@@ -4,7 +4,7 @@ This document describes workflows that may be useful when debugging e2e tests wi
 
 ## Overview
 
-The entry point for an e2e test is a Go test function of the form `func TestXyz(t *testing.T)` which represents a top level suite against an installation mode of kgateway. For example, the `TestKgateway` function in [kgateway_test.go](/test/e2e/tests/kgateway_test.go) is a top-level suite comprising multiple feature specific suites that are invoked as subtests.
+The entry point for an e2e test is a Go test function of the form `func TestXyz(t *testing.T)` which represents a top-level integration suite for a particular installation mode. For example, the `TestAgentgatewayIntegration` function in [agent_gateway_test.go](/test/e2e/tests/agent_gateway_test.go) is a top-level suite comprising multiple feature specific suites that are invoked as subtests.
 
 Each feature suite is invoked as a subtest of the top level suite. The subtests use [testify](https://github.com/stretchr/testify) to structure the tests in the feature's test suite and make use of the library's assertions.
 
@@ -114,16 +114,16 @@ A unified script that auto-detects whether you're running e2e or unit tests and 
 **Common Examples:**
 ```bash
 # Run an e2e test suite (auto-detected)
-./hack/run-test.sh SessionPersistence
+./hack/run-test.sh BasicRouting
 
 # Run a unit test (auto-detected)
-./hack/run-test.sh TestShouldUseDefaultGatewayParameters
+./hack/run-test.sh TestRenderHelmChart
 
 # Run all tests in a package
 ./hack/run-test.sh --package ./pkg/utils/helmutils
 
 # Skip setup if cluster exists (faster iteration for e2e tests)
-PERSIST_INSTALL=true ./hack/run-test.sh SessionPersistence
+PERSIST_INSTALL=true ./hack/run-test.sh BasicRouting
 
 # List all available tests
 ./hack/run-test.sh --list
@@ -155,28 +155,28 @@ A specialized script for running e2e tests with advanced features.
 **Common Examples:**
 ```bash
 # Run an entire test suite
-./hack/run-e2e-test.sh SessionPersistence
+./hack/run-e2e-test.sh BasicRouting
 
 # Run a specific test method within a suite
-./hack/run-e2e-test.sh TestCookieSessionPersistence
+./hack/run-e2e-test.sh TestAgentgatewayHTTPRoute
 
 # Run a top-level test function
-./hack/run-e2e-test.sh TestKgateway
+./hack/run-e2e-test.sh TestAgentgatewayIntegration
 
 # Skip setup if cluster exists (faster iteration)
-PERSIST_INSTALL=true ./hack/run-e2e-test.sh SessionPersistence
+PERSIST_INSTALL=true ./hack/run-e2e-test.sh BasicRouting
 
 # Auto-cleanup conflicting Helm releases
-AUTO_SETUP=true ./hack/run-e2e-test.sh SessionPersistence
+AUTO_SETUP=true ./hack/run-e2e-test.sh BasicRouting
 
 # Delete cluster and rebuild everything from scratch
-./hack/run-e2e-test.sh --rebuild SessionPersistence
+./hack/run-e2e-test.sh --rebuild BasicRouting
 
 # List all available e2e tests
 ./hack/run-e2e-test.sh --list
 
 # See what command would run without executing
-./hack/run-e2e-test.sh --dry-run TestCookieSessionPersistence
+./hack/run-e2e-test.sh --dry-run TestAgentgatewayHTTPRoute
 ```
 
 **Options:**
@@ -199,11 +199,11 @@ AUTO_SETUP=true ./hack/run-e2e-test.sh SessionPersistence
 
 The script intelligently finds tests and generates the correct regex:
 
-1. **Suite name** (e.g., `SessionPersistence`) → Finds the suite registration and parent test → Generates `^TestKgateway$/^SessionPersistence$`
+1. **Suite name** (e.g., `BasicRouting`) → Finds the suite registration and parent test → Generates `^TestAgentgatewayIntegration$/^BasicRouting$`
 
-2. **Test method** (e.g., `TestCookieSessionPersistence`) → Finds the method, its suite, and parent test → Generates `^TestKgateway$/^SessionPersistence$/^TestCookieSessionPersistence$`
+2. **Test method** (e.g., `TestAgentgatewayHTTPRoute`) → Finds the method, its suite, and parent test → Generates `^TestAgentgatewayIntegration$/^BasicRouting$/^TestAgentgatewayHTTPRoute$`
 
-3. **Top-level test** (e.g., `TestKgateway`) → Generates `^TestKgateway$`
+3. **Top-level test** (e.g., `TestAgentgatewayIntegration`) → Generates `^TestAgentgatewayIntegration$`
 
 This saves you from having to manually construct complex regex patterns.
 
@@ -213,12 +213,12 @@ If you need more control or prefer to run tests manually, you can use `go test` 
 
 **Note:** The test runner scripts (above) are the recommended approach as they handle pattern matching automatically. This section is for advanced use cases.
 
-For example, to run the `Deployer` feature suite in the `TestKgateway` test:
+For example, to run the `BasicRouting` feature suite in the `TestAgentgatewayIntegration` test:
 
 You can either set environment variables inline with the command:
 
 ```bash
-PERSIST_INSTALL=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestKgateway$/^Deployer$
+PERSIST_INSTALL=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestAgentgatewayIntegration$/^BasicRouting$
 ```
 
 Or export the environment variables first and then run the test:
@@ -227,7 +227,7 @@ Or export the environment variables first and then run the test:
 export PERSIST_INSTALL=true
 export CLUSTER_NAME=kind
 export INSTALL_NAMESPACE=agentgateway-system
-go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestKgateway$/^Deployer$
+go test -v -timeout 600s -tags e2e ./test/e2e/tests -run ^TestAgentgatewayIntegration$/^BasicRouting$
 ```
 
 Note that the `-run` flag takes a sequence of regular expressions, and that each part may match a substring of a suite/test name. See https://pkg.go.dev/cmd/go#hdr-Testing_flags for details. To match only exact suite/test names, use the `^` and `$` characters as shown.
@@ -248,10 +248,10 @@ You can use a custom debugger launch config that sets the `test.run` flag to run
   "request": "launch",
   "mode": "test",
   "buildFlags": "-tags=e2e",
-  "program": "${workspaceFolder}/test/e2e/tests/kgateway_test.go",
+  "program": "${workspaceFolder}/test/e2e/tests/agent_gateway_test.go",
   "args": [
     "-test.run",
-    "^TestKgateway$/^Deployer$",
+    "^TestAgentgatewayIntegration$/^BasicRouting$",
     "-test.v",
   ],
   "env": {
@@ -263,13 +263,13 @@ You can use a custom debugger launch config that sets the `test.run` flag to run
 ```
 
 Setting `FAIL_FAST_AND_PERSIST` to `true` will skip the installation of
-kgateway, and, only upon test failure, skip teardown/cleanup.  You can manually
+agentgateway, and, only upon test failure, skip teardown/cleanup.  You can manually
 set up your environment first (e.g., using `make setup` or Tilt) but don't have
 to.
 
 `CLUSTER_NAME` specifies the name of the cluster used for e2e tests (corresponds to the cluster name used when creating the kind cluster).
 
-`INSTALL_NAMESPACE` specifies the namespace in which kgateway is installed (typically `agentgateway-system` when using Tilt).
+`INSTALL_NAMESPACE` specifies the namespace in which agentgateway is installed (typically `agentgateway-system` when using Tilt).
 
 When invoking tests using VSCode's `run test` option, remember to set `"go.testTimeout": "600s"` in the user `settings.json` file as this may default to a lower value such as `30s` which may not be enough time for the e2e test to complete.
 
@@ -279,20 +279,20 @@ When invoking tests using VSCode's `run test` option, remember to set `"go.testT
 
 ```bash
 # The script figures out the full pattern for you
-./hack/run-e2e-test.sh TestProvisionDeploymentAndService
+./hack/run-e2e-test.sh TestAgentgatewayHTTPRoute
 
 # Or with PERSIST_INSTALL for faster iteration
-PERSIST_INSTALL=true ./hack/run-e2e-test.sh TestProvisionDeploymentAndService
+PERSIST_INSTALL=true ./hack/run-e2e-test.sh TestAgentgatewayHTTPRoute
 ```
 
 **Manual approach:** If you need to run it manually, you can select a specific test using the `-run` flag.
 
-For example, to run `TestProvisionDeploymentAndService` in `Deployer` feature suite that is a part of `TestKgateway`:
+For example, to run `TestAgentgatewayHTTPRoute` in the `BasicRouting` feature suite that is a part of `TestAgentgatewayIntegration`:
 ```bash
-FAIL_FAST_AND_PERSIST=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -failfast ./test/e2e/tests -run ^TestKgateway$/^Deployer$/^TestProvisionDeploymentAndService$
+FAIL_FAST_AND_PERSIST=true CLUSTER_NAME=kind INSTALL_NAMESPACE=agentgateway-system go test -v -timeout 600s -failfast ./test/e2e/tests -run ^TestAgentgatewayIntegration$/^BasicRouting$/^TestAgentgatewayHTTPRoute$
 ```
 
-**For IDE debugging:** Use `./hack/run-e2e-test.sh --dry-run TestProvisionDeploymentAndService` to see the exact pattern, then use it in your IDE config.
+**For IDE debugging:** Use `./hack/run-e2e-test.sh --dry-run TestAgentgatewayHTTPRoute` to see the exact pattern, then use it in your IDE config.
 
 With VSCode you can use a custom debugger launch config that sets the `test.run` flag to run a specific test:
 ```json
@@ -301,11 +301,11 @@ With VSCode you can use a custom debugger launch config that sets the `test.run`
   "type": "go",
   "request": "launch",
   "mode": "test",
-  "program": "${workspaceFolder}/test/e2e/tests/kgateway_test.go",
+  "program": "${workspaceFolder}/test/e2e/tests/agent_gateway_test.go",
   "args": [
     "-failfast",
     "-test.run",
-    "^TestKgateway$/^Deployer$/^TestProvisionDeploymentAndService$",
+    "^TestAgentgatewayIntegration$/^BasicRouting$/^TestAgentgatewayHTTPRoute$",
     "-test.v",
   ],
   "env": {
@@ -330,7 +330,7 @@ You'll also need to set other env variables that are required for the test to ru
 If there are multiple tests in a feature suite, you can run a single test by adding the test name to the `-run` flag in the run configuration:
 
 ```bash
--test.run="^TestKgateway$/^Deployer$/^TestProvisionDeploymentAndService$"
+-test.run="^TestAgentgatewayIntegration$/^BasicRouting$/^TestAgentgatewayHTTPRoute$"
 ```
 
 
@@ -338,7 +338,7 @@ If there are multiple tests in a feature suite, you can run a single test by add
 We [load balance tests](./load_balancing_tests.md) across different clusters when executing them in CI. If you would like to replicate the exact set of tests that are run for a given cluster, you should:
 1. Inspect the `go-test-run-regex` defined in the [test matrix](/.github/workflows/pr-kubernetes-tests.yaml)
 ```bash
-go-test-run-regex: '(^TestKgateway$$)'
+go-test-run-regex: '(^TestAgentgatewayIntegration$$)'
 ```
 _NOTE: There is `$$` in the GitHub action definition, since a single `$` is expanded_
 2. Inspect the `go-test-args` defined in the [test matrix](/.github/workflows/pr-kubernetes-tests.yaml)
@@ -347,5 +347,5 @@ go-test-args: '-v -timeout=25m'
 ```
 3. Combine these arguments when invoking go test:
 ```bash
-TEST_PKG=./test/e2e/... GO_TEST_USER_ARGS='-v -timeout=25m -run \(^TestKgateway$$/\)' make go-test
+TEST_PKG=./test/e2e/... GO_TEST_USER_ARGS='-v -timeout=25m -run \(^TestAgentgatewayIntegration$$/\)' make go-test
 ```

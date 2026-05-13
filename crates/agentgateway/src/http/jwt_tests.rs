@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use itertools::Itertools;
 use serde_json::json;
 
-use super::{JWTValidationOptions, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
+use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
 use crate::telemetry::log::MetricsConfig;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
@@ -193,6 +193,119 @@ pub fn test_basic_jwks() {
 		p.keys.keys().collect_vec(),
 		vec!["XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI"]
 	);
+}
+
+#[test]
+pub fn test_ed25519_jwks() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "OKP",
+				"kid": "ed25519-kid",
+				"crv": "Ed25519",
+				"alg": "EdDSA",
+				"x": "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let p = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		Some(vec!["test-aud".to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	assert_eq!(p.keys.keys().collect_vec(), vec!["ed25519-kid"]);
+	assert_eq!(
+		p.keys["ed25519-kid"].validation.algorithms,
+		vec![jsonwebtoken::Algorithm::EdDSA]
+	);
+}
+
+#[test]
+pub fn test_ed25519_jwt_validation() {
+	// Test fixture from jsonwebtoken 10.3.0 tests/eddsa/private_ed25519_key.pk8.
+	const ED25519_PRIVATE_KEY: &[u8] = &[
+		0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+		0x6a, 0xc3, 0xfd, 0xee, 0xee, 0x29, 0x8a, 0x92, 0x63, 0x8b, 0x70, 0x0c, 0x4b, 0x11, 0x7c, 0xc3,
+		0x2e, 0x2d, 0x2a, 0xce, 0x0d, 0xfd, 0x78, 0x76, 0x94, 0xe2, 0x4c, 0xae, 0x8a, 0xd5, 0x82, 0x34,
+	];
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "OKP",
+				"kid": "ed25519-kid",
+				"crv": "Ed25519",
+				"x": "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let issuer = "https://example.com";
+	let aud = "test-aud";
+	let provider = Provider::from_jwks(
+		jwks,
+		issuer.to_string(),
+		Some(vec![aud.to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+		location: bearer_location(),
+	};
+	let now = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let claims = json!({
+		"iss": issuer,
+		"aud": aud,
+		"sub": "test-user",
+		"exp": now + 600,
+	});
+	let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
+	header.kid = Some("ed25519-kid".to_string());
+	let token = jsonwebtoken::encode(
+		&header,
+		&claims,
+		&jsonwebtoken::EncodingKey::from_ed_der(ED25519_PRIVATE_KEY),
+	)
+	.unwrap();
+
+	let claims = jwt.validate_claims(&token).unwrap();
+	assert_eq!(
+		claims.inner.get("sub"),
+		Some(&serde_json::Value::String("test-user".to_string()))
+	);
+}
+
+#[test]
+pub fn test_okp_non_ed25519_curve_rejected() {
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "OKP",
+				"kid": "okp-p256-kid",
+				"crv": "P-256",
+				"x": "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8"
+			}
+		]
+	});
+	let jwks = serde_json::from_value(jwks).unwrap();
+	let result = Provider::from_jwks(
+		jwks,
+		"https://example.com".to_string(),
+		Some(vec!["test-aud".to_string()]),
+		JWTValidationOptions::default(),
+	);
+	assert!(matches!(result, Err(JwkError::UnsupportedCurve { .. })));
 }
 
 fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {

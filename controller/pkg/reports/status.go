@@ -30,7 +30,7 @@ const (
 	ValidRefsMessage             = "Successfully resolved all references"
 	ListenerProgrammedMessage    = "Successfully programmed Listener"
 	RouteAcceptedMessage         = "Successfully accepted Route"
-	GatewayClassAcceptedMessage  = "GatewayClass accepted by kgateway controller"
+	GatewayClassAcceptedMessage  = "GatewayClass accepted by agentgateway controller"
 )
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer
@@ -343,10 +343,10 @@ func ensureParentRefNamespaces(parentRefs []gwv1.ParentReference, routeNamespace
 			e.Namespace = &routeNs
 		}
 		if e.Group == nil {
-			e.Group = ptr.Of(gwv1.Group(wellknown.GatewayGVK.Group))
+			e.Group = new(gwv1.Group(wellknown.GatewayGVK.Group))
 		}
 		if e.Kind == nil {
-			e.Kind = ptr.Of(gwv1.Kind(wellknown.GatewayGVK.Kind))
+			e.Kind = new(gwv1.Kind(wellknown.GatewayGVK.Kind))
 		}
 		return e
 	})

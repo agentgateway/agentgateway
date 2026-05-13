@@ -66,30 +66,39 @@ pub struct WaypointIdentity {
 }
 
 impl WaypointIdentity {
-	/// Returns the full Kubernetes FQDN for this waypoint.
+	/// Returns the default full Kubernetes FQDN for this waypoint.
+	/// TODO: we don't know the cluster domain, so we potentially return the wrong hostname for this waypoint.
 	pub fn hostname(&self) -> Strng {
 		strng::format!("{}.{}.svc.cluster.local", self.gateway, self.namespace)
 	}
 
 	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
-	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
+	/// Assumes the hostname from xDS always starts with `{gateway name}.{namespace}` but the suffix
+	/// may be customized.
 	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
-		nh.hostname == self.hostname()
+		nh.namespace == self.namespace
+			&& nh
+				.hostname
+				.strip_prefix(self.gateway.as_str())
+				.and_then(|s| s.strip_prefix('.'))
+				.and_then(|s| s.strip_prefix(self.namespace.as_str()))
+				.is_some_and(|s| s.starts_with('.') && s.len() > 1)
 	}
 
 	/// Checks whether this waypoint identity matches an Address-based waypoint destination
-	/// by looking up this waypoint's own service VIPs.
+	/// by resolving the service at `addr` and comparing its (name, namespace) to this waypoint's
+	/// (gateway, namespace).
 	pub fn matches_address(
 		&self,
 		addr: &NetworkAddress,
-		get_self_vips: impl FnOnce(&Strng, &Strng) -> Option<Vec<NetworkAddress>>,
+		get_service_at: impl FnOnce(&NetworkAddress) -> Option<(Strng, Strng)>,
 	) -> bool {
-		match get_self_vips(&self.namespace, &self.hostname()) {
-			Some(vips) => vips.contains(addr),
+		match get_service_at(addr) {
+			Some((name, ns)) => name == self.gateway && ns == self.namespace,
 			None => {
 				warn!(
-					"waypoint {}.{} cannot find own service for address verification",
-					self.gateway, self.namespace
+					"waypoint {}.{} cannot resolve service at {} for address verification",
+					self.gateway, self.namespace, addr
 				);
 				false
 			},
@@ -482,6 +491,11 @@ pub struct Service {
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub ip_families: Option<IpFamily>,
+
+	/// When true, ingress gateways should send traffic destined for this service
+	/// through the service's waypoint proxy.
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub ingress_use_waypoint: bool,
 }
 
 impl Service {
@@ -884,6 +898,7 @@ impl TryFrom<&XdsService> for Service {
 			waypoint,
 			load_balancer: lb,
 			ip_families,
+			ingress_use_waypoint: s.ingress_use_waypoint,
 		};
 		Ok(svc)
 	}

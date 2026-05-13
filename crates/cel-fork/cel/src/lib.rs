@@ -333,6 +333,54 @@ mod tests {
 	}
 
 	#[test]
+	fn type_values() {
+		use crate::common::types;
+
+		assert_eq!(
+			test_script("type(1)", None),
+			Ok(Value::Type(types::INT_TYPE))
+		);
+		assert_eq!(
+			test_script("type(1u)", None),
+			Ok(Value::Type(types::UINT_TYPE))
+		);
+		assert_eq!(
+			test_script("type(1.0)", None),
+			Ok(Value::Type(types::DOUBLE_TYPE))
+		);
+		assert_eq!(
+			test_script("type(\"a\")", None),
+			Ok(Value::Type(types::STRING_TYPE))
+		);
+		assert_eq!(
+			test_script("type(null)", None),
+			Ok(Value::Type(types::NULL_TYPE))
+		);
+		assert_eq!(
+			test_script("type([])", None),
+			Ok(Value::Type(types::LIST_TYPE))
+		);
+		assert_eq!(
+			test_script("type({})", None),
+			Ok(Value::Type(types::MAP_TYPE))
+		);
+		assert_eq!(test_script("type", None), Ok(Value::Type(types::TYPE_TYPE)));
+
+		assert_eq!(test_script("type(1) == int", None), Ok(true.into()));
+		assert_eq!(test_script("type(1.0) == float", None), Ok(true.into()));
+		assert_eq!(test_script("type(1) == string", None), Ok(false.into()));
+		assert_eq!(
+			test_script("type(type(1)) == type(string)", None),
+			Ok(true.into())
+		);
+
+		let program = Program::compile("type(1) == int").unwrap();
+		let references = program.references();
+		assert!(references.has_function("type"));
+		assert!(!references.has_variable("int"));
+	}
+
+	#[test]
 	fn test_execution_errors() {
 		let tests = vec![
 			(

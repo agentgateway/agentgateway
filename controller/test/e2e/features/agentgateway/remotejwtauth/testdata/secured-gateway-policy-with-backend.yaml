@@ -28,7 +28,7 @@ spec:
     jwtAuthentication:
       mode: Strict
       providers:
-      - issuer: https://kgateway.dev
+      - issuer: https://agentgateway.dev
         jwks:
           remote:
             jwksPath: org-one/keys
@@ -37,7 +37,7 @@ spec:
               kind: AgentgatewayBackend
               name: dummy-idp-1
               port: 8443
-      - issuer: https://kgateway.dev
+      - issuer: https://agentgateway.dev
         jwks:
           remote:
             jwksPath: org-two/keys

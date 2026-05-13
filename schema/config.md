@@ -80,6 +80,7 @@
 |`binds[].listeners[].tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
 |`binds[].listeners[].tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`binds[].listeners[].tls.maxTLSVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
+|`binds[].listeners[].tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
 |`binds[].listeners[].routes`|[]object||
 |`binds[].listeners[].routes[].name`|string||
 |`binds[].listeners[].routes[].namespace`|string||
@@ -139,6 +140,10 @@
 |`binds[].listeners[].routes[].policies.requestMirror.backend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.requestMirror.percentage`|number||
 |`binds[].listeners[].routes[].policies.directResponse`|object|Directly respond to the request with a static response.|
+|`binds[].listeners[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].status`|integer||
 |`binds[].listeners[].routes[].policies.directResponse.body`|array||
 |`binds[].listeners[].routes[].policies.directResponse.status`|integer||
 |`binds[].listeners[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
@@ -225,9 +230,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -238,7 +244,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -249,7 +255,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -321,9 +331,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -334,7 +345,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -345,7 +356,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -417,9 +432,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -430,7 +446,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -441,7 +457,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -511,9 +531,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -524,7 +545,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -535,7 +556,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -641,9 +666,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -654,7 +680,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -665,7 +691,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -737,9 +767,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -750,7 +781,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -761,7 +792,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -831,9 +866,10 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -844,7 +880,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -855,7 +891,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -937,6 +977,7 @@
 |`binds[].listeners[].routes[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.backendTunnel`|object|Tunnel to the backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.service`|object||
@@ -948,7 +989,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -959,7 +1000,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.header.prefix`|string||
@@ -970,7 +1011,11 @@
 |`binds[].listeners[].routes[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -990,12 +1035,133 @@
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.azure.developerImplicit`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.azure.implicit`|object||
-|`binds[].listeners[].routes[].policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`binds[].listeners[].routes[].policies.localRateLimit`|object|Rate limit incoming requests. State is kept local.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer||
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer||
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].fillInterval`|string||
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].type`|enum|Possible values: `requests`, `tokens`.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`|integer||
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer||
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string||
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Possible values: `requests`, `tokens`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service.name`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service.port`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].domain`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].value`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.service`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.service.name`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.service.name.namespace`|string||
@@ -1031,9 +1197,10 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1044,7 +1211,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header.prefix`|string||
@@ -1055,7 +1222,11 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1101,7 +1272,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
@@ -1179,6 +1351,129 @@
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -1213,9 +1508,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1226,7 +1522,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -1237,7 +1533,11 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1296,6 +1596,116 @@
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
+|`binds[].listeners[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].service`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].service.name`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].service.port`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.service`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name.namespace`|string||
@@ -1330,9 +1740,10 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1343,7 +1754,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -1354,7 +1765,11 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1400,6 +1815,20 @@
 |`binds[].listeners[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify requests and responses|
+|`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.add`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.set`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.body`|string||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].request.metadata`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.add`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.set`|object||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.body`|string||
+|`binds[].listeners[].routes[].policies.transformations.conditional[].response.metadata`|object||
 |`binds[].listeners[].routes[].policies.transformations.request`|object||
 |`binds[].listeners[].routes[].policies.transformations.request.add`|object||
 |`binds[].listeners[].routes[].policies.transformations.request.set`|object||
@@ -1483,9 +1912,10 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1496,7 +1926,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header.prefix`|string||
@@ -1507,7 +1937,11 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -1555,7 +1989,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini`|object||
@@ -1577,6 +2011,8 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
+|`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -1608,9 +2044,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1621,7 +2058,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.header.prefix`|string||
@@ -1632,7 +2069,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1694,6 +2135,128 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number||
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http.path`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -1758,9 +2321,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1771,7 +2335,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -1782,7 +2346,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1854,9 +2422,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1867,7 +2436,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -1878,7 +2447,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -1950,9 +2523,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -1963,7 +2537,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -1974,7 +2548,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2044,9 +2622,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2057,7 +2636,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -2068,7 +2647,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2174,9 +2757,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2187,7 +2771,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -2198,7 +2782,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2270,9 +2858,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2283,7 +2872,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -2294,7 +2883,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2364,9 +2957,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2377,7 +2971,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -2388,7 +2982,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2464,7 +3062,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -2486,6 +3084,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -2517,9 +3117,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2530,7 +3131,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.prefix`|string||
@@ -2541,7 +3142,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -2603,6 +3208,128 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.path`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -2667,9 +3394,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2680,7 +3408,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -2691,7 +3419,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2763,9 +3495,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2776,7 +3509,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -2787,7 +3520,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2859,9 +3596,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2872,7 +3610,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -2883,7 +3621,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -2953,9 +3695,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -2966,7 +3709,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -2977,7 +3720,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3083,9 +3830,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3096,7 +3844,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -3107,7 +3855,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3179,9 +3931,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3192,7 +3945,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -3203,7 +3956,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3273,9 +4030,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3286,7 +4044,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -3297,7 +4055,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3403,9 +4165,10 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3416,7 +4179,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.header.prefix`|string||
@@ -3427,7 +4190,11 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -3489,6 +4256,128 @@
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.restoreHealth`|number||
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.consecutiveFailures`|integer||
 |`binds[].listeners[].routes[].backends[].policies.health.eviction.healthThreshold`|number||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http.path`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -3553,9 +4442,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3566,7 +4456,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -3577,7 +4467,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3649,9 +4543,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3662,7 +4557,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -3673,7 +4568,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3745,9 +4644,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3758,7 +4658,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -3769,7 +4669,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3839,9 +4743,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3852,7 +4757,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -3863,7 +4768,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -3969,9 +4878,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -3982,7 +4892,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -3993,7 +4903,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4065,9 +4979,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4078,7 +4993,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -4089,7 +5004,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4159,9 +5078,10 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4172,7 +5092,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -4183,7 +5103,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4271,6 +5195,7 @@
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].tcpRoutes[].backends`|[]object||
 |`binds[].listeners[].tcpRoutes[].backends[].service`|object||
 |`binds[].listeners[].tcpRoutes[].backends[].service.name`|object||
@@ -4290,6 +5215,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel`|object|Tunnel to the backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.service`|object||
@@ -4350,6 +5276,129 @@
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`binds[].listeners[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].policies.extAuthz.conditional[].service`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`binds[].listeners[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`binds[].listeners[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`binds[].listeners[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.service`|object||
 |`binds[].listeners[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].policies.extAuthz.service.name.namespace`|string||
@@ -4384,9 +5433,10 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4397,7 +5447,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -4408,7 +5458,11 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4467,6 +5521,116 @@
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extProc`|object|Extend agentgateway with an external processor|
+|`binds[].listeners[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].policies.extProc.conditional[].service`|object||
+|`binds[].listeners[].policies.extProc.conditional[].service.name`|object||
+|`binds[].listeners[].policies.extProc.conditional[].service.name.namespace`|string||
+|`binds[].listeners[].policies.extProc.conditional[].service.name.hostname`|string||
+|`binds[].listeners[].policies.extProc.conditional[].service.port`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].policies.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`binds[].listeners[].policies.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.add`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.set`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.body`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.add`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.set`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.body`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.key`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.root`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].policies.extProc.conditional[].policies.http.version`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.service`|object||
 |`binds[].listeners[].policies.extProc.service.name`|object||
 |`binds[].listeners[].policies.extProc.service.name.namespace`|string||
@@ -4501,9 +5665,10 @@
 |`binds[].listeners[].policies.extProc.policies.backendTLS.insecureHost`|boolean||
 |`binds[].listeners[].policies.extProc.policies.backendTLS.alpn`|[]string||
 |`binds[].listeners[].policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].policies.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough`|object||
-|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4514,7 +5679,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.header`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.header.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -4525,7 +5690,11 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4571,6 +5740,20 @@
 |`binds[].listeners[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.transformations`|object|Modify requests and responses|
+|`binds[].listeners[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`binds[].listeners[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`binds[].listeners[].policies.transformations.conditional[].request`|object||
+|`binds[].listeners[].policies.transformations.conditional[].request.add`|object||
+|`binds[].listeners[].policies.transformations.conditional[].request.set`|object||
+|`binds[].listeners[].policies.transformations.conditional[].request.remove`|[]string||
+|`binds[].listeners[].policies.transformations.conditional[].request.body`|string||
+|`binds[].listeners[].policies.transformations.conditional[].request.metadata`|object||
+|`binds[].listeners[].policies.transformations.conditional[].response`|object||
+|`binds[].listeners[].policies.transformations.conditional[].response.add`|object||
+|`binds[].listeners[].policies.transformations.conditional[].response.set`|object||
+|`binds[].listeners[].policies.transformations.conditional[].response.remove`|[]string||
+|`binds[].listeners[].policies.transformations.conditional[].response.body`|string||
+|`binds[].listeners[].policies.transformations.conditional[].response.metadata`|object||
 |`binds[].listeners[].policies.transformations.request`|object||
 |`binds[].listeners[].policies.transformations.request.add`|object||
 |`binds[].listeners[].policies.transformations.request.set`|object||
@@ -4618,6 +5801,7 @@
 |`frontendPolicies.http.http2WindowSize`|integer||
 |`frontendPolicies.http.http2ConnectionWindowSize`|integer||
 |`frontendPolicies.http.http2FrameSize`|integer||
+|`frontendPolicies.http.http2MaxHeaderSize`|integer||
 |`frontendPolicies.http.http2KeepaliveInterval`|string||
 |`frontendPolicies.http.http2KeepaliveTimeout`|string||
 |`frontendPolicies.http.maxConnectionDuration`|string|Maximum duration a connection is allowed to remain open. After this duration,<br>the connection is gracefully closed after the current in-flight request completes.<br>Useful for ensuring even traffic distribution behind load balancers during scaling events.|
@@ -4627,6 +5811,7 @@
 |`frontendPolicies.tls.minVersion`|enum|Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`frontendPolicies.tls.maxVersion`|enum|Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`frontendPolicies.tls.cipherSuites`|[]string||
+|`frontendPolicies.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
 |`frontendPolicies.tcp`|object|Settings for handling incoming TCP connections.|
 |`frontendPolicies.tcp.keepalives`|object||
 |`frontendPolicies.tcp.keepalives.enabled`|boolean||
@@ -4677,9 +5862,10 @@
 |`frontendPolicies.accessLog.otlp.policies.backendTLS.insecureHost`|boolean||
 |`frontendPolicies.accessLog.otlp.policies.backendTLS.alpn`|[]string||
 |`frontendPolicies.accessLog.otlp.policies.backendTLS.subjectAltNames`|[]string||
+|`frontendPolicies.accessLog.otlp.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth`|object|Authenticate to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough`|object||
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.header`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.header.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4690,7 +5876,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value.file`|string||
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.header`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.header.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.header.prefix`|string||
@@ -4701,7 +5887,11 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.accessKeyId`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4779,9 +5969,10 @@
 |`frontendPolicies.tracing.policies.backendTLS.insecureHost`|boolean||
 |`frontendPolicies.tracing.policies.backendTLS.alpn`|[]string||
 |`frontendPolicies.tracing.policies.backendTLS.subjectAltNames`|[]string||
+|`frontendPolicies.tracing.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`frontendPolicies.tracing.policies.backendAuth`|object|Authenticate to the backend.|
 |`frontendPolicies.tracing.policies.backendAuth.passthrough`|object||
-|`frontendPolicies.tracing.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.location`|object||
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.header`|object||
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.header.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -4792,7 +5983,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.key`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.value`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.value.file`|string||
-|`frontendPolicies.tracing.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`frontendPolicies.tracing.policies.backendAuth.key.location`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.location.header`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.location.header.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.key.location.header.prefix`|string||
@@ -4803,7 +5994,11 @@
 |`frontendPolicies.tracing.policies.backendAuth.gcp`|object||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`frontendPolicies.tracing.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.tracing.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`frontendPolicies.tracing.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`frontendPolicies.tracing.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws`|object||
 |`frontendPolicies.tracing.policies.backendAuth.aws.accessKeyId`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.secretAccessKey`|string||
@@ -4855,7 +6050,7 @@
 |`policies[].name`|object||
 |`policies[].name.name`|string||
 |`policies[].name.namespace`|string||
-|`policies[].target`|object|Exactly one of gateway, route, or backend may be set.|
+|`policies[].target`|object|Exactly one of gateway, route, backend, or listenerSet may be set.|
 |`policies[].target.gateway`|object||
 |`policies[].target.gateway.gatewayName`|string||
 |`policies[].target.gateway.gatewayNamespace`|string||
@@ -4875,6 +6070,10 @@
 |`policies[].target.backend.service.hostname`|string||
 |`policies[].target.backend.service.namespace`|string||
 |`policies[].target.backend.service.port`|integer||
+|`policies[].target.listenerSet`|object||
+|`policies[].target.listenerSet.name`|string||
+|`policies[].target.listenerSet.namespace`|string||
+|`policies[].target.listenerSet.section`|string||
 |`policies[].phase`|enum|phase defines at what level the policy runs at. Gateway policies run pre-routing, while<br>Route policies apply post-routing.<br>Only a subset of policies are eligible as Gateway policies.<br>In general, normal (route level) policies should be used, except you need the policy to influence<br>routing.<br>Possible values: `route`, `gateway`.|
 |`policies[].policy`|object||
 |`policies[].policy.requestHeaderModifier`|object|Headers to be modified in the request.|
@@ -4914,6 +6113,10 @@
 |`policies[].policy.requestMirror.backend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.requestMirror.percentage`|number||
 |`policies[].policy.directResponse`|object|Directly respond to the request with a static response.|
+|`policies[].policy.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.directResponse.conditional[].body`|array||
+|`policies[].policy.directResponse.conditional[].status`|integer||
 |`policies[].policy.directResponse.body`|array||
 |`policies[].policy.directResponse.status`|integer||
 |`policies[].policy.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
@@ -5000,9 +6203,10 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5013,7 +6217,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -5024,7 +6228,11 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5096,9 +6304,10 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5109,7 +6318,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -5120,7 +6329,11 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5192,9 +6405,10 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5205,7 +6419,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -5216,7 +6430,11 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5286,9 +6504,10 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5299,7 +6518,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -5310,7 +6529,11 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5416,9 +6639,10 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5429,7 +6653,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -5440,7 +6664,11 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5512,9 +6740,10 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5525,7 +6754,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -5536,7 +6765,11 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5606,9 +6839,10 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5619,7 +6853,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -5630,7 +6864,11 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5712,6 +6950,7 @@
 |`policies[].policy.backendTLS.insecureHost`|boolean||
 |`policies[].policy.backendTLS.alpn`|[]string||
 |`policies[].policy.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.backendTunnel`|object|Tunnel to the backend.|
 |`policies[].policy.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.backendTunnel.proxy.service`|object||
@@ -5723,7 +6962,7 @@
 |`policies[].policy.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.backendAuth.passthrough`|object||
-|`policies[].policy.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.backendAuth.passthrough.location`|object||
 |`policies[].policy.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.backendAuth.passthrough.location.header.prefix`|string||
@@ -5734,7 +6973,7 @@
 |`policies[].policy.backendAuth.key`|object||
 |`policies[].policy.backendAuth.key.value`|object||
 |`policies[].policy.backendAuth.key.value.file`|string||
-|`policies[].policy.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.backendAuth.key.location`|object||
 |`policies[].policy.backendAuth.key.location.header`|object||
 |`policies[].policy.backendAuth.key.location.header.name`|string||
 |`policies[].policy.backendAuth.key.location.header.prefix`|string||
@@ -5745,7 +6984,11 @@
 |`policies[].policy.backendAuth.gcp`|object||
 |`policies[].policy.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.backendAuth.aws`|object||
 |`policies[].policy.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.backendAuth.aws.secretAccessKey`|string||
@@ -5765,12 +7008,133 @@
 |`policies[].policy.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.backendAuth.azure.developerImplicit`|object||
 |`policies[].policy.backendAuth.azure.implicit`|object||
-|`policies[].policy.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`policies[].policy.localRateLimit`|object|Rate limit incoming requests. State is kept local.|
+|`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.localRateLimit.conditional[].maxTokens`|integer||
+|`policies[].policy.localRateLimit.conditional[].tokensPerFill`|integer||
+|`policies[].policy.localRateLimit.conditional[].fillInterval`|string||
+|`policies[].policy.localRateLimit.conditional[].type`|enum|Possible values: `requests`, `tokens`.|
 |`policies[].policy.localRateLimit[].maxTokens`|integer||
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer||
 |`policies[].policy.localRateLimit[].fillInterval`|string||
 |`policies[].policy.localRateLimit[].type`|enum|Possible values: `requests`, `tokens`.|
 |`policies[].policy.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.remoteRateLimit.conditional[].service`|object||
+|`policies[].policy.remoteRateLimit.conditional[].service.name`|object||
+|`policies[].policy.remoteRateLimit.conditional[].service.name.namespace`|string||
+|`policies[].policy.remoteRateLimit.conditional[].service.name.hostname`|string||
+|`policies[].policy.remoteRateLimit.conditional[].service.port`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].host`|string|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.remoteRateLimit.conditional[].domain`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies`|object|Policies to connect to the backend|
+|`policies[].policy.remoteRateLimit.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.requestHeaderModifier.add`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.requestHeaderModifier.set`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.add`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.set`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.body`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.add`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.set`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.body`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.cert`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.key`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.root`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.hostname`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.insecure`|boolean||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.alpn`|[]string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.header`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.remoteRateLimit.conditional[].policies.http.version`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.http.requestTimeout`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives.time`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives.interval`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.connectTimeout`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.conditional[].descriptors`|[]object||
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries`|[]object||
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries[].key`|string||
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries[].value`|string||
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`policies[].policy.remoteRateLimit.conditional[].descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`policies[].policy.remoteRateLimit.conditional[].failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.remoteRateLimit.service`|object||
 |`policies[].policy.remoteRateLimit.service.name`|object||
 |`policies[].policy.remoteRateLimit.service.name.namespace`|string||
@@ -5806,9 +7170,10 @@
 |`policies[].policy.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.remoteRateLimit.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.remoteRateLimit.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough`|object||
-|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -5819,7 +7184,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.header.prefix`|string||
@@ -5830,7 +7195,11 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
@@ -5876,7 +7245,8 @@
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].key`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].entries[].value`|string||
 |`policies[].policy.remoteRateLimit.descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
-|`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`policies[].policy.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`policies[].policy.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`policies[].policy.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
@@ -5954,6 +7324,129 @@
 |`policies[].policy.apiKey.location.cookie`|object||
 |`policies[].policy.apiKey.location.cookie.name`|string||
 |`policies[].policy.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`policies[].policy.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.extAuthz.conditional[].service`|object||
+|`policies[].policy.extAuthz.conditional[].service.name`|object||
+|`policies[].policy.extAuthz.conditional[].service.name.namespace`|string||
+|`policies[].policy.extAuthz.conditional[].service.name.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].service.port`|integer||
+|`policies[].policy.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`policies[].policy.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.extAuthz.conditional[].policies.http.version`|string||
+|`policies[].policy.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`policies[].policy.extAuthz.conditional[].protocol.grpc`|object||
+|`policies[].policy.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`policies[].policy.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`policies[].policy.extAuthz.conditional[].protocol.http`|object||
+|`policies[].policy.extAuthz.conditional[].protocol.http.path`|string||
+|`policies[].policy.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`policies[].policy.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`policies[].policy.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`policies[].policy.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`policies[].policy.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`policies[].policy.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`policies[].policy.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.service`|object||
 |`policies[].policy.extAuthz.service.name`|object||
 |`policies[].policy.extAuthz.service.name.namespace`|string||
@@ -5988,9 +7481,10 @@
 |`policies[].policy.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.extAuthz.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough`|object||
-|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6001,7 +7495,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.key`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.value`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extAuthz.policies.backendAuth.key.location`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -6012,7 +7506,11 @@
 |`policies[].policy.extAuthz.policies.backendAuth.gcp`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6071,6 +7569,116 @@
 |`policies[].policy.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extProc`|object|Extend agentgateway with an external processor|
+|`policies[].policy.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.extProc.conditional[].service`|object||
+|`policies[].policy.extProc.conditional[].service.name`|object||
+|`policies[].policy.extProc.conditional[].service.name.namespace`|string||
+|`policies[].policy.extProc.conditional[].service.name.hostname`|string||
+|`policies[].policy.extProc.conditional[].service.port`|integer||
+|`policies[].policy.extProc.conditional[].host`|string|Hostname or IP address|
+|`policies[].policy.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`policies[].policy.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`policies[].policy.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`policies[].policy.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extProc.conditional[].policies.transformations.request`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.request.add`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.request.set`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`policies[].policy.extProc.conditional[].policies.transformations.request.body`|string||
+|`policies[].policy.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.response`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.response.add`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.response.set`|object||
+|`policies[].policy.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`policies[].policy.extProc.conditional[].policies.transformations.response.body`|string||
+|`policies[].policy.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`policies[].policy.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.extProc.conditional[].policies.backendTLS.cert`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.key`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.root`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.extProc.conditional[].policies.http.version`|string||
+|`policies[].policy.extProc.conditional[].policies.http.requestTimeout`|string||
+|`policies[].policy.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.extProc.conditional[].policies.tcp.keepalives`|object||
+|`policies[].policy.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`policies[].policy.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`policies[].policy.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`policies[].policy.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.service`|object||
 |`policies[].policy.extProc.service.name`|object||
 |`policies[].policy.extProc.service.name.namespace`|string||
@@ -6105,9 +7713,10 @@
 |`policies[].policy.extProc.policies.backendTLS.insecureHost`|boolean||
 |`policies[].policy.extProc.policies.backendTLS.alpn`|[]string||
 |`policies[].policy.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`policies[].policy.extProc.policies.backendAuth.passthrough`|object||
-|`policies[].policy.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extProc.policies.backendAuth.passthrough.location`|object||
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6118,7 +7727,7 @@
 |`policies[].policy.extProc.policies.backendAuth.key`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.value`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.value.file`|string||
-|`policies[].policy.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.extProc.policies.backendAuth.key.location`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.location.header`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.location.header.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -6129,7 +7738,11 @@
 |`policies[].policy.extProc.policies.backendAuth.gcp`|object||
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws`|object||
 |`policies[].policy.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6175,6 +7788,20 @@
 |`policies[].policy.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.transformations`|object|Modify requests and responses|
+|`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`policies[].policy.transformations.conditional[].request`|object||
+|`policies[].policy.transformations.conditional[].request.add`|object||
+|`policies[].policy.transformations.conditional[].request.set`|object||
+|`policies[].policy.transformations.conditional[].request.remove`|[]string||
+|`policies[].policy.transformations.conditional[].request.body`|string||
+|`policies[].policy.transformations.conditional[].request.metadata`|object||
+|`policies[].policy.transformations.conditional[].response`|object||
+|`policies[].policy.transformations.conditional[].response.add`|object||
+|`policies[].policy.transformations.conditional[].response.set`|object||
+|`policies[].policy.transformations.conditional[].response.remove`|[]string||
+|`policies[].policy.transformations.conditional[].response.body`|string||
+|`policies[].policy.transformations.conditional[].response.metadata`|object||
 |`policies[].policy.transformations.request`|object||
 |`policies[].policy.transformations.request.add`|object||
 |`policies[].policy.transformations.request.set`|object||
@@ -6253,9 +7880,10 @@
 |`backends[].mcp.targets[].policies.backendTLS.insecureHost`|boolean||
 |`backends[].mcp.targets[].policies.backendTLS.alpn`|[]string||
 |`backends[].mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].mcp.targets[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].mcp.targets[].policies.backendAuth.passthrough`|object||
-|`backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object||
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.header`|object||
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6266,7 +7894,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
-|`backends[].mcp.targets[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].mcp.targets[].policies.backendAuth.key.location`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.location.header`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.location.header.name`|string||
 |`backends[].mcp.targets[].policies.backendAuth.key.location.header.prefix`|string||
@@ -6277,7 +7905,11 @@
 |`backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -6325,7 +7957,7 @@
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string||
-|`backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`backends[].ai.provider.openAI`|object||
 |`backends[].ai.provider.openAI.model`|string||
 |`backends[].ai.provider.gemini`|object||
@@ -6347,6 +7979,8 @@
 |`backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`backends[].ai.provider.azure.apiVersion`|string||
 |`backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.provider.copilot`|object||
+|`backends[].ai.provider.copilot.model`|string||
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -6378,9 +8012,10 @@
 |`backends[].ai.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6391,7 +8026,7 @@
 |`backends[].ai.policies.backendAuth.key`|object||
 |`backends[].ai.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.backendAuth.key.location.header.prefix`|string||
@@ -6402,7 +8037,11 @@
 |`backends[].ai.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6464,6 +8103,128 @@
 |`backends[].ai.policies.health.eviction.restoreHealth`|number||
 |`backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
 |`backends[].ai.policies.health.eviction.healthThreshold`|number||
+|`backends[].ai.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`backends[].ai.policies.extAuthz.service`|object||
+|`backends[].ai.policies.extAuthz.service.name`|object||
+|`backends[].ai.policies.extAuthz.service.name.namespace`|string||
+|`backends[].ai.policies.extAuthz.service.name.hostname`|string||
+|`backends[].ai.policies.extAuthz.service.port`|integer||
+|`backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
+|`backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`backends[].ai.policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].ai.policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`backends[].ai.policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`backends[].ai.policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`backends[].ai.policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].ai.policies.extAuthz.policies.transformations.request`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.request.add`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.request.set`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`backends[].ai.policies.extAuthz.policies.transformations.request.body`|string||
+|`backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.response`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.response.add`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.response.set`|object||
+|`backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`backends[].ai.policies.extAuthz.policies.transformations.response.body`|string||
+|`backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object||
+|`backends[].ai.policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.key`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.root`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.hostname`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`backends[].ai.policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].ai.policies.extAuthz.policies.http.version`|string||
+|`backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string||
+|`backends[].ai.policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object||
+|`backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`backends[].ai.policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`backends[].ai.policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`backends[].ai.policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`backends[].ai.policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`backends[].ai.policies.extAuthz.protocol.grpc`|object||
+|`backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`backends[].ai.policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`backends[].ai.policies.extAuthz.protocol.http`|object||
+|`backends[].ai.policies.extAuthz.protocol.http.path`|string||
+|`backends[].ai.policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`backends[].ai.policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`backends[].ai.policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`backends[].ai.policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`backends[].ai.policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`backends[].ai.policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`backends[].ai.policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`backends[].ai.policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -6528,9 +8289,10 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6541,7 +8303,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -6552,7 +8314,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6624,9 +8390,10 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6637,7 +8404,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -6648,7 +8415,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6720,9 +8491,10 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6733,7 +8505,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -6744,7 +8516,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6814,9 +8590,10 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6827,7 +8604,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -6838,7 +8615,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -6944,9 +8725,10 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -6957,7 +8739,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -6968,7 +8750,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7040,9 +8826,10 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7053,7 +8840,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -7064,7 +8851,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7134,9 +8925,10 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7147,7 +8939,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -7158,7 +8950,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7234,7 +9030,7 @@
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object||
 |`backends[].ai.groups[].providers[].name`|string||
-|`backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`backends[].ai.groups[].providers[].provider.openAI`|object||
 |`backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -7256,6 +9052,8 @@
 |`backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
 |`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.groups[].providers[].provider.copilot`|object||
+|`backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -7287,9 +9085,10 @@
 |`backends[].ai.groups[].providers[].policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7300,7 +9099,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.prefix`|string||
@@ -7311,7 +9110,11 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -7373,6 +9176,128 @@
 |`backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
 |`backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
 |`backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
+|`backends[].ai.groups[].providers[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.service`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.service.name`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.service.name.namespace`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.service.name.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.add`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.set`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.set`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.key`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.root`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.path`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`backends[].ai.groups[].providers[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -7437,9 +9362,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7450,7 +9376,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -7461,7 +9387,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7533,9 +9463,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7546,7 +9477,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -7557,7 +9488,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7629,9 +9564,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7642,7 +9578,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -7653,7 +9589,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7723,9 +9663,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7736,7 +9677,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -7747,7 +9688,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7853,9 +9798,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7866,7 +9812,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -7877,7 +9823,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -7949,9 +9899,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -7962,7 +9913,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -7973,7 +9924,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8043,9 +9998,10 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8056,7 +10012,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -8067,7 +10023,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8172,9 +10132,10 @@
 |`backends[].policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.backendTLS.alpn`|[]string||
 |`backends[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.backendAuth.passthrough`|object||
-|`backends[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8185,7 +10146,7 @@
 |`backends[].policies.backendAuth.key`|object||
 |`backends[].policies.backendAuth.key.value`|object||
 |`backends[].policies.backendAuth.key.value.file`|string||
-|`backends[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.backendAuth.key.location`|object||
 |`backends[].policies.backendAuth.key.location.header`|object||
 |`backends[].policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.backendAuth.key.location.header.prefix`|string||
@@ -8196,7 +10157,11 @@
 |`backends[].policies.backendAuth.gcp`|object||
 |`backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.backendAuth.aws`|object||
 |`backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -8258,6 +10223,128 @@
 |`backends[].policies.health.eviction.restoreHealth`|number||
 |`backends[].policies.health.eviction.consecutiveFailures`|integer||
 |`backends[].policies.health.eviction.healthThreshold`|number||
+|`backends[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`backends[].policies.extAuthz.service`|object||
+|`backends[].policies.extAuthz.service.name`|object||
+|`backends[].policies.extAuthz.service.name.namespace`|string||
+|`backends[].policies.extAuthz.service.name.hostname`|string||
+|`backends[].policies.extAuthz.service.port`|integer||
+|`backends[].policies.extAuthz.host`|string|Hostname or IP address|
+|`backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`backends[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`backends[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`backends[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`backends[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.extAuthz.policies.transformations.request`|object||
+|`backends[].policies.extAuthz.policies.transformations.request.add`|object||
+|`backends[].policies.extAuthz.policies.transformations.request.set`|object||
+|`backends[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`backends[].policies.extAuthz.policies.transformations.request.body`|string||
+|`backends[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`backends[].policies.extAuthz.policies.transformations.response`|object||
+|`backends[].policies.extAuthz.policies.transformations.response.add`|object||
+|`backends[].policies.extAuthz.policies.transformations.response.set`|object||
+|`backends[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`backends[].policies.extAuthz.policies.transformations.response.body`|string||
+|`backends[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`backends[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`backends[].policies.extAuthz.policies.backendTLS.key`|string||
+|`backends[].policies.extAuthz.policies.backendTLS.root`|string||
+|`backends[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`backends[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`backends[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`backends[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`backends[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`backends[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].policies.extAuthz.policies.http.version`|string||
+|`backends[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`backends[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`backends[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`backends[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`backends[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`backends[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`backends[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`backends[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`backends[].policies.extAuthz.protocol.grpc`|object||
+|`backends[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`backends[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`backends[].policies.extAuthz.protocol.http`|object||
+|`backends[].policies.extAuthz.protocol.http.path`|string||
+|`backends[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`backends[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`backends[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`backends[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`backends[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`backends[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`backends[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`backends[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -8322,9 +10409,10 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8335,7 +10423,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -8346,7 +10434,11 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8418,9 +10510,10 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8431,7 +10524,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -8442,7 +10535,11 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8514,9 +10611,10 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8527,7 +10625,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -8538,7 +10636,11 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8608,9 +10710,10 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8621,7 +10724,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -8632,7 +10735,11 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8738,9 +10845,10 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8751,7 +10859,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -8762,7 +10870,11 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8834,9 +10946,10 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8847,7 +10960,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -8858,7 +10971,11 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -8928,9 +11045,10 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -8941,7 +11059,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -8952,7 +11070,11 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9086,6 +11208,10 @@
 |`routeGroups[].routes[].policies.requestMirror.backend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.requestMirror.percentage`|number||
 |`routeGroups[].routes[].policies.directResponse`|object|Directly respond to the request with a static response.|
+|`routeGroups[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.directResponse.conditional[].body`|array||
+|`routeGroups[].routes[].policies.directResponse.conditional[].status`|integer||
 |`routeGroups[].routes[].policies.directResponse.body`|array||
 |`routeGroups[].routes[].policies.directResponse.status`|integer||
 |`routeGroups[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
@@ -9172,9 +11298,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9185,7 +11312,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -9196,7 +11323,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9268,9 +11399,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9281,7 +11413,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -9292,7 +11424,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9364,9 +11500,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9377,7 +11514,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -9388,7 +11525,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9458,9 +11599,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9471,7 +11613,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -9482,7 +11624,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9588,9 +11734,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9601,7 +11748,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -9612,7 +11759,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9684,9 +11835,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9697,7 +11849,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -9708,7 +11860,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9778,9 +11934,10 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9791,7 +11948,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -9802,7 +11959,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -9884,6 +12045,7 @@
 |`routeGroups[].routes[].policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.backendTunnel`|object|Tunnel to the backend.|
 |`routeGroups[].routes[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].policies.backendTunnel.proxy.service`|object||
@@ -9895,7 +12057,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9906,7 +12068,7 @@
 |`routeGroups[].routes[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.backendAuth.key.location.header.prefix`|string||
@@ -9917,7 +12079,11 @@
 |`routeGroups[].routes[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -9937,12 +12103,133 @@
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.backendAuth.azure.developerImplicit`|object||
 |`routeGroups[].routes[].policies.backendAuth.azure.implicit`|object||
-|`routeGroups[].routes[].policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`routeGroups[].routes[].policies.localRateLimit`|object|Rate limit incoming requests. State is kept local.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer||
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer||
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].fillInterval`|string||
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].type`|enum|Possible values: `requests`, `tokens`.|
 |`routeGroups[].routes[].policies.localRateLimit[].maxTokens`|integer||
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer||
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string||
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Possible values: `requests`, `tokens`.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service.name`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service.name.namespace`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service.name.hostname`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service.port`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].domain`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries[].value`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.service`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.service.name`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.service.name.namespace`|string||
@@ -9978,9 +12265,10 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -9991,7 +12279,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.header.prefix`|string||
@@ -10002,7 +12290,11 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10048,7 +12340,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
-|`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`routeGroups[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
@@ -10126,6 +12419,129 @@
 |`routeGroups[].routes[].policies.apiKey.location.cookie`|object||
 |`routeGroups[].routes[].policies.apiKey.location.cookie.name`|string||
 |`routeGroups[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.version`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.path`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].policies.extAuthz.service`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -10160,9 +12576,10 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10173,7 +12590,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -10184,7 +12601,11 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10243,6 +12664,116 @@
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
+|`routeGroups[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.extProc.conditional[].service`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].service.name`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].service.port`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.http.version`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.service`|object||
 |`routeGroups[].routes[].policies.extProc.service.name`|object||
 |`routeGroups[].routes[].policies.extProc.service.name.namespace`|string||
@@ -10277,9 +12808,10 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].policies.extProc.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10290,7 +12822,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -10301,7 +12833,11 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10347,6 +12883,20 @@
 |`routeGroups[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify requests and responses|
+|`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`routeGroups[].routes[].policies.transformations.conditional[].request`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].request.add`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].request.set`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].request.remove`|[]string||
+|`routeGroups[].routes[].policies.transformations.conditional[].request.body`|string||
+|`routeGroups[].routes[].policies.transformations.conditional[].request.metadata`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].response`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].response.add`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].response.set`|object||
+|`routeGroups[].routes[].policies.transformations.conditional[].response.remove`|[]string||
+|`routeGroups[].routes[].policies.transformations.conditional[].response.body`|string||
+|`routeGroups[].routes[].policies.transformations.conditional[].response.metadata`|object||
 |`routeGroups[].routes[].policies.transformations.request`|object||
 |`routeGroups[].routes[].policies.transformations.request.add`|object||
 |`routeGroups[].routes[].policies.transformations.request.set`|object||
@@ -10430,9 +12980,10 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10443,7 +12994,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.header.prefix`|string||
@@ -10454,7 +13005,11 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -10502,7 +13057,7 @@
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string||
-|`routeGroups[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`routeGroups[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`routeGroups[].routes[].backends[].ai.provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.provider.openAI.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.gemini`|object||
@@ -10524,6 +13079,8 @@
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.apiVersion`|string||
 |`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
+|`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -10555,9 +13112,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10568,7 +13126,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.header.prefix`|string||
@@ -10579,7 +13137,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10641,6 +13203,128 @@
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.restoreHealth`|number||
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.consecutiveFailures`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.health.eviction.healthThreshold`|number||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.service`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http.path`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -10705,9 +13389,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10718,7 +13403,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -10729,7 +13414,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10801,9 +13490,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10814,7 +13504,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -10825,7 +13515,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10897,9 +13591,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -10910,7 +13605,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -10921,7 +13616,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -10991,9 +13690,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11004,7 +13704,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -11015,7 +13715,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11121,9 +13825,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11134,7 +13839,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -11145,7 +13850,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11217,9 +13926,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11230,7 +13940,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -11241,7 +13951,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11311,9 +14025,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11324,7 +14039,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -11335,7 +14050,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11411,7 +14130,7 @@
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, or azure may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -11433,6 +14152,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -11464,9 +14185,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11477,7 +14199,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.header.prefix`|string||
@@ -11488,7 +14210,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -11550,6 +14276,128 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.restoreHealth`|number||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.consecutiveFailures`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.health.eviction.healthThreshold`|number||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.path`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -11614,9 +14462,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11627,7 +14476,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -11638,7 +14487,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11710,9 +14563,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11723,7 +14577,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -11734,7 +14588,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11806,9 +14664,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11819,7 +14678,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -11830,7 +14689,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -11900,9 +14763,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -11913,7 +14777,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -11924,7 +14788,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12030,9 +14898,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12043,7 +14912,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -12054,7 +14923,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12126,9 +14999,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12139,7 +15013,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -12150,7 +15024,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12220,9 +15098,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12233,7 +15112,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -12244,7 +15123,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12350,9 +15233,10 @@
 |`routeGroups[].routes[].backends[].policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12363,7 +15247,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.header.prefix`|string||
@@ -12374,7 +15258,11 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -12436,6 +15324,128 @@
 |`routeGroups[].routes[].backends[].policies.health.eviction.restoreHealth`|number||
 |`routeGroups[].routes[].backends[].policies.health.eviction.consecutiveFailures`|integer||
 |`routeGroups[].routes[].backends[].policies.health.eviction.healthThreshold`|number||
+|`routeGroups[].routes[].backends[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server after this backend is selected.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.service`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.service.name`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extAuthz.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies`|object|Policies to connect to the backend|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.version`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http.path`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`routeGroups[].routes[].backends[].policies.extAuthz.protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`routeGroups[].routes[].backends[].policies.extAuthz.failureMode.denyWithStatus`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody`|object|Options for including the request body in the authorization request|
+|`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -12500,9 +15510,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12513,7 +15524,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -12524,7 +15535,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12596,9 +15611,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12609,7 +15625,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -12620,7 +15636,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12692,9 +15712,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12705,7 +15726,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -12716,7 +15737,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12786,9 +15811,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12799,7 +15825,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -12810,7 +15836,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -12916,9 +15946,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -12929,7 +15960,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -12940,7 +15971,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13012,9 +16047,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13025,7 +16061,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -13036,7 +16072,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13106,9 +16146,10 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13119,7 +16160,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -13130,7 +16171,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13222,7 +16267,7 @@
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
 |`llm.models[].params.tokenize`|boolean|Whether to tokenize the request before forwarding it upstream.|
-|`llm.models[].provider`|enum|provider of the LLM we are connecting too<br>Possible values: `openAI`, `gemini`, `vertex`, `anthropic`, `bedrock`, `azure`.|
+|`llm.models[].provider`|enum|provider of the LLM we are connecting too<br>Possible values: `openAI`, `gemini`, `vertex`, `anthropic`, `bedrock`, `azure`, `copilot`.|
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
@@ -13243,6 +16288,7 @@
 |`llm.models[].backendTLS.insecureHost`|boolean||
 |`llm.models[].backendTLS.alpn`|[]string||
 |`llm.models[].backendTLS.subjectAltNames`|[]string||
+|`llm.models[].backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
 |`llm.models[].health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
@@ -13309,9 +16355,10 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13322,7 +16369,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -13333,7 +16380,11 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13405,9 +16456,10 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13418,7 +16470,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -13429,7 +16481,11 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13501,9 +16557,10 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13514,7 +16571,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -13525,7 +16582,11 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13595,9 +16656,10 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13608,7 +16670,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -13619,7 +16681,11 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13725,9 +16791,10 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13738,7 +16805,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -13749,7 +16816,11 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13821,9 +16892,10 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13834,7 +16906,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -13845,7 +16917,11 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -13915,9 +16991,10 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -13928,7 +17005,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -13939,7 +17016,11 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14051,6 +17132,129 @@
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`llm.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`llm.policies.extAuthz.conditional[].service`|object||
+|`llm.policies.extAuthz.conditional[].service.name`|object||
+|`llm.policies.extAuthz.conditional[].service.name.namespace`|string||
+|`llm.policies.extAuthz.conditional[].service.name.hostname`|string||
+|`llm.policies.extAuthz.conditional[].service.port`|integer||
+|`llm.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`llm.policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`llm.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`llm.policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`llm.policies.extAuthz.conditional[].policies.http.version`|string||
+|`llm.policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`llm.policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`llm.policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`llm.policies.extAuthz.conditional[].protocol.grpc`|object||
+|`llm.policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`llm.policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`llm.policies.extAuthz.conditional[].protocol.http`|object||
+|`llm.policies.extAuthz.conditional[].protocol.http.path`|string||
+|`llm.policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`llm.policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`llm.policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`llm.policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`llm.policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`llm.policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`llm.policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`llm.policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.service`|object||
 |`llm.policies.extAuthz.service.name`|object||
 |`llm.policies.extAuthz.service.name.namespace`|string||
@@ -14085,9 +17289,10 @@
 |`llm.policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`llm.policies.extAuthz.policies.backendTLS.alpn`|[]string||
 |`llm.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.policies.extAuthz.policies.backendAuth.passthrough`|object||
-|`llm.policies.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14098,7 +17303,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.key`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.value.file`|string||
-|`llm.policies.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extAuthz.policies.backendAuth.key.location`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.location.header`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -14109,7 +17314,11 @@
 |`llm.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws`|object||
 |`llm.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14168,6 +17377,116 @@
 |`llm.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extProc`|object|Extend agentgateway with an external processor|
+|`llm.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`llm.policies.extProc.conditional[].service`|object||
+|`llm.policies.extProc.conditional[].service.name`|object||
+|`llm.policies.extProc.conditional[].service.name.namespace`|string||
+|`llm.policies.extProc.conditional[].service.name.hostname`|string||
+|`llm.policies.extProc.conditional[].service.port`|integer||
+|`llm.policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`llm.policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`llm.policies.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`llm.policies.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.policies.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`llm.policies.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`llm.policies.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`llm.policies.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.policies.extProc.conditional[].policies.transformations.request`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.request.add`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.request.set`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`llm.policies.extProc.conditional[].policies.transformations.request.body`|string||
+|`llm.policies.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.response`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.response.add`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.response.set`|object||
+|`llm.policies.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`llm.policies.extProc.conditional[].policies.transformations.response.body`|string||
+|`llm.policies.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`llm.policies.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.policies.extProc.conditional[].policies.backendTLS.cert`|string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.key`|string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.root`|string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`llm.policies.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`llm.policies.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.policies.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`llm.policies.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`llm.policies.extProc.conditional[].policies.http.version`|string||
+|`llm.policies.extProc.conditional[].policies.http.requestTimeout`|string||
+|`llm.policies.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.policies.extProc.conditional[].policies.tcp.keepalives`|object||
+|`llm.policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`llm.policies.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`llm.policies.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`llm.policies.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`llm.policies.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`llm.policies.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`llm.policies.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`llm.policies.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.service`|object||
 |`llm.policies.extProc.service.name`|object||
 |`llm.policies.extProc.service.name.namespace`|string||
@@ -14202,9 +17521,10 @@
 |`llm.policies.extProc.policies.backendTLS.insecureHost`|boolean||
 |`llm.policies.extProc.policies.backendTLS.alpn`|[]string||
 |`llm.policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`llm.policies.extProc.policies.backendAuth.passthrough`|object||
-|`llm.policies.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extProc.policies.backendAuth.passthrough.location`|object||
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14215,7 +17535,7 @@
 |`llm.policies.extProc.policies.backendAuth.key`|object||
 |`llm.policies.extProc.policies.backendAuth.key.value`|object||
 |`llm.policies.extProc.policies.backendAuth.key.value.file`|string||
-|`llm.policies.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.extProc.policies.backendAuth.key.location`|object||
 |`llm.policies.extProc.policies.backendAuth.key.location.header`|object||
 |`llm.policies.extProc.policies.backendAuth.key.location.header.name`|string||
 |`llm.policies.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -14226,7 +17546,11 @@
 |`llm.policies.extProc.policies.backendAuth.gcp`|object||
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.policies.backendAuth.aws`|object||
 |`llm.policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14272,6 +17596,20 @@
 |`llm.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.transformations`|object|Modify requests and responses|
+|`llm.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`llm.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`llm.policies.transformations.conditional[].request`|object||
+|`llm.policies.transformations.conditional[].request.add`|object||
+|`llm.policies.transformations.conditional[].request.set`|object||
+|`llm.policies.transformations.conditional[].request.remove`|[]string||
+|`llm.policies.transformations.conditional[].request.body`|string||
+|`llm.policies.transformations.conditional[].request.metadata`|object||
+|`llm.policies.transformations.conditional[].response`|object||
+|`llm.policies.transformations.conditional[].response.add`|object||
+|`llm.policies.transformations.conditional[].response.set`|object||
+|`llm.policies.transformations.conditional[].response.remove`|[]string||
+|`llm.policies.transformations.conditional[].response.body`|string||
+|`llm.policies.transformations.conditional[].response.metadata`|object||
 |`llm.policies.transformations.request`|object||
 |`llm.policies.transformations.request.add`|object||
 |`llm.policies.transformations.request.set`|object||
@@ -14312,6 +17650,125 @@
 |`llm.policies.apiKey.location.cookie.name`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
+|`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`llm.policies.localRateLimit[].maxTokens`|integer||
+|`llm.policies.localRateLimit[].tokensPerFill`|integer||
+|`llm.policies.localRateLimit[].fillInterval`|string||
+|`llm.policies.localRateLimit[].type`|enum|Possible values: `requests`, `tokens`.|
+|`llm.policies.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`llm.policies.remoteRateLimit.service`|object||
+|`llm.policies.remoteRateLimit.service.name`|object||
+|`llm.policies.remoteRateLimit.service.name.namespace`|string||
+|`llm.policies.remoteRateLimit.service.name.hostname`|string||
+|`llm.policies.remoteRateLimit.service.port`|integer||
+|`llm.policies.remoteRateLimit.host`|string|Hostname or IP address|
+|`llm.policies.remoteRateLimit.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.domain`|string||
+|`llm.policies.remoteRateLimit.policies`|object|Policies to connect to the backend|
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.add`|object||
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.set`|object||
+|`llm.policies.remoteRateLimit.policies.requestHeaderModifier.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`llm.policies.remoteRateLimit.policies.transformations.request`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.add`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.set`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.request.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.transformations.request.body`|string||
+|`llm.policies.remoteRateLimit.policies.transformations.request.metadata`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.add`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.set`|object||
+|`llm.policies.remoteRateLimit.policies.transformations.response.remove`|[]string||
+|`llm.policies.remoteRateLimit.policies.transformations.response.body`|string||
+|`llm.policies.remoteRateLimit.policies.transformations.response.metadata`|object||
+|`llm.policies.remoteRateLimit.policies.backendTLS`|object|Send TLS to the backend.|
+|`llm.policies.remoteRateLimit.policies.backendTLS.cert`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.key`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.root`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.hostname`|string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.insecure`|boolean||
+|`llm.policies.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
+|`llm.policies.remoteRateLimit.policies.backendTLS.alpn`|[]string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`llm.policies.remoteRateLimit.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.prefix`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.value`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.header`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.header.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.header.prefix`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object||
+|`llm.policies.remoteRateLimit.policies.http`|object|Specify HTTP settings for the backend|
+|`llm.policies.remoteRateLimit.policies.http.version`|string||
+|`llm.policies.remoteRateLimit.policies.http.requestTimeout`|string||
+|`llm.policies.remoteRateLimit.policies.tcp`|object|Specify TCP settings for the backend|
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives`|object||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.enabled`|boolean||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.time`|string||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.interval`|string||
+|`llm.policies.remoteRateLimit.policies.tcp.keepalives.retries`|integer||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout`|object||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout.secs`|integer||
+|`llm.policies.remoteRateLimit.policies.tcp.connectTimeout.nanos`|integer||
+|`llm.policies.remoteRateLimit.policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service`|object||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name`|object||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer||
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.descriptors`|[]object||
+|`llm.policies.remoteRateLimit.descriptors[].entries`|[]object||
+|`llm.policies.remoteRateLimit.descriptors[].entries[].key`|string||
+|`llm.policies.remoteRateLimit.descriptors[].entries[].value`|string||
+|`llm.policies.remoteRateLimit.descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
+|`llm.policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`llm.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`llm.policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp`|object||
 |`mcp.port`|integer||
 |`mcp.targets`|[]object||
@@ -14366,9 +17823,10 @@
 |`mcp.targets[].policies.backendTLS.insecureHost`|boolean||
 |`mcp.targets[].policies.backendTLS.alpn`|[]string||
 |`mcp.targets[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.targets[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.targets[].policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.targets[].policies.backendAuth.passthrough`|object||
-|`mcp.targets[].policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.targets[].policies.backendAuth.passthrough.location`|object||
 |`mcp.targets[].policies.backendAuth.passthrough.location.header`|object||
 |`mcp.targets[].policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.targets[].policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14379,7 +17837,7 @@
 |`mcp.targets[].policies.backendAuth.key`|object||
 |`mcp.targets[].policies.backendAuth.key.value`|object||
 |`mcp.targets[].policies.backendAuth.key.value.file`|string||
-|`mcp.targets[].policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.targets[].policies.backendAuth.key.location`|object||
 |`mcp.targets[].policies.backendAuth.key.location.header`|object||
 |`mcp.targets[].policies.backendAuth.key.location.header.name`|string||
 |`mcp.targets[].policies.backendAuth.key.location.header.prefix`|string||
@@ -14390,7 +17848,11 @@
 |`mcp.targets[].policies.backendAuth.gcp`|object||
 |`mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.targets[].policies.backendAuth.aws`|object||
 |`mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
@@ -14474,6 +17936,10 @@
 |`mcp.policies.requestMirror.backend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.requestMirror.percentage`|number||
 |`mcp.policies.directResponse`|object|Directly respond to the request with a static response.|
+|`mcp.policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.directResponse.conditional[].body`|array||
+|`mcp.policies.directResponse.conditional[].status`|integer||
 |`mcp.policies.directResponse.body`|array||
 |`mcp.policies.directResponse.status`|integer||
 |`mcp.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
@@ -14560,9 +18026,10 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14573,7 +18040,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.header.prefix`|string||
@@ -14584,7 +18051,11 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14656,9 +18127,10 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14669,7 +18141,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -14680,7 +18152,11 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14752,9 +18228,10 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14765,7 +18242,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -14776,7 +18253,11 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14846,9 +18327,10 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14859,7 +18341,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -14870,7 +18352,11 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -14976,9 +18462,10 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -14989,7 +18476,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.header.prefix`|string||
@@ -15000,7 +18487,11 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15072,9 +18563,10 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15085,7 +18577,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.header.prefix`|string||
@@ -15096,7 +18588,11 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15166,9 +18662,10 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough`|object||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15179,7 +18676,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.header.prefix`|string||
@@ -15190,7 +18687,11 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15272,6 +18773,7 @@
 |`mcp.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.backendTunnel`|object|Tunnel to the backend.|
 |`mcp.policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.backendTunnel.proxy.service`|object||
@@ -15283,7 +18785,7 @@
 |`mcp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.backendAuth.passthrough`|object||
-|`mcp.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15294,7 +18796,7 @@
 |`mcp.policies.backendAuth.key`|object||
 |`mcp.policies.backendAuth.key.value`|object||
 |`mcp.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.backendAuth.key.location`|object||
 |`mcp.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.backendAuth.key.location.header.prefix`|string||
@@ -15305,7 +18807,11 @@
 |`mcp.policies.backendAuth.gcp`|object||
 |`mcp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.backendAuth.aws`|object||
 |`mcp.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15325,12 +18831,133 @@
 |`mcp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.backendAuth.azure.developerImplicit`|object||
 |`mcp.policies.backendAuth.azure.implicit`|object||
-|`mcp.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
+|`mcp.policies.localRateLimit`|object|Rate limit incoming requests. State is kept local.|
+|`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.localRateLimit.conditional[].maxTokens`|integer||
+|`mcp.policies.localRateLimit.conditional[].tokensPerFill`|integer||
+|`mcp.policies.localRateLimit.conditional[].fillInterval`|string||
+|`mcp.policies.localRateLimit.conditional[].type`|enum|Possible values: `requests`, `tokens`.|
 |`mcp.policies.localRateLimit[].maxTokens`|integer||
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer||
 |`mcp.policies.localRateLimit[].fillInterval`|string||
 |`mcp.policies.localRateLimit[].type`|enum|Possible values: `requests`, `tokens`.|
 |`mcp.policies.remoteRateLimit`|object|Rate limit incoming requests. State is managed by a remote server.|
+|`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.remoteRateLimit.conditional[].service`|object||
+|`mcp.policies.remoteRateLimit.conditional[].service.name`|object||
+|`mcp.policies.remoteRateLimit.conditional[].service.name.namespace`|string||
+|`mcp.policies.remoteRateLimit.conditional[].service.name.hostname`|string||
+|`mcp.policies.remoteRateLimit.conditional[].service.port`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].host`|string|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.remoteRateLimit.conditional[].domain`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies`|object|Policies to connect to the backend|
+|`mcp.policies.remoteRateLimit.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.add`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.set`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.add`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.set`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.remove`|[]string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.body`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.request.metadata`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.add`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.set`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.remove`|[]string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.body`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.transformations.response.metadata`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.cert`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.key`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.root`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.hostname`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.insecure`|boolean||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.alpn`|[]string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.remoteRateLimit.conditional[].policies.http.version`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives.time`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives.interval`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.conditional[].descriptors`|[]object||
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object||
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries[].key`|string||
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries[].value`|string||
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`mcp.policies.remoteRateLimit.conditional[].descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`mcp.policies.remoteRateLimit.conditional[].failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.remoteRateLimit.service`|object||
 |`mcp.policies.remoteRateLimit.service.name`|object||
 |`mcp.policies.remoteRateLimit.service.name.namespace`|string||
@@ -15366,9 +18993,10 @@
 |`mcp.policies.remoteRateLimit.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.remoteRateLimit.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.remoteRateLimit.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.remoteRateLimit.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough`|object||
-|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15379,7 +19007,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.header.prefix`|string||
@@ -15390,7 +19018,11 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15436,7 +19068,8 @@
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].key`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].entries[].value`|string||
 |`mcp.policies.remoteRateLimit.descriptors[].type`|enum|Possible values: `requests`, `tokens`.|
-|`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
+|`mcp.policies.remoteRateLimit.descriptors[].cost`|string|cost determines the optional expression to determine the cost of the request.<br>If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.<br>If the expression fails to evaluate, the descriptor is skipped.<br>Costs for type `requests` are evaluated during request processing. Costs for type `tokens`<br>are evaluated upon request completion.|
+|`mcp.policies.remoteRateLimit.descriptors[].limitOverride`|string|limitOverride determines the optional expression to determine the limit of the request.<br>This tells the remote server what limit to apply to the request.<br>Note: this does not specify the *cost* of the request, which is done by the `cost` field.<br>The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:<br>`{"unit":"second","requestsPerUnit":100}`.<br>Valid units: second, minute, hour, day, month, year<br>If the expression fails to evaluate, the descriptor is skipped.|
 |`mcp.policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
@@ -15514,6 +19147,129 @@
 |`mcp.policies.apiKey.location.cookie`|object||
 |`mcp.policies.apiKey.location.cookie.name`|string||
 |`mcp.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
+|`mcp.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.extAuthz.conditional[].service`|object||
+|`mcp.policies.extAuthz.conditional[].service.name`|object||
+|`mcp.policies.extAuthz.conditional[].service.name.namespace`|string||
+|`mcp.policies.extAuthz.conditional[].service.name.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].service.port`|integer||
+|`mcp.policies.extAuthz.conditional[].host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.extAuthz.conditional[].policies`|object|Policies to connect to the backend|
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.body`|string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.request.metadata`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.add`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.set`|object||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.remove`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.body`|string||
+|`mcp.policies.extAuthz.conditional[].policies.transformations.response.metadata`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.cert`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.key`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.root`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.insecure`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.alpn`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.extAuthz.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.extAuthz.conditional[].policies.http.version`|string||
+|`mcp.policies.extAuthz.conditional[].policies.http.requestTimeout`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives`|object||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.time`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.interval`|string||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout`|object||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].protocol`|object|The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.<br>Exactly one of grpc or http may be set.|
+|`mcp.policies.extAuthz.conditional[].protocol.grpc`|object||
+|`mcp.policies.extAuthz.conditional[].protocol.grpc.context`|object|Additional context to send to the authorization service.<br>This maps to the `context_extensions` field of the request, and only allows static values.|
+|`mcp.policies.extAuthz.conditional[].protocol.grpc.metadata`|object|Additional metadata to send to the authorization service.<br>This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.<br>If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.|
+|`mcp.policies.extAuthz.conditional[].protocol.http`|object||
+|`mcp.policies.extAuthz.conditional[].protocol.http.path`|string||
+|`mcp.policies.extAuthz.conditional[].protocol.http.redirect`|string|When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by<br>the provided expression rather than directly returning the error.|
+|`mcp.policies.extAuthz.conditional[].protocol.http.includeResponseHeaders`|[]string|Specific headers from the authorization response will be copied into the request to the backend.|
+|`mcp.policies.extAuthz.conditional[].protocol.http.addRequestHeaders`|object|Specific headers to add in the authorization request (empty = all headers), based on the expression|
+|`mcp.policies.extAuthz.conditional[].protocol.http.metadata`|object|Metadata to include under the `extauthz` variable, based on the authorization response.|
+|`mcp.policies.extAuthz.conditional[].failureMode`|object|Behavior when the authorization service is unavailable or returns an error|
+|`mcp.policies.extAuthz.conditional[].failureMode.denyWithStatus`|integer||
+|`mcp.policies.extAuthz.conditional[].includeRequestHeaders`|[]string|Specific headers to include in the authorization request.<br>If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody`|object|Options for including the request body in the authorization request|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
+|`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.service`|object||
 |`mcp.policies.extAuthz.service.name`|object||
 |`mcp.policies.extAuthz.service.name.namespace`|string||
@@ -15548,9 +19304,10 @@
 |`mcp.policies.extAuthz.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.extAuthz.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.extAuthz.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extAuthz.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.extAuthz.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough`|object||
-|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15561,7 +19318,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.key`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.extAuthz.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extAuthz.policies.backendAuth.key.location`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.header.prefix`|string||
@@ -15572,7 +19329,11 @@
 |`mcp.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15631,6 +19392,116 @@
 |`mcp.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extProc`|object|Extend agentgateway with an external processor|
+|`mcp.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.extProc.conditional[].service`|object||
+|`mcp.policies.extProc.conditional[].service.name`|object||
+|`mcp.policies.extProc.conditional[].service.name.namespace`|string||
+|`mcp.policies.extProc.conditional[].service.name.hostname`|string||
+|`mcp.policies.extProc.conditional[].service.port`|integer||
+|`mcp.policies.extProc.conditional[].host`|string|Hostname or IP address|
+|`mcp.policies.extProc.conditional[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.extProc.conditional[].policies`|object|Policies to connect to the backend|
+|`mcp.policies.extProc.conditional[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.extProc.conditional[].policies.requestHeaderModifier.add`|object||
+|`mcp.policies.extProc.conditional[].policies.requestHeaderModifier.set`|object||
+|`mcp.policies.extProc.conditional[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.extProc.conditional[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extProc.conditional[].policies.transformations.request`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.request.add`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.request.set`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.request.remove`|[]string||
+|`mcp.policies.extProc.conditional[].policies.transformations.request.body`|string||
+|`mcp.policies.extProc.conditional[].policies.transformations.request.metadata`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.response`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.response.add`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.response.set`|object||
+|`mcp.policies.extProc.conditional[].policies.transformations.response.remove`|[]string||
+|`mcp.policies.extProc.conditional[].policies.transformations.response.body`|string||
+|`mcp.policies.extProc.conditional[].policies.transformations.response.metadata`|object||
+|`mcp.policies.extProc.conditional[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.extProc.conditional[].policies.backendTLS.cert`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.key`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.root`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.hostname`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.insecure`|boolean||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.alpn`|[]string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extProc.conditional[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.value`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.header`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.extProc.conditional[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.extProc.conditional[].policies.http.version`|string||
+|`mcp.policies.extProc.conditional[].policies.http.requestTimeout`|string||
+|`mcp.policies.extProc.conditional[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.extProc.conditional[].policies.tcp.keepalives`|object||
+|`mcp.policies.extProc.conditional[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.extProc.conditional[].policies.tcp.keepalives.time`|string||
+|`mcp.policies.extProc.conditional[].policies.tcp.keepalives.interval`|string||
+|`mcp.policies.extProc.conditional[].policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.extProc.conditional[].policies.tcp.connectTimeout`|object||
+|`mcp.policies.extProc.conditional[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.extProc.conditional[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.conditional[].failureMode`|enum|Behavior when the ext_proc service is unavailable or returns an error<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.service`|object||
 |`mcp.policies.extProc.service.name`|object||
 |`mcp.policies.extProc.service.name.namespace`|string||
@@ -15665,9 +19536,10 @@
 |`mcp.policies.extProc.policies.backendTLS.insecureHost`|boolean||
 |`mcp.policies.extProc.policies.backendTLS.alpn`|[]string||
 |`mcp.policies.extProc.policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extProc.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.extProc.policies.backendAuth`|object|Authenticate to the backend.|
 |`mcp.policies.extProc.policies.backendAuth.passthrough`|object||
-|`mcp.policies.extProc.policies.backendAuth.passthrough.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extProc.policies.backendAuth.passthrough.location`|object||
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.header`|object||
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.header.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.header.prefix`|string||
@@ -15678,7 +19550,7 @@
 |`mcp.policies.extProc.policies.backendAuth.key`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.value`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.value.file`|string||
-|`mcp.policies.extProc.policies.backendAuth.key.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.extProc.policies.backendAuth.key.location`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.location.header`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.location.header.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.key.location.header.prefix`|string||
@@ -15689,7 +19561,11 @@
 |`mcp.policies.extProc.policies.backendAuth.gcp`|object||
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws`|object||
 |`mcp.policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
@@ -15735,6 +19611,20 @@
 |`mcp.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.transformations`|object|Modify requests and responses|
+|`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
+|`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
+|`mcp.policies.transformations.conditional[].request`|object||
+|`mcp.policies.transformations.conditional[].request.add`|object||
+|`mcp.policies.transformations.conditional[].request.set`|object||
+|`mcp.policies.transformations.conditional[].request.remove`|[]string||
+|`mcp.policies.transformations.conditional[].request.body`|string||
+|`mcp.policies.transformations.conditional[].request.metadata`|object||
+|`mcp.policies.transformations.conditional[].response`|object||
+|`mcp.policies.transformations.conditional[].response.add`|object||
+|`mcp.policies.transformations.conditional[].response.set`|object||
+|`mcp.policies.transformations.conditional[].response.remove`|[]string||
+|`mcp.policies.transformations.conditional[].response.body`|string||
+|`mcp.policies.transformations.conditional[].response.metadata`|object||
 |`mcp.policies.transformations.request`|object||
 |`mcp.policies.transformations.request.add`|object||
 |`mcp.policies.transformations.request.set`|object||

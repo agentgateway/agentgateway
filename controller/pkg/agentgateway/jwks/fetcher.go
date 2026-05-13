@@ -313,9 +313,13 @@ func (f *Fetcher) maybeFetchJwks(ctx context.Context) {
 		updates.Insert(fetch.RequestKey)
 	}
 
-	if !updates.IsEmpty() {
-		f.notifySubscribers(updates)
+	if updates.IsEmpty() {
+		return
 	}
+
+	swept := f.sweepRetiredCache()
+	updates.Merge(swept)
+	f.notifySubscribers(updates)
 }
 
 func (f *Fetcher) SubscribeToUpdates() <-chan sets.Set[remotehttp.FetchKey] {
@@ -413,6 +417,39 @@ func (f *Fetcher) RemoveKeyset(requestKey remotehttp.FetchKey) {
 	if hadRequest {
 		signalWake(f.wake)
 	}
+}
+
+// RetireKeyset stops fetching requestKey but keeps its cache entry alive so
+// that JWT validation can continue using the old keys until the next
+// successful fetch sweeps the orphaned entry.
+func (f *Fetcher) RetireKeyset(requestKey remotehttp.FetchKey) {
+	f.mu.Lock()
+	_, hadRequest := f.requests[requestKey]
+	if hadRequest {
+		delete(f.requests, requestKey)
+		f.schedule.Remove(requestKey)
+	}
+	f.mu.Unlock()
+
+	if hadRequest {
+		signalWake(f.wake)
+	}
+}
+
+// sweepRetiredCache removes cache entries that have no corresponding live
+// request. Called after a successful fetch batch so that retired entries
+// linger until a replacement is available.
+func (f *Fetcher) sweepRetiredCache() sets.Set[remotehttp.FetchKey] {
+	f.mu.Lock()
+	swept := sets.New[remotehttp.FetchKey]()
+	for _, key := range f.cache.Keys() {
+		if _, ok := f.requests[key]; !ok {
+			swept.Insert(key)
+			f.cache.deleteJwks(key)
+		}
+	}
+	f.mu.Unlock()
+	return swept
 }
 
 func (f *Fetcher) fetchJwks(ctx context.Context, source JwksSource) (string, jose.JSONWebKeySet, error) {

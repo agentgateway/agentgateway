@@ -2,6 +2,7 @@ package translator
 
 import (
 	"istio.io/istio/pilot/pkg/model/kstatus"
+	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
@@ -145,6 +146,9 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 			supported = append(supported, toRouteKind(wellknown.TCPRouteGVK))
 		}
 		// UDP route not support
+	case gwv1.ProtocolType(protocol.HBONE):
+		// HBONE is a tunnel terminator — routes attach to inner listeners, not here.
+		supported = []gwv1.RouteGroupKind{}
 	}
 	if l.AllowedRoutes != nil && len(l.AllowedRoutes.Kinds) > 0 {
 		// We need to filter down to only ones we actually support

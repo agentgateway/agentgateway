@@ -127,7 +127,7 @@ type BaseTestingSuite struct {
 	TestCases        map[string]*TestCase
 
 	// (Optional) Path of directory (relative to git root) containing the CRDs that will be used to read
-	// the objects from the manifests. If empty then defaults to "install/helm/kgateway-crds/templates"
+	// the objects from the manifests. If empty then defaults to "install/helm/agentgateway-crds/templates"
 	CrdPath string
 
 	// used internally to parse the manifest files

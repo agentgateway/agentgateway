@@ -121,6 +121,20 @@ impl RateLimit {
 	}
 }
 
+impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		_req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		for rate_limit in self {
+			rate_limit.check_request()?;
+		}
+		Ok(http::PolicyResponse::default())
+	}
+}
+
 // Forked from https://github.com/pelikan-io/rustcommon/tree/main/ratelimit to provide some additional functions
 mod ratelimit {
 	use core::sync::atomic::{AtomicU64, Ordering};

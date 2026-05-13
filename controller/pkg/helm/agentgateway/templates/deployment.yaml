@@ -22,9 +22,12 @@ spec:
     metadata:
       annotations:
       {{- /* Add managed resource checksums to trigger rollout when config changes */}}
-      {{- $configChecksum := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
+      {{- $managedChecksums := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
+      {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
+      {{- $_ := set $managedChecksums "checksum/xds-ca" (include (print $.Template.BasePath "/xds-ca-configmap.yaml") . | sha256sum) }}
+      {{- end }}
       {{- toYaml (merge
-          $configChecksum
+          $managedChecksums
           (deepCopy ($gateway.gatewayAnnotations | default dict))
           $promAnnotations
           (include "kgateway.gateway.gatewayNameAnnotation" . | fromYaml)

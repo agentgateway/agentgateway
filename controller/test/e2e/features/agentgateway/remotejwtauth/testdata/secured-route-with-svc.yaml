@@ -28,7 +28,7 @@ spec:
     jwtAuthentication:
       mode: Strict
       providers:
-      - issuer: https://kgateway.dev
+      - issuer: https://agentgateway.dev
         jwks:
           remote:
             jwksPath: org-one/keys

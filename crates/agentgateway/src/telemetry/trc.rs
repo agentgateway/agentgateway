@@ -16,7 +16,7 @@ pub use traceparent::TraceParent;
 
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
-use crate::types::agent::{BackendPolicy, SimpleBackendReference, TracingConfig};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingConfig};
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -268,7 +268,7 @@ impl PolicyGrpcSpanExporter {
 	fn new(
 		inputs: Arc<crate::ProxyInputs>,
 		target: Arc<SimpleBackendReference>,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 		runtime: tokio::runtime::Handle,
 	) -> Self {
 		use crate::http::ext_proc::GrpcReferenceChannel;
@@ -352,7 +352,7 @@ pub(crate) struct PolicyOtelHttpClient {
 	pub(crate) policy_client: crate::proxy::httpproxy::PolicyClient,
 	pub(crate) backend_ref: SimpleBackendReference,
 	pub(crate) runtime: tokio::runtime::Handle,
-	pub(crate) policies: Vec<BackendPolicy>,
+	pub(crate) policies: Vec<BackendTrafficPolicy>,
 }
 
 #[async_trait::async_trait]
@@ -538,6 +538,7 @@ mod traceparent {
 	use rand::RngExt;
 
 	use crate::http::Request;
+	use crate::http::x_headers::TRACEPARENT;
 
 	/// Represents a traceparent, as defined by https://www.w3.org/TR/trace-context/
 	#[derive(Clone, Eq, PartialEq)]
@@ -547,8 +548,6 @@ mod traceparent {
 		pub span_id: u64,
 		pub flags: u8,
 	}
-
-	pub const TRACEPARENT_HEADER: &str = "traceparent";
 
 	impl Default for TraceParent {
 		fn default() -> Self {
@@ -568,12 +567,12 @@ mod traceparent {
 		}
 		pub fn insert_header(&self, req: &mut Request) {
 			let hv = hyper::header::HeaderValue::from_bytes(format!("{self:?}").as_bytes()).unwrap();
-			req.headers_mut().insert(TRACEPARENT_HEADER, hv);
+			req.headers_mut().insert(TRACEPARENT, hv);
 		}
 		pub fn from_request(req: &Request) -> Option<Self> {
 			req
 				.headers()
-				.get(TRACEPARENT_HEADER)
+				.get(TRACEPARENT)
 				.and_then(|b| b.to_str().ok())
 				.and_then(|b| TraceParent::try_from(b).ok())
 		}

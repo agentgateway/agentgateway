@@ -137,6 +137,41 @@ func TestOverrideXValidationErrorsWithoutExactSingleMatch(t *testing.T) {
 	})
 }
 
+func TestApplyConditionalPolicyUsesVisibleSchemaFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"backendRef":  {},
+			"conditional": {},
+			"failureMode": {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{
+		Fields: []string{"backendRef"},
+	})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 2)
+	require.Equal(t, "has(self.conditional) ? [has(self.backendRef),has(self.failureMode)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
+	require.Equal(t, "has(self.conditional) ? true : has(self.backendRef)", schema.XValidations[1].Rule)
+	require.Equal(t, "backendRef: Required value", schema.XValidations[1].Message)
+}
+
+func TestApplyConditionalPolicyAllowsZeroRequiredFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"conditional": {},
+			"optional":    {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 1)
+	require.Equal(t, "has(self.conditional) ? [has(self.optional)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
+}
+
 func TestApplyIfThenOnlyFieldsUsesVisibleSchemaFields(t *testing.T) {
 	schema := &apiextensionsv1.JSONSchemaProps{
 		Properties: map[string]apiextensionsv1.JSONSchemaProps{

@@ -13,6 +13,8 @@ use serde::ser::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::common::ast::{CallExpr, EntryExpr, Expr, OptimizedExpr, operators};
+use crate::common::types;
+use crate::common::types::Type;
 use crate::common::value::CelVal;
 use crate::context::{Context, SingleVarResolver, VariableResolver};
 use crate::functions::FunctionContext;
@@ -59,6 +61,7 @@ pub enum Value<'a> {
 	Bytes(BytesValue<'a>),
 
 	Null,
+	Type(Type<'static>),
 }
 
 impl Serialize for Value<'_> {
@@ -244,6 +247,7 @@ impl PartialEq for Value<'_> {
 			(Value::Float(a), Value::Int(b)) => *a == (*b as f64),
 			(Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
 			(Value::Object(a), Value::Object(b)) => a.eq(b),
+			(Value::Type(a), Value::Type(b)) => a == b,
 			(_, _) => false,
 		}
 	}
@@ -320,6 +324,7 @@ impl Debug for Value<'_> {
 			Value::Object(obj) => write!(f, "Object<{}>({:?})", obj.type_name(), obj),
 			Value::Dynamic(obj) => write!(f, "Dynamic({:?})", obj),
 			Value::Null => write!(f, "Null"),
+			Value::Type(t) => write!(f, "Type({})", t.name()),
 		}
 	}
 }
@@ -354,6 +359,7 @@ pub enum ValueType {
 	Timestamp,
 	Object,
 	Null,
+	Type,
 }
 
 impl ValueType {
@@ -372,6 +378,7 @@ impl ValueType {
 			ValueType::Duration => "duration",
 			ValueType::Timestamp => "timestamp",
 			ValueType::Null => "null",
+			ValueType::Type => "type",
 		}
 	}
 }
@@ -399,6 +406,7 @@ impl<'a> Value<'a> {
 
 			Value::Timestamp(_) => ValueType::Timestamp,
 			Value::Null => ValueType::Null,
+			Value::Type(_) => ValueType::Type,
 		}
 	}
 
@@ -530,6 +538,7 @@ impl<'a> Value<'a> {
 			Value::Duration(d) => Value::Duration(*d),
 
 			Value::Timestamp(t) => Value::Timestamp(*t),
+			Value::Type(t) => Value::Type(t.clone()),
 			Value::String(s) => match s {
 				StringValue::Borrowed(str_ref) => Value::String(StringValue::Owned(Arc::from(*str_ref))),
 				StringValue::Owned(owned) => Value::String(StringValue::Owned(owned.clone())),
@@ -579,6 +588,9 @@ impl<'a> Value<'a> {
 			Expr::Ident(name) => {
 				if let Some(v) = resolver.resolve(name) {
 					return Ok(v);
+				}
+				if let Some(t) = standard_type(name) {
+					return Ok(Value::Type(t));
 				}
 				Err(ExecutionError::UndeclaredReference(name.to_string().into()))
 			},
@@ -1098,6 +1110,44 @@ impl<'a> Value<'a> {
 			Value::Bool(v) => Ok(*v),
 			_ => Err(ExecutionError::NoSuchOverload),
 		}
+	}
+}
+
+pub fn standard_type(name: &str) -> Option<Type<'static>> {
+	match name {
+		"bool" => Some(types::BOOL_TYPE),
+		"bytes" => Some(types::BYTES_TYPE),
+		"double" | "float" => Some(types::DOUBLE_TYPE),
+		"duration" | "google.protobuf.Duration" => Some(types::DURATION_TYPE),
+		"dyn" => Some(types::DYN_TYPE),
+		"int" => Some(types::INT_TYPE),
+		"list" => Some(types::LIST_TYPE),
+		"map" => Some(types::MAP_TYPE),
+		"null_type" => Some(types::NULL_TYPE),
+		"string" => Some(types::STRING_TYPE),
+		"timestamp" | "google.protobuf.Timestamp" => Some(types::TIMESTAMP_TYPE),
+		"type" => Some(types::TYPE_TYPE),
+		"uint" => Some(types::UINT_TYPE),
+		_ => None,
+	}
+}
+
+pub fn type_of_value(value: &Value<'_>) -> Type<'static> {
+	match value.always_materialize().as_ref() {
+		Value::List(_) => types::LIST_TYPE,
+		Value::Map(_) => types::MAP_TYPE,
+		Value::Int(_) => types::INT_TYPE,
+		Value::UInt(_) => types::UINT_TYPE,
+		Value::Float(_) => types::DOUBLE_TYPE,
+		Value::String(_) => types::STRING_TYPE,
+		Value::Bytes(_) => types::BYTES_TYPE,
+		Value::Bool(_) => types::BOOL_TYPE,
+		Value::Object(obj) => Type::new_opaque_type(obj.type_name()),
+		Value::Dynamic(d) => type_of_value(&d.materialize()),
+		Value::Duration(_) => types::DURATION_TYPE,
+		Value::Timestamp(_) => types::TIMESTAMP_TYPE,
+		Value::Null => types::NULL_TYPE,
+		Value::Type(_) => types::TYPE_TYPE,
 	}
 }
 

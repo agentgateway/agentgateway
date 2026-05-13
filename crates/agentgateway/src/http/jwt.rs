@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use ::cel::types::dynamic::DynamicType;
-use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet, KeyAlgorithm};
+use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
 use serde_json::{Map, Value};
@@ -55,10 +55,17 @@ pub enum JwkError {
 		key_id: String,
 		error: jsonwebtoken::errors::Error,
 	},
-	#[error("the key {key_id:?} uses a non-RSA algorithm {algorithm:?}")]
+	#[error(
+		"the key {key_id:?} uses an unsupported algorithm {algorithm:?} (supported: RSA, EC, OKP[Ed25519])"
+	)]
 	UnexpectedAlgorithm {
 		algorithm: AlgorithmParameters,
 		key_id: String,
+	},
+	#[error("the key {key_id:?} uses unsupported OKP curve {curve:?} (supported: Ed25519)")]
+	UnsupportedCurve {
+		key_id: String,
+		curve: EllipticCurve,
 	},
 }
 
@@ -297,6 +304,20 @@ impl Provider {
 						key_id: kid.clone(),
 						error: err,
 					})?,
+					AlgorithmParameters::OctetKeyPair(okp) => match &okp.curve {
+						EllipticCurve::Ed25519 => {
+							DecodingKey::from_ed_components(&okp.x).map_err(|err| JwkError::DecodingError {
+								key_id: kid.clone(),
+								error: err,
+							})?
+						},
+						other => {
+							return Err(JwkError::UnsupportedCurve {
+								key_id: kid,
+								curve: other.clone(),
+							});
+						},
+					},
 					other => {
 						return Err(JwkError::UnexpectedAlgorithm {
 							key_id: kid,
@@ -315,7 +336,17 @@ impl Provider {
 							vec![Algorithm::ES256, Algorithm::ES384]
 						},
 						AlgorithmParameters::RSA(_) => {
-							vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512]
+							vec![
+								Algorithm::RS256,
+								Algorithm::RS384,
+								Algorithm::RS512,
+								Algorithm::PS256,
+								Algorithm::PS384,
+								Algorithm::PS512,
+							]
+						},
+						AlgorithmParameters::OctetKeyPair(_) => {
+							vec![Algorithm::EdDSA]
 						},
 						_ => unreachable!(),
 					}

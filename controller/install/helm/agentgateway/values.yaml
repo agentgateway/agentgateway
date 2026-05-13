@@ -123,11 +123,14 @@ controller:
   #         name: agentgateway-secrets
   #         key: apiToken
   extraEnv: {}
-  # -- Configure TLS settings for the xDS gRPC servers.
+  # -- Add extra volume mounts to the controller container.
+  extraVolumeMounts: []
+  # -- Add extra volumes to the controller pod.
+  extraVolumes: []
+  # -- Configure xDS transport mode for the gRPC servers.
   xds:
-    tls:
-      # -- Enable TLS encryption for xDS communication. When enabled, the agent gateway xDS server (port 9978) will use TLS. When TLS is enabled, you must create a Secret named 'agentgateway-xds-cert' in the agentgateway installation namespace. The Secret must be of type 'kubernetes.io/tls' with 'tls.crt', 'tls.key', and 'ca.crt' data fields present.
-      enabled: false
+    # -- One of: plaintext, tls, either.
+    mode: tls
   # -- Change the rollout strategy from the Kubernetes default of a RollingUpdate with 25% maxUnavailable, 25% maxSurge.
   # E.g., to recreate pods, minimizing resources for the rollout but causing downtime:
   # strategy:
@@ -196,13 +199,13 @@ image:
   tag: ""
   # -- Set the default image pull policy.
   pullPolicy: IfNotPresent
-  
+
 # -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://agentgateway.dev/docs/kubernetes/latest/inference/
 inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
-# -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://kgateway.dev/docs/envoy/latest/install/advanced/#namespace-discovery.
+# -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://agentgateway.dev/docs/kubernetes/latest/install/advanced/#namespace-discovery.
 discoveryNamespaceSelectors: []
 
 # -- Map of GatewayClass names to GatewayParameters references that will be set on
@@ -217,3 +220,28 @@ discoveryNamespaceSelectors: []
 #        namespace: kgateway-system
 gatewayClassParametersRefs: {}
 
+# -- Configure Prometheus and Grafana monitoring resources.
+monitoring:
+  # -- Create monitoring resources (ServiceMonitors and Grafana dashboard ConfigMap).
+  # Requires the Prometheus Operator CRDs to be installed in the cluster.
+  enabled: false
+
+  serviceMonitor:
+    # -- Create ServiceMonitor resources.
+    enabled: true
+    # -- Scrape interval for both ServiceMonitors.
+    interval: 15s
+    # -- Additional labels to add to both ServiceMonitor resources (e.g. release: prometheus).
+    extraLabels: {}
+
+  proxy:
+    # -- Namespace selector used by the proxy ServiceMonitor.
+    # The proxy ServiceMonitor always selects Services with gateway.networking.k8s.io/gateway-class-name=agentgateway.
+    namespaceSelector: {}
+
+  grafanaDashboard:
+    # -- Create the Grafana dashboard ConfigMap.
+    enabled: true
+    # -- Labels that the Grafana sidecar uses to discover dashboards.
+    labels:
+      grafana_dashboard: "1"

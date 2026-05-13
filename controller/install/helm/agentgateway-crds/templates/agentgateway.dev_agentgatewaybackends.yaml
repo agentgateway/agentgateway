@@ -597,6 +597,23 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
+                                                                secretRef:
+                                                                  description: |-
+                                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                                    ambient credentials are used.
+                                                                  properties:
+                                                                    name:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Name of the referent.
+                                                                        This field is effectively required, but due to backwards compatibility is
+                                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                                        almost certainly wrong.
+                                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                                      type: string
+                                                                  type: object
+                                                                  x-kubernetes-map-type: atomic
                                                                 type:
                                                                   description: |-
                                                                     The type of token to generate. To authenticate to GCP services,
@@ -884,6 +901,18 @@ spec:
                                                               - All
                                                               - Hostname
                                                               type: string
+                                                            keyExchangeGroups:
+                                                              description: |-
+                                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                                For example: `X25519_MLKEM768,X25519`.
+                                                              items:
+                                                                enum:
+                                                                - X25519
+                                                                - P-256
+                                                                - P-384
+                                                                - X25519_MLKEM768
+                                                                type: string
+                                                              type: array
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -1166,6 +1195,23 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
+                                                                secretRef:
+                                                                  description: |-
+                                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                                    ambient credentials are used.
+                                                                  properties:
+                                                                    name:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Name of the referent.
+                                                                        This field is effectively required, but due to backwards compatibility is
+                                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                                        almost certainly wrong.
+                                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                                      type: string
+                                                                  type: object
+                                                                  x-kubernetes-map-type: atomic
                                                                 type:
                                                                   description: |-
                                                                     The type of token to generate. To authenticate to GCP services,
@@ -1453,6 +1499,18 @@ spec:
                                                               - All
                                                               - Hostname
                                                               type: string
+                                                            keyExchangeGroups:
+                                                              description: |-
+                                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                                For example: `X25519_MLKEM768,X25519`.
+                                                              items:
+                                                                enum:
+                                                                - X25519
+                                                                - P-256
+                                                                - P-384
+                                                                - X25519_MLKEM768
+                                                                type: string
+                                                              type: array
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -1731,6 +1789,23 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
+                                                                secretRef:
+                                                                  description: |-
+                                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                                    ambient credentials are used.
+                                                                  properties:
+                                                                    name:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Name of the referent.
+                                                                        This field is effectively required, but due to backwards compatibility is
+                                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                                        almost certainly wrong.
+                                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                                      type: string
+                                                                  type: object
+                                                                  x-kubernetes-map-type: atomic
                                                                 type:
                                                                   description: |-
                                                                     The type of token to generate. To authenticate to GCP services,
@@ -2018,6 +2093,18 @@ spec:
                                                               - All
                                                               - Hostname
                                                               type: string
+                                                            keyExchangeGroups:
+                                                              description: |-
+                                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                                For example: `X25519_MLKEM768,X25519`.
+                                                              items:
+                                                                enum:
+                                                                - X25519
+                                                                - P-256
+                                                                - P-384
+                                                                - X25519_MLKEM768
+                                                                type: string
+                                                              type: array
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -2522,6 +2609,23 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
+                                                                secretRef:
+                                                                  description: |-
+                                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                                    ambient credentials are used.
+                                                                  properties:
+                                                                    name:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Name of the referent.
+                                                                        This field is effectively required, but due to backwards compatibility is
+                                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                                        almost certainly wrong.
+                                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                                      type: string
+                                                                  type: object
+                                                                  x-kubernetes-map-type: atomic
                                                                 type:
                                                                   description: |-
                                                                     The type of token to generate. To authenticate to GCP services,
@@ -2809,6 +2913,18 @@ spec:
                                                               - All
                                                               - Hostname
                                                               type: string
+                                                            keyExchangeGroups:
+                                                              description: |-
+                                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                                For example: `X25519_MLKEM768,X25519`.
+                                                              items:
+                                                                enum:
+                                                                - X25519
+                                                                - P-256
+                                                                - P-384
+                                                                - X25519_MLKEM768
+                                                                type: string
+                                                              type: array
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -3091,6 +3207,23 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
+                                                                secretRef:
+                                                                  description: |-
+                                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                                    ambient credentials are used.
+                                                                  properties:
+                                                                    name:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Name of the referent.
+                                                                        This field is effectively required, but due to backwards compatibility is
+                                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                                        almost certainly wrong.
+                                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                                      type: string
+                                                                  type: object
+                                                                  x-kubernetes-map-type: atomic
                                                                 type:
                                                                   description: |-
                                                                     The type of token to generate. To authenticate to GCP services,
@@ -3378,6 +3511,18 @@ spec:
                                                               - All
                                                               - Hostname
                                                               type: string
+                                                            keyExchangeGroups:
+                                                              description: |-
+                                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                                For example: `X25519_MLKEM768,X25519`.
+                                                              items:
+                                                                enum:
+                                                                - X25519
+                                                                - P-256
+                                                                - P-384
+                                                                - X25519_MLKEM768
+                                                                type: string
+                                                              type: array
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -3937,6 +4082,23 @@ spec:
                                             maxLength: 256
                                             minLength: 1
                                             type: string
+                                          secretRef:
+                                            description: |-
+                                              `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                              Google credential JSON in the `credentials.json` key. When omitted,
+                                              ambient credentials are used.
+                                            properties:
+                                              name:
+                                                default: ""
+                                                description: |-
+                                                  Name of the referent.
+                                                  This field is effectively required, but due to backwards compatibility is
+                                                  allowed to be empty. Instances of this type with an empty value here are
+                                                  almost certainly wrong.
+                                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                type: string
+                                            type: object
+                                            x-kubernetes-map-type: atomic
                                           type:
                                             description: |-
                                               The type of token to generate. To authenticate to GCP services,
@@ -4261,6 +4423,18 @@ spec:
                                         - All
                                         - Hostname
                                         type: string
+                                      keyExchangeGroups:
+                                        description: |-
+                                          keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                          For example: `X25519_MLKEM768,X25519`.
+                                        items:
+                                          enum:
+                                          - X25519
+                                          - P-256
+                                          - P-384
+                                          - X25519_MLKEM768
+                                          type: string
+                                        type: array
                                       mtlsCertificateRef:
                                         description: |-
                                           `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -5280,6 +5454,23 @@ spec:
                                           maxLength: 256
                                           minLength: 1
                                           type: string
+                                        secretRef:
+                                          description: |-
+                                            `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                            Google credential JSON in the `credentials.json` key. When omitted,
+                                            ambient credentials are used.
+                                          properties:
+                                            name:
+                                              default: ""
+                                              description: |-
+                                                Name of the referent.
+                                                This field is effectively required, but due to backwards compatibility is
+                                                allowed to be empty. Instances of this type with an empty value here are
+                                                almost certainly wrong.
+                                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                              type: string
+                                          type: object
+                                          x-kubernetes-map-type: atomic
                                         type:
                                           description: |-
                                             The type of token to generate. To authenticate to GCP services,
@@ -5531,6 +5722,18 @@ spec:
                                       - All
                                       - Hostname
                                       type: string
+                                    keyExchangeGroups:
+                                      description: |-
+                                        keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                        For example: `X25519_MLKEM768,X25519`.
+                                      items:
+                                        enum:
+                                        - X25519
+                                        - P-256
+                                        - P-384
+                                        - X25519_MLKEM768
+                                        type: string
+                                      type: array
                                     mtlsCertificateRef:
                                       description: |-
                                         `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -6022,6 +6225,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -6282,6 +6502,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -6546,6 +6778,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -6806,6 +7055,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -7067,6 +7328,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -7327,6 +7605,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -7805,6 +8095,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -8065,6 +8372,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -8329,6 +8648,23 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
+                                                secretRef:
+                                                  description: |-
+                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                                                    Google credential JSON in the `credentials.json` key. When omitted,
+                                                    ambient credentials are used.
+                                                  properties:
+                                                    name:
+                                                      default: ""
+                                                      description: |-
+                                                        Name of the referent.
+                                                        This field is effectively required, but due to backwards compatibility is
+                                                        allowed to be empty. Instances of this type with an empty value here are
+                                                        almost certainly wrong.
+                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                      type: string
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -8589,6 +8925,18 @@ spec:
                                               - All
                                               - Hostname
                                               type: string
+                                            keyExchangeGroups:
+                                              description: |-
+                                                keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                                                For example: `X25519_MLKEM768,X25519`.
+                                              items:
+                                                enum:
+                                                - X25519
+                                                - P-256
+                                                - P-384
+                                                - X25519_MLKEM768
+                                                type: string
+                                              type: array
                                             mtlsCertificateRef:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -9125,6 +9473,23 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
+                          secretRef:
+                            description: |-
+                              `secretRef` references a Kubernetes `Secret` containing ADC-compatible
+                              Google credential JSON in the `credentials.json` key. When omitted,
+                              ambient credentials are used.
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
                           type:
                             description: |-
                               The type of token to generate. To authenticate to GCP services,
@@ -9235,6 +9600,224 @@ spec:
                         aws azure gcp] must be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp)].filter(x,x==true).size()
                         == 1'
+                  extAuth:
+                    description: |-
+                      extAuth specifies the external authentication configuration for requests
+                      sent to this backend.
+                    properties:
+                      backendRef:
+                        description: |-
+                          `backendRef` references the External Authorization server to reach.
+
+                          Supported types: `Service` and `Backend`.
+                        properties:
+                          group:
+                            default: ""
+                            description: |-
+                              Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                              When unspecified or empty string, core API group is inferred.
+                            maxLength: 253
+                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          kind:
+                            default: Service
+                            description: |-
+                              Kind is the Kubernetes resource kind of the referent. For example
+                              "Service".
+
+                              Defaults to "Service" when not specified.
+
+                              ExternalName services can refer to CNAME DNS records that may live
+                              outside of the cluster and as such are difficult to reason about in
+                              terms of conformance. They also may not be safe to forward to (see
+                              CVE-2021-25740 for more information). Implementations SHOULD NOT
+                              support ExternalName Services.
+
+                              Support: Core (Services with a type other than ExternalName)
+
+                              Support: Implementation-specific (Services with type ExternalName)
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                            type: string
+                          name:
+                            description: Name is the name of the referent.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace is the namespace of the backend. When unspecified, the local
+                              namespace is inferred.
+
+                              Note that when a namespace different than the local namespace is specified,
+                              a ReferenceGrant object is required in the referent namespace to allow that
+                              namespace's owner to accept the reference. See the ReferenceGrant
+                              documentation for details.
+
+                              Support: Core
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                            type: string
+                          port:
+                            description: |-
+                              Port specifies the destination port number to use for this resource.
+                              Port is required when the referent is a Kubernetes Service. In this
+                              case, the port number is the service port number, not the target port.
+                              For other resources, destination port might be derived from the referent
+                              resource or this field.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                        required:
+                        - name
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Must have port for Service reference
+                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                            ? has(self.port) : true'
+                      failureMode:
+                        description: |-
+                          FailureMode controls behavior when the external authorization service is
+                          unavailable or returns an error. "FailOpen" allows the request to continue.
+                          "FailClosed" (default) denies the request.
+                        enum:
+                        - FailOpen
+                        - FailClosed
+                        type: string
+                      forwardBody:
+                        description: |-
+                          `forwardBody` configures whether to include the HTTP body in the request.
+                          If enabled, the request body will be buffered.
+                        properties:
+                          maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxSize` specifies, in bytes, the largest body that will be buffered
+                              and sent to the authorization server. If the body size is larger than
+                              `maxSize`, then the request will be rejected with a response.
+                            maxLength: 32
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte
+                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                            - message: value must fit within uint32
+                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        required:
+                        - maxSize
+                        type: object
+                      grpc:
+                        description: |-
+                          grpc specifies that the gRPC External Authorization
+                          [protocol](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/auth/v3/external_auth.proto) should be used.
+                        properties:
+                          contextExtensions:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              `contextExtensions` specifies additional arbitrary key-value pairs to
+                              send to the authorization server in the `context_extensions` field.
+                            maxProperties: 64
+                            type: object
+                          requestMetadata:
+                            additionalProperties:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            description: |-
+                              `requestMetadata` specifies metadata to be sent to the authorization
+                              server. This maps to the `metadata_context.filter_metadata` field of the
+                              request, and allows dynamic CEL expressions. If unset, by default the
+                              `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as
+                              well, for compatibility.
+                            maxProperties: 64
+                            type: object
+                        type: object
+                      http:
+                        description: |-
+                          `http` specifies that the HTTP protocol should be used for connecting to
+                          the authorization server. The authorization server must return a `200`
+                          status code, otherwise the request is considered an authorization
+                          failure.
+                        properties:
+                          addRequestHeaders:
+                            additionalProperties:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            description: |-
+                              `addRequestHeaders` specifies what additional headers to add to the
+                              request to the authorization server. While `allowedRequestHeaders` just
+                              passes the original headers through, `addRequestHeaders` allows defining
+                              custom headers based on CEL expressions.
+                            maxProperties: 64
+                            type: object
+                          allowedRequestHeaders:
+                            description: |-
+                              `allowedRequestHeaders` specifies what additional headers from the client request
+                              will be sent to the authorization server.
+
+                              If unset, the following headers are sent by default: `Authorization`.
+                            items:
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                            maxItems: 64
+                            type: array
+                          allowedResponseHeaders:
+                            description: |-
+                              `allowedResponseHeaders` specifies what headers from the authorization response
+                              will be copied into the request to the backend.
+                            items:
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                            maxItems: 64
+                            type: array
+                          path:
+                            description: |-
+                              `path` specifies the path to send to the authorization server. If
+                              unset, this defaults to the original request path.
+                              This is a CEL expression, which allows customizing the path based on the
+                              incoming request. For example, to add a prefix, use
+                              `"/prefix/" + request.path`.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                          redirect:
+                            description: |-
+                              `redirect` defines an optional expression to determine a path to
+                              redirect to on authorization failure. This is useful to redirect to a
+                              sign-in page.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                          responseMetadata:
+                            additionalProperties:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            description: |-
+                              `responseMetadata` specifies what metadata fields should be constructed
+                              from the authorization response. These will be included under the
+                              `extauthz` variable in future CEL expressions. Setting this is useful
+                              for things like logging usernames, without needing to include them as
+                              headers to the backend, as `allowedResponseHeaders` would.
+                            maxProperties: 64
+                            type: object
+                        type: object
+                    type: object
                   health:
                     description: health defines settings for passive and active health
                       checking.
@@ -9655,6 +10238,18 @@ spec:
                         - All
                         - Hostname
                         type: string
+                      keyExchangeGroups:
+                        description: |-
+                          keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+                          For example: `X25519_MLKEM768,X25519`.
+                        items:
+                          enum:
+                          - X25519
+                          - P-256
+                          - P-384
+                          - X25519_MLKEM768
+                          type: string
+                        type: array
                       mtlsCertificateRef:
                         description: |-
                           `mtlsCertificateRef` enables mutual TLS to the backend, using the
@@ -10043,9 +10638,9 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [ai auth health http mcp
-                    tcp tls transformation tunnel] must be set
-                  rule: '[has(self.ai),has(self.auth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [ai auth extAuth health http
+                    mcp tcp tls transformation tunnel] must be set
+                  rule: '[has(self.ai),has(self.auth),has(self.extAuth),has(self.health),has(self.http),has(self.mcp),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               static:
                 description: static represents a static hostname.

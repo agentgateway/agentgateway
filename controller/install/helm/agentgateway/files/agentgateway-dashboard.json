@@ -1,0 +1,1309 @@
+{
+  "annotations": {},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 0,
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (pod,namespace) (container_memory_working_set_bytes{image=\"\",namespace=~\"$namespace\"}) * on(pod, namespace) group_left(gateway_networking_k8s_io_gateway_name) agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"}",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "refId": ""
+        }
+      ],
+      "title": "Memory",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (pod,namespace) (irate(container_cpu_usage_seconds_total{image=\"\",namespace=~\"$namespace\"}[$__rate_interval]) * on(pod, namespace) group_left(gateway_networking_k8s_io_gateway_name) agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"})",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "refId": ""
+        }
+      ],
+      "title": "CPU",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 0,
+      "panels": [],
+      "title": "Requests",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (pod,namespace) (rate(agentgateway_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "refId": ""
+        }
+      ],
+      "title": "Requests (by Pod)",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (gateway) (rate(agentgateway_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "{{gateway}}",
+          "refId": ""
+        }
+      ],
+      "title": "Requests (by Gateway)",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (gateway,status) (rate(agentgateway_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "{{gateway}}: {{status}}",
+          "refId": ""
+        }
+      ],
+      "title": "Requests (by Status)",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "interval": "5s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "last",
+            "max",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last",
+          "sortDesc": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "asc"
+        }
+      },
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "expr": "sum by (gateway,reason) (rate(agentgateway_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+          "legendFormat": "{{gateway}}: {{reason}}",
+          "refId": ""
+        }
+      ],
+      "title": "Requests (by Reason)",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 0,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (gen_ai_token_type,gen_ai_request_model,gateway) (rate(agentgateway_gen_ai_client_token_usage_sum{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+              "legendFormat": "{{gateway}}: {{gen_ai_request_model}} ({{gen_ai_token_type}})",
+              "refId": ""
+            }
+          ],
+          "title": "Token Consumption",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 33
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.5, sum by (le,gateway,gen_ai_request_model) (rate(agentgateway_gen_ai_server_time_to_first_token_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))",
+              "legendFormat": "{{gateway}}: {{gen_ai_request_model}}",
+              "refId": ""
+            }
+          ],
+          "title": "Time To First Token",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 43
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.5, sum by (le,gateway,gen_ai_request_model) (rate(agentgateway_gen_ai_server_request_duration_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))",
+              "legendFormat": "{{gateway}}: {{gen_ai_request_model}}",
+              "refId": ""
+            }
+          ],
+          "title": "Request Time",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "tps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 43
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "1 / histogram_quantile(0.5, sum by (le,gateway,gen_ai_request_model) (rate(agentgateway_gen_ai_server_time_per_output_token_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))",
+              "legendFormat": "{{gateway}}: {{gen_ai_request_model}}",
+              "refId": ""
+            }
+          ],
+          "title": "Tokens Per Second",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        }
+      ],
+      "title": "LLM",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "id": 0,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 54
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (gateway,method) (rate(agentgateway_mcp_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+              "legendFormat": "{{gateway}}: {{method}}",
+              "refId": ""
+            }
+          ],
+          "title": "MCP Calls (by method)",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 54
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (gateway,server,resource) (rate(agentgateway_mcp_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\",method=\"tools/call\"}[$__rate_interval]))",
+              "legendFormat": "{{gateway}}: {{server}}/{{resource}}",
+              "refId": ""
+            }
+          ],
+          "title": "Tool Calls (by tool)",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        }
+      ],
+      "title": "MCP",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "id": 0,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 65
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "(histogram_quantile(0.50, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))) == (histogram_quantile(0.50, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))))",
+              "legendFormat": "{{gateway}}: {{route}} p50",
+              "refId": ""
+            },
+            {
+              "expr": "(histogram_quantile(0.95, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))) == (histogram_quantile(0.95, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))))",
+              "legendFormat": "{{gateway}}: {{route}} p95",
+              "refId": ""
+            },
+            {
+              "expr": "(histogram_quantile(0.99, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval])))) == (histogram_quantile(0.99, sum by (le,gateway,route) (rate(agentgateway_request_duration_seconds_bucket{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))))",
+              "legendFormat": "{{gateway}}: {{route}} p99",
+              "refId": ""
+            }
+          ],
+          "title": "Latency by Route",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        }
+      ],
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      },
+      "id": 0,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 76
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (url) (rate(agentgateway_xds_message_total[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "refId": ""
+            }
+          ],
+          "title": "XDS Messages by Type",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 76
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (url) (rate(agentgateway_xds_message_bytes_total[$__rate_interval])) / sum by (url) (rate(agentgateway_xds_message_total[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "refId": ""
+            }
+          ],
+          "title": "XDS Average Message Size",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        }
+      ],
+      "title": "XDS",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 86
+      },
+      "id": 0,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 87
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "agentgateway_cgroup_usage{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} usage",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_working_set{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} working set",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_anon{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} anonymous",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_file{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} file",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_kernel{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} kernel",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_sock{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} socket",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_cgroup_slab{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} slab",
+              "refId": ""
+            }
+          ],
+          "title": "Cgroup Memory",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 87
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "agentgateway_process_rss{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} rss",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_process_pss{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} pss",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_process_private_dirty{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} private dirty",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_process_private_clean{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} private clean",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_process_shared_clean{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} shared clean",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_process_swap{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} swap",
+              "refId": ""
+            }
+          ],
+          "title": "Process Memory",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 97
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "agentgateway_tokio_num_workers{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} workers",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_tokio_num_alive_tasks{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} alive tasks",
+              "refId": ""
+            },
+            {
+              "expr": "agentgateway_tokio_global_queue_depth{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "legendFormat": "{{namespace}}/{{pod}} global queue depth",
+              "refId": ""
+            }
+          ],
+          "title": "Tokio Runtime",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 12,
+            "y": 97
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (tag) (agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"})",
+              "legendFormat": "{{tag}}",
+              "refId": ""
+            }
+          ],
+          "title": "Build Versions",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        }
+      ],
+      "title": "Runtime",
+      "type": "row"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 36,
+  "style": "dark",
+  "templating": {
+    "list": [
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "hide": 0,
+        "id": "00000000-0000-0000-0000-000000000000",
+        "includeAll": false,
+        "multi": false,
+        "name": "datasource",
+        "query": "prometheus",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$datasource"
+        },
+        "hide": 0,
+        "id": "00000000-0000-0000-0000-000000000000",
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "query": "label_values(agentgateway_build_info,namespace)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$datasource"
+        },
+        "hide": 0,
+        "id": "00000000-0000-0000-0000-000000000000",
+        "includeAll": true,
+        "label": "Gateway",
+        "multi": true,
+        "name": "gateway_name",
+        "query": "label_values(agentgateway_build_info{namespace=~\"$namespace\"},gateway_networking_k8s_io_gateway_name)",
+        "refresh": 2,
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$datasource"
+        },
+        "hide": 2,
+        "id": "00000000-0000-0000-0000-000000000000",
+        "includeAll": true,
+        "label": "Gateway Full Name",
+        "multi": true,
+        "name": "gateway",
+        "query": "query_result(label_join(agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"}, \"gateway\", \"/\", \"namespace\", \"gateway_networking_k8s_io_gateway_name\"))",
+        "refresh": 2,
+        "regex": "/.*gateway=\"([^\"]+).*/",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$datasource"
+        },
+        "hide": 0,
+        "id": "00000000-0000-0000-0000-000000000000",
+        "includeAll": true,
+        "label": "Pod",
+        "multi": true,
+        "name": "pod",
+        "query": "query_result(agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"})",
+        "refresh": 2,
+        "regex": ".*pod=\"([^\"]+)\".*",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Agentgateway",
+  "uid": "agentgateway"
+}

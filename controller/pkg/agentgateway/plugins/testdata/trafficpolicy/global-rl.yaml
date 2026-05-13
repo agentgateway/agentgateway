@@ -20,6 +20,8 @@ spec:
           - entries:
               - name: user-agent
                 expression: 'request.headers["user-agent"]'
+            unit: Tokens
+            cost: llm.outputTokens
 ---
 apiVersion: v1
 kind: Service
@@ -49,9 +51,11 @@ output:
       traffic:
         remoteRateLimit:
           descriptors:
-          - entries:
+          - cost: llm.outputTokens
+            entries:
             - key: user-agent
               value: request.headers["user-agent"]
+            type: TOKENS
           domain: api-gateway
           failureMode: FAIL_OPEN
           target:

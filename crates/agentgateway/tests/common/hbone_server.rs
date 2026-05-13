@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use http::HeaderMap;
 use http_body_util::Full;
 use hyper::Response;
 use hyper::server::conn::http2;
@@ -15,6 +16,7 @@ use hyper_util::rt::TokioIo;
 use rand::Rng;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
 #[allow(dead_code)]
@@ -34,6 +36,7 @@ pub struct HboneTestServer {
 	name: String,
 	waypoint_message: Vec<u8>, // Prefix to write before echoing data
 	port: u16,                 // The actual bound port
+	header_tx: Option<mpsc::UnboundedSender<HeaderMap>>,
 }
 
 impl HboneTestServer {
@@ -51,7 +54,16 @@ impl HboneTestServer {
 			name: name.to_string(),
 			waypoint_message,
 			port: actual_port,
+			header_tx: None,
 		}
+	}
+
+	/// Forward each accepted CONNECT's request headers on `tx`. Used by tests
+	/// to assert ambient identification headers (`x-istio-source`, etc.) are
+	/// set on outbound CONNECTs.
+	#[allow(dead_code)]
+	pub fn capture_headers(&mut self, tx: mpsc::UnboundedSender<HeaderMap>) {
+		self.header_tx = Some(tx);
 	}
 
 	/// Returns the port this server is bound to
@@ -98,6 +110,7 @@ impl HboneTestServer {
 			let mode = self.mode.clone();
 			let waypoint_message = self.waypoint_message.clone();
 			let name = self.name.clone();
+			let header_tx = self.header_tx.clone();
 
 			tokio::spawn(async move {
 				if let Err(err) = http2::Builder::new(hyper_util::rt::TokioExecutor::new())
@@ -107,8 +120,12 @@ impl HboneTestServer {
 							let waypoint_message = waypoint_message.clone();
 							let mode = mode.clone();
 							let name = name.clone();
+							let header_tx = header_tx.clone();
 							async move {
 								info!("{}: received request", name);
+								if let Some(tx) = header_tx.as_ref() {
+									let _ = tx.send(req.headers().clone());
+								}
 								tokio::task::spawn(async move {
 									match hyper::upgrade::on(req).await {
 										Ok(upgraded) => {

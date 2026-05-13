@@ -9,12 +9,18 @@ pub use binds::{
 };
 use serde::{Serialize, Serializer};
 mod discovery;
+mod policy;
+
 use std::sync::RwLock;
 
 pub use binds::PreviousState as BindPreviousState;
 pub use discovery::{
 	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore,
 	StoreUpdater as DiscoveryStoreUpdater, WorkloadStore,
+};
+pub use policy::{
+	BackendPolicy, BackendPolicyTrait, HasExpressions, PolicyExpressions, RequestPolicy,
+	RequestPolicyTrait, ResponsePolicy, ResponsePolicyTrait,
 };
 
 use crate::store;

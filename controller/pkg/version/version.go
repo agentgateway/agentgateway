@@ -8,15 +8,15 @@ import (
 )
 
 var (
-	// UndefinedVersion is the version of the kgateway controller
+	// UndefinedVersion is the version of the agentgateway controller
 	// if the version is not set.
 	UndefinedVersion = "undefined"
-	// Version is the version of the kgateway controller.
+	// Version is the version of the agentgateway controller.
 	// This is set by the linker during build.
 	Version string
 	// GitVersion is like Version, but always set based on the git information
 	GitVersion string
-	// ref is the version of the kgateway controller.
+	// ref is the version of the agentgateway controller.
 	// Constructed from the build info during init
 	ref *version
 )

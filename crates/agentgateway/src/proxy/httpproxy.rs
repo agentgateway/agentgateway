@@ -19,14 +19,15 @@ use types::agent::*;
 use types::discovery::*;
 
 use crate::cel::{BackendContext, RequestTime};
-use crate::client::{ApplicationTransport, Transport};
+use crate::client::{ApplicationTransport, HboneHeaders, HboneSourceRole, Transport};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
+use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, PolicyResponse, Request, Response, Scheme, StatusCode, Uri,
-	auth, filters, merge_in_headers, retry,
+	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
+	merge_in_headers, retry,
 };
 use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
 use crate::proxy::tcpproxy::TCPProxy;
@@ -35,7 +36,7 @@ use crate::proxy::{
 };
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
-	RoutePath,
+	ResponsePolicy, RoutePath,
 };
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
@@ -119,110 +120,107 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 }
 
 async fn apply_request_policies(
-	policies: &store::RoutePolicies,
-	client: PolicyClient,
-	log: &mut RequestLog,
+	pol: &store::RoutePolicies,
+	c: &PolicyClient,
+	l: &mut RequestLog,
 	req: &mut Request,
-	response_policies: &mut ResponsePolicies,
+	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	// CORS must run before authentication, authorization and rate limiting so that:
 	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
 	// 2. CORS response headers are queued even if the request is later rejected,
 	//    allowing browsers to read error responses instead of seeing a CORS error
-	if let Some(c) = &policies.cors {
-		c.apply(req)
-			.map_err(ProxyError::from)?
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.cors
+		.apply_without_response("cors", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(o) = &policies.oidc {
-		o.apply(Some(log), req, client.clone())
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.oidc
+		.apply_without_response("oidc", c, l, req, rp.headers())
+		.await?;
 	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
-	if let Some(j) = &policies.jwt {
-		j.apply(&client, Some(log), req).await?;
-	}
-	if let Some(b) = &policies.basic_auth {
-		b.apply(req).await?;
-	}
-	if let Some(b) = &policies.api_key {
-		b.apply(req).await?;
-	}
+	pol
+		.jwt
+		.apply_without_response("jwt auth", c, l, req, rp.headers())
+		.await?;
+	pol
+		.basic_auth
+		.apply_without_response("basic auth", c, l, req, rp.headers())
+		.await?;
+	pol
+		.api_key
+		.apply_without_response("api key", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req)
-			.await?
-			.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "ext authz", &req);
-	}
-	if let Some(j) = &policies.authorization {
-		j.apply(req)
-			.map_err(|_| ProxyResponse::from(ProxyError::AuthorizationFailed))?;
-	}
+	pol
+		.ext_authz
+		.apply_without_response("ext authz", c, l, req, rp.headers())
+		.await?;
 
-	for lrl in &policies.local_rate_limit {
-		lrl.check_request()?;
-		dtrace::snapshot!(Request, "local rate limit", &req);
-	}
+	pol
+		.authorization
+		.apply_without_response("authorization", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(rrl) = &policies.remote_rate_limit {
-		rrl
-			.check(client, req)
-			.await?
-			.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "remote rate limit", &req);
-	}
+	rp.llm_request_policies.local_rate_limit = pol
+		.local_rate_limit
+		.apply_selected("local rate limit", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(x) = response_policies.ext_proc.as_mut() {
-		x.mutate_request(req)
-			.await?
-			.apply(response_policies.headers())?;
+	rp.llm_request_policies.remote_rate_limit = pol
+		.remote_rate_limit
+		.apply_selected("remote rate limit", c, l, req, rp.headers())
+		.await?;
+
+	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
+	// The selected config is built into per-request state, which must be retained for
+	// the response mutation phase instead of applying ExtProc directly.
+	rp.ext_proc = pol
+		.ext_proc
+		.select("ext proc", req)
+		.map(|p| p.build(c.clone()));
+	if let Some(x) = rp.ext_proc.as_mut() {
+		x.mutate_request(req).await?.apply(rp.headers())?;
 		dtrace::snapshot!(Request, "ext proc", &req);
 	}
 
-	if let Some(j) = &policies.transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "transformation", &req);
-	}
+	rp.transformation = pol
+		.transformation
+		.apply("transformation", c, l, req, rp.headers())
+		.await?;
 
-	if let Some(csrf) = &policies.csrf {
-		csrf
-			.apply(req)
-			.map_err(|_| ProxyError::CsrfValidationFailed)?
-			.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "csrf", &req);
-	}
-	if let Some(rhm) = &policies.request_header_modifier {
-		rhm.apply_request(req).map_err(ProxyError::from)?;
-		dtrace::snapshot!(Request, "request header modifier", &req);
-	}
+	pol
+		.csrf
+		.apply_without_response("csrf", c, l, req, rp.headers())
+		.await?;
+
+	// Insert route response header filter. This a response-only policy so we only insert it, no need
+	// to run it.
+	rp.route_response_header = pol.response_header_modifier.clone();
+	pol
+		.request_header_modifier
+		.apply_without_response("request header modifier", c, l, req, rp.headers())
+		.await?;
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
-	if policies
-		.hostname_rewrite
-		.unwrap_or(HostRedirectOverride::Auto)
-		== HostRedirectOverride::Auto
-	{
+	if pol.hostname_rewrite.unwrap_or(HostRedirectOverride::Auto) == HostRedirectOverride::Auto {
 		req.extensions_mut().insert(AutoHostname());
 	}
-	if let Some(r) = &policies.url_rewrite {
-		r.apply(req).map_err(ProxyError::from)?;
-	}
-	if let Some(rr) = &policies.request_redirect {
-		let pr = rr.apply(req).map_err(ProxyError::from)?;
-		pr.apply(response_policies.headers())?;
-		dtrace::snapshot!(Request, "request redirect", &req);
-	}
-	if let Some(dr) = &policies.direct_response {
-		PolicyResponse::default()
-			.with_response(dr.apply().map_err(ProxyError::from)?)
-			.apply(response_policies.headers())?;
-	}
+	pol
+		.url_rewrite
+		.apply_without_response("url rewrite", c, l, req, rp.headers())
+		.await?;
+	pol
+		.request_redirect
+		.apply_without_response("request redirect", c, l, req, rp.headers())
+		.await?;
+	pol
+		.direct_response
+		.apply_without_response("direct response", c, l, req, rp.headers())
+		.await?;
 
 	// Mirror, timeout, and retry are handled separately.
 
@@ -231,10 +229,11 @@ async fn apply_request_policies(
 
 async fn apply_backend_policies(
 	backend_info: auth::BackendInfo,
+	client: PolicyClient,
 	backend_call: &BackendCall,
 	req: &mut Request,
 	log: &mut Option<&mut RequestLog>,
-	response_policies: &mut ResponsePolicies,
+	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	let BackendPolicies {
 		backend_tls: _,
@@ -255,6 +254,7 @@ async fn apply_backend_policies(
 		mcp_authentication: _,
 		// Applied elsewhere
 		inference_routing: _,
+		ext_authz,
 		request_header_modifier,
 		response_header_modifier,
 		request_redirect,
@@ -268,8 +268,7 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		health: _,
 	} = &backend_call.backend_policies;
-	response_policies.backend_response_header = response_header_modifier.clone();
-	response_policies.backend_transformation = transformation.clone();
+	rp.backend_response_header = response_header_modifier.as_response_policy();
 
 	let dh = backend::HTTP::default();
 	http
@@ -277,21 +276,26 @@ async fn apply_backend_policies(
 		.unwrap_or(&dh)
 		.apply(req, backend_call.http_version_override);
 
+	// Ext auth has no response-side
+	let _ = ext_authz
+		.apply("backend ext authz", &client, log, req, rp.headers())
+		.await?;
+
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
 		dtrace::snapshot!(Request, "backend auth", &req);
 	}
-	if let Some(j) = transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "backend transformation", &req);
-	}
+	rp.backend_transformation = transformation
+		.apply("backend transformation", &client, log, req, rp.headers())
+		.await?;
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
 		dtrace::snapshot!(Request, "backend request header modifier", &req);
 	}
 	if let Some(rr) = request_redirect {
-		let pr = rr.apply(req).map_err(ProxyError::from)?;
-		pr.apply(response_policies.headers())?;
+		rr.apply(req)
+			.map_err(ProxyError::from)?
+			.apply(rp.headers())?;
 	}
 
 	if let Some(a2a) = a2a {
@@ -309,7 +313,7 @@ async fn apply_backend_policies(
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
 			});
 		}
-		response_policies.a2a_type = a2a_type;
+		rp.a2a_type = a2a_type;
 	}
 
 	Ok(())
@@ -318,48 +322,61 @@ async fn apply_backend_policies(
 async fn apply_gateway_policies(
 	policies: &GatewayPolicies,
 	client: PolicyClient,
-	log: &mut RequestLog,
+	l: &mut RequestLog,
 	req: &mut Request,
-	ext_proc: Option<&mut ExtProcRequest>,
-	response_headers: &mut HeaderMap,
+	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-	if let Some(o) = &policies.oidc {
-		o.apply(Some(log), req, client.clone())
-			.await
-			.map_err(|e| ProxyResponse::from(ProxyError::OidcFailure(e)))?
-			.apply(response_headers)?;
-		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
-	}
+	let c = &client;
+	policies
+		.oidc
+		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
+		.await?;
+	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
-	if let Some(j) = &policies.jwt {
-		j.apply(&client, Some(log), req).await?;
-		dtrace::snapshot!(Request, "gateway jwt", &req);
-	}
-	if let Some(b) = &policies.basic_auth {
-		b.apply(req).await?;
-		dtrace::snapshot!(Request, "gateway basic auth", &req);
-	}
-	if let Some(b) = &policies.api_key {
-		b.apply(req).await?;
-		dtrace::snapshot!(Request, "gateway api key", &req);
-	}
+	policies
+		.jwt
+		.apply_without_response("gateway jwt", c, l, req, response_policies.headers())
+		.await?;
 
-	if let Some(x) = &policies.ext_authz {
-		x.check(client.clone(), req)
+	policies
+		.basic_auth
+		.apply_without_response("gateway basic auth", c, l, req, response_policies.headers())
+		.await?;
+	policies
+		.api_key
+		.apply_without_response("gateway api key", c, l, req, response_policies.headers())
+		.await?;
+
+	policies
+		.ext_authz
+		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
+		.await?;
+
+	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
+	// The selected config is built into per-request state, which must be retained for
+	// the response mutation phase instead of applying ExtProc directly.
+	let mut ext_proc = policies
+		.ext_proc
+		.select("gateway ext proc", req)
+		.map(|p| p.build(client.clone()));
+	if let Some(x) = ext_proc.as_mut() {
+		x.mutate_request(req)
 			.await?
-			.apply(response_headers)?;
-		dtrace::snapshot!(Request, "gateway ext authz", &req);
-	}
-
-	if let Some(x) = ext_proc {
-		x.mutate_request(req).await?.apply(response_headers)?;
+			.apply(response_policies.headers())?;
 		dtrace::snapshot!(Request, "gateway ext proc", &req);
 	}
+	response_policies.gateway_ext_proc = ext_proc;
 
-	if let Some(j) = &policies.transformation {
-		j.apply_request(req);
-		dtrace::snapshot!(Request, "gateway transformation", &req);
-	}
+	response_policies.gateway_transformation = policies
+		.transformation
+		.apply(
+			"gateway transformation",
+			c,
+			l,
+			req,
+			response_policies.headers(),
+		)
+		.await?;
 
 	Ok(())
 }
@@ -371,7 +388,15 @@ async fn apply_llm_request_policies(
 	llm_req: &LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
-	for lrl in &policies.local_rate_limit {
+	let local_rate_limit = policies
+		.local_rate_limit
+		.as_deref()
+		.into_iter()
+		.flatten()
+		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
+		.cloned()
+		.collect::<Vec<_>>();
+	for lrl in &local_rate_limit {
 		lrl.check_llm_request(llm_req)?;
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
@@ -386,8 +411,9 @@ async fn apply_llm_request_policies(
 	};
 	rl_resp.apply(response_headers)?;
 	Ok(store::LLMResponsePolicies {
-		local_rate_limit: policies.local_rate_limit.clone(),
+		local_rate_limit,
 		remote_rate_limit: response,
+		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
 		prompt_guard: policies
 			.llm
 			.as_deref()
@@ -436,7 +462,11 @@ where
 		req: &mut Request,
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
-			log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
+			log.request_snapshot = log
+				.cel
+				.cel_context
+				.maybe_snapshot_request(req, true)
+				.map(Arc::new);
 			SnapshottedProxyResponse(e.into())
 		})
 	}
@@ -447,7 +477,11 @@ where
 	) -> Result<T, SnapshottedProxyResponse> {
 		self.map_err(|e| {
 			if let Some(req) = req.as_mut() {
-				log.request_snapshot = log.cel.cel_context.maybe_snapshot_request(req, true);
+				log.request_snapshot = log
+					.cel
+					.cel_context
+					.maybe_snapshot_request(req, true)
+					.map(Arc::new);
 			}
 			SnapshottedProxyResponse(e.into())
 		})
@@ -632,7 +666,7 @@ impl HTTPProxy {
 		log.bind_name = Some(bind_name.clone());
 		log.listener_name = Some(selected_listener.name.clone());
 
-		let mut gateway_policies = inputs
+		let gateway_policies = inputs
 			.stores
 			.read_binds()
 			.gateway_policies(&selected_listener.name);
@@ -641,18 +675,12 @@ impl HTTPProxy {
 		// (for logging, etc) and also after we register the expressions since new fields may be available.
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		let mut response_headers = HeaderMap::new();
-		let mut maybe_gateway_ext_proc = gateway_policies
-			.ext_proc
-			.take()
-			.map(|c| c.build(self.policy_client()));
 		apply_gateway_policies(
 			&gateway_policies,
 			self.policy_client(),
 			log,
 			&mut req,
-			maybe_gateway_ext_proc.as_mut(),
-			&mut response_headers,
+			response_policies,
 		)
 		.await
 		.snapshot_on_err(log, &mut req)?;
@@ -706,7 +734,7 @@ impl HTTPProxy {
 			.map(|route| route.inline_policies.as_slice())
 			.collect::<Vec<_>>();
 
-		let mut route_policies = inputs
+		let route_policies = inputs
 			.stores
 			.read_binds()
 			.route_policies(&route_path, &route_inline_policies);
@@ -715,21 +743,13 @@ impl HTTPProxy {
 		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		let maybe_ext_proc = route_policies
-			.ext_proc
-			.take()
-			.map(|c| c.build(self.policy_client()));
-		response_policies.route_response_header = route_policies.response_header_modifier.clone();
-		// backend_response_header is set much later
+		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
+		// a middleware-style approach where if the request side never runs, neither does the response side.
 		response_policies.timeout = route_policies.timeout.clone();
-		response_policies.transformation = route_policies.transformation.clone();
-		response_policies.gateway_transformation = gateway_policies.transformation.clone();
-		response_policies.ext_proc = maybe_ext_proc;
-		response_policies.gateway_ext_proc = maybe_gateway_ext_proc;
 
 		apply_request_policies(
 			&route_policies,
-			self.policy_client(),
+			&self.policy_client(),
 			log,
 			&mut req,
 			response_policies,
@@ -790,7 +810,14 @@ impl HTTPProxy {
 
 		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
 		let retries = route_policies.retry.clone();
-		let late_route_policies: Arc<LLMRequestPolicies> = Arc::new(route_policies.into());
+
+		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
+		// request-policy flow. Conditional rate-limit expressions are evaluated only once there;
+		// the LLM path must not re-run conditions against the provider-specific rewritten request.
+		let mut llm_request_policies = std::mem::take(&mut response_policies.llm_request_policies);
+		llm_request_policies.llm = route_policies.llm.clone();
+		let llm_request_policies = Arc::new(llm_request_policies);
+
 		// attempts is the total number of attempts, not the retries
 		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
 		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
@@ -818,7 +845,7 @@ impl HTTPProxy {
 					.attempt_upstream(
 						log,
 						&mut req_upgrade,
-						late_route_policies,
+						llm_request_policies,
 						&selected_backend,
 						backend_policies,
 						response_policies,
@@ -854,7 +881,7 @@ impl HTTPProxy {
 				.attempt_upstream(
 					log,
 					&mut req_upgrade,
-					late_route_policies.clone(),
+					llm_request_policies.clone(),
 					&selected_backend,
 					backend_policies.clone(),
 					response_policies,
@@ -1183,9 +1210,38 @@ async fn handle_upgrade(
 	Ok(resp)
 }
 
+/// Build the `x-istio-source` / `x-forwarded-network` / `baggage` headers added
+/// to outbound HBONE CONNECTs.
+pub(crate) fn build_hbone_headers(
+	inputs: &ProxyInputs,
+	source: Option<HboneSourceRole>,
+) -> HboneHeaders {
+	let baggage = inputs
+		.stores
+		.read_discovery()
+		.self_workload
+		.get()
+		.map(format_baggage)
+		.map(strng::new);
+	HboneHeaders {
+		source,
+		forwarded_network: inputs.cfg.network.clone(),
+		baggage,
+	}
+}
+
+/// Format matches Istio's `baggageFormat`.
+fn format_baggage(w: &Workload) -> String {
+	format!(
+		"k8s.cluster.name={},k8s.namespace.name={},k8s.deployment.name={},service.name={},service.version={}",
+		w.cluster_id, w.namespace, w.workload_name, w.canonical_name, w.canonical_revision,
+	)
+}
+
 pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
+	hbone_source: Option<HboneSourceRole>,
 	backend_tls: Option<BackendTLS>,
 	backend_tunnel: Option<&backend::Tunnel>,
 	backend_http_version_override: Option<::http::Version>,
@@ -1199,7 +1255,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1207,6 +1263,7 @@ pub async fn build_transport(
 		let transport = Box::pin(build_transport(
 			inputs,
 			&call,
+			hbone_source,
 			tunnel_backend_tls,
 			None,
 			// Currently we only support HTTP/1.1
@@ -1225,6 +1282,22 @@ pub async fn build_transport(
 			token,
 		};
 		return Ok(Transport::Tunnel(app_transport, tc));
+	}
+
+	// Check if we should route through a waypoint proxy (ingress_use_waypoint)
+	if let (Some(wp), Some(ca)) = (&backend_call.waypoint, &inputs.ca) {
+		if ca.get_identity().await.is_ok() {
+			tracing::debug!("using HBONE waypoint at {} for service", wp.address);
+			return Ok(Transport::HboneWaypoint {
+				waypoint_address: wp.address,
+				identities: wp.identities.clone(),
+				inner: app_transport,
+			});
+		} else {
+			return Err(ProxyError::Processing(anyhow::anyhow!(
+				"ingress_use_waypoint: wanted HBONE to waypoint but CA is not available"
+			)));
+		}
 	}
 
 	// Check if we need double hbone
@@ -1259,6 +1332,7 @@ pub async fn build_transport(
 				gateway_identity: gw_identity.clone(),
 				waypoint_identities: waypoint_identities.clone(),
 				inner: app_transport,
+				headers: build_hbone_headers(inputs, hbone_source),
 			});
 		} else {
 			warn!("wanted double hbone but CA is not available");
@@ -1285,7 +1359,11 @@ pub async fn build_transport(
 		},
 		(Some((InboundProtocol::HBONE, idents)), Some(ca)) => {
 			if ca.get_identity().await.is_ok() {
-				Transport::Hbone(app_transport, idents.clone())
+				Transport::Hbone(
+					app_transport,
+					idents.clone(),
+					build_hbone_headers(inputs, hbone_source),
+				)
 			} else {
 				warn!("wanted TLS but CA is not available");
 				app_transport.into()
@@ -1299,7 +1377,7 @@ fn get_backend_policies(
 	inputs: &ProxyInputs,
 	// Backend, and policies specifically inlined on this backend object
 	backend: &BackendWithPolicies,
-	inline_policies: &[BackendPolicy],
+	inline_policies: &[BackendTrafficPolicy],
 	path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
@@ -1340,7 +1418,11 @@ impl<'a> MustSnapshot<'a> {
 		if let Some(mut req) = self.0.take() {
 			if let Some(l) = log.take() {
 				// Do not clear extensions
-				l.request_snapshot = l.cel.cel_context.maybe_snapshot_request(&mut req, clear);
+				l.request_snapshot = l
+					.cel
+					.cel_context
+					.maybe_snapshot_request(&mut req, clear)
+					.map(Arc::new);
 			};
 			Ok(req)
 		} else {
@@ -1363,6 +1445,7 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
@@ -1375,6 +1458,11 @@ async fn make_backend_call(
 	let policy_client = PolicyClient {
 		inputs: inputs.clone(),
 	};
+	let hbone_source = req
+		.extensions()
+		.get::<WaypointService>()
+		.is_some()
+		.then_some(HboneSourceRole::Waypoint);
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -1469,6 +1557,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 			}
 		},
 		Backend::Service(svc, port) => build_service_call(
@@ -1479,12 +1568,14 @@ async fn make_backend_call(
 			svc,
 			port,
 			req.uri().host(),
+			hbone_source,
 		)?,
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
 			transport_override: None,
 			network_gateway: None,
+			waypoint: None,
 			backend_policies: policies,
 		},
 		Backend::Aws(_, config) => {
@@ -1515,6 +1606,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 			}
 		},
 		Backend::Dynamic(_, _) => {
@@ -1532,6 +1624,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 				backend_policies: policies,
 			}
 		},
@@ -1554,7 +1647,6 @@ async fn make_backend_call(
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
-
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -1564,6 +1656,9 @@ async fn make_backend_call(
 	};
 	apply_backend_policies(
 		backend_info.clone(),
+		PolicyClient {
+			inputs: inputs.clone(),
+		},
 		&backend_call,
 		&mut req,
 		&mut log,
@@ -1755,6 +1850,7 @@ async fn make_backend_call(
 	let transport = build_transport(
 		&inputs,
 		&backend_call,
+		hbone_source,
 		backend_call.backend_policies.backend_tls.clone(),
 		backend_call.backend_policies.tunnel.as_ref(),
 		backend_call
@@ -1813,6 +1909,7 @@ async fn make_backend_call(
 				policy_client.clone(),
 				llm_request,
 				llm_response_policies,
+				log.as_ref().expect("must be set").request_snapshot.clone(),
 				llm_response_log.expect("must be set"),
 				include_completion_in_log,
 				resp,
@@ -1843,6 +1940,7 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_service_call(
 	inputs: &ProxyInputs,
 	backend_policies: BackendPolicies,
@@ -1851,6 +1949,7 @@ pub fn build_service_call(
 	svc: &Arc<Service>,
 	port: &u16,
 	request_host: Option<&str>,
+	hbone_source: Option<HboneSourceRole>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let http_version_override = if svc.port_is_http2(port) {
@@ -1868,6 +1967,7 @@ pub fn build_service_call(
 			http_version_override,
 			transport_override: None,
 			network_gateway: None,
+			waypoint: None,
 			backend_policies,
 		});
 	}
@@ -1932,8 +2032,95 @@ pub fn build_service_call(
 		None
 	};
 
-	// For double HBONE, use hostname-based target so the gateway can resolve it
-	let target = if network_gateway.is_some() {
+	// Check if the service has ingress_use_waypoint set and a waypoint configured.
+	// When set, route traffic through the waypoint instead of directly to the workload.
+	// Skip when we are acting as a waypoint: ingress_use_waypoint should only affect
+	// ingress gateways, never waypoint-to-waypoint traffic.
+	let waypoint = if svc.ingress_use_waypoint && hbone_source.is_none() {
+		if let Some(wp) = &svc.waypoint {
+			let discovery = inputs.stores.read_discovery();
+			let wp_ip = match &wp.destination {
+				types::discovery::gatewayaddress::Destination::Address(net_addr) => Some(net_addr.address),
+				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
+					// Resolve hostname-based waypoint via service discovery
+					discovery
+						.services
+						.get_by_namespaced_host(&NamespacedHostname {
+							namespace: nh.namespace.clone(),
+							hostname: nh.hostname.clone(),
+						})
+						.and_then(|wp_svc| {
+							wp_svc
+								.vips
+								.iter()
+								.find(|v| v.network == inputs.cfg.network)
+								.or_else(|| wp_svc.vips.first())
+								.map(|v| v.address)
+						})
+				},
+			};
+			// Resolve the waypoint's own SPIFFE identity for mTLS verification.
+			let waypoint_info = wp_ip.and_then(|ip| {
+				let net_addr = types::discovery::NetworkAddress {
+					network: inputs.cfg.network.clone(),
+					address: ip,
+				};
+				let identity = if let Some(wp_wl) = discovery.workloads.find_address(&net_addr) {
+					// waypoint_ip is a pod IP — use the workload identity directly
+					Some(wp_wl.identity())
+				} else if let Some(wp_svc) = discovery.services.get_by_vip(&net_addr) {
+					// waypoint_ip is a service VIP — get identity from a backing workload
+					wp_svc.endpoints.iter().iter().find_map(|(ep, _)| {
+						discovery
+							.workloads
+							.find_uid(&ep.workload_uid)
+							.map(|wl| wl.identity())
+					})
+				} else {
+					None
+				};
+				identity.map(|id| (ip, id))
+			});
+			drop(discovery);
+			match waypoint_info {
+				Some((ip, identity)) => {
+					let wp_port = if wp.hbone_mtls_port > 0 {
+						wp.hbone_mtls_port
+					} else {
+						agent_hbone::DEFAULT_HBONE_PORT
+					};
+					tracing::debug!(
+						service = %svc.hostname,
+						waypoint = %ip,
+						waypoint_port = %wp_port,
+						"ingress_use_waypoint: routing through waypoint"
+					);
+					Some(WaypointTarget {
+						address: SocketAddr::new(ip, wp_port),
+						service_hostname: svc.hostname.clone(),
+						identities: vec![identity],
+					})
+				},
+				_ => {
+					tracing::warn!(
+						service = %svc.hostname,
+						"ingress_use_waypoint set but waypoint could not be resolved"
+					);
+					None
+				},
+			}
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+
+	// Waypoint: target = service hostname (becomes the inner CONNECT authority).
+	// Double HBONE: target = service hostname (resolved by the gateway).
+	let target = if let Some(wp) = &waypoint {
+		Target::Hostname(wp.service_hostname.clone(), port)
+	} else if network_gateway.is_some() {
 		tracing::debug!(
 			hostname=%svc.hostname,
 			port=%port,
@@ -1962,6 +2149,7 @@ pub fn build_service_call(
 		http_version_override,
 		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
 		network_gateway,
+		waypoint,
 		backend_policies,
 	})
 }
@@ -2093,6 +2281,7 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
+			ingress_use_waypoint: false,
 		}
 	}
 
@@ -2349,7 +2538,18 @@ pub struct BackendCall {
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
+	pub waypoint: Option<WaypointTarget>,                    // For ingress waypoint routing
 	pub backend_policies: BackendPolicies,
+}
+
+/// Information needed to route through a waypoint proxy.
+pub struct WaypointTarget {
+	/// The socket address of the waypoint (IP:hbone_port).
+	pub address: SocketAddr,
+	/// Destination service hostname used as the inner HBONE CONNECT authority.
+	pub service_hostname: Strng,
+	/// Identities for mTLS verification (service SANs).
+	pub identities: Vec<Identity>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -2362,14 +2562,17 @@ pub struct ServiceCallOverride {
 #[derive(Debug, Default)]
 struct ResponsePolicies {
 	timeout: Option<http::timeout::Policy>,
-	route_response_header: Option<filters::HeaderModifier>,
-	backend_response_header: Option<filters::HeaderModifier>,
-	transformation: Option<Transformation>,
-	backend_transformation: Option<Transformation>,
-	gateway_transformation: Option<Transformation>,
+	route_response_header: ResponsePolicy<filters::HeaderModifier>,
+	backend_response_header: ResponsePolicy<filters::HeaderModifier>,
+	transformation: ResponsePolicy<Transformation>,
+	backend_transformation: ResponsePolicy<Transformation>,
+	gateway_transformation: ResponsePolicy<Transformation>,
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	// Populated by the standard request-policy flow after conditional rate-limit policies are
+	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
+	llm_request_policies: LLMRequestPolicies,
 	a2a_type: a2a::RequestType,
 }
 
@@ -2381,51 +2584,51 @@ impl ResponsePolicies {
 	pub async fn apply(
 		&mut self,
 		resp: &mut Response,
-		log: &mut RequestLog,
+		l: &mut RequestLog,
 		is_upstream_response: bool,
 	) -> Result<(), ProxyResponse> {
-		dtrace::snapshot!(Response, "response policies", log, &resp);
+		let rh = &mut self.response_headers;
 
-		if let Some(rhm) = &self.route_response_header {
-			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
-			dtrace::snapshot!(Response, "response header modifier", log, &resp);
-		}
-		if let Some(rhm) = &self.backend_response_header {
-			rhm.apply(resp.headers_mut()).map_err(ProxyError::from)?;
-			dtrace::snapshot!(Response, "backend response header modifier", log, &resp);
-		}
-		if let Some(j) = &self.transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "transformation", log, &resp);
-		}
-		if let Some(j) = &self.backend_transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "backend transformation", log, &resp);
-		}
-		if let Some(j) = &self.gateway_transformation {
-			j.apply_response(resp, log.request_snapshot.as_ref());
-			dtrace::snapshot!(Response, "gateway transformation", log, &resp);
-		}
+		self
+			.route_response_header
+			.apply("response header modifier", l, resp, rh)
+			.await?;
+		self
+			.backend_response_header
+			.apply("backend response header modifier", l, resp, rh)
+			.await?;
+		self
+			.transformation
+			.apply("transformation", l, resp, rh)
+			.await?;
+		self
+			.backend_transformation
+			.apply("backend transformation", l, resp, rh)
+			.await?;
+		self
+			.gateway_transformation
+			.apply("gateway transformation", l, resp, rh)
+			.await?;
 
 		// ext_proc is only intended to run on responses from upstream
 		if is_upstream_response {
 			if let Some(x) = self.ext_proc.as_mut() {
-				x.mutate_response(resp, log.request_snapshot.as_ref())
+				x.mutate_response(resp, l.request_snapshot.as_deref())
 					.await?
 					.apply(&mut self.response_headers)?;
-				dtrace::snapshot!(Response, "ext proc", log, &resp);
+				dtrace::snapshot!(Response, "ext proc", l, &resp);
 			};
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
-				x.mutate_response(resp, log.request_snapshot.as_ref())
+				x.mutate_response(resp, l.request_snapshot.as_deref())
 					.await?
 					.apply(&mut self.response_headers)?;
-				dtrace::snapshot!(Response, "gateway ext proc", log, &resp);
+				dtrace::snapshot!(Response, "gateway ext proc", l, &resp);
 			}
 		}
 
 		if !self.response_headers.is_empty() {
 			merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
-			dtrace::snapshot!(Response, "response headers", log, &resp);
+			dtrace::snapshot!(Response, "response headers", l, &resp);
 		}
 
 		Ok(())
@@ -2456,7 +2659,7 @@ impl PolicyClient {
 		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
-		policies: &[BackendPolicy],
+		policies: &[BackendTrafficPolicy],
 	) -> Result<Response, ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
@@ -2509,7 +2712,7 @@ impl PolicyClient {
 		&self,
 		req: Request,
 		backend: SimpleBackend,
-		policies: Vec<BackendPolicy>,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Result<Response, ProxyError> {
 		let backend = Backend::from(backend);
 		let pols = self

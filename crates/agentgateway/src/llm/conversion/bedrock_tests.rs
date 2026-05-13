@@ -114,7 +114,7 @@ fn test_metadata_from_header() {
 	let mut headers = HeaderMap::new();
 	headers.insert(
 		"x-bedrock-metadata",
-		r#"{"user_id": "user123", "department": "engineering"}"#
+		r#"{"user_id": "user123", "department": "engineering", "json_user": "{\"device_id\":\"abc\"}", "bad?key": "bad{}"}"#
 			.parse()
 			.unwrap(),
 	);
@@ -150,6 +150,61 @@ fn test_metadata_from_header() {
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
 	assert_eq!(metadata.get("department"), Some(&"engineering".to_string()));
+	assert_eq!(
+		metadata.get("json_user"),
+		Some(&r#"{"device_id":"abc"}"#.to_string())
+	);
+	assert_eq!(metadata.get("bad?key"), Some(&"bad{}".to_string()));
+}
+
+#[test]
+fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let json_encoded_user_id = r#"{"device_id":"704cb53c2074e9","account_uuid":"","session_id":"180423cd-fe24-4f48-bbde-b4ab5bfd36e7"}"#;
+	let req = messages::typed::Request {
+		model: "anthropic.claude-3-sonnet".to_string(),
+		messages: vec![messages::typed::Message {
+			role: messages::typed::Role::User,
+			content: vec![messages::typed::ContentBlock::Text(
+				messages::typed::ContentTextBlock {
+					text: "Hello".to_string(),
+					citations: None,
+					cache_control: None,
+				},
+			)],
+		}],
+		max_tokens: 100,
+		metadata: Some(messages::typed::Metadata {
+			fields: std::collections::HashMap::from([
+				("user_id".to_string(), json_encoded_user_id.to_string()),
+				("department".to_string(), "engineering".to_string()),
+			]),
+		}),
+		system: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_k: None,
+		top_p: None,
+		tools: None,
+		tool_choice: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let additional_fields = out.additional_model_request_fields.unwrap();
+	let metadata = additional_fields.get("metadata").unwrap();
+
+	assert!(out.request_metadata.is_none());
+	assert_eq!(metadata["user_id"], json_encoded_user_id);
+	assert_eq!(metadata["department"], "engineering");
 }
 
 #[test]
@@ -573,7 +628,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 }
 
 #[test]
-fn test_metadata_from_completions_metadata_field() {
+fn test_completions_request_metadata_only_uses_bedrock_header() {
 	let provider = Provider {
 		model: None,
 		region: strng::new("us-east-1"),
@@ -581,7 +636,6 @@ fn test_metadata_from_completions_metadata_field() {
 		guardrail_version: None,
 	};
 
-	// OpenAI-style request metadata (agentgateway uses this to carry request-scoped guardrail knobs)
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
 		messages: vec![types::completions::typed::RequestMessage::User(
@@ -618,7 +672,7 @@ fn test_metadata_from_completions_metadata_field() {
 		metadata: Some(json!({
 			"user_id": "user123",
 			"department": "engineering",
-			// Non-string values should be ignored by the Bedrock metadata bridge
+			"json_user": r#"{"device_id":"from-body"}"#,
 			"nonstr": 123
 		})),
 		#[allow(deprecated)]
@@ -629,19 +683,30 @@ fn test_metadata_from_completions_metadata_field() {
 		store: None,
 		reasoning_effort: None,
 	};
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"x-bedrock-metadata",
+		r#"{"json_user": "{\"device_id\":\"from-header\"}", "bad?key": "bad{}"}"#
+			.parse()
+			.unwrap(),
+	);
 
 	let out = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
-		None,
+		Some(&headers),
 		None,
 	);
 	let md = out.request_metadata.unwrap();
 
-	// `metadata.user_id` should win over the `user`-derived value.
-	assert_eq!(md.get("user_id"), Some(&"user123".to_string()));
-	assert_eq!(md.get("department"), Some(&"engineering".to_string()));
+	assert!(!md.contains_key("user_id"));
+	assert!(!md.contains_key("department"));
+	assert_eq!(
+		md.get("json_user"),
+		Some(&r#"{"device_id":"from-header"}"#.to_string())
+	);
+	assert_eq!(md.get("bad?key"), Some(&"bad{}".to_string()));
 	assert!(!md.contains_key("nonstr"));
 }
 
@@ -939,6 +1004,48 @@ fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
 		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["schema"],
 		serde_json::to_string(&schema).unwrap()
 	);
+}
+
+#[test]
+fn test_responses_request_metadata_only_uses_bedrock_header() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"max_output_tokens": 16,
+		"input": "Hello",
+		"metadata": {
+			"safe": "ok",
+			"json_user": "{\"device_id\":\"from-body\"}"
+		}
+	}))
+	.expect("valid responses request");
+
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"x-bedrock-metadata",
+		r#"{"json_user": "{\"device_id\":\"from-header\"}", "bad?key": "bad{}"}"#
+			.parse()
+			.unwrap(),
+	);
+
+	let translated = super::from_responses::translate(&req, &provider, Some(&headers), None).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+	let metadata = translated["requestMetadata"]
+		.as_object()
+		.expect("requestMetadata object");
+
+	assert!(!metadata.contains_key("safe"));
+	assert_eq!(
+		translated["requestMetadata"]["json_user"],
+		r#"{"device_id":"from-header"}"#
+	);
+	assert_eq!(translated["requestMetadata"]["bad?key"], "bad{}");
 }
 
 #[test]

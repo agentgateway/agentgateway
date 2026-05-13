@@ -91,6 +91,9 @@ output:
         gatewayName: example
         gatewayNamespace: default
         listenerName: http-9090
+        listenerSet:
+          name: foo
+          namespace: default
       protocol: HTTP
 - gateway:
     Name: example

@@ -1,0 +1,29 @@
+# Configuration:
+#
+# Parent infra/root:
+#   - Delegate /anything/team1 to team1 namespace via wildcard
+#   - No child HTTPRoute exists in team1 -> delegation reference is unresolved
+#
+# Expectation:
+# The parent HTTPRoute is still Accepted by the gateway, but any request
+# matching the delegated prefix has no downstream route and returns 404.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: root
+  namespace: infra
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /anything/team1
+    backendRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: "*"
+      namespace: team1

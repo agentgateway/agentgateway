@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	InitializeRequest, JsonRpcRequest, ProtocolVersion, RequestId, RootsCapabilities,
+	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, RootsCapabilities,
 	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
@@ -26,6 +26,7 @@ use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop};
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
@@ -136,6 +137,62 @@ impl Session {
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
 		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
 		self
+	}
+
+	fn authorize_prompt_request<'a, 'b: 'a>(
+		&'a self,
+		name: &'b str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(&'a str, &'b str), UpstreamError> {
+		let (service_name, prompt) = self.relay.parse_resource_name(name)?;
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_prompt(service_name.to_string(), prompt.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+				service_name.to_string(),
+				prompt.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "prompt".to_string(),
+				resource_name: name.to_string(),
+			});
+		}
+		Ok((service_name, prompt))
+	}
+
+	fn authorize_resource_request(
+		&self,
+		service_name: &str,
+		uri: &str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(), UpstreamError> {
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_resource(service_name.to_string(), uri.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Resource(rbac::ResourceId::new(
+				service_name.to_string(),
+				uri.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "resource".to_string(),
+				resource_name: uri.to_string(),
+			});
+		}
+		Ok(())
 	}
 
 	/// delete any active sessions
@@ -405,45 +462,22 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
-						span.rename_span(format!("{method} {service_name}"));
-						log.non_atomic_mutate(|l| {
-							l.set_prompt(service_name.to_string(), prompt.to_string());
-						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-								service_name.to_string(),
-								prompt.to_string(),
-							)),
-							&cel,
-						) {
-							return Err(UpstreamError::Authorization {
-								resource_type: "prompt".to_string(),
-								resource_name: name.to_string(),
-							});
-						}
+						let (service_name, prompt) =
+							self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
 						gpr.params.name = prompt.to_string();
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						if let Some(service_name) = self.relay.default_target_name() {
 							let uri = rrr.params.uri.clone();
-							span.rename_span(format!("{method} {service_name}"));
-							log.non_atomic_mutate(|l| {
-								l.set_resource(service_name.to_string(), uri.to_string());
-							});
-							if !self.relay.policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									service_name.to_string(),
-									uri.to_string(),
-								)),
+							self.authorize_resource_request(
+								&service_name,
+								&uri,
+								&method,
+								&mut span,
+								&log,
 								&cel,
-							) {
-								return Err(UpstreamError::Authorization {
-									resource_type: "resource".to_string(),
-									resource_name: uri.to_string(),
-								});
-							}
+							)?;
 							self
 								.relay
 								.send_single_without_multiplexing(r, ctx, None)
@@ -467,13 +501,39 @@ impl Session {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
-					ClientRequest::CompleteRequest(_) => {
-						// For now, we don't have a sane mapping of incoming requests to a specific
-						// downstream service when multiplexing. Only forward when we have only one backend.
-						self
-							.relay
-							.send_single_without_multiplexing(r, ctx, None)
-							.await
+					ClientRequest::CompleteRequest(cr) => {
+						match &cr.params.r#ref {
+							Reference::Prompt(prompt) => {
+								let name = prompt.name.clone();
+								let (service_name, prompt_name) =
+									self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+								cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
+								self.relay.send_single(r, ctx, service_name, None).await
+							},
+							Reference::Resource(resource) => {
+								if let Some(service_name) = self.relay.default_target_name() {
+									let uri = resource.uri.clone();
+									self.authorize_resource_request(
+										&service_name,
+										&uri,
+										&method,
+										&mut span,
+										&log,
+										&cel,
+									)?;
+									self
+										.relay
+										.send_single_without_multiplexing(r, ctx, None)
+										.await
+								} else {
+									// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+									// Find a mapping of URL
+									Err(UpstreamError::InvalidMethodWithMultiplexing(
+										r.request.method().to_string(),
+									))
+								}
+							},
+						}
 					},
 				}
 			},

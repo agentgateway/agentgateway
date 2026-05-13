@@ -39,6 +39,8 @@ The CRD generation pipeline supports custom kubebuilder validation markers, impl
 
 - `+kubebuilder:validation:AtLeastOneFieldSet` requires at least one field on the struct to be set.
 - `+kubebuilder:validation:ExactlyOneFieldSet` requires exactly one field on the struct to be set.
+- `+kubebuilder:validation:ConditionalPolicy:fields=a;b;c` requires that `conditional` is set by itself, or,
+  when `conditional` is unset, all listed fields are set.
 - `+kubebuilder:validation:IfThenOnlyFields:if="...",fields=a;b;c,message="..."` requires that, when `if` is true,
   only the listed fields may be set.
 

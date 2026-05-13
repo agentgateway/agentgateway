@@ -3,6 +3,7 @@ use chrono::Duration;
 use thiserror::Error;
 
 use crate::Value;
+use crate::duration::format_duration;
 use crate::functions::format_timestamp;
 
 #[derive(Debug, Clone, Error)]
@@ -59,10 +60,9 @@ impl<'a> Value<'a> {
 
 			Value::Timestamp(ref dt) => format_timestamp(dt).into(),
 
-			Value::Duration(ref v) => serde_json::Value::Number(serde_json::Number::from(
-				v.num_nanoseconds()
-					.ok_or(ConvertToJsonError::DurationOverflow(v))?,
-			)),
+			Value::Duration(ref v) => format_duration(v)
+				.ok_or(ConvertToJsonError::DurationOverflow(v))?
+				.into(),
 			Value::Object(ref obj) => obj.json().unwrap_or(serde_json::Value::Null),
 			Value::Dynamic(ref d) => {
 				let materialized = d.materialize();
@@ -70,6 +70,7 @@ impl<'a> Value<'a> {
 					.json()
 					.map_err(|_| ConvertToJsonError::Value(self))?
 			},
+			Value::Type(ref t) => t.name().into(),
 		})
 	}
 }
@@ -82,6 +83,7 @@ mod tests {
 	use serde_json::json;
 
 	use crate::Value as CelValue;
+	use crate::common::types;
 	use crate::objects::{ListValue, MapValue};
 
 	#[test]
@@ -92,6 +94,7 @@ mod tests {
 			(json!(42.0), CelValue::Float(42.0)),
 			(json!(true), CelValue::Bool(true)),
 			(json!(null), CelValue::Null),
+			(json!("int"), CelValue::Type(types::INT_TYPE)),
 			(
 				json!([true, null]),
 				CelValue::List(ListValue::Owned(
@@ -107,12 +110,11 @@ mod tests {
 			),
 		];
 
-		if true {
-			tests.push((
-				json!(1_000_000_000),
-				CelValue::Duration(Duration::seconds(1)),
-			));
-		}
+		tests.push((json!("1s"), CelValue::Duration(Duration::seconds(1))));
+		tests.push((
+			json!("61.5s"),
+			CelValue::Duration(Duration::seconds(61) + Duration::milliseconds(500)),
+		));
 
 		for (expected, value) in tests.iter() {
 			assert_eq!(value.json().unwrap(), *expected, "{value:?}={expected:?}");

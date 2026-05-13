@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
+use ::http::HeaderValue;
 use agent_xds::{RejectedConfig, XdsUpdate};
 use anyhow::Context;
 use futures_core::Stream;
@@ -20,9 +21,10 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy, ResponsePolicy};
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
-	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
+	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
+	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
 	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey, RouteName, RouteSet,
 	TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
@@ -198,6 +200,7 @@ pub struct BackendPolicies {
 	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub llm: Option<Arc<llm::Policy>>,
 	pub inference_routing: Option<InferenceRouting>,
+	pub ext_authz: BackendPolicy<ext_authz::ExtAuthz>,
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
@@ -207,10 +210,10 @@ pub struct BackendPolicies {
 	pub tunnel: Option<types::backend::Tunnel>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
-	pub response_header_modifier: Option<filters::HeaderModifier>,
+	pub response_header_modifier: BackendPolicy<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
+	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
 
@@ -235,6 +238,7 @@ impl BackendPolicies {
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			inference_routing: other.inference_routing.or(self.inference_routing),
+			ext_authz: other.ext_authz.or(self.ext_authz),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
 			tunnel: other.tunnel.or(self.tunnel),
@@ -266,11 +270,8 @@ impl BackendPolicies {
 	}
 
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
+		self.ext_authz.register_expressions(ctx);
+		self.transformation.register_expressions(ctx);
 	}
 }
 
@@ -278,113 +279,101 @@ impl BackendPolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
-	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
-	pub jwt: Option<JwtAuthentication>,
-	pub oidc: Option<oidc::OidcPolicy>,
-	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
-	pub api_key: Option<http::apikey::APIKeyAuthentication>,
-	pub ext_authz: Option<ext_authz::ExtAuthz>,
-	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
-	pub llm: Option<Arc<llm::Policy>>,
-	pub csrf: Option<http::csrf::Csrf>,
+	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
+	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
+	pub jwt: RequestPolicy<JwtAuthentication>,
+	pub oidc: RequestPolicy<oidc::OidcPolicy>,
+	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
+	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
+	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
+	pub csrf: RequestPolicy<http::csrf::Csrf>,
+	pub direct_response: RequestPolicy<filters::DirectResponse>,
 
+	pub llm: Option<Arc<llm::Policy>>,
+
+	// These both are not typical "policies" that are just applied; do not wrap in RequestPolicy
 	pub timeout: Option<timeout::Policy>,
 	pub retry: Option<retry::Policy>,
-	pub request_header_modifier: Option<filters::HeaderModifier>,
-	pub response_header_modifier: Option<filters::HeaderModifier>,
-	pub request_redirect: Option<filters::RequestRedirect>,
-	pub url_rewrite: Option<filters::UrlRewrite>,
+
+	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
+	pub response_header_modifier: ResponsePolicy<filters::HeaderModifier>,
+	pub request_redirect: RequestPolicy<filters::RequestRedirect>,
+	pub url_rewrite: RequestPolicy<filters::UrlRewrite>,
 	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub request_mirror: Vec<filters::RequestMirror>,
-	pub direct_response: Option<filters::DirectResponse>,
-	pub cors: Option<http::cors::Cors>,
+	pub cors: RequestPolicy<http::cors::Cors>,
 }
 
 #[derive(Debug, Default)]
 pub struct GatewayPolicies {
-	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub oidc: Option<oidc::OidcPolicy>,
-	pub jwt: Option<JwtAuthentication>,
-	pub ext_authz: Option<ext_authz::ExtAuthz>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
-	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
-	pub api_key: Option<http::apikey::APIKeyAuthentication>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
+	pub oidc: RequestPolicy<oidc::OidcPolicy>,
+	pub jwt: RequestPolicy<JwtAuthentication>,
+	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
+	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
+	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
 }
 
 impl GatewayPolicies {
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+		]
+		.into_iter()
+	}
+
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-
-		if let Some(extauthz) = &self.ext_authz {
-			for expr in extauthz.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
 		}
 	}
 }
 
 impl RoutePolicies {
-	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
-		};
-		if let Some(rrl) = &self.remote_rate_limit {
-			for expr in rrl.expressions() {
-				ctx.register_expression(expr)
-			}
-		};
-		if let Some(rrl) = &self.authorization {
-			rrl.register(ctx)
-		};
-		if let Some(extauthz) = &self.ext_authz {
-			for expr in extauthz.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
-		}
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.local_rate_limit as &dyn PolicyExpressions,
+			&self.remote_rate_limit as &dyn PolicyExpressions,
+			&self.authorization as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.csrf as &dyn PolicyExpressions,
+			&self.direct_response as &dyn PolicyExpressions,
+			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.request_redirect as &dyn PolicyExpressions,
+			&self.url_rewrite as &dyn PolicyExpressions,
+			&self.cors as &dyn PolicyExpressions,
+		]
+		.into_iter()
 	}
-}
 
-impl From<RoutePolicies> for LLMRequestPolicies {
-	fn from(value: RoutePolicies) -> Self {
-		LLMRequestPolicies {
-			remote_rate_limit: value.remote_rate_limit.clone(),
-			local_rate_limit: value
-				.local_rate_limit
-				.iter()
-				.filter(|r| r.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
-				.cloned()
-				.collect(),
-			llm: value.llm.clone(),
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
 		}
 	}
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<http::remoteratelimit::RemoteRateLimit>,
+	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
 
@@ -436,6 +425,7 @@ impl LLMRequestPolicies {
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
+	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
 }
 
@@ -713,35 +703,33 @@ impl Store {
 		let mut authz = Vec::new();
 		let mut pol = RoutePolicies::default();
 		for rule in rules {
-			match &rule {
+			match rule {
 				TrafficPolicy::LocalRateLimit(p) => {
-					if pol.local_rate_limit.is_empty() {
-						pol.local_rate_limit = p.clone();
-					}
+					pol.local_rate_limit.set_if_unset(p);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
+					pol.ext_authz.set_if_unset(p);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.set_if_unset(p);
 				},
 				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+					pol.remote_rate_limit.set_if_unset(p);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
+					pol.jwt.set_if_unset(p);
 				},
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.get_or_insert_with(|| p.clone());
+					pol.oidc.set_if_unset(p);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
+					pol.basic_auth.set_if_unset(p);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
+					pol.api_key.set_if_unset(p);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+					pol.transformation.set_if_unset(p);
 				},
 				TrafficPolicy::Authorization(p) => {
 					// Authorization policies merge, unlike others
@@ -751,7 +739,7 @@ impl Store {
 					pol.llm.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::Csrf(p) => {
-					pol.csrf.get_or_insert_with(|| p.clone());
+					pol.csrf.set_if_unset(p);
 				},
 
 				TrafficPolicy::Timeout(p) => {
@@ -761,18 +749,16 @@ impl Store {
 					pol.retry.get_or_insert_with(|| p.clone());
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.get_or_insert_with(|| p.clone());
+					pol.request_header_modifier.set_if_unset(p);
 				},
 				TrafficPolicy::ResponseHeaderModifier(p) => {
-					pol
-						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
+					pol.response_header_modifier.set_if_unset(p);
 				},
 				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.get_or_insert_with(|| p.clone());
+					pol.request_redirect.set_if_unset(p);
 				},
 				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.get_or_insert_with(|| p.clone());
+					pol.url_rewrite.set_if_unset(p);
 				},
 				TrafficPolicy::HostRewrite(p) => {
 					pol.hostname_rewrite.get_or_insert(*p);
@@ -783,15 +769,15 @@ impl Store {
 					}
 				},
 				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.get_or_insert_with(|| p.clone());
+					pol.direct_response.set_if_unset(p);
 				},
 				TrafficPolicy::CORS(p) => {
-					pol.cors.get_or_insert_with(|| p.clone());
+					pol.cors.set_if_unset(p);
 				},
 			}
 		}
 		if !authz.is_empty() {
-			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(authz.into()));
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();
@@ -804,37 +790,45 @@ impl Store {
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let rules = listener
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
-			match &rule {
+			match rule {
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.get_or_insert_with(|| p.clone());
+					pol.oidc.set_if_unset(p);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
+					pol.jwt.set_if_unset(p);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
+					pol.basic_auth.set_if_unset(p);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
+					pol.api_key.set_if_unset(p);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
+					pol.ext_authz.set_if_unset(p);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.set_if_unset(p);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+					pol.transformation.set_if_unset(p);
 				},
 				other => {
 					warn!("unexpected gateway policy: {:?}", other);
@@ -851,7 +845,7 @@ impl Store {
 	pub fn sub_backend_policies(
 		&self,
 		sub_backend: BackendTargetRef,
-		inline_policies: Option<&[BackendPolicy]>,
+		inline_policies: Option<&[BackendTrafficPolicy]>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
 			None,
@@ -867,7 +861,10 @@ impl Store {
 	}
 
 	// inline_backend_policies flattens out a list of inline policies,
-	pub fn inline_backend_policies(&self, inline_policies: &[BackendPolicy]) -> BackendPolicies {
+	pub fn inline_backend_policies(
+		&self,
+		inline_policies: &[BackendTrafficPolicy],
+	) -> BackendPolicies {
 		self.internal_backend_policies(
 			None,
 			None,
@@ -880,7 +877,7 @@ impl Store {
 	pub fn backend_policies(
 		&self,
 		backend: BackendTargetRef,
-		inline_policies: &[&[BackendPolicy]],
+		inline_policies: &[&[BackendTrafficPolicy]],
 		path: Option<RoutePath>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
@@ -900,7 +897,7 @@ impl Store {
 		// backend with section retained.
 		// Note this differs from other types, where just one is passed in and we strip them
 		sub_backend: Option<BackendTargetRef>,
-		inline_policies: &[&[BackendPolicy]],
+		inline_policies: &[&[BackendTrafficPolicy]],
 		gateway: Option<&ListenerName>,
 		routes: &[&RouteName],
 	) -> BackendPolicies {
@@ -948,62 +945,63 @@ impl Store {
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
 			match &rule {
-				BackendPolicy::A2a(p) => {
+				BackendTrafficPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::BackendTLS(p) => {
+				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::BackendAuth(p) => {
+				BackendTrafficPolicy::BackendAuth(p) => {
 					pol.backend_auth.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::InferenceRouting(p) => {
+				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::AI(p) => {
+				BackendTrafficPolicy::ExtAuthz(p) => {
+					pol.ext_authz.set_if_unset(p);
+				},
+				BackendTrafficPolicy::AI(p) => {
 					pol.llm.get_or_insert_with(|| p.clone());
 				},
 
-				BackendPolicy::HTTP(p) => {
+				BackendTrafficPolicy::HTTP(p) => {
 					pol.http.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::TCP(p) => {
+				BackendTrafficPolicy::TCP(p) => {
 					pol.tcp.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Tunnel(p) => {
+				BackendTrafficPolicy::Tunnel(p) => {
 					pol.tunnel.get_or_insert_with(|| p.clone());
 				},
 
-				BackendPolicy::RequestHeaderModifier(p) => {
+				BackendTrafficPolicy::RequestHeaderModifier(p) => {
 					pol.request_header_modifier.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::ResponseHeaderModifier(p) => {
-					pol
-						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::ResponseHeaderModifier(p) => {
+					pol.response_header_modifier.set_if_unset(p);
 				},
-				BackendPolicy::RequestRedirect(p) => {
+				BackendTrafficPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::Transformation(p) => {
+					pol.transformation.set_if_unset(p);
 				},
-				BackendPolicy::SessionPersistence(p) => {
+				BackendTrafficPolicy::SessionPersistence(p) => {
 					pol.session_persistence.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Health(p) => {
+				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::RequestMirror(p) => {
+				BackendTrafficPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {
 						pol.request_mirror = p.clone();
 					}
 				},
-				BackendPolicy::McpAuthorization(p) => {
+				BackendTrafficPolicy::McpAuthorization(p) => {
 					// Authorization policies merge, unlike others
 					mcp_authz.push(p.clone().into_inner());
 				},
-				BackendPolicy::McpAuthentication(p) => {
+				BackendTrafficPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
 				},
 			}
@@ -1094,6 +1092,12 @@ impl Store {
 	) -> FrontendPolices {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let svc = service.and_then(|s| self.policies_by_target.get(&s));
 		let gateway_port = port.and_then(|port| {
 			self.policies_by_target.get(&PolicyTargetRef::Gateway {
@@ -1108,6 +1112,8 @@ impl Store {
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway_port.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -1744,7 +1750,8 @@ mod tests {
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
-		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, PolicyType, TunnelProtocol,
+		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
+		ResourceName, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -2330,11 +2337,13 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: None,
 			}),
-			policy: PolicyType::Backend(BackendPolicy::RequestHeaderModifier(HeaderModifier {
-				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar"))],
-				remove: vec![],
-			})),
+			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
+				HeaderModifier {
+					add: vec![],
+					set: vec![(strng::new("x-foo"), strng::new("bar"))],
+					remove: vec![],
+				},
+			)),
 		};
 		store.insert_policy(backend_attached_policy);
 
@@ -2348,20 +2357,24 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: Some(strng::new("target")),
 			}),
-			policy: PolicyType::Backend(BackendPolicy::RequestHeaderModifier(HeaderModifier {
-				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar3"))],
-				remove: vec![],
-			})),
+			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
+				HeaderModifier {
+					add: vec![],
+					set: vec![(strng::new("x-foo"), strng::new("bar3"))],
+					remove: vec![],
+				},
+			)),
 		};
 		store.insert_policy(section_policy);
 
 		// Create inline policies - sets x-foo=bar2
-		let backend_inline_policies = vec![BackendPolicy::RequestHeaderModifier(HeaderModifier {
-			add: vec![],
-			set: vec![(strng::new("x-foo"), strng::new("bar2"))],
-			remove: vec![],
-		})];
+		let backend_inline_policies = vec![BackendTrafficPolicy::RequestHeaderModifier(
+			HeaderModifier {
+				add: vec![],
+				set: vec![(strng::new("x-foo"), strng::new("bar2"))],
+				remove: vec![],
+			},
+		)];
 
 		// Test case 1: Inline policy beats backend attached policy
 		let policies_no_section = store.backend_policies(
@@ -2478,6 +2491,122 @@ mod tests {
 			modifier.set[0],
 			(strng::new("x-foo"), strng::new("bar3")),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
+		);
+	}
+
+	#[test]
+	fn listenerset_targeted_policy_is_found_via_listener_frontend_policies() {
+		let mut store = Store::default();
+
+		// Insert a policy targeting a ListenerSet
+		let policy_key: PolicyKey = strng::new("ls-policy");
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// Create a ListenerName that belongs to the ListenerSet
+		let listener = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+
+		let pols = store.listener_frontend_policies(&listener, None, None);
+		let access_log = pols
+			.access_log
+			.as_ref()
+			.expect("expected access log policy from ListenerSet target");
+		assert!(
+			access_log.remove.contains("ls_remove"),
+			"ListenerSet-targeted policy should be found via listener_frontend_policies"
+		);
+	}
+
+	#[test]
+	fn listenerset_section_targeted_policy_applies_only_to_named_listener() {
+		let mut store = Store::default();
+
+		let policy_key: PolicyKey = strng::new("ls-section-policy");
+		// Policy targets ListenerSet/my-ls with sectionName: listener-a
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// listener-a: should match
+		let listener_a = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_a = store.listener_frontend_policies(&listener_a, None, None);
+		assert!(
+			pols_a
+				.access_log
+				.as_ref()
+				.is_some_and(|p| p.remove.contains("section_remove")),
+			"section-targeted policy should apply to the named listener"
+		);
+
+		// listener-b: should NOT match
+		let listener_b = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_b = store.listener_frontend_policies(&listener_b, None, None);
+		assert!(
+			pols_b.access_log.is_none(),
+			"section-targeted policy should NOT apply to a different listener in the same set"
 		);
 	}
 }

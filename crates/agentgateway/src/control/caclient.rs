@@ -165,6 +165,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		cc.key_log = transport::tls::key_log();
 		cc.alpn_protocols = vec![b"istio".into()];
 		cc.resumption = Resumption::disabled();
 		// cc.enable_sni = false;
@@ -186,6 +187,7 @@ impl WorkloadCertificate {
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
+		cc.key_log = transport::tls::key_log();
 		cc.alpn_protocols = vec![b"h2".into()];
 		cc.resumption = Resumption::disabled();
 		cc.enable_sni = false;
@@ -195,33 +197,46 @@ impl WorkloadCertificate {
 		})
 	}
 	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
+		self.server_config(vec![b"h2".into()], true)
+	}
+
+	pub fn server_config(
+		&self,
+		alpns: Vec<Vec<u8>>,
+		require_client_cert: bool,
+	) -> Result<ServerConfig, Error> {
 		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
-		let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
-			roots.clone(),
-			transport::tls::provider(),
-		)
-		.build()?;
-		// Verify the client's SPIFFE trust domain is in the allowed set, unless explicitly
-		// disabled via skip_validate_trust_domain. CA-level certificate validation still applies.
-		let client_cert_verifier: Arc<dyn rustls::server::danger::ClientCertVerifier> =
-			if self.skip_validate_trust_domain {
-				raw_client_cert_verifier
-			} else {
-				transport::tls::trustdomain::TrustDomainVerifier::new(
-					raw_client_cert_verifier,
-					self.allowed_trust_domains.clone(),
-				)
-			};
-		let mut sc = ServerConfig::builder_with_provider(transport::tls::provider())
+		let scb = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("server config must be valid")
-			.with_client_cert_verifier(client_cert_verifier)
-			.with_single_cert(
-				self.chain.iter().map(|c| c.der.clone()).collect(),
-				self.private_key.clone_key(),
-			)?;
-		sc.alpn_protocols = vec![b"h2".into()];
+			.expect("server config must be valid");
+		let scb = if require_client_cert {
+			let raw_client_cert_verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+				roots,
+				transport::tls::provider(),
+			)
+			.build()?;
+			// Verify the client's SPIFFE trust domain is in the allowed set, unless explicitly
+			// disabled via skip_validate_trust_domain. CA-level certificate validation still applies.
+			let client_cert_verifier: Arc<dyn rustls::server::danger::ClientCertVerifier> =
+				if self.skip_validate_trust_domain {
+					raw_client_cert_verifier
+				} else {
+					transport::tls::trustdomain::TrustDomainVerifier::new(
+						raw_client_cert_verifier,
+						self.allowed_trust_domains.clone(),
+					)
+				};
+			scb.with_client_cert_verifier(client_cert_verifier)
+		} else {
+			scb.with_no_client_auth()
+		};
+		let mut sc = scb.with_single_cert(
+			self.chain.iter().map(|c| c.der.clone()).collect(),
+			self.private_key.clone_key(),
+		)?;
+		sc.key_log = transport::tls::key_log();
+		sc.alpn_protocols = alpns;
 		Ok(sc)
 	}
 }

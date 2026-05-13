@@ -10,10 +10,10 @@ import (
 
 const (
 	K8sClientQpsEnv     = "K8S_CLIENT_QPS"
-	K8sClientQpsDefault = 50 // 10x the k8s-recommended default; kgateway gets busy writing status updates
+	K8sClientQpsDefault = 50 // 10x the k8s-recommended default; agentgateway gets busy writing status updates
 
 	K8sClientBurstEnv     = "K8S_CLIENT_BURST"
-	K8sClientBurstDefault = 100 // 10x the k8s-recommended default; kgateway gets busy writing status updates
+	K8sClientBurstDefault = 100 // 10x the k8s-recommended default; agentgateway gets busy writing status updates
 )
 
 // GetRestConfigWithKubeContext provides the rest.Config object for a given Kubernetes context

@@ -51,7 +51,7 @@ type testingSuite struct {
 	*base.BaseTestingSuite
 
 	// testInstallation contains all the metadata/utilities necessary to execute a series of tests
-	// against an installation of kgateway
+	// against an installation of agentgateway
 	testInstallation *e2e.TestInstallation
 }
 

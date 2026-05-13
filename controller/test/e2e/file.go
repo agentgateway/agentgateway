@@ -14,6 +14,8 @@ var (
 	// rely entirely on the values provided by the "profile". In those cases, the test supplies this reference
 	EmptyValuesManifestPath = ManifestPath("empty-values.yaml")
 
+	// ControlPlaneTLSPlaintextManifestPath returns the path to a manifest with plaintext mode for xDS communication
+	ControlPlaneTLSPlaintextManifestPath = ManifestPath("controlplane-plaintext-helm.yaml")
 	// ControlPlaneTLSManifestPath returns the path to a manifest with TLS enabled for xDS communication
 	ControlPlaneTLSManifestPath = ManifestPath("controlplane-tls-helm.yaml")
 )

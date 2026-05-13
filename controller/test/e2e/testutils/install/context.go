@@ -4,12 +4,12 @@ package install
 
 import "fmt"
 
-// Context contains the set of properties for a given installation of kgateway
+// Context contains the set of properties for a given installation of agentgateway
 type Context struct {
 	InstallNamespace string
 
-	// ChartType specifies which chart to install: "kgateway" or "agentgateway"
-	// Defaults to "kgateway" for backwards compatibility
+	// ChartType specifies which chart to install: "agentgateway"
+	// Defaults to "agentgateway" for backwards compatibility
 	// TODO: convert to enum
 	ChartType string
 

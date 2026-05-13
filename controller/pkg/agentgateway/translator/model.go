@@ -52,7 +52,7 @@ func (key ConfigKey) String() string {
 type Meta struct {
 	// GroupVersionKind is a short configuration name that matches the content message type
 	// (e.g. "route-rule")
-	GroupVersionKind schema.GroupVersionKind `json:"type,omitempty"`
+	GroupVersionKind schema.GroupVersionKind `json:"type"`
 
 	// UID
 	UID string `json:"uid,omitempty"`
@@ -87,7 +87,7 @@ type Meta struct {
 	ResourceVersion string `json:"resourceVersion,omitempty"`
 
 	// CreationTimestamp records the creation time
-	CreationTimestamp time.Time `json:"creationTimestamp,omitempty"`
+	CreationTimestamp time.Time `json:"creationTimestamp"`
 
 	// OwnerReferences allows specifying in-namespace owning objects.
 	OwnerReferences []metav1.OwnerReference `json:"ownerReferences,omitempty"`

@@ -7,6 +7,61 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::http::x_headers::TRACEPARENT;
+
+fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
+	LLMRequest {
+		input_tokens,
+		input_format: InputFormat::Completions,
+		request_model: "test-model".into(),
+		provider: "test-provider".into(),
+		streaming: true,
+		params: Default::default(),
+		prompt: None,
+	}
+}
+
+#[test]
+fn streaming_amend_on_drop_updates_local_rate_limit() {
+	let rate_limit =
+		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 10,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+		})
+		.unwrap();
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request: llm_request_with_tokens(Some(2)),
+		response: LLMResponse {
+			input_tokens: Some(2),
+			output_tokens: Some(4),
+			..Default::default()
+		},
+	}));
+
+	let mut amend = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.clone()],
+			..Default::default()
+		},
+		None,
+	);
+	amend.report_rate_limit();
+
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(7)))
+			.is_err()
+	);
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(6)))
+			.is_ok()
+	);
+}
 
 fn test_root() -> &'static Path {
 	Path::new("src/llm/tests")
@@ -14,6 +69,49 @@ fn test_root() -> &'static Path {
 
 fn fixture_path(relative_path: &str) -> PathBuf {
 	test_root().join(relative_path)
+}
+
+#[test]
+fn response_prompt_guard_headers_copies_request_traceparent() {
+	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+		.parse()
+		.unwrap();
+	let mut response_headers = ::http::HeaderMap::new();
+	response_headers.insert("x-upstream", "value".parse().unwrap());
+
+	let headers = response_prompt_guard_headers(&response_headers, Some(&traceparent));
+
+	assert_eq!(headers.get("x-upstream").unwrap(), "value");
+	assert_eq!(
+		headers.get(TRACEPARENT).unwrap(),
+		"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	);
+	assert!(!response_headers.contains_key(TRACEPARENT));
+}
+
+#[test]
+fn response_prompt_guard_headers_overwrites_upstream_traceparent() {
+	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+		.parse()
+		.unwrap();
+	let mut response_headers = ::http::HeaderMap::new();
+	response_headers.insert(
+		TRACEPARENT,
+		"00-11111111111111111111111111111111-2222222222222222-01"
+			.parse()
+			.unwrap(),
+	);
+
+	let headers = response_prompt_guard_headers(&response_headers, Some(&traceparent));
+
+	assert_eq!(
+		headers.get(TRACEPARENT).unwrap(),
+		"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	);
+	assert_eq!(
+		response_headers.get(TRACEPARENT).unwrap(),
+		"00-11111111111111111111111111111111-2222222222222222-01"
+	);
 }
 
 fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, String) {
@@ -524,7 +622,7 @@ mod response {
 	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
-			p.process_streaming(r, LLMResponsePolicies::default(), log, false, i)
+			p.process_streaming(r, LLMResponsePolicies::default(), None, log, false, i)
 				.await
 		};
 		test_streaming(provider, test, test_fn).await
@@ -689,6 +787,108 @@ async fn test_passthrough() {
 		serde_json::from_str::<Value>(&t2).unwrap(),
 		"{t}\n{t2}"
 	);
+}
+
+#[tokio::test]
+async fn openai_provider_normalizes_max_tokens_before_forwarding() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5.4",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert!(forwarded_json.get("max_tokens").is_none());
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(1024));
+	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[tokio::test]
+async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 11434)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "llama3.1",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI-compatible completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["max_tokens"], json!(1024));
+	assert!(forwarded_json.get("max_completion_tokens").is_none());
+	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[test]
+fn openai_token_limit_normalization_keeps_explicit_max_completion_tokens() {
+	let mut request: types::completions::Request = serde_json::from_value(json!({
+		"model": "gpt-5.4",
+		"max_tokens": 1024,
+		"max_completion_tokens": 2048,
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.expect("valid completions request");
+
+	request.normalize_openai_token_limit();
+
+	assert_eq!(request.max_tokens, None);
+	assert_eq!(request.max_completion_tokens, Some(2048));
 }
 
 #[test]
@@ -984,6 +1184,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			client,
 			req,
 			LLMResponsePolicies::default(),
+			None,
 			AsyncLog::default(),
 			false,
 			resp,
@@ -1047,6 +1248,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				prompt: None,
 			},
 			LLMResponsePolicies::default(),
+			None,
 			AsyncLog::default(),
 			false,
 			resp,
@@ -1122,6 +1324,102 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 
 	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
 	assert_eq!(req.uri().query(), Some("trace=repro"));
+}
+
+fn llm_request_for_path(request_model: &str) -> LLMRequest {
+	LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		request_model: request_model.into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+	}
+}
+
+fn assert_prefixed_host_override_path(
+	provider: AIProvider,
+	request_model: &str,
+	expected_path: &str,
+	expected_query: Option<&str>,
+) {
+	let llm_request = llm_request_for_path(request_model);
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			Some(&llm_request),
+			None,
+			Some("/proxy/"),
+			true,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), expected_path);
+	assert_eq!(req.uri().query(), expected_query);
+}
+
+#[test]
+fn setup_request_gemini_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		"gemini-2.5-pro",
+		"/proxy/v1beta/openai/chat/completions",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_vertex_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Vertex(vertex::Provider {
+			model: None,
+			region: Some(strng::new("us-central1")),
+			project_id: strng::new("example-project"),
+		}),
+		"gemini-2.5-pro",
+		"/proxy/v1/projects/example-project/locations/us-central1/endpoints/openapi/chat/completions",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_bedrock_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Bedrock(bedrock::Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		}),
+		"anthropic.claude-3-5-sonnet-20241022-v2:0",
+		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+		Some("trace=repro"),
+	);
+}
+
+#[test]
+fn setup_request_azure_applies_path_prefix_with_host_override() {
+	assert_prefixed_host_override_path(
+		AIProvider::Azure(azure::Provider {
+			model: None,
+			resource_name: strng::new("example"),
+			resource_type: azure::AzureResourceType::OpenAI,
+			api_version: Some(strng::new("2024-02-15-preview")),
+			project_name: None,
+			cached_cred: Default::default(),
+		}),
+		"gpt-4.1",
+		"/proxy/openai/deployments/gpt-4.1/chat/completions",
+		Some("api-version=2024-02-15-preview&trace=repro"),
+	);
 }
 
 #[test]

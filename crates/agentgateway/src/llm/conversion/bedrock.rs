@@ -420,29 +420,9 @@ pub mod from_completions {
 			None
 		};
 
-		// Build metadata from:
-		// - OpenAI `user` field (normalized as user_id)
-		// - OpenAI `metadata` field (agentgateway uses this to carry guardrail/model-armor knobs through Messages→Completions)
-		// - x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		let mut metadata = req
-			.user
-			.map(|user| HashMap::from([("user_id".to_string(), user)]))
-			.unwrap_or_default();
-
-		// Merge OpenAI request `metadata` when it is an object of string values
-		if let Some(serde_json::Value::Object(obj)) = &req.metadata {
-			for (k, v) in obj {
-				if let serde_json::Value::String(s) = v {
-					metadata.insert(k.clone(), s.clone());
-				}
-			}
-		}
-
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		if let Some(header_metadata) = super::helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = super::helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -1266,14 +1246,17 @@ pub mod from_messages {
 			None
 		};
 
-		// Build metadata from request field and x-bedrock-metadata header
-		let mut metadata = req.metadata.map(|m| m.fields).unwrap_or_default();
-
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		if let Some(header_metadata) = helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
+		if let Some(metadata) = req.metadata.map(|m| m.fields)
+			&& !metadata.is_empty()
+		{
+			// Anthropic metadata is opaque to Bedrock requestMetadata validation. Preserve it
+			// in the Anthropic model request envelope instead of dropping provider-specific data.
+			upsert_additional_field("metadata", serde_json::json!(metadata));
 		}
 
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2018,13 +2001,9 @@ pub mod from_responses {
 			None
 		};
 
-		// Extract metadata from request body and merge with headers (consistent with Messages/Completions)
-		let mut metadata = req.metadata.unwrap_or_default();
-
-		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {

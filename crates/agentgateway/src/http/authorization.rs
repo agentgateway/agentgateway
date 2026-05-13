@@ -25,9 +25,23 @@ impl HTTPAuthorizationSet {
 		}
 		Ok(())
 	}
+}
 
-	pub fn register(&self, cel: &mut ContextBuilder) {
-		self.0.register(cel);
+impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+		Ok(http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
 	}
 }
 
@@ -63,20 +77,6 @@ pub struct RuleSet {
 	#[serde(serialize_with = "se_policies", deserialize_with = "de_policies")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
 	pub rules: PolicySet,
-}
-
-impl RuleSet {
-	pub fn register(&self, cel: &mut ContextBuilder) {
-		for rule in &self.rules.allow {
-			cel.register_expression(rule.as_ref());
-		}
-		for rule in &self.rules.deny {
-			cel.register_expression(rule.as_ref());
-		}
-		for rule in &self.rules.require {
-			cel.register_expression(rule.as_ref());
-		}
-	}
 }
 
 #[derive(Clone, Debug, Default)]
@@ -193,9 +193,20 @@ impl From<Vec<RuleSet>> for RuleSets {
 
 impl RuleSets {
 	pub fn register(&self, ctx: &mut ContextBuilder) {
-		for rule_set in &self.0 {
-			rule_set.register(ctx);
+		for expr in self.expressions() {
+			ctx.register_expression(expr);
 		}
+	}
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.iter().flat_map(|rule_set| {
+			rule_set
+				.rules
+				.allow
+				.iter()
+				.chain(rule_set.rules.deny.iter())
+				.chain(rule_set.rules.require.iter())
+				.map(|rule| rule.as_ref())
+		})
 	}
 	pub fn validate(&self, exec: &Executor) -> bool {
 		let rule_sets = &self.0;

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::common::ast::{Expr, IdedExpr};
+use crate::objects::standard_type;
 
 /// A collection of all the references that an expression makes to variables and functions.
 pub struct ExpressionReferences<'expr> {
@@ -114,7 +115,7 @@ impl IdedExpr {
 			},
 			Expr::Ident(name) => {
 				// todo! Might want to make this "smarter" (are we in a comprehension?) and better encode these in const
-				if !name.starts_with('@') {
+				if !name.starts_with('@') && standard_type(name).is_none() {
 					variables.insert(name);
 				}
 			},

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
-use ::http::{HeaderValue, header};
+use ::http::{HeaderMap, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
@@ -14,20 +14,21 @@ use serde::de::DeserializeOwned;
 use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
-use crate::http::auth::{AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 pub use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
-use crate::types::agent::{BackendPolicy, Target};
+use crate::types::agent::{BackendTrafficPolicy, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 
 pub mod anthropic;
 pub mod azure;
 pub mod bedrock;
+pub mod copilot;
 pub mod gemini;
 pub mod openai;
 pub mod vertex;
@@ -38,6 +39,7 @@ mod types;
 
 pub use types::SimpleChatCompletionMessage;
 
+use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::store;
 
 #[cfg(test)]
@@ -97,7 +99,7 @@ pub struct NamedAIProvider {
 	#[serde(default)]
 	pub tokenize: bool,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub inline_policies: Vec<BackendPolicy>,
+	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
 #[apply(schema!)]
@@ -132,6 +134,7 @@ pub enum AIProvider {
 	Anthropic(anthropic::Provider),
 	Bedrock(bedrock::Provider),
 	Azure(azure::Provider),
+	Copilot(copilot::Provider),
 }
 
 #[apply(schema!)]
@@ -142,6 +145,7 @@ pub enum LocalModelAIProvider {
 	Anthropic,
 	Bedrock,
 	Azure,
+	Copilot,
 }
 
 trait Provider {
@@ -290,6 +294,7 @@ impl AIProvider {
 			AIProvider::Vertex(_p) => vertex::Provider::NAME,
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
 			AIProvider::Azure(_p) => azure::Provider::NAME,
+			AIProvider::Copilot(_p) => copilot::Provider::NAME,
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -300,6 +305,7 @@ impl AIProvider {
 			AIProvider::Vertex(p) => p.model.clone(),
 			AIProvider::Bedrock(p) => p.model.clone(),
 			AIProvider::Azure(p) => p.model.clone(),
+			AIProvider::Copilot(p) => p.model.clone(),
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -310,6 +316,13 @@ impl AIProvider {
 		};
 		match self {
 			AIProvider::OpenAI(_) => (Target::Hostname(openai::DEFAULT_HOST, 443), btls),
+			AIProvider::Copilot(_) => {
+				let bp = BackendPolicies {
+					backend_auth: Some(BackendAuth::Copilot),
+					..btls.clone()
+				};
+				(Target::Hostname(copilot::DEFAULT_HOST, 443), bp)
+			},
 			AIProvider::Gemini(_) => (Target::Hostname(gemini::DEFAULT_HOST, 443), btls),
 			AIProvider::Vertex(p) => {
 				let bp = BackendPolicies {
@@ -368,14 +381,22 @@ impl AIProvider {
 	fn set_path_and_query(uri: &mut http::uri::Parts, path: &str) -> anyhow::Result<()> {
 		let query = uri.path_and_query.as_ref().and_then(|p| p.query());
 		if let Some(query) = query {
+			let separator = if path.contains('?') { "&" } else { "?" };
 			uri.path_and_query = Some(PathAndQuery::from_maybe_shared(format!(
-				"{}?{}",
-				path, query
+				"{}{}{}",
+				path, separator, query
 			))?);
 		} else {
 			uri.path_and_query = Some(PathAndQuery::try_from(path)?);
 		};
 		Ok(())
+	}
+
+	fn with_path_prefix(path: &str, path_prefix: Option<&str>) -> String {
+		match path_prefix {
+			Some(prefix) => format!("{}{}", prefix.trim_end_matches('/'), path),
+			None => path.to_string(),
+		}
 	}
 
 	pub fn set_default_path(
@@ -390,8 +411,7 @@ impl AIProvider {
 			return Ok(());
 		}
 
-		let supports_path_prefix = matches!(self, AIProvider::OpenAI(_) | AIProvider::Anthropic(_));
-		if has_host_override && !(supports_path_prefix && path_prefix.is_some()) {
+		if has_host_override && path_prefix.is_none() {
 			return Ok(());
 		}
 
@@ -404,6 +424,18 @@ impl AIProvider {
 							prefix.trim_end_matches('/')
 						}),
 						openai::path_suffix(route_type)
+					);
+					Self::set_path_and_query(uri, &path)?;
+					Ok(())
+				})?;
+				Ok(())
+			}),
+			AIProvider::Copilot(_) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					let path = format!(
+						"{}{}",
+						path_prefix.map_or("", |prefix| prefix.trim_end_matches('/')),
+						copilot::path_suffix(route_type)
 					);
 					Self::set_path_and_query(uri, &path)?;
 					Ok(())
@@ -426,7 +458,8 @@ impl AIProvider {
 			}),
 			AIProvider::Gemini(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
-					Self::set_path_and_query(uri, gemini::path(route_type))?;
+					let path = Self::with_path_prefix(gemini::path(route_type), path_prefix);
+					Self::set_path_and_query(uri, &path)?;
 					Ok(())
 				})?;
 				Ok(())
@@ -437,7 +470,8 @@ impl AIProvider {
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path = provider.get_path_for_model(route_type, request_model, streaming);
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 						Ok(())
 					})?;
 					Ok(())
@@ -448,7 +482,8 @@ impl AIProvider {
 					if let Some(l) = llm_request {
 						let path =
 							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 					}
 					Ok(())
 				})?;
@@ -458,7 +493,8 @@ impl AIProvider {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
-						uri.path_and_query = Some(PathAndQuery::from_str(&path)?);
+						let path = Self::with_path_prefix(&path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
 					}
 					Ok(())
 				})?;
@@ -474,6 +510,7 @@ impl AIProvider {
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
+			AIProvider::Copilot(_) => Authority::from_static(copilot::DEFAULT_HOST_STR),
 			AIProvider::Anthropic(_) => Authority::from_static(anthropic::DEFAULT_HOST_STR),
 			AIProvider::Gemini(_) => Authority::from_static(gemini::DEFAULT_HOST_STR),
 			AIProvider::Vertex(provider) => {
@@ -509,21 +546,30 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
-						// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer; drop any x-api-key.
-						// All other tokens are moved to x-api-key (standard API key auth).
-						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) {
+						// Check whether the backend auth location was explicitly configured by the user.
+						// When explicit, we must not rewrite it
+						// (e.g. Databricks Anthropic Messages API requires Authorization: Bearer <jwt>).
+						let explicit_authorization = req
+							.extensions
+							.get::<AppliedBackendAuthLocation>()
+							.is_some_and(|auth| auth.explicit);
+
+						if authz.token().starts_with(anthropic::OAUTH_TOKEN_PREFIX) || explicit_authorization {
+							// OAuth tokens ("sk-ant-oat*") keep Authorization: Bearer; drop any x-api-key.
+							// Explicitly configured Authorization auth also keeps the header as-is.
 							req.headers.remove("x-api-key");
 						} else {
+							// All other tokens are moved to x-api-key (standard API key auth).
 							req.headers.remove(http::header::AUTHORIZATION);
 							let mut api_key = HeaderValue::from_str(authz.token())?;
 							api_key.set_sensitive(true);
 							req.headers.insert("x-api-key", api_key);
 						}
-						// https://docs.anthropic.com/en/api/versioning
-						req
-							.headers
-							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-					};
+					}
+					// https://docs.anthropic.com/en/api/versioning
+					req
+						.headers
+						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
 					Ok(())
 				})
 			},
@@ -554,6 +600,9 @@ impl AIProvider {
 				include_usage: true,
 				rest: Default::default(),
 			});
+		}
+		if matches!(self, AIProvider::OpenAI(_)) {
+			req.normalize_openai_token_limit();
 		}
 		self
 			.process_request(
@@ -764,6 +813,7 @@ impl AIProvider {
 			},
 			(
 				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
 				| AIProvider::Azure(_)
 				| AIProvider::Bedrock(_)
 				| AIProvider::Gemini(_),
@@ -776,6 +826,7 @@ impl AIProvider {
 				| AIProvider::Bedrock(_)
 				| AIProvider::Vertex(_)
 				| AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
 				| AIProvider::Gemini(_)
 				| AIProvider::Azure(_),
 				InputFormat::Messages,
@@ -858,7 +909,7 @@ impl AIProvider {
 			}
 		} else {
 			match self {
-				AIProvider::OpenAI(_) | AIProvider::Azure(_) => req.to_openai()?,
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_) => req.to_openai()?,
 				AIProvider::Vertex(p) => {
 					if p.is_anthropic_model(Some(request_model)) {
 						let body = req.to_anthropic()?;
@@ -888,11 +939,13 @@ impl AIProvider {
 		Ok(RequestResult::Success(req, llm_info))
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn process_response(
 		&self,
 		client: PolicyClient,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
+		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
 		resp: Response,
@@ -902,7 +955,14 @@ impl AIProvider {
 		// fall through to the buffered path where process_error translates them.
 		if req.streaming && resp.status().is_success() {
 			return self
-				.process_streaming(req, rate_limit, log, include_completion_in_log, resp)
+				.process_streaming(
+					req,
+					rate_limit,
+					req_snapshot,
+					log,
+					include_completion_in_log,
+					resp,
+				)
 				.await;
 		}
 
@@ -941,32 +1001,38 @@ impl AIProvider {
 			};
 
 			parts.headers.remove(header::CONTENT_LENGTH);
-			let resp = Response::from_parts(parts, bytes.into());
 			let llm_resp = LLMResponse {
 				count_tokens: Some(count),
 				..Default::default()
 			};
 			let llm_info = LLMInfo::new(req, llm_resp);
+			parts
+				.extensions
+				.insert(crate::cel::LLMContext::from(llm_info.clone()));
+			let resp = Response::from_parts(parts, bytes.into());
 			log.store(Some(llm_info));
 			return Ok(resp);
 		}
 
 		// embeddings has simplified response handling
 		if req.input_format == InputFormat::Embeddings {
+			parts.headers.remove(header::CONTENT_LENGTH);
 			if !parts.status.is_success() {
 				let body = self.process_error(&req, parts.status, &bytes)?;
-				parts.headers.remove(header::CONTENT_LENGTH);
-				let resp = Response::from_parts(parts, body.into());
 				let llm_info = LLMInfo::new(req, LLMResponse::default());
+				parts
+					.extensions
+					.insert(crate::cel::LLMContext::from(llm_info.clone()));
+				let resp = Response::from_parts(parts, body.into());
 				log.store(Some(llm_info));
 				return Ok(resp);
 			}
-
 			let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
-
-			parts.headers.remove(header::CONTENT_LENGTH);
-			let resp = Response::from_parts(parts, bytes.into());
 			let llm_info = LLMInfo::new(req, llm_resp);
+			parts
+				.extensions
+				.insert(crate::cel::LLMContext::from(llm_info.clone()));
+			let resp = Response::from_parts(parts, bytes.into());
 			log.store(Some(llm_info));
 			return Ok(resp);
 		}
@@ -976,12 +1042,14 @@ impl AIProvider {
 			(LLMResponse::default(), body)
 		} else {
 			let mut resp = self.process_success(&req, &bytes)?;
+			let prompt_guard_headers =
+				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 
 			// Apply response prompt guard
 			if let Some(dr) = Policy::apply_response_prompt_guard(
 				&client,
 				resp.as_mut(),
-				&parts.headers,
+				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
 			)
 			.await
@@ -1010,12 +1078,18 @@ impl AIProvider {
 			Body::from(body)
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);
+		let llm_info = LLMInfo::new(req, llm_resp);
+		parts
+			.extensions
+			.insert(crate::cel::LLMContext::from(llm_info.clone()));
 		let resp = Response::from_parts(parts, body);
 
-		let llm_info = LLMInfo::new(req, llm_resp);
-		// In the initial request, we subtracted the approximate request tokens.
-		// Now we should have the real request tokens and the response tokens
-		amend_tokens(rate_limit, &llm_info);
+		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+			let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+			// In the initial request, we subtracted the approximate request tokens.
+			// Now we should have the real request tokens and the response tokens
+			amend_tokens(rate_limit, &llm_info, exec);
+		}
 		log.store(Some(llm_info));
 		Ok(resp)
 	}
@@ -1070,7 +1144,10 @@ impl AIProvider {
 			)),
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::Azure(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::completions::Response>(bytes).map_err(|e| {
@@ -1083,7 +1160,10 @@ impl AIProvider {
 				})?,
 			)),
 			// Responses with OpenAI/Azure: just passthrough
-			(AIProvider::OpenAI(_) | AIProvider::Azure(_), InputFormat::Responses) => Ok(Box::new(
+			(
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
+				InputFormat::Responses,
+			) => Ok(Box::new(
 				serde_json::from_slice::<types::responses::Response>(bytes).map_err(|e| {
 					warn!(
 						error = %e,
@@ -1111,7 +1191,10 @@ impl AIProvider {
 			)),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::Azure(_),
 				InputFormat::Messages,
 			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
@@ -1159,6 +1242,7 @@ impl AIProvider {
 		&self,
 		req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
+		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
 		resp: Response,
@@ -1196,116 +1280,74 @@ impl AIProvider {
 			normalize_sse_response_headers(resp)
 		};
 
+		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
 		Ok(match (self, input_format) {
 			// Completions with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::Azure(_),
 				InputFormat::Completions,
-			) => conversion::completions::passthrough_stream(
-				AmendOnDrop::new(log, rate_limit),
-				include_completion_in_log,
-				resp,
-			),
+			) => conversion::completions::passthrough_stream(logger, include_completion_in_log, resp),
 			// Vertex completions: passthrough for OpenAI-compatible models, translate for Anthropic models
-			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_anthropic => resp.map(|b| {
-				conversion::messages::from_completions::translate_stream(
-					b,
-					buffer,
-					AmendOnDrop::new(log, rate_limit),
-				)
-			}),
+			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_anthropic => {
+				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
+			},
 			(AIProvider::Vertex(_), InputFormat::Completions) => {
-				conversion::completions::passthrough_stream(
-					AmendOnDrop::new(log, rate_limit),
-					include_completion_in_log,
-					resp,
-				)
+				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
 			},
-			(_, InputFormat::Detect) => {
-				types::detect::passthrough_stream(AmendOnDrop::new(log, rate_limit), resp)
-			},
+			(_, InputFormat::Detect) => types::detect::passthrough_stream(logger, resp),
 			// Responses with OpenAI: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Azure(_) | AIProvider::Vertex(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Vertex(_),
 				InputFormat::Responses,
-			) => resp.map(|b| {
-				conversion::responses::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
-			}),
-			(AIProvider::Gemini(_), InputFormat::Responses) => resp.map(|b| {
-				conversion::openai_compat::to_responses::translate_stream(
-					b,
-					buffer,
-					AmendOnDrop::new(log, rate_limit),
-				)
-			}),
+			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger)),
+			(AIProvider::Gemini(_), InputFormat::Responses) => {
+				resp.map(|b| conversion::openai_compat::to_responses::translate_stream(b, buffer, logger))
+			},
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
-			(AIProvider::Vertex(_), InputFormat::Messages) if is_vertex_anthropic => resp.map(|b| {
-				conversion::messages::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
-			}),
-			(AIProvider::Vertex(_), InputFormat::Messages) => resp.map(|b| {
-				conversion::completions::from_messages::translate_stream(
-					b,
-					buffer,
-					AmendOnDrop::new(log, rate_limit),
-				)
-			}),
+			(AIProvider::Vertex(_), InputFormat::Messages) if is_vertex_anthropic => {
+				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
+			},
+			(AIProvider::Vertex(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
+			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => resp.map(|b| {
-				conversion::messages::passthrough_stream(b, buffer, AmendOnDrop::new(log, rate_limit))
-			}),
+			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
+			},
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Gemini(_)
+				| AIProvider::Azure(_),
 				InputFormat::Messages,
-			) => resp.map(|b| {
-				conversion::completions::from_messages::translate_stream(
-					b,
-					buffer,
-					AmendOnDrop::new(log, rate_limit),
-				)
-			}),
+			) => resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger)),
 			// Supported paths with conversion...
-			(AIProvider::Anthropic(_), InputFormat::Completions) => resp.map(|b| {
-				conversion::messages::from_completions::translate_stream(
-					b,
-					buffer,
-					AmendOnDrop::new(log, rate_limit),
-				)
-			}),
+			(AIProvider::Anthropic(_), InputFormat::Completions) => {
+				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
+			},
 			(AIProvider::Bedrock(_), InputFormat::Completions) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_completions::translate_stream(
-						b,
-						buffer,
-						AmendOnDrop::new(log, rate_limit),
-						&model,
-						&msg,
-					)
+					conversion::bedrock::from_completions::translate_stream(b, buffer, logger, &model, &msg)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_messages::translate_stream(
-						b,
-						buffer,
-						AmendOnDrop::new(log, rate_limit),
-						&model,
-						&msg,
-					)
+					conversion::bedrock::from_messages::translate_stream(b, buffer, logger, &model, &msg)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_responses::translate_stream(
-						b,
-						buffer,
-						AmendOnDrop::new(log, rate_limit),
-						&model,
-						&msg,
-					)
+					conversion::bedrock::from_responses::translate_stream(b, buffer, logger, &model, &msg)
 				})
 			},
 			(_, InputFormat::Realtime) => {
@@ -1360,7 +1402,7 @@ impl AIProvider {
 	) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
 			(
-				AIProvider::OpenAI(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
 				InputFormat::Completions | InputFormat::Responses | InputFormat::Embeddings,
 			) => {
 				// Passthrough; nothing needed
@@ -1387,9 +1429,10 @@ impl AIProvider {
 				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
 				Ok(bytes.clone())
 			},
-			(AIProvider::OpenAI(_) | AIProvider::Azure(_), InputFormat::Messages) => {
-				conversion::completions::from_messages::translate_error(bytes, status)
-			},
+			(
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
+				InputFormat::Messages,
+			) => conversion::completions::from_messages::translate_error(bytes, status),
 			(AIProvider::Gemini(_), InputFormat::Messages) => {
 				conversion::messages::translate_google_error(bytes)
 			},
@@ -1535,7 +1578,18 @@ pub enum AIError {
 	JoinError(#[from] tokio::task::JoinError),
 }
 
-fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
+fn response_prompt_guard_headers(
+	response_headers: &HeaderMap,
+	request_traceparent: Option<&HeaderValue>,
+) -> HeaderMap {
+	let mut headers = response_headers.clone();
+	if let Some(traceparent) = request_traceparent {
+		headers.insert(http::x_headers::TRACEPARENT, traceparent.clone());
+	}
+	headers
+}
+
+fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
 	let input_mismatch = match (
 		llm_resp.request.input_tokens,
 		llm_resp.response.input_tokens,
@@ -1554,28 +1608,40 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo) {
 		lrl.amend_tokens(tokens_to_remove)
 	}
 	if let Some(rrl) = rate_limit.remote_rate_limit {
-		rrl.amend_tokens(tokens_to_remove)
+		rrl.amend_tokens(tokens_to_remove, &exec)
 	}
 }
 
 pub struct AmendOnDrop {
 	log: AsyncLog<llm::LLMInfo>,
 	pol: Option<LLMResponsePolicies>,
+	req: Option<Arc<RequestSnapshot>>,
 }
 
 impl AmendOnDrop {
-	pub fn new(log: AsyncLog<llm::LLMInfo>, pol: LLMResponsePolicies) -> Self {
+	pub fn new(
+		log: AsyncLog<llm::LLMInfo>,
+		pol: LLMResponsePolicies,
+		req: Option<Arc<RequestSnapshot>>,
+	) -> Self {
 		Self {
 			log,
 			pol: Some(pol),
+			req,
 		}
 	}
 	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
 		self.log.non_atomic_mutate(f);
 	}
 	pub fn report_rate_limit(&mut self) {
-		if let Some(pol) = self.pol.take() {
-			self.log.non_atomic_mutate(|r| amend_tokens(pol, r));
+		if let Some(pol) = self.pol.take()
+			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
+		{
+			self.log.non_atomic_mutate(|r| {
+				let ctx = LLMContext::from(r.clone());
+				let exec = cel::Executor::new_llm_rate_limit_streaming(self.req.as_deref(), &ctx);
+				amend_tokens(pol, r, exec)
+			});
 		}
 	}
 }

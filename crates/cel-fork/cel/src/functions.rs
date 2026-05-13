@@ -256,19 +256,26 @@ pub fn contains<'a>(
 // supported:
 // * `string` - Returns a copy of the target string.
 // * `timestamp` - Returns the timestamp in RFC3339 format.
-// * `duration` - Returns the duration in a string formatted like "72h3m0.5s".
+// * `duration` - Returns the duration in `<seconds>[.<fraction>]s` format,
+//   with up to 9 fractional digits and trailing zeros trimmed.
 // * `int` - Returns the integer value of the target.
 // * `uint` - Returns the unsigned integer value of the target.
 // * `float` - Returns the float value of the target.
 // * `bytes` - Converts bytes to string using from_utf8_lossy.
+// * `type` - Returns the type name.
 pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	let this = ftx.this_or_arg_value()?;
 	Ok(match this {
 		Value::String(v) => Value::String(v.clone()),
+		Value::Type(v) => Value::String(v.name().into()),
 
 		Value::Timestamp(t) => Value::String(format_timestamp(&t).into()),
 
-		Value::Duration(v) => Value::String(crate::duration::format_duration(&v).into()),
+		Value::Duration(v) => Value::String(
+			crate::duration::format_duration(&v)
+				.ok_or_else(|| ftx.error("duration too large to convert to string"))?
+				.into(),
+		),
 		Value::Bool(v) => Value::String(v.to_string().into()),
 		Value::Int(v) => Value::String(v.to_string().into()),
 		Value::UInt(v) => Value::String(v.to_string().into()),
@@ -279,6 +286,12 @@ pub fn string<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 		v => return Err(ftx.error(format!("cannot convert {v:?} to string"))),
 	})
 }
+
+pub fn type_<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
+	let value = ftx.this_or_arg_value()?;
+	Ok(Value::Type(crate::objects::type_of_value(&value)))
+}
+
 pub fn bytes<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 	let value: StringValue = ftx.arg(0)?;
 	Ok(Value::Bytes(BytesValue::Owned(value.as_bytes().into())))
@@ -1050,7 +1063,11 @@ mod tests {
 	#[test]
 	fn test_chrono_string() {
 		[
-			("duration", "duration('1h30m').string() == '1h30m0s'"),
+			("duration", "duration('1h30m').string() == '5400s'"),
+			(
+				"fractional duration",
+				"string(duration('1m1ms')) == '60.001s'",
+			),
 			(
 				"timestamp",
 				"timestamp('2023-05-29T00:00:00Z').string() == '2023-05-29T00:00:00Z'",

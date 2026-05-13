@@ -4,9 +4,9 @@ import "crypto/tls"
 
 type FetchTarget struct {
 	URL            string               `json:"url"`
-	Transport      TransportFingerprint `json:"transport,omitempty"`
+	Transport      TransportFingerprint `json:"transport"`
 	ProxyURL       string               `json:"proxyURL,omitempty"`
-	ProxyTransport TransportFingerprint `json:"proxyTransport,omitempty"`
+	ProxyTransport TransportFingerprint `json:"proxyTransport"`
 }
 
 type ResolvedTarget struct {

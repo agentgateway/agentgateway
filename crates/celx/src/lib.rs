@@ -6,6 +6,7 @@ mod benches;
 mod cidr;
 mod flatten;
 mod general;
+mod math;
 mod optimize;
 mod strings;
 #[cfg(test)]
@@ -21,6 +22,9 @@ pub fn insert_all(ctx: &mut Context) {
 	// "Strings" extension
 	// https://pkg.go.dev/github.com/google/cel-go/ext#Strings
 	strings::insert_all(ctx);
+	// "Math" extension
+	// https://pkg.go.dev/github.com/google/cel-go/ext#Math
+	math::insert_all(ctx);
 	// https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-cidr-library and
 	// https://kubernetes.io/docs/reference/using-api/cel/#kubernetes-ip-address-library
 	cidr::insert_all(ctx);

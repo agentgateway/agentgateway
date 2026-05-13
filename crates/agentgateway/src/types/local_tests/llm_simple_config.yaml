@@ -5,6 +5,11 @@ frontendPolicies:
 
 llm:
   policies:
+    localRateLimit:
+    - type: tokens
+      fillInterval: 1s
+      tokensPerFill: 10
+      maxTokens: 100
     jwtAuth:
       issuer: agentgateway.dev
       audiences: [test.agentgateway.dev]

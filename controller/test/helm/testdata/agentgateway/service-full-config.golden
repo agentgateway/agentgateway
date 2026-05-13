@@ -373,6 +373,8 @@ spec:
               value: "9978"
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: "[]"
+            - name: AGW_XDS_MODE
+              value: "tls"
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: "{}"
             - name: POD_NAMESPACE

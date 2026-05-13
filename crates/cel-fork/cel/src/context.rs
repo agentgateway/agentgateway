@@ -94,6 +94,7 @@ impl Default for Context {
 		ctx.add_function("double", functions::double);
 		ctx.add_function("int", functions::int);
 		ctx.add_function("uint", functions::uint);
+		ctx.add_function("type", functions::type_);
 
 		ctx.add_qualified_function("optional", "none", functions::optional_none);
 		ctx.add_qualified_function("optional", "of", functions::optional_of);

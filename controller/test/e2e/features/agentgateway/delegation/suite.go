@@ -124,3 +124,93 @@ func (s *testingSuite) TestCyclicDelegation() {
 		curl.WithPath("/anything/team2/foo"),
 	)
 }
+
+// TestRecursiveDelegation tests multi-level route delegation.
+//   - Parent infra/root delegates /anything/team2 to an intermediate route
+//     team2-root/team2-root, which in turn delegates to team2/svc2.
+//   - The shallow /anything/team1 delegation still works in parallel.
+func (s *testingSuite) TestRecursiveDelegation() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"root",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+
+	// Single-level delegation via team1 still works
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusOK},
+		curl.WithPath("/anything/team1/foo"),
+	)
+
+	// Two-level delegation: root -> team2-root -> svc2
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusOK},
+		curl.WithPath("/anything/team2/foo"),
+	)
+}
+
+// TestMultipleParents verifies that when a child HTTPRoute declares an explicit
+// HTTPRoute parentRef, only that parent can delegate into it at request time.
+//
+//   - infra/parent1 (host parent1.com) and infra/parent2 (host parent2.com) both
+//     delegate /anything/team2 into team2 via wildcard.
+//   - team2/svc2 declares parentRefs: [infra/parent1].
+//
+// The child must be reachable through parent1.com but a request through
+// parent2.com (which delegates via the same wildcard) must 404.
+func (s *testingSuite) TestMultipleParents() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"parent1",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"parent2",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+
+	// Reachable via parent1 (the parent the child explicitly allows).
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusOK},
+		curl.WithHostHeader("parent1.com"),
+		curl.WithPath("/anything/team2/foo"),
+	)
+
+	// Not reachable via parent2: the child does not list parent2 as a parent,
+	// so parent2's delegation group does not contain svc2.
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusNotFound},
+		curl.WithHostHeader("parent2.com"),
+		curl.WithPath("/anything/team2/foo"),
+	)
+}
+
+// TestUnresolvedChild tests that a parent HTTPRoute which delegates to a
+// namespace with no matching children is still Accepted, and that requests
+// to the delegated prefix return 404 rather than a hard error.
+func (s *testingSuite) TestUnresolvedChild() {
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+		s.Ctx,
+		"root",
+		"infra",
+		gwv1.RouteConditionAccepted,
+		metav1.ConditionTrue,
+	)
+
+	common.BaseGateway.Send(
+		s.T(),
+		&testmatchers.HttpResponse{StatusCode: http.StatusNotFound},
+		curl.WithPath("/anything/team1/foo"),
+	)
+}

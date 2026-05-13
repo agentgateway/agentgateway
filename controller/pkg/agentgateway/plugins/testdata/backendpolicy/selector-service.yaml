@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: labeled-svc
+  namespace: default
+  labels:
+    app: web
+spec:
+  ports:
+    - port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: svc-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - name: labeled-svc
+          port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetSelectors:
+  - kind: Service
+    group: ""
+    matchLabels:
+      app: web
+  backend:
+    health:
+      unhealthyCondition: "response.code >= 500"
+      eviction:
+        duration: 30s
+        consecutiveFailures: 5
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        health:
+          eviction:
+            consecutiveFailures: 5
+            duration: 30s
+          unhealthyCondition: response.code >= 500
+      key: default/agw:health:default/labeled-svc.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        service:
+          hostname: labeled-svc.default.svc.cluster.local
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

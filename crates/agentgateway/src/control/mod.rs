@@ -52,6 +52,7 @@ impl RootCert {
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)?
 			.with_root_certificates(roots)
 			.with_no_client_auth();
+		ccb.key_log = transport::tls::key_log();
 		ccb.alpn_protocols = vec![b"h2".to_vec()];
 		Ok(BackendTLS {
 			hostname_override: None,

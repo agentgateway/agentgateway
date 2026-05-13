@@ -14,6 +14,9 @@ var (
 	basicDelegationManifest        = getTestFile("basic-delegation.yaml")
 	delegationHeadersQueryManifest = getTestFile("delegation-headers-query.yaml")
 	cyclicDelegationManifest       = getTestFile("cyclic-delegation.yaml")
+	recursiveDelegationManifest    = getTestFile("recursive-delegation.yaml")
+	unresolvedChildManifest        = getTestFile("unresolved-child.yaml")
+	multipleParentsManifest        = getTestFile("multiple-parents.yaml")
 
 	setup = base.TestCase{
 		Manifests: []string{setupManifest},
@@ -28,6 +31,15 @@ var (
 		},
 		"TestCyclicDelegation": {
 			Manifests: []string{cyclicDelegationManifest},
+		},
+		"TestRecursiveDelegation": {
+			Manifests: []string{recursiveDelegationManifest},
+		},
+		"TestUnresolvedChild": {
+			Manifests: []string{unresolvedChildManifest},
+		},
+		"TestMultipleParents": {
+			Manifests: []string{multipleParentsManifest},
 		},
 	}
 )

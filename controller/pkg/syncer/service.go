@@ -107,14 +107,14 @@ type Service struct {
 
 	// CreationTime records the time this service was created, if available.
 	// +krtEqualsTodo decide if CreationTime impacts KRT outputs
-	CreationTime time.Time `json:"creationTime,omitempty"`
+	CreationTime time.Time `json:"creationTime"`
 
 	// Name of the service, e.g. "catalog.mystore.com"
 	Hostname host.Name `json:"hostname"`
 
 	// ClusterVIPs specifies the service address of the load balancer
 	// in each of the clusters where the service resides
-	ClusterVIPs AddressMap `json:"clusterVIPs,omitempty"`
+	ClusterVIPs AddressMap `json:"clusterVIPs"`
 
 	// DefaultAddress specifies the default service IP of the load balancer.
 	// Do not access directly. Use GetAddressForProxy
@@ -777,7 +777,7 @@ func (m *AddressMap) ForEach(fn func(c cluster.ID, addresses []string)) {
 }
 
 func precomputeServicePtr(w *model.ServiceInfo) *model.ServiceInfo {
-	return ptr.Of(precomputeService(*w))
+	return new(precomputeService(*w))
 }
 
 func precomputeService(w model.ServiceInfo) model.ServiceInfo {

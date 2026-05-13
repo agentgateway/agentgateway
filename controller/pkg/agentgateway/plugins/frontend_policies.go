@@ -138,7 +138,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(*tracing.Path)
+		path = new(*tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -222,7 +222,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(*otlp.Path)
+			path = new(*otlp.Path)
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
@@ -367,7 +367,15 @@ func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPoli
 }
 
 func castUint32[T ~int32](ka *T) *uint32 {
-	return ptr.Of((uint32)(*ka))
+	return new((uint32)(*ka))
+}
+
+func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
+	return new(requiredQuantityUint32(*ka))
+}
+
+func requiredQuantityUint32(ka agentgateway.ByteSize) uint32 {
+	return uint32(ka.Value()) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
@@ -434,6 +442,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	if len(agwCipherSuites) > 0 {
 		spec.CipherSuites = agwCipherSuites
 	}
+	spec.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
 	tlsPolicy := &api.Policy{
 		Key:  name + frontendTlsPolicySuffix,
@@ -454,11 +463,31 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	return tlsPolicy
 }
 
+func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.TLSConfig_KeyExchangeGroup {
+	var out []api.TLSConfig_KeyExchangeGroup
+	for _, group := range groups {
+		switch group {
+		case agentgateway.KeyExchangeGroupX25519:
+			out = append(out, api.TLSConfig_X25519)
+		case agentgateway.KeyExchangeGroupP256:
+			out = append(out, api.TLSConfig_P256)
+		case agentgateway.KeyExchangeGroupP384:
+			out = append(out, api.TLSConfig_P384)
+		case agentgateway.KeyExchangeGroupX25519MLKEM768:
+			out = append(out, api.TLSConfig_X25519_MLKEM768)
+		default:
+			logger.Warn("unknown tls key exchange group", "key_exchange_group", group)
+			continue
+		}
+	}
+	return out
+}
+
 func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	http := policy.Spec.Frontend.HTTP
 	spec := &api.FrontendPolicySpec_HTTP{}
 	if v := http.MaxBufferSize; v != nil {
-		spec.MaxBufferSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.MaxBufferSize = quantityUint32(v)
 	}
 	if v := http.HTTP1MaxHeaders; v != nil {
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -467,13 +496,16 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
 	}
 	if v := http.HTTP2WindowSize; v != nil {
-		spec.Http2WindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2WindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2ConnectionWindowSize; v != nil {
-		spec.Http2ConnectionWindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2ConnectionWindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2FrameSize; v != nil {
-		spec.Http2FrameSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2FrameSize = quantityUint32(v)
+	}
+	if v := http.HTTP2MaxHeaderSize; v != nil {
+		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
 	if v := http.HTTP2KeepaliveInterval; v != nil {
 		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)

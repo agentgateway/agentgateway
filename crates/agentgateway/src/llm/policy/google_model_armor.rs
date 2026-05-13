@@ -15,7 +15,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::GoogleModelArmor;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
 
 /// User prompt data for sanitization
 #[derive(Debug, Clone, Serialize)]
@@ -321,12 +321,12 @@ pub async fn send_response(
 impl GoogleModelArmor {
 	/// User-provided policies come first so they take precedence during resolution
 	/// then system TLS and implicit GCP auth are appended as fallbacks.
-	pub(crate) fn build_request_policies(&self) -> Vec<BackendPolicy> {
-		let mut pols: Vec<BackendPolicy> = self.policies.to_vec();
-		pols.push(BackendPolicy::BackendTLS(
+	pub(crate) fn build_request_policies(&self) -> Vec<BackendTrafficPolicy> {
+		let mut pols: Vec<BackendTrafficPolicy> = self.policies.to_vec();
+		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendPolicy::BackendAuth(BackendAuth::Gcp(
+		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Gcp(
 			GcpAuth::default(),
 		)));
 		pols

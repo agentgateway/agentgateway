@@ -16,7 +16,7 @@ async fn test_hbone() -> anyhow::Result<()> {
 	// Start the HBONE server in ReadWrite (echo) mode on the standard HBONE port 15008
 	// It will prefix all echoed data with "waypoint:" to prove the connection went through it
 	// Note: The HBONE client in agentgateway hardcodes port 15008 for HBONE connections
-	let _hbone_port = start_hbone_server(15008, "test-server", WAYPOINT_PREFIX.to_vec()).await;
+	let _hbone_port = start_hbone_server(15008, "test-server", WAYPOINT_PREFIX.to_vec(), None).await;
 
 	// Configure agentgateway with CA and a workload that uses HBONE protocol
 	// The workload's protocol: HBONE tells AGW to connect via HBONE to port 15008
@@ -122,12 +122,12 @@ async fn test_double_hbone() -> anyhow::Result<()> {
 	// Start the waypoint HBONE server (the final destination) on an OS-assigned port
 	// It echoes back data with "waypoint:" prefix
 	// The waypoint must have the identity of the remote-server workload
-	let waypoint_port = start_hbone_server(0, "remote-server", WAYPOINT_PREFIX.to_vec()).await;
+	let waypoint_port = start_hbone_server(0, "remote-server", WAYPOINT_PREFIX.to_vec(), None).await;
 
 	// Start the E/W gateway HBONE server on an OS-assigned port
 	// It forwards connections to the waypoint's HBONE port
 	let waypoint_addr: SocketAddr = format!("127.0.0.1:{}", waypoint_port).parse().unwrap();
-	let gateway_port = start_hbone_forward_server(0, "ew-gateway", waypoint_addr).await;
+	let gateway_port = start_hbone_forward_server(0, "ew-gateway", waypoint_addr, None).await;
 
 	// Configure agentgateway with:
 	// 1. AGW itself is on network "" (default)
@@ -252,12 +252,12 @@ async fn test_double_hbone_with_hostname() -> anyhow::Result<()> {
 	// Start the waypoint HBONE server (the final destination) on an OS-assigned port
 	// It echoes back data with "waypoint:" prefix
 	// The waypoint must have the identity of the remote-server workload
-	let waypoint_port = start_hbone_server(0, "remote-server", WAYPOINT_PREFIX.to_vec()).await;
+	let waypoint_port = start_hbone_server(0, "remote-server", WAYPOINT_PREFIX.to_vec(), None).await;
 
 	// Start the E/W gateway HBONE server on an OS-assigned port
 	// It forwards connections to the waypoint's HBONE port
 	let waypoint_addr: SocketAddr = format!("127.0.0.1:{}", waypoint_port).parse().unwrap();
-	let gateway_port = start_hbone_forward_server(0, "ew-gateway", waypoint_addr).await;
+	let gateway_port = start_hbone_forward_server(0, "ew-gateway", waypoint_addr, None).await;
 
 	// Configure agentgateway with:
 	// 1. AGW itself is on network "" (default)
@@ -474,9 +474,146 @@ binds:
 	Ok(())
 }
 
-async fn start_hbone_server(port: u16, name: &str, waypoint_message: Vec<u8>) -> u16 {
+/// Verifies that outbound double-HBONE CONNECTs carry `x-forwarded-network`
+/// and `baggage` (inner only). The bind uses the default `Direct` tunnel
+/// protocol, so `x-istio-source` is absent; the waypoint role mapping
+/// (`HboneWaypoint → "waypoint"`) is covered by the unit tests in
+/// `client::tests`.
+#[tokio::test]
+async fn test_hbone_carries_istio_headers() -> anyhow::Result<()> {
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let ca_addr = start_mock_ca_server().await?;
+
+	let (waypoint_tx, mut waypoint_rx) = tokio::sync::mpsc::unbounded_channel::<http::HeaderMap>();
+	let waypoint_port =
+		start_hbone_server(0, "remote-server", b"waypoint:".to_vec(), Some(waypoint_tx)).await;
+
+	let (gateway_tx, mut gateway_rx) = tokio::sync::mpsc::unbounded_channel::<http::HeaderMap>();
+	let waypoint_addr: SocketAddr = format!("127.0.0.1:{}", waypoint_port).parse().unwrap();
+	let gateway_port =
+		start_hbone_forward_server(0, "ew-gateway", waypoint_addr, Some(gateway_tx)).await;
+
+	let gw_config = format!(
+		r#"config:
+  network: "network-1"
+  namespace: default
+  serviceAccount: default
+  trustDomain: cluster.local
+  caAddress: "http://{ca_addr}"
+workloads:
+  - uid: "ew-gateway"
+    name: "ew-gateway"
+    namespace: "default"
+    serviceAccount: "ew-gateway"
+    trustDomain: "cluster.local"
+    workloadIps: ["127.0.0.1"]
+    network: "remote"
+    protocol: HBONE
+    services: {{}}
+  - uid: "remote-workload"
+    name: "remote-server"
+    namespace: "default"
+    serviceAccount: "remote-server"
+    trustDomain: "cluster.local"
+    workloadIps: ["127.0.0.2"]
+    network: "remote"
+    protocol: HBONE
+    networkGateway:
+      destination: "remote/127.0.0.1"
+      hboneMtlsPort: {gateway_port}
+    services:
+      default/remote-service.default.svc.cluster.local:
+        "8080": 8080
+services:
+  - name: "remote-service"
+    namespace: "default"
+    hostname: "remote-service.default.svc.cluster.local"
+    vips:
+      - "/127.0.0.2"
+    ports:
+      "8080": 8080
+binds:
+- port: $PORT
+  listeners:
+  - name: default
+    protocol: TCP
+    tcpRoutes:
+    - name: default
+      backends:
+        - service:
+            name: default/remote-service.default.svc.cluster.local
+            port: 8080
+"#
+	);
+
+	let gw = AgentGateway::new(gw_config).await?;
+
+	use tokio::io::AsyncWriteExt;
+	use tokio::net::TcpStream;
+	let mut stream = TcpStream::connect(("127.0.0.1", gw.port()))
+		.await
+		.expect("connect to gw");
+	stream.write_all(b"hi").await.expect("write");
+	stream.shutdown().await.expect("shutdown");
+
+	let outer = tokio::time::timeout(std::time::Duration::from_secs(5), gateway_rx.recv())
+		.await
+		.expect("timeout waiting for outer CONNECT headers")
+		.expect("gateway closed without forwarding headers");
+	assert!(
+		outer.get("x-istio-source").is_none(),
+		"outer: Direct bind should not set x-istio-source",
+	);
+	assert_eq!(
+		outer
+			.get("x-forwarded-network")
+			.map(|v| v.to_str().unwrap()),
+		Some("network-1"),
+		"outer: expected x-forwarded-network: network-1",
+	);
+	assert!(
+		outer.get("baggage").is_none(),
+		"outer: baggage must only appear on the inner CONNECT",
+	);
+
+	// --- inner CONNECT (to waypoint / workload): no x-istio-source, has x-forwarded-network + baggage ---
+	let inner = tokio::time::timeout(std::time::Duration::from_secs(5), waypoint_rx.recv())
+		.await
+		.expect("timeout waiting for inner CONNECT headers")
+		.expect("waypoint closed without forwarding headers");
+	assert!(
+		inner.get("x-istio-source").is_none(),
+		"inner: Direct bind should not set x-istio-source",
+	);
+	assert_eq!(
+		inner
+			.get("x-forwarded-network")
+			.map(|v| v.to_str().unwrap()),
+		Some("network-1"),
+		"inner: expected x-forwarded-network: network-1",
+	);
+	assert!(
+		inner.get("baggage").is_some(),
+		"inner: expected baggage header on inner CONNECT",
+	);
+
+	drop(stream);
+	gw.shutdown().await;
+	Ok(())
+}
+
+async fn start_hbone_server(
+	port: u16,
+	name: &str,
+	waypoint_message: Vec<u8>,
+	header_tx: Option<tokio::sync::mpsc::UnboundedSender<http::HeaderMap>>,
+) -> u16 {
 	let name = name.to_string();
-	let server = HboneTestServer::new(Mode::ReadWrite, &name, waypoint_message, port).await;
+	let mut server = HboneTestServer::new(Mode::ReadWrite, &name, waypoint_message, port).await;
+	if let Some(tx) = header_tx {
+		server.capture_headers(tx);
+	}
 	let actual_port = server.port();
 	tokio::spawn(async move {
 		server.run().await;
@@ -484,9 +621,17 @@ async fn start_hbone_server(port: u16, name: &str, waypoint_message: Vec<u8>) ->
 	actual_port
 }
 
-async fn start_hbone_forward_server(port: u16, name: &str, forward_to: SocketAddr) -> u16 {
+async fn start_hbone_forward_server(
+	port: u16,
+	name: &str,
+	forward_to: SocketAddr,
+	header_tx: Option<tokio::sync::mpsc::UnboundedSender<http::HeaderMap>>,
+) -> u16 {
 	let name = name.to_string();
-	let server = HboneTestServer::new(Mode::Forward(forward_to), &name, vec![], port).await;
+	let mut server = HboneTestServer::new(Mode::Forward(forward_to), &name, vec![], port).await;
+	if let Some(tx) = header_tx {
+		server.capture_headers(tx);
+	}
 	let actual_port = server.port();
 	tokio::spawn(async move {
 		server.run().await;
