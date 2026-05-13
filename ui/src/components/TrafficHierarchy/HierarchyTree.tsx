@@ -3002,7 +3002,12 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
       <TreeCard>
         <Empty description="No resources configured" image={Empty.PRESENTED_IMAGE_SIMPLE}>
           <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-            <XdsAwareButton disabled={xdsMode} type="primary" icon={<PlusOutlined />}>
+            <XdsAwareButton 
+              disabled={xdsMode} 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              data-testid="hierarchy-tree-no-resources-add-button"
+            >
               Add <DownOutlined />
             </XdsAwareButton>
           </Dropdown>
@@ -3037,7 +3042,12 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
               </CardTitle>
               <Space size="small">
                 <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-                  <XdsAwareButton type="primary" size="small" icon={<PlusOutlined />}>
+                  <XdsAwareButton 
+                    type="primary" 
+                    size="small" 
+                    icon={<PlusOutlined />} 
+                    data-testid="hierarchy-tree-header-row-add-button"
+                  >
                     Add <DownOutlined />
                   </XdsAwareButton>
                 </Dropdown>

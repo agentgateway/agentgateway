@@ -1,8 +1,6 @@
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ArrayFieldTemplateProps } from '@rjsf/utils';
-import { Button, Card, Space, Typography } from 'antd';
-
-const { Text } = Typography;
+import { Button, Card, Space } from 'antd';
 
 /**
  * Custom ArrayFieldTemplate that uses Ant Design Cards for array items

@@ -320,10 +320,18 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
               { label: "YAML", value: "yaml" },
             ]}
           />
-          <XdsAwareButton onClick={handleFormat} disabled={isLoading}>
+          <XdsAwareButton 
+            onClick={handleFormat} 
+            disabled={isLoading}
+            data-testid="config-editor-format-button"
+          >
             Format
           </XdsAwareButton>
-          <XdsAwareButton onClick={onClose} disabled={isSubmitting}>
+          <XdsAwareButton 
+            onClick={onClose} 
+            disabled={isSubmitting}
+            data-testid="config-editor-cancel-button"
+          >
             Cancel
           </XdsAwareButton>
           <InfoText>
@@ -335,6 +343,7 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
           onClick={handleSave}
           loading={isSubmitting}
           disabled={!hasChanges || isLoading}
+          data-testid="config-editor-save-button"
         >
           Save Changes
         </XdsAwareButton>

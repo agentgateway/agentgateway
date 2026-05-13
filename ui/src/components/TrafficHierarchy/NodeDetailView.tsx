@@ -643,199 +643,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
     isCreating,
   );
 
-  // Action handlers for creating sub-resources - defined early to satisfy hooks rules
-  const handleAddListener = useCallback(
-    async (port: number) => {
-      try {
-        const newListener = {
-          name: "listener",
-          protocol: "HTTP" as const,
-          hostname: "*",
-          routes: [],
-        };
-        await api.createListener(port, newListener);
-        toast.success("Listener created successfully");
-        const freshConfig = await mutate();
-        const bind = freshConfig?.binds?.find((b: any) => b.port === port);
-        const listenerIndex = bind ? bind.listeners.length - 1 : 0;
-        navigate(
-          `${basePath}/bind/${port}/listener/${listenerIndex}?edit=true&creating=true`,
-        );
-      } catch (e: unknown) {
-        toast.error(
-          getErrorMessage(e, "Failed to create listener"),
-        );
-      }
-    },
-    [basePath, mutate, navigate],
-  );
-
-  const handleAddRoute = useCallback(
-    async (port: number, li: number, isTcp: boolean) => {
-      try {
-        const bind = hierarchy.binds.find((b) => b.bind.port === port);
-        if (!bind) throw new Error(`Bind with port ${port} not found`);
-        const listener = bind.bind.listeners[li];
-        if (!listener) throw new Error(`Listener at index ${li} not found`);
-
-        const newRoute = {
-          name: "route",
-          hostnames: [],
-          matches: [{ path: { pathPrefix: "/" } }],
-          backends: [],
-        };
-
-        const updatedListener = { ...listener };
-        if (isTcp) {
-          if (!updatedListener.tcpRoutes) updatedListener.tcpRoutes = [];
-          updatedListener.tcpRoutes.push(newRoute as any);
-        } else {
-          if (!updatedListener.routes) updatedListener.routes = [];
-          updatedListener.routes.push(newRoute as any);
-        }
-
-        await api.updateListenerByIndex(port, li, updatedListener);
-        toast.success(
-          isTcp
-            ? "TCP route created successfully"
-            : "Route created successfully",
-        );
-
-        const freshConfig = await mutate();
-        const freshBind = freshConfig?.binds?.find((b: any) => b.port === port);
-        const freshListener = freshBind?.listeners?.[li];
-        const routeIndex = isTcp
-          ? (freshListener?.tcpRoutes?.length ?? 1) - 1
-          : (freshListener?.routes?.length ?? 1) - 1;
-        const routeSeg = isTcp ? "tcproute" : "route";
-        navigate(
-          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${routeIndex}?edit=true&creating=true`,
-        );
-      } catch (e: unknown) {
-        toast.error(getErrorMessage(e, "Failed to create route"));
-      }
-    },
-    [basePath, hierarchy.binds, mutate, navigate],
-  );
-
-  const handleAddBackend = useCallback(
-    async (port: number, li: number, ri: number, isTcp: boolean) => {
-      try {
-        const bind = hierarchy.binds.find((b) => b.bind.port === port);
-        if (!bind) throw new Error(`Bind with port ${port} not found`);
-        const listener = bind.bind.listeners[li];
-        if (!listener) throw new Error(`Listener at index ${li} not found`);
-        const route = isTcp ? listener.tcpRoutes?.[ri] : listener.routes?.[ri];
-        if (!route) throw new Error(`Route at index ${ri} not found`);
-
-        const newBackend = {
-          service: {
-            name: {
-              namespace: "default",
-              hostname: "service",
-            },
-            port: 8080,
-          },
-          weight: 1,
-        };
-
-        const existingBackends = route.backends || [];
-        const updatedBackends = [...existingBackends, newBackend];
-
-        const updatedRoute: Record<string, unknown> = {
-          hostnames: route.hostnames,
-          backends: updatedBackends,
-        };
-
-        if ("matches" in route) updatedRoute.matches = route.matches;
-        if ("name" in route) updatedRoute.name = route.name;
-        if ("namespace" in route) updatedRoute.namespace = route.namespace;
-        if ("ruleName" in route) updatedRoute.ruleName = route.ruleName;
-        if ("policies" in route) updatedRoute.policies = route.policies;
-
-        if (isTcp) {
-          await api.updateTCPRouteByIndex(port, li, ri, updatedRoute);
-        } else {
-          await api.updateRouteByIndex(port, li, ri, updatedRoute);
-        }
-
-        toast.success("Backend created successfully");
-
-        const freshConfig = await mutate();
-        const freshBind = freshConfig?.binds?.find((b: any) => b.port === port);
-        const freshListener = freshBind?.listeners?.[li];
-        const freshRoute = isTcp
-          ? freshListener?.tcpRoutes?.[ri]
-          : freshListener?.routes?.[ri];
-        const backendIndex = (freshRoute?.backends?.length ?? 1) - 1;
-        const routeSeg = isTcp ? "tcproute" : "route";
-        navigate(
-          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/backend/${backendIndex}?edit=true&creating=true`,
-        );
-      } catch (e: unknown) {
-        toast.error(
-          getErrorMessage(e, "Failed to create backend"),
-        );
-      }
-    },
-    [basePath, hierarchy.binds, mutate, navigate],
-  );
-
-  const handleAddPolicy = useCallback(
-    async (
-      port: number,
-      li: number,
-      ri: number,
-      isTcp: boolean,
-      policyType: string,
-    ) => {
-      try {
-        const bind = hierarchy.binds.find((b) => b.bind.port === port);
-        if (!bind) throw new Error(`Bind with port ${port} not found`);
-        const listener = bind.bind.listeners[li];
-        if (!listener) throw new Error(`Listener at index ${li} not found`);
-        const route = isTcp ? listener.tcpRoutes?.[ri] : listener.routes?.[ri];
-        if (!route) throw new Error(`Route at index ${ri} not found`);
-
-        const currentPolicies =
-          route.policies && typeof route.policies === "object"
-            ? route.policies
-            : {};
-        const newPolicyConfig = getDefaultPolicyValue(policyType);
-
-        const updatedRoute = {
-          ...route,
-          policies: {
-            ...currentPolicies,
-            [policyType]: newPolicyConfig,
-          },
-        };
-
-        if (isTcp) {
-          await api.updateTCPRouteByIndex(port, li, ri, updatedRoute as any);
-        } else {
-          await api.updateRouteByIndex(port, li, ri, updatedRoute as any);
-        }
-
-        const displayName = policyType
-          .replace(/([A-Z])/g, " $1")
-          .replace(/^./, (str) => str.toUpperCase())
-          .trim();
-
-        toast.success(`${displayName} policy created successfully`);
-        await mutate();
-
-        const routeSeg = isTcp ? "tcproute" : "route";
-        navigate(
-          `${basePath}/bind/${port}/listener/${li}/${routeSeg}/${ri}/policy/${policyType}?edit=true&creating=true`,
-        );
-      } catch (e: unknown) {
-        toast.error(getErrorMessage(e, "Failed to create policy"));
-      }
-    },
-    [basePath, hierarchy.binds, mutate, navigate],
-  );
-
   const selected = useMemo(() => {
     const sel = findSelectedNode(hierarchy, urlParams);
     // Initialize formData when selection changes
@@ -1442,6 +1249,7 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
                   type="primary"
                   icon={<Edit2 size={14} />}
                   onClick={() => navigate(location.pathname + "?edit=true")}
+                  data-testid="port-bind-edit-button"
                 >
                   Edit
                 </XdsAwareButton>
@@ -1509,7 +1317,6 @@ export function NodeDetailView({ hierarchy, urlParams }: NodeDetailViewProps) {
   if (selected.type === "listener") {
     const { node } = selected;
     const protocol = node.listener.protocol ?? "HTTP";
-    const isTcp = protocol === "TCP" || protocol === "TLS";
     const breadcrumbItems = generateBreadcrumbItems(selected, navigate, basePath);
     return (
       <Container>
