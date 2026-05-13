@@ -8,12 +8,25 @@ import { defineConfig, devices } from '@playwright/test';
 // import path from 'path';
 // dotenv.config({ path: path.resolve(__dirname, '.env') });
 
+const STANDARD_BASE_URL = process.env.STANDARD_BASE_URL || 'http://127.0.0.1:15000';
+const XDS_BASE_URL = process.env.XDS_BASE_URL ||'http://127.0.0.1:15001';
+
+const XDS_SPEC = /xdsMode\.spec\.ts/;
+
+const BINARY_PATH = (process.env.CI) ? "../agentgateway" : "agentgateway";
+const CONFIG_PATH = (process.env.CI) ? "../e2e-test-config.yaml" : "tests/fixtures/e2e-config.yaml";
+
+const useDevUi = !!process.env.E2E_DEV_UI;
+const standardBaseUrlTarget = useDevUi ? 'http://localhost:5173' : STANDARD_BASE_URL;
+const xdsBaseUrlTarget = useDevUi ? 'http://localhost:5174' : XDS_BASE_URL;
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  timeout: 120000,
+  timeout: 90000,
   testDir: './tests',
+  globalTeardown: './tests/teardown.ts',
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -26,9 +39,6 @@ export default defineConfig({
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('')`. */
-    baseURL: process.env.BASE_URL ||'http://127.0.0.1:15000',
-
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
 
@@ -41,19 +51,38 @@ export default defineConfig({
 
   /* Configure projects for major browsers */
   projects: [
+    // standard mode - ie all tests other than xDS-mode (port 15000)
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Chrome'], baseURL: standardBaseUrlTarget },
     },
-
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Firefox'], baseURL: standardBaseUrlTarget },
     },
-
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      testIgnore: XDS_SPEC,
+      use: { ...devices['Desktop Safari'], baseURL: standardBaseUrlTarget },
+    },
+
+    // xDS mode: ONLY xdsMode.spec.ts (port 15001)
+    {
+      name: 'xds-chromium',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Chrome'], baseURL: xdsBaseUrlTarget },
+    },
+    {
+      name: 'xds-firefox',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Firefox'], baseURL: xdsBaseUrlTarget },
+    },
+    {
+      name: 'xds-webkit',
+      testMatch: XDS_SPEC,
+      use: { ...devices['Desktop Safari'], baseURL: xdsBaseUrlTarget },
     },
 
     /* Test against mobile viewports. */
@@ -78,9 +107,31 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run start',
-  //   url: 'http://localhost:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
+  webServer: [
+    // agentgateway binary (standard)
+    {
+      command: `${BINARY_PATH} -f ${CONFIG_PATH}`,
+      url: 'http://127.0.0.1:15000',
+      reuseExistingServer: !process.env.CI,
+    },
+
+    // agentgateway binary (xDS-mode enabled)
+    {
+      command: `ADMIN_ADDR=127.0.0.1:15001 STATS_ADDR=127.0.0.1:15022 READINESS_ADDR=127.0.0.1:15023 XDS_ADDRESS=localhost:18000 NAMESPACE=default GATEWAY=default ${BINARY_PATH} -f ${CONFIG_PATH}`,
+      url: 'http://127.0.0.1:15001',
+      reuseExistingServer: !process.env.CI,
+    },
+    ...(useDevUi ? [
+      { 
+        command: 'yarn dev', 
+        url: 'http://localhost:5173',
+        reuseExistingServer: true,
+      },
+      {
+        command: 'yarn dev:xds', 
+        url: 'http://localhost:5174',
+        reuseExistingServer: true,
+      }
+    ] : []),
+  ],
 });

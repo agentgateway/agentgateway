@@ -248,6 +248,7 @@ export function LLMConfigurationPage() {
                         icon={<Bot size={16} />}
                         onClick={() => addHandlers?.addLLM()}
                         disabled={!addHandlers}
+                        data-testid="llm-config-no-resources-add-button"
                       >
                         Add LLM Config
                       </XdsAwareButton>

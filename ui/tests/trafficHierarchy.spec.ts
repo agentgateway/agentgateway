@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { getPolicyTypesForScope, type PolicyScope } from '../src/components/TrafficHierarchy/policyTypes';
@@ -119,7 +119,14 @@ test('should traverse Traffic Hierarchy tree and verify all nodes', async ({ pag
             }
             await getTreeNode(nodeText, exact).locator('button').click();
             await expect(openDropdown).toBeVisible({ timeout: 2000 });
-            await openDropdown.locator(`[data-menu-id$="${addPolicyMenuIdSuffix}"]`).hover();
+            const submenuTrigger = openDropdown.locator(`[data-menu-id$="${addPolicyMenuIdSuffix}"]`);
+            // Webkit sometimes drops the first synthetic mouseenter before AntD's
+            // submenu open-delay fires. Move pointer in with steps, then re-hover.
+            const box = await submenuTrigger.boundingBox();
+            if (box) {
+                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+            }
+            await submenuTrigger.hover();
             await expect(submenuPopup).toBeVisible({ timeout: 2000 });
         }).toPass({ timeout: 15_000, intervals: [500, 1000, 2000, 3000] });
 

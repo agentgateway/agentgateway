@@ -75,54 +75,72 @@ jobs:
         working-directory: ui
     steps:
       - uses: actions/checkout@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".nvmrc"
           cache: "yarn"
           cache-dependency-path: ui/yarn.lock
+
       - name: Install dependencies
         run: yarn install --immutable
-      - name: Install Playwright dependencies
+
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(yarn info @playwright/test --json | jq -r '.children.Version')" >> $GITHUB_OUTPUT
+
+      - name: Restore Playwright browsers
+        id: playwright-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: yarn playwright install --with-deps
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: yarn playwright install-deps
+
+      - name: Save Playwright browsers
+        if: always() && steps.playwright-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
       - name: Download proxy binary
         uses: actions/download-artifact@v8
         with:
           name: agentgateway-binary
           path: .
-      - name: Start agentgateway binary
-        run: |
-          # make agentgateway executable
-          chmod +x ../agentgateway
 
-          # copy over test config file 
+      - name: Prepare binary
+        run: |
+          chmod +x ../agentgateway
           cp tests/fixtures/e2e-config.yaml ../e2e-test-config.yaml
 
-          # start binary with health check (2 secs / 30 attempts)
-          ../agentgateway -f ../e2e-test-config.yaml &
-          for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:15000/ui > /dev/null 2>&1; then
-              echo "Gateway is ready"
-              break
-            fi
-            echo "Waiting for gateway... ($i/30)"
-            sleep 2
-          done
       - name: Run Playwright tests
         run: yarn playwright test
+
       - name: Upload test videos
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-videos
+          name: playwright-videos-${{ github.sha }}
           path: ui/test-results
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-report
+          name: playwright-report-${{ github.sha }}
           path: ui/playwright-report/
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
       - name: Clean up artifacts
         if: always()
         uses: geekyeggo/delete-artifact@v6
