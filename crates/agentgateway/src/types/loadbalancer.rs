@@ -8,6 +8,8 @@ use futures_util::SinkExt;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
+use rand::distr::Distribution;
+use rand::distr::weighted::WeightedIndex;
 use serde::ser::SerializeSeq;
 use tokio::time::sleep_until;
 
@@ -39,14 +41,14 @@ impl<T> EndpointWithInfo<T> {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum Sampler {
 	/// All endpoints have the same nonzero capacity. No need for weighted sampling.
 	/// Stores the common capacity for quick checks that we're still uniform after
 	/// new endpoints are added incrementally.
 	Uniform(u32),
-	// Weighted sampling by capacity via expansion table.
-	Weighted(Vec<u32>),
+	/// Weighted sampling by capacity via a cached prefix sum.
+	Weighted(WeightedIndex<u64>),
 	/// At least one endpoint is present, but total capacity is zero — every
 	/// active endpoint is drained. Distinct from the zero-endpoints case,
 	/// which keeps the default `Uniform(1)` sampler.
@@ -63,19 +65,6 @@ impl Sampler {
 	pub fn is_drained(&self) -> bool {
 		matches!(self, Sampler::Drained)
 	}
-}
-
-// cap the size of the expansion table to avoid excessive memory
-// usage in pathological cases for capacity values.
-const MAX_EXPANSION: usize = 4096;
-
-fn gcd_u32(mut a: u32, mut b: u32) -> u32 {
-	while b != 0 {
-		let t = b;
-		b = a % b;
-		a = t;
-	}
-	a
 }
 
 fn build_sampler<T>(active: &IndexMap<EndpointKey, EndpointWithInfo<T>>) -> Sampler {
@@ -100,41 +89,9 @@ fn build_sampler<T>(active: &IndexMap<EndpointKey, EndpointWithInfo<T>>) -> Samp
 		return Sampler::Uniform(first_cap);
 	}
 
-	let g = active
-		.values()
-		.map(|e| e.capacity)
-		.filter(|&c| c > 0)
-		// reduce expansion size by normalizing capacity weights
-		.reduce(gcd_u32)
-		.unwrap_or(1)
-		.max(1);
-	let mut reduced: Vec<u32> = active.values().map(|e| e.capacity / g).collect();
-
-	// if the expansion would be very large due to no common divisor with
-	// large values for capacity, iteratively shrink all capacities which
-	// reduces precision but keeps memory usage sane
-	let mut total: u64 = reduced.iter().map(|&c| c as u64).sum();
-	while total as usize > MAX_EXPANSION {
-		let mut changed = false;
-		for c in reduced.iter_mut() {
-			if *c > 1 {
-				*c = c.div_ceil(2);
-				changed = true;
-			}
-		}
-		if !changed {
-			break;
-		}
-		total = reduced.iter().map(|&c| c as u64).sum();
-	}
-
-	let mut table = Vec::with_capacity(total as usize);
-	for (i, &c) in reduced.iter().enumerate() {
-		for _ in 0..c {
-			table.push(i as u32);
-		}
-	}
-	Sampler::Weighted(table)
+	let dist = WeightedIndex::new(active.values().map(|e| e.capacity as u64))
+		.expect("non-empty, non-all-zero u64 weights cannot fail WeightedIndex::new");
+	Sampler::Weighted(dist)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -275,13 +232,7 @@ impl EndpointSet<Endpoint> {
 		let mut rng = rand::rng();
 		let (a, b) = match iter.sampler() {
 			Some(Sampler::Drained) => return None,
-			Some(Sampler::Weighted(table)) => {
-				let tl = table.len();
-				(
-					table[rng.random_range(0..tl)] as usize,
-					table[rng.random_range(0..tl)] as usize,
-				)
-			},
+			Some(Sampler::Weighted(dist)) => (dist.sample(&mut rng), dist.sample(&mut rng)),
 			Some(Sampler::Uniform(_)) | None => {
 				let len = index.len();
 				(rng.random_range(0..len), rng.random_range(0..len))
@@ -352,16 +303,14 @@ fn viable(
 	if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
 		trace!(
 			"filter endpoint {}, no service port {}",
-			endpoint.workload_uid,
-			svc_port
+			endpoint.workload_uid, svc_port
 		);
 		return None;
 	}
 	if wl.capacity == 0 {
 		trace!(
 			"filter endpoint {}, workload {} capacity is 0",
-			endpoint.workload_uid,
-			wl.name
+			endpoint.workload_uid, wl.name
 		);
 		return None;
 	}
@@ -612,11 +561,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 			.iter()
 			.find_map(|x| {
 				let b = x.load_full();
-				if !b.active.is_empty() {
-					Some(b)
-				} else {
-					None
-				}
+				if !b.active.is_empty() { Some(b) } else { None }
 			})
 			// TODO: allow selecting across multiple buckets.
 			.unwrap_or_else(|| self.buckets[0].load_full())
@@ -1613,13 +1558,13 @@ mod tests {
 	#[test]
 	fn sampler_all_default_capacity_is_uniform() {
 		let active = make_active(&[1, 1, 1, 1]);
-		assert_eq!(build_sampler(&active), Sampler::Uniform(1));
+		assert!(matches!(build_sampler(&active), Sampler::Uniform(1)));
 	}
 
 	#[test]
 	fn sampler_all_equal_nonzero_is_uniform() {
 		let active = make_active(&[5, 5, 5]);
-		assert_eq!(build_sampler(&active), Sampler::Uniform(5));
+		assert!(matches!(build_sampler(&active), Sampler::Uniform(5)));
 	}
 
 	#[test]
@@ -1639,16 +1584,16 @@ mod tests {
 	fn sampler_weighted_3_1_distribution() {
 		let active = make_active(&[3, 1]);
 		let sampler = build_sampler(&active);
-		let Sampler::Weighted(table) = &sampler else {
+		let Sampler::Weighted(dist) = &sampler else {
 			panic!("expected Weighted, got {sampler:?}");
 		};
-		assert_eq!(table.len(), 4);
+		assert_eq!(dist.weights().collect::<Vec<_>>(), vec![3u64, 1]);
 
 		let mut rng = rand::rng();
 		let mut counts = [0u32; 2];
 		let n = 100_000u32;
 		for _ in 0..n {
-			let idx = table[rng.random_range(0..table.len())] as usize;
+			let idx = dist.sample(&mut rng);
 			counts[idx] += 1;
 		}
 		// Expect ~75/25; ±2% is comfortable for n=100k.
@@ -1660,60 +1605,21 @@ mod tests {
 	}
 
 	#[test]
-	fn sampler_gcd_reduces_round_capacities() {
-		// 100, 200, 300 → after gcd=100, table size is 1+2+3 = 6, not 600.
-		let active = make_active(&[100, 200, 300]);
-		let sampler = build_sampler(&active);
-		let Sampler::Weighted(table) = &sampler else {
-			panic!("expected Weighted, got {sampler:?}");
-		};
-		assert_eq!(table.len(), 6, "gcd reduction should yield 1+2+3");
-		let zero = table.iter().filter(|&&i| i == 0).count();
-		let one = table.iter().filter(|&&i| i == 1).count();
-		let two = table.iter().filter(|&&i| i == 2).count();
-		assert_eq!((zero, one, two), (1, 2, 3));
-	}
-
-	#[test]
-	fn sampler_zero_cap_excluded_from_weighted_table() {
-		// Mixed 0 and nonzero — the 0-cap index must never appear in samples.
+	fn sampler_zero_cap_endpoint_is_never_sampled() {
+		// Mixed 0 and nonzero — the 0-cap index must never be returned.
 		let active = make_active(&[0, 1, 1]);
 		let sampler = build_sampler(&active);
-		let Sampler::Weighted(table) = &sampler else {
+		let Sampler::Weighted(dist) = &sampler else {
 			panic!("expected Weighted, got {sampler:?}");
 		};
-		assert_eq!(table.len(), 2);
-		for &i in table {
-			assert_ne!(i, 0, "cap=0 endpoint must not appear in expansion table");
+		let mut rng = rand::rng();
+		for _ in 0..1_000 {
+			assert_ne!(
+				dist.sample(&mut rng),
+				0,
+				"cap=0 endpoint must never be sampled"
+			);
 		}
-	}
-
-	#[test]
-	fn sampler_clamps_pathological_large_capacity() {
-		// gcd(10_000, 1) = 1 → naive expansion would be 10_001 entries.
-		// The clamp must bound the table without zeroing out the small cap.
-		let active = make_active(&[10_000, 1]);
-		let sampler = build_sampler(&active);
-		let Sampler::Weighted(table) = &sampler else {
-			panic!("expected Weighted, got {sampler:?}");
-		};
-		assert!(
-			table.len() <= MAX_EXPANSION,
-			"table.len()={} exceeds MAX_EXPANSION={}",
-			table.len(),
-			MAX_EXPANSION
-		);
-		let zero = table.iter().filter(|&&i| i == 0).count();
-		let one = table.iter().filter(|&&i| i == 1).count();
-		assert!(
-			one >= 1,
-			"small-capacity endpoint must remain reachable post-clamp (zero={zero}, one={one})"
-		);
-		// Ratio should still strongly favor the large-capacity endpoint.
-		assert!(
-			zero > one * 100,
-			"expected strong skew toward index 0, got zero={zero}, one={one}"
-		);
 	}
 
 	/// Test helper: equivalent to the inlined `sampler = build_sampler(&active)`
@@ -1733,17 +1639,17 @@ mod tests {
 			.active
 			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert_eq!(group.sampler, Sampler::Uniform(1));
+		assert!(matches!(group.sampler, Sampler::Uniform(1)));
 
 		// Replace "a" with cap=3 — now mixed, should become Weighted.
 		group
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 3));
 		rebuild_sampler(&mut group);
-		let Sampler::Weighted(table) = &group.sampler else {
+		let Sampler::Weighted(dist) = &group.sampler else {
 			panic!("expected Weighted, got {:?}", group.sampler);
 		};
-		assert_eq!(table.len(), 4); // 3 + 1
+		assert_eq!(dist.weights().collect::<Vec<_>>(), vec![3u64, 1]);
 
 		// Drain everything — should become Drained.
 		group
@@ -1765,17 +1671,17 @@ mod tests {
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert_eq!(group.sampler, Sampler::Uniform(1));
+		assert!(matches!(group.sampler, Sampler::Uniform(1)));
 
 		group
 			.active
 			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
 		group.update_sampler(Some(1));
-		assert_eq!(group.sampler, Sampler::Uniform(1));
+		assert!(matches!(group.sampler, Sampler::Uniform(1)));
 
 		group.active.swap_remove(&Strng::from("b"));
 		group.update_sampler(None);
-		assert_eq!(group.sampler, Sampler::Uniform(1));
+		assert!(matches!(group.sampler, Sampler::Uniform(1)));
 	}
 
 	#[test]
@@ -1786,7 +1692,7 @@ mod tests {
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert_eq!(group.sampler, Sampler::Uniform(1));
+		assert!(matches!(group.sampler, Sampler::Uniform(1)));
 
 		group
 			.active
@@ -1802,13 +1708,13 @@ mod tests {
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
 		rebuild_sampler(&mut group);
-		assert_eq!(group.sampler, Sampler::Drained);
+		assert!(matches!(group.sampler, Sampler::Drained));
 
 		group
 			.active
 			.insert("b".into(), EndpointWithInfo::with_capacity((), 0));
 		group.update_sampler(Some(0));
-		assert_eq!(group.sampler, Sampler::Drained);
+		assert!(matches!(group.sampler, Sampler::Drained));
 	}
 
 	#[test]
@@ -1838,7 +1744,7 @@ mod tests {
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
 		rebuild_sampler(&mut group);
-		assert_eq!(group.sampler, Sampler::Drained);
+		assert!(matches!(group.sampler, Sampler::Drained));
 
 		group.active.swap_remove(&Strng::from("a"));
 		group.update_sampler(None);
@@ -1847,15 +1753,6 @@ mod tests {
 			"sampler stayed drained after removing the last cap=0 endpoint; \
 			 select_fallback would now skip this bucket's rejected pool"
 		);
-	}
-
-	#[test]
-	fn gcd_basic() {
-		assert_eq!(gcd_u32(12, 18), 6);
-		assert_eq!(gcd_u32(7, 11), 1);
-		assert_eq!(gcd_u32(100, 0), 100);
-		assert_eq!(gcd_u32(0, 100), 100);
-		assert_eq!(gcd_u32(0, 0), 0);
 	}
 
 	#[test]

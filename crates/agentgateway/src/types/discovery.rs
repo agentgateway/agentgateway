@@ -17,7 +17,7 @@ use crate::types::proto::workload::{
 	GatewayAddress as XdsGatewayAddress, Port, PortList, Service as XdsService,
 	Workload as XdsWorkload,
 };
-use crate::types::proto::{workload, ProtoError};
+use crate::types::proto::{ProtoError, workload};
 use crate::*;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
