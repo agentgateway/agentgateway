@@ -3,11 +3,8 @@ package main
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	random "math/rand"
 	"os"
 	"strconv"
@@ -33,21 +30,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	jwt, err := generateJwt("ignore@kgateway.dev", kid, key)
+	jwt, err := generateJwt("ignore@agentgateway.dev", kid, key)
 	if err != nil {
 		fmt.Printf("error generating jwt: %s", err.Error())
 		os.Exit(1)
 	}
 
-	jwt1, err := generateJwt("boom@kgateway.dev", kid, key)
+	jwt1, err := generateJwt("boom@agentgateway.dev", kid, key)
 	if err != nil {
 		fmt.Printf("error generating jwt: %s", err.Error())
 		os.Exit(1)
 	}
 
 	fmt.Printf("jwks: %s\n", string(serializedJwks))
-	fmt.Printf("jwt, sub: 'ignore@kgateway.dev': %s\n", jwt)
-	fmt.Printf("jwt, sub: 'boom@kgateway.dev': %s\n", jwt1)
+	fmt.Printf("jwt, sub: 'ignore@agentgateway.dev': %s\n", jwt)
+	fmt.Printf("jwt, sub: 'boom@agentgateway.dev': %s\n", jwt1)
 }
 
 func generateJWKS(kid string) (*jose.JSONWebKeySet, *rsa.PrivateKey, error) {
@@ -55,39 +52,13 @@ func generateJWKS(kid string) (*jose.JSONWebKeySet, *rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	serialNumber, err := rand.Int(rand.Reader, big.NewInt(100))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			Organization: []string{"kgateway.dev"},
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(2 * time.Hour),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &rsaKey.PublicKey, rsaKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	certificate, err := x509.ParseCertificate(derBytes)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	return &jose.JSONWebKeySet{
 		Keys: []jose.JSONWebKey{
 			{
-				Certificates: []*x509.Certificate{certificate},
-				Key:          &rsaKey.PublicKey,
-				KeyID:        kid,
-				Use:          "sig",
+				Key:   &rsaKey.PublicKey,
+				KeyID: kid,
+				Use:   "sig",
 			},
 		},
 	}, rsaKey, nil
@@ -95,7 +66,7 @@ func generateJWKS(kid string) (*jose.JSONWebKeySet, *rsa.PrivateKey, error) {
 
 func generateJwt(sub, kid string, key *rsa.PrivateKey) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.RegisteredClaims{
-		Issuer:    "https://kgateway.dev",
+		Issuer:    "https://agentgateway.dev",
 		Subject:   sub,
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		NotBefore: jwt.NewNumericDate(time.Now()),

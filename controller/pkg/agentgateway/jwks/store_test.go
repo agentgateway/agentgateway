@@ -131,6 +131,49 @@ func TestStoreTracksSharedRequestCollectionLifecycle(t *testing.T) {
 	awaitNoJwksFetchState(t, store.jwksFetcher, remotehttp.FetchTarget{URL: "https://issuer.example/b"}.Key())
 }
 
+func TestStoreDropsOldFetchStateWhenPolicyRetargets(t *testing.T) {
+	krtOpts := testKrtOptions(t)
+	policies := dynamicRemotePolicies(t, []*agentgateway.AgentgatewayPolicy{
+		testRemotePolicy("one", "https://issuer.example/v1", 5*time.Minute),
+	}, krtOpts)
+
+	collections := NewCollections(CollectionInputs{
+		AgentgatewayPolicies: policies,
+		Backends:             krt.NewStaticCollection[*agentgateway.AgentgatewayBackend](alwaysSynced{}, nil),
+		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
+			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+		}),
+		KrtOpts: krtOpts,
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	persisted := NewPersistedEntriesFromCollection(
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil),
+		DefaultJwksStorePrefix,
+		"agentgateway-system",
+	)
+	store := NewStore(collections.SharedRequests, persisted, DefaultJwksStorePrefix)
+	store.jwksFetcher.defaultJwksClient = offlineStubJwksClient{}
+	go func() {
+		_ = store.Start(ctx)
+	}()
+
+	oldKey := remotehttp.FetchTarget{URL: "https://issuer.example/v1"}.Key()
+	newKey := remotehttp.FetchTarget{URL: "https://issuer.example/v2"}.Key()
+
+	assert.Eventually(t, store.HasSynced, testEventuallyTimeout, testEventuallyPoll)
+	awaitJwksFetchState(t, store.jwksFetcher, oldKey)
+
+	policies.Reset([]*agentgateway.AgentgatewayPolicy{
+		testRemotePolicy("one", "https://issuer.example/v2", 5*time.Minute),
+	})
+
+	awaitNoJwksFetchState(t, store.jwksFetcher, oldKey)
+	awaitJwksFetchState(t, store.jwksFetcher, newKey)
+}
+
 func TestStoreLoadsPersistedKeysetsBeforeServing(t *testing.T) {
 	target := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}
 	keyset := Keyset{

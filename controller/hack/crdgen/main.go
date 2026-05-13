@@ -26,6 +26,7 @@ import (
 
 const (
 	atLeastOneFieldSetMarker  = "kubebuilder:validation:AtLeastOneFieldSet"
+	conditionalPolicyMarker   = "kubebuilder:validation:ConditionalPolicy"
 	ifThenOnlyFieldsMarker    = "kubebuilder:validation:IfThenOnlyFields"
 	overrideXValidationMarker = "kubebuilder:validation:OverrideXValidation"
 	controllerGenVersion      = "v0.20.0"
@@ -60,6 +61,12 @@ type IfThenOnlyFields struct {
 	If      string
 	Fields  []string
 	Message string `marker:",optional"`
+}
+
+// +controllertools:marker:generateHelp:category="CRD validation"
+type ConditionalPolicy struct {
+	Fields  []string `marker:",optional"`
+	Message string   `marker:",optional"`
 }
 
 // +controllertools:marker:generateHelp:category="CRD validation"
@@ -199,6 +206,7 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 func registerCustomMarkers(registry *markers.Registry) error {
 	defs := []*markers.Definition{
 		markers.Must(markers.MakeDefinition(atLeastOneFieldSetMarker, markers.DescribesType, AtLeastOneFieldSet{})),
+		markers.Must(markers.MakeDefinition(conditionalPolicyMarker, markers.DescribesType, ConditionalPolicy{})),
 		markers.Must(markers.MakeDefinition(ifThenOnlyFieldsMarker, markers.DescribesType, IfThenOnlyFields{})),
 		markers.Must(markers.MakeDefinition(overrideXValidationMarker, markers.DescribesType, OverrideXValidation{})),
 	}
@@ -281,6 +289,20 @@ func asOverrideXValidation(raw any) (OverrideXValidation, error) {
 	}
 }
 
+func asConditionalPolicy(raw any) (ConditionalPolicy, error) {
+	switch marker := raw.(type) {
+	case ConditionalPolicy:
+		return marker, nil
+	case *ConditionalPolicy:
+		if marker == nil {
+			return ConditionalPolicy{}, fmt.Errorf("unexpected nil marker for %s", conditionalPolicyMarker)
+		}
+		return *marker, nil
+	default:
+		return ConditionalPolicy{}, fmt.Errorf("unexpected marker value %T for %s", raw, conditionalPolicyMarker)
+	}
+}
+
 func asIfThenOnlyFields(raw any) (IfThenOnlyFields, error) {
 	switch marker := raw.(type) {
 	case IfThenOnlyFields:
@@ -293,6 +315,61 @@ func asIfThenOnlyFields(raw any) (IfThenOnlyFields, error) {
 	default:
 		return IfThenOnlyFields{}, fmt.Errorf("unexpected marker value %T for %s", raw, ifThenOnlyFieldsMarker)
 	}
+}
+
+func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker ConditionalPolicy) error {
+	const conditionalField = "conditional"
+	if _, err := validateFieldList(allFields, []string{conditionalField}, "fields"); err != nil {
+		return err
+	}
+
+	requiredFields, err := validateFieldList(allFields, marker.Fields, "fields")
+	if err != nil {
+		return err
+	}
+	if slices.Contains(requiredFields, conditionalField) {
+		return errors.New("fields: conditional cannot be required by ConditionalPolicy")
+	}
+
+	otherFields := make([]string, 0, len(allFields))
+	for _, field := range allFields {
+		if field != conditionalField {
+			otherFields = append(otherFields, field)
+		}
+	}
+
+	conditionalRule := "true"
+	if len(otherFields) > 0 {
+		conditionalRule = fmt.Sprintf("%s == 0", fieldsToOneOfCelRuleStr(otherFields))
+	}
+	if err := (crdmarkers.XValidation{
+		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalRule),
+		Message: "conditional cannot be set with any other field",
+	}).ApplyToSchema(schema); err != nil {
+		return err
+	}
+
+	if len(requiredFields) == 0 {
+		return nil
+	}
+
+	var requiredRule string
+	message := marker.Message
+	if len(requiredFields) == 1 {
+		requiredRule = fmt.Sprintf("has(self.%s)", requiredFields[0])
+		if message == "" {
+			message = fmt.Sprintf("%s: Required value", requiredFields[0])
+		}
+	} else {
+		requiredRule = fmt.Sprintf("%s == %d", fieldsToOneOfCelRuleStr(requiredFields), len(requiredFields))
+		if message == "" {
+			message = fmt.Sprintf("all fields in %v must be set", requiredFields)
+		}
+	}
+	return crdmarkers.XValidation{
+		Rule:    fmt.Sprintf("has(self.%s) ? true : %s", conditionalField, requiredRule),
+		Message: message,
+	}.ApplyToSchema(schema)
 }
 
 func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker AtLeastOneFieldSet) error {
@@ -491,6 +568,19 @@ func applyPostSchemaMarkersForType(
 				return err
 			}
 			if err := applyIfThenOnlyFields(schema, allFields, marker); err != nil {
+				return err
+			}
+		}
+	}
+
+	if rawMarkers, ok := info.Markers[conditionalPolicyMarker]; ok {
+		allFields := sortedPropertyNames(schema)
+		for _, raw := range rawMarkers {
+			marker, err := asConditionalPolicy(raw)
+			if err != nil {
+				return err
+			}
+			if err := applyConditionalPolicy(schema, allFields, marker); err != nil {
 				return err
 			}
 		}

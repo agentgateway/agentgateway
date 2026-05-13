@@ -1,0 +1,154 @@
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: gateway-pool
+  namespace: default
+  labels:
+    app: gateway-pool
+spec:
+  appProtocol: kubernetes.io/h2c
+  endpointPickerRef:
+    failureMode: FailClose
+    group: ""
+    kind: Service
+    name: gateway-pool-endpoint-picker
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-pool-endpoint-picker
+  namespace: default
+spec:
+  ports:
+    - port: 9002
+      protocol: TCP
+  selector:
+    app: gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: inference-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - group: inference.networking.k8s.io
+          kind: InferencePool
+          name: gateway-pool
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: pool-rl-policy
+  namespace: default
+spec:
+  targetSelectors:
+  - group: inference.networking.k8s.io
+    kind: InferencePool
+    matchLabels:
+      app: gateway-pool
+  traffic:
+    rateLimit:
+      local:
+        - requests: 100
+          unit: Minutes
+          burst: 10
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/gateway-pool:inference
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/gateway-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: gateway-pool
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool-endpoint-picker.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/pool-rl-policy:rl-local:default/gateway-pool.default.inference.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: pool-rl-policy
+        namespace: default
+      target:
+        service:
+          hostname: gateway-pool.default.inference.cluster.local
+          namespace: default
+      traffic:
+        localRateLimit:
+          fillInterval: 60s
+          maxTokens: "110"
+          tokensPerFill: "100"
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: pool-rl-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

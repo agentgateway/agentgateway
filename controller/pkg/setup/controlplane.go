@@ -16,7 +16,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 	"istio.io/istio/pkg/security"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
@@ -50,18 +49,22 @@ var (
 		}, nil)
 )
 
+type certificateProvider interface {
+	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
+}
+
 func runXDSServer(
 	ctx context.Context,
 	lis net.Listener,
 	authenticators []security.Authenticator,
 	xdsAuth bool,
-	certWatcher *certwatcher.CertWatcher,
+	certProvider certificateProvider,
 	nackPublisher *nack.Publisher,
 	reg ...krtxds.Registration,
 ) {
 	baseLogger := slog.Default().With("component", "agentgateway-controlplane")
 
-	serverOpts := getGRPCServerOpts(authenticators, xdsAuth, certWatcher, baseLogger)
+	serverOpts := getGRPCServerOpts(authenticators, xdsAuth, certProvider, baseLogger)
 	grpcServer := grpc.NewServer(serverOpts...)
 
 	ds := krtxds.NewDiscoveryServer(nil, nackPublisher, reg...)
@@ -86,7 +89,7 @@ func runXDSServer(
 func getGRPCServerOpts(
 	authenticators []security.Authenticator,
 	xdsAuth bool,
-	certWatcher *certwatcher.CertWatcher,
+	certProvider certificateProvider,
 	logger *slog.Logger,
 ) []grpc.ServerOption {
 	opts := []grpc.ServerOption{
@@ -121,10 +124,10 @@ func getGRPCServerOpts(
 
 	// Add TLS credentials if the certificate watcher was provided. Needed to react to
 	// certificate rotations to ensure we're always serving the latest CA certificate.
-	if certWatcher != nil {
+	if certProvider != nil {
 		creds := credentials.NewTLS(&tls.Config{
 			MinVersion:     tls.VersionTLS12,
-			GetCertificate: certWatcher.GetCertificate,
+			GetCertificate: certProvider.GetCertificate,
 		})
 		opts = append(opts, grpc.Creds(creds))
 		logger.Info("TLS enabled for xDS servers with certificate watcher")

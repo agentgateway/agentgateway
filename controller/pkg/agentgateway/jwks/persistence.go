@@ -109,7 +109,6 @@ func NewPersistedEntriesFromCollection(configMaps krt.Collection[*corev1.ConfigM
 			entry.ParseError = err.Error()
 			return &entry
 		}
-		keyset = normalizePersistedKeyset(storePrefix, cm.Name, keyset)
 		entry.Keyset = &keyset
 		return &entry
 	})
@@ -323,17 +322,4 @@ func keysetsEqual(a, b *Keyset) bool {
 	default:
 		return *a == *b
 	}
-}
-
-func normalizePersistedKeyset(storePrefix, configMapName string, keyset Keyset) Keyset {
-	if keyset.URL == "" {
-		return keyset
-	}
-
-	requestKeyFromURL := remotehttp.FetchTarget{URL: keyset.URL}.Key()
-	if JwksConfigMapName(storePrefix, requestKeyFromURL) == configMapName {
-		keyset.RequestKey = requestKeyFromURL
-	}
-
-	return keyset
 }

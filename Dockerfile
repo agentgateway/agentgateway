@@ -52,6 +52,8 @@ ARG TARGETARCH
 ARG PROFILE=release
 ARG VERSION
 ARG GIT_REVISION
+ARG CARGO_FEATURES=agentgateway/ui
+ARG CARGO_NO_DEFAULT_FEATURES=false
 
 WORKDIR /app
 
@@ -71,7 +73,11 @@ RUN --mount=type=cache,target=/app/target \
     <<EOF
 export VERSION="${VERSION}"
 export GIT_REVISION="${GIT_REVISION}"
-cargo build --features ui  --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
+if [ "${CARGO_NO_DEFAULT_FEATURES}" = "true" ]; then
+  cargo build --no-default-features --features "${CARGO_FEATURES}" --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
+else
+  cargo build --features "${CARGO_FEATURES}" --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
+fi
 mkdir /out
 mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
 /out/agentgateway --version

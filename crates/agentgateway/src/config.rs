@@ -25,7 +25,10 @@ struct TracingEnvOverrides {
 	protocol: Option<trc::Protocol>,
 }
 
-pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
+pub fn parse_config(
+	contents: String,
+	local_config_source: Option<ConfigSource>,
+) -> anyhow::Result<Config> {
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
 	let raw = nested.config.unwrap_or_default();
 
@@ -48,8 +51,8 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	};
 	let local_config = parse::<PathBuf>("LOCAL_XDS_PATH")?
 		.or(raw.local_xds_path)
-		.or(filename)
-		.map(ConfigSource::File);
+		.map(ConfigSource::File)
+		.or(local_config_source);
 
 	let dns = raw.dns.unwrap_or_default();
 	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {

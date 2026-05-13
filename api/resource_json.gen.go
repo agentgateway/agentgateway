@@ -116,6 +116,28 @@ func (this *TCPRoute) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for ConditionalPolicies
+func (this *ConditionalPolicies) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for ConditionalPolicies
+func (this *ConditionalPolicies) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for ConditionalPolicy
+func (this *ConditionalPolicy) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for ConditionalPolicy
+func (this *ConditionalPolicy) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for Policy
 func (this *Policy) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -608,6 +630,17 @@ func (this *PolicyTarget_RouteTarget) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for PolicyTarget_RouteTarget
 func (this *PolicyTarget_RouteTarget) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for PolicyTarget_ListenerSetTarget
+func (this *PolicyTarget_ListenerSetTarget) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for PolicyTarget_ListenerSetTarget
+func (this *PolicyTarget_ListenerSetTarget) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

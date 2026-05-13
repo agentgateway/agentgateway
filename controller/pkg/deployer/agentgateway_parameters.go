@@ -218,7 +218,19 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 
 	if g.inputs.ControlPlane.XdsTLS {
-		if err := injectXdsCACertificate(g.inputs.ControlPlane.XdsTlsCaPath, vals); err != nil {
+		caCert := g.inputs.ControlPlane.XdsTlsCaCert
+		if caCert == "" {
+			secret := g.secretClient.Get(g.inputs.ControlPlane.XdsTLSSecretName, g.inputs.ControlPlane.ControlPlaneNs)
+			if secret == nil {
+				return nil, fmt.Errorf("xDS TLS secret %s/%s not found", g.inputs.ControlPlane.ControlPlaneNs, g.inputs.ControlPlane.XdsTLSSecretName)
+			}
+			var err error
+			caCert, err = extractXdsCACertificate(secret)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err := injectXdsCACertificate(caCert, vals); err != nil {
 			return nil, fmt.Errorf("failed to inject xDS CA certificate: %w", err)
 		}
 	}
@@ -361,7 +373,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 			Port: &g.inputs.ControlPlane.AgwXdsPort,
 			Tls: &HelmXdsTls{
 				Enabled: func() *bool { b := g.inputs.ControlPlane.XdsTLS; return &b }(),
-				CaCert:  &g.inputs.ControlPlane.XdsTlsCaPath,
+				CaCert:  &g.inputs.ControlPlane.XdsTlsCaCert,
 			},
 		},
 	}

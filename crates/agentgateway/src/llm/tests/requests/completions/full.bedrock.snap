@@ -160,8 +160,5 @@ info:
         "name": "my_function"
       }
     }
-  },
-  "requestMetadata": {
-    "user_id": "user_12345"
   }
 }

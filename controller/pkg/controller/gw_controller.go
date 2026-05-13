@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	utilretry "k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -517,7 +516,7 @@ func (r *gatewayReconciler) updateGatewayStatusWithRetry(gw *gwv1.Gateway, condi
 // setupTLSCertificateWatch configures a watch for xDS TLS certificate changes.
 // When certificates are rotated, all Gateways managed by this controller will be reconciled
 // to update the proxy CA certificates.
-func (r *gatewayReconciler) setupTLSCertificateWatch(certWatcher *certwatcher.CertWatcher) {
+func (r *gatewayReconciler) setupTLSCertificateWatch(certWatcher CertificateWatcher) {
 	if certWatcher == nil {
 		return
 	}

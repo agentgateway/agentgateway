@@ -29,11 +29,11 @@ spec:
       action: Allow
       policy:
         matchExpressions:
-          - 'jwt.sub == "ignore@kgateway.dev"'
+          - 'jwt.sub == "ignore@agentgateway.dev"'
     jwtAuthentication:
       mode: Strict
       providers:
-      - issuer: https://kgateway.dev
+      - issuer: https://agentgateway.dev
         jwks:
           remote:
             jwksPath: org-one/keys
@@ -43,7 +43,7 @@ spec:
               name: dummy-idp
               port: 8443
               namespace: default
-      - issuer: https://kgateway.dev
+      - issuer: https://agentgateway.dev
         jwks:
           remote:
             jwksPath: org-four/keys

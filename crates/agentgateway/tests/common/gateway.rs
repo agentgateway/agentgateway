@@ -80,7 +80,9 @@ impl AgentGateway {
 		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
 		let task = tokio::task::spawn(async move {
-			let config = agentgateway::config::parse_config(js, Some(config)).unwrap();
+			let config =
+				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
+					.unwrap();
 			let app = agentgateway::app::run(Arc::new(config)).await.unwrap();
 
 			// Wait for either shutdown signal or termination

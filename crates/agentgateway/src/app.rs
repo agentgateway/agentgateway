@@ -12,6 +12,7 @@ use crate::telemetry::trc;
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
+	crate::transport::tls::warn_if_key_log_enabled();
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
@@ -49,6 +50,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let xds_metrics = agent_xds::Metrics::new(sub_registry);
 	agent_core::metrics::TokioCollector::register(sub_registry, &data_plane_handle);
+	pprof_alloc::stats::cgroups::PrometheusCollector::register(sub_registry);
+	pprof_alloc::stats::smaps::PrometheusCollector::register(sub_registry);
 
 	// TODO: use for XDS
 	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);

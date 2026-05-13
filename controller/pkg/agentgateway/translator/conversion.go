@@ -80,7 +80,7 @@ func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
 		}
 	}
 
-	backends, backendErr, err := buildAgwHTTPDestination(ctx, r.BackendRefs, obj.Namespace)
+	backends, backendErr, err := buildAgwHTTPDestination(ctx, r.BackendRefs, obj.Namespace, obj.Name)
 	if err != nil {
 		return nil, &reporter.RouteCondition{
 			Type:    gwv1.RouteConditionAccepted,
@@ -568,6 +568,7 @@ func buildAgwHTTPDestination(
 	ctx RouteContext,
 	forwardTo []gwv1.HTTPBackendRef,
 	ns string,
+	routeName string,
 ) ([]*api.RouteBackend, *reporter.RouteCondition, *reporter.RouteCondition) {
 	if forwardTo == nil {
 		return nil, nil, nil
@@ -587,9 +588,10 @@ func buildAgwHTTPDestination(
 			if fwd.Namespace != nil {
 				backendNs = string(*fwd.Namespace)
 			}
+			// distinct parents delegating to the same target do not share a group.
 			res = append(res, &api.RouteBackend{
 				Weight:        weight,
-				RouteGroupKey: ptr.Of(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
+				RouteGroupKey: new(utils.InternalRouteGroupKey(ns, routeName, backendNs, string(fwd.Name))),
 			})
 			continue
 		}
@@ -1206,7 +1208,12 @@ var dummyTls = &TLSInfo{
 	Key:  []byte("invalid"),
 }
 
+const gatewayTLSTerminateModeKey = "gateway.istio.io/tls-terminate-mode"
+
 func validateTLS(certInfo *TLSInfo) *ConfigError {
+	if certInfo.IstioWorkloadCert {
+		return nil
+	}
 	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
 		return &ConfigError{
 			Reason:  InvalidTLS,
@@ -1243,6 +1250,15 @@ func buildTLS(
 	namespace := gw.GetNamespace()
 	switch mode {
 	case gwv1.TLSModeTerminate:
+		if tls.Options != nil {
+			switch tls.Options[gatewayTLSTerminateModeKey] {
+			case "ISTIO_SIMPLE":
+				return &TLSInfo{IstioWorkloadCert: true}, nil
+			case "ISTIO_MUTUAL":
+				return &TLSInfo{IstioWorkloadCert: true, IstioMutual: true}, nil
+			}
+		}
+
 		// Important: all failures MUST include dummyTls, as this is the signal to the dataplane to actually do TLS (but fail)
 		if len(tls.CertificateRefs) != 1 {
 			// This is required in the API, should be rejected in validation

@@ -15,7 +15,7 @@ spec:
         port: 1024
       failureMode: FailOpen
       forwardBody:
-        maxSize: 1024
+        maxSize: 1Ki
       http:
         path: |
           "/prefix/" + request.path

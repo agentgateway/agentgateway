@@ -2,14 +2,11 @@ package jwks
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -213,40 +210,6 @@ func TestLoadPersistedKeysetsUsesDeterministicNameTieBreakForNonCanonicalDuplica
 	}
 }
 
-func TestPersistedEntriesNormalizeLegacyStoredRequestKey(t *testing.T) {
-	stop := test.NewStop(t)
-	url := "https://issuer.example/jwks"
-	currentRequestKey := remotehttp.FetchTarget{URL: url}.Key()
-	legacyStoredRequestKey := hashString(string(currentRequestKey))
-	legacyName := JwksConfigMapName(DefaultJwksStorePrefix, currentRequestKey)
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      legacyName,
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
-	}
-	assert.NoError(t, SetJwksInConfigMap(cm, Keyset{
-		RequestKey: remotehttp.FetchKey(legacyStoredRequestKey),
-		URL:        url,
-		JwksJSON:   `{"keys":[]}`,
-	}))
-
-	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}),
-		DefaultJwksStorePrefix,
-		"agentgateway-system",
-	)
-	persisted.entries.WaitUntilSynced(stop)
-	cache := newKeysetCache(persisted)
-
-	keyset, ok := cache.Get(krt.TestingDummyContext{}, currentRequestKey)
-
-	assert.True(t, ok)
-	assert.Equal(t, currentRequestKey, keyset.RequestKey)
-}
-
 func TestRequestKeyFromConfigMapReturnsErrorForMalformedPayload(t *testing.T) {
 	cm := &corev1.ConfigMap{
 		Data: map[string]string{
@@ -257,21 +220,4 @@ func TestRequestKeyFromConfigMapReturnsErrorForMalformedPayload(t *testing.T) {
 	_, err := RequestKeyFromConfigMap(cm)
 
 	assert.Error(t, err)
-}
-
-func TestNormalizePersistedKeysetDoesNotRewriteWhenURLIsEmpty(t *testing.T) {
-	keyset := Keyset{
-		RequestKey: remotehttp.FetchKey("legacy-request-key"),
-		URL:        "",
-		JwksJSON:   `{"keys":[]}`,
-	}
-
-	got := normalizePersistedKeyset(DefaultJwksStorePrefix, "jwks-store-anything", keyset)
-
-	assert.Equal(t, keyset, got)
-}
-
-func hashString(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])
 }

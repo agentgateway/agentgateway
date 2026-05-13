@@ -14,7 +14,7 @@ import (
 )
 
 // Provider is the entity that provides methods which assert behaviors of a Kubernetes Cluster
-// These assertions occur against a running instance of kgateway, within a Kubernetes Cluster.
+// These assertions occur against a running instance of agentgateway, within a Kubernetes Cluster.
 type Provider struct {
 	t *testing.T
 
@@ -30,7 +30,7 @@ type Provider struct {
 }
 
 // NewProvider returns a Provider that will provide Assertions that can be executed against an
-// installation of kgateway
+// installation of agentgateway
 func NewProvider(t *testing.T) *Provider {
 	gomega.RegisterTestingT(t)
 	return &Provider{
@@ -50,15 +50,15 @@ func (p *Provider) WithClusterContext(clusterContext *cluster.Context) *Provider
 	return p
 }
 
-// WithInstallContext sets the providers to point to a particular installation of kgateway
+// WithInstallContext sets the providers to point to a particular installation of agentgateway
 func (p *Provider) WithInstallContext(installContext *install.Context) *Provider {
 	p.installContext = installContext
 	return p
 }
 
 // expectInstallContextDefined is invoked by methods on the Provider that can only be invoked
-// if the provider has been configured to point to a kgateway installation
-// There are certain Assertions that can be invoked that do not require that kgateway be installed for them to be invoked
+// if the provider has been configured to point to a agentgateway installation
+// There are certain Assertions that can be invoked that do not require that agentgateway be installed for them to be invoked
 func (p *Provider) expectInstallContextDefined() {
-	p.Require.NotNil(p.installContext, "Provider attempted to create an Assertion that requires a kgateway installation, but none was configured")
+	p.Require.NotNil(p.installContext, "Provider attempted to create an Assertion that requires a agentgateway installation, but none was configured")
 }

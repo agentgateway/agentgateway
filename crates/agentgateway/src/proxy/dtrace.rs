@@ -77,14 +77,18 @@ pub(crate) use pol_event;
 macro_rules! snapshot {
 	(Request, $kind:expr, $request:expr) => {{
 		$crate::proxy::dtrace::trace(|trace| {
-			trace.request_snapshot($kind, cel::Executor::new_request($request).debug_snapshot())
+			trace.request_snapshot(
+				$kind,
+				crate::cel::Executor::new_request($request).debug_snapshot(),
+			)
 		});
 	}};
 	(Response, $kind:expr, $log:expr, $resp:expr) => {{
 		$crate::proxy::dtrace::trace(|trace| {
 			trace.response_snapshot(
 				$kind,
-				cel::Executor::new_response($log.request_snapshot.as_ref(), $resp).debug_snapshot(),
+				crate::cel::Executor::new_response($log.request_snapshot.as_deref(), $resp)
+					.debug_snapshot(),
 			)
 		});
 	}};
@@ -328,17 +332,20 @@ fn cel_severity(result: &Value) -> Severity {
 	}
 }
 
+#[derive(Clone, Debug)]
 pub struct DebugTracer {
 	sender: tokio::sync::mpsc::Sender<Message>,
 	start: Instant,
 	scope_state: Arc<Mutex<ScopeState>>,
 }
 
+#[derive(Debug)]
 struct ScopeState {
 	next_id: u64,
 	stack: Vec<ScopeFrame>,
 }
 
+#[derive(Debug)]
 struct ScopeFrame {
 	id: u64,
 	name: String,
@@ -390,6 +397,9 @@ impl DebugTracer {
 			})),
 		};
 		ACTIVE.scope(Some(ins), f).await
+	}
+	pub fn active() -> Option<Self> {
+		ACTIVE.try_with(Clone::clone).ok().flatten()
 	}
 	pub fn start_scope(&self, name: impl Into<String>) -> ScopeGuard {
 		let mut scope_state = self.scope_state.lock().expect("scope mutex poisoned");

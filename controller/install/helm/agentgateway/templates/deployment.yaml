@@ -142,10 +142,8 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
-            {{- if .Values.controller.xds.tls.enabled }}
-            - name: AGW_XDS_TLS_ENABLED
-              value: "true"
-            {{- end }}
+            - name: AGW_XDS_MODE
+              value: {{ .Values.controller.xds.mode | quote }}
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: {{ .Values.gatewayClassParametersRefs | toJson | quote }}
             - name: POD_NAMESPACE
@@ -154,17 +152,17 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.controller.xds.tls.enabled }}
+          {{- if .Values.controller.extraVolumeMounts }}
           volumeMounts:
-            - name: xds-tls
-              mountPath: /etc/xds-tls
-              readOnly: true
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- if .Values.controller.xds.tls.enabled }}
+      {{- if.Values.controller.extraVolumes }}
       volumes:
-        - name: xds-tls
-          secret:
-            secretName: agentgateway-xds-cert
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

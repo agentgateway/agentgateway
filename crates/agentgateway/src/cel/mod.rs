@@ -174,7 +174,7 @@ impl ContextBuilder {
 		&self,
 		res: &mut crate::http::Response,
 	) -> Option<ResponseSnapshot> {
-		if self.any_has(Attributes::Response) {
+		if self.any_has(Attributes::Response) || self.any_has(Attributes::Metadata) {
 			Some(types::snapshot_response(res))
 		} else {
 			None
@@ -255,6 +255,10 @@ impl ContextBuilder {
 			*resp.body_mut() = crate::http::Body::new(body);
 			resp.extensions_mut().insert(handle);
 		}
+	}
+
+	pub fn needs_llm(&self) -> bool {
+		self.any_has(Attributes::Llm)
 	}
 
 	pub fn needs_llm_prompt(&self) -> bool {

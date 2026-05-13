@@ -16,7 +16,7 @@ func main() {
 
 	app, err := license.CliAllPackages(macOnlyDependencies)
 	if err != nil {
-		fmt.Printf("unable to list all kgateway dependencies: %v\n", err)
+		fmt.Printf("unable to list all agentgateway dependencies: %v\n", err)
 		os.Exit(1)
 	}
 	if err := app.Execute(); err != nil {

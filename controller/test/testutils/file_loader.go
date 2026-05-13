@@ -101,7 +101,7 @@ func parseFile(
 
 	type metaOnly struct {
 		metav1.TypeMeta   `json:",inline"`
-		metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+		metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 	}
 
 	// Split into individual YAML documents

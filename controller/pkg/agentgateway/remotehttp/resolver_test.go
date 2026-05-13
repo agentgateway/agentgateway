@@ -48,7 +48,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("oauth2-discovery.default.svc.cluster.local"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -106,15 +106,15 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("backendtls.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("discovery-backend"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:          "https://dummy-idp.default:8443/",
 			wantTLSConfig:    true,
@@ -205,7 +205,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("whole.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -226,7 +226,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("port.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -288,8 +288,8 @@ func TestResolve(t *testing.T) {
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
 									BackendRef: gwv1.BackendObjectReference{
-										Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 										Name:  gwv1.ObjectName("corporate-proxy"),
 									},
 								},
@@ -306,8 +306,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("idp-jwks"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:       "https://idp.example.com:443/",
 			wantProxyURL:  "http://proxy.internal.example.com:8080",
@@ -325,8 +325,8 @@ func TestResolve(t *testing.T) {
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
 									BackendRef: gwv1.BackendObjectReference{
-										Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 										Name:  gwv1.ObjectName("tls-proxy"),
 									},
 								},
@@ -350,8 +350,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("idp-jwks"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:            "https://idp.example.com:443/",
 			wantProxyURL:       "https://proxy.internal.example.com:8443",

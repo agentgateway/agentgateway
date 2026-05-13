@@ -22,12 +22,10 @@ package deployer
 // KubernetesResourceOverlay.Spec for details.
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
@@ -66,16 +64,11 @@ JKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz1234567890ABC
 DEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz123456
 wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 -----END CERTIFICATE-----`
-	tmpDir := t.TempDir()
-	caCertPath := tmpDir + "/ca.crt"
-	err := os.WriteFile(caCertPath, []byte(caCertContent), 0o600)
-	require.NoError(t, err)
-
 	// TLS override function for tests that need TLS enabled
-	tlsOverride := func(caCertPath string) func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
+	tlsOverride := func(caCert string) func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
 		return func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
 			inputs.ControlPlane.XdsTLS = true
-			inputs.ControlPlane.XdsTlsCaPath = caCertPath
+			inputs.ControlPlane.XdsTlsCaCert = caCert
 			return nil
 		}
 	}
@@ -414,7 +407,12 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 		{
 			Name:                        "agentgateway with TLS enabled",
 			InputFile:                   "agentgateway-tls",
-			HelmValuesGeneratorOverride: tlsOverride(caCertPath),
+			HelmValuesGeneratorOverride: tlsOverride(caCertContent),
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "checksum/xds-ca:",
+					"deployment pod template should roll when the xDS CA bundle changes")
+			},
 		},
 		{
 			// Custom configmap name via AgentgatewayParameters deployment overlay:

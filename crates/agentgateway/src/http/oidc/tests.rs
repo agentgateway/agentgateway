@@ -13,10 +13,11 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
-use crate::client;
 use crate::http::jwt;
+use crate::proxy::ProxyError;
 use crate::serdes::FileInlineOrRemote;
 use crate::test_helpers::proxymock::setup_proxy_test;
+use crate::{client, test_helpers};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
@@ -337,8 +338,7 @@ async fn apply_derives_claims_from_stored_id_token() {
 		format!("{}={encoded}", policy.session.cookie_name),
 	);
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
+	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("browser policy apply");
 	assert!(response.direct_response.is_none());
@@ -393,8 +393,7 @@ async fn apply_redirects_unauthenticated_requests_to_login() {
 		policy.redirect_uri = RedirectUri::parse(redirect_uri.to_string()).expect("redirect uri");
 		let mut req = request(Method::GET, request_uri, Some(accept));
 
-		let response = policy
-			.apply(None, &mut req, policy_client())
+		let response = test_helpers::test_policy(&policy, &mut req)
 			.await
 			.expect(name);
 		let response = response.direct_response.expect("redirect response");
@@ -436,8 +435,7 @@ async fn apply_bypasses_cors_preflight_requests() {
 		"GET".parse().unwrap(),
 	);
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
+	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("preflight should bypass oidc");
 
@@ -657,13 +655,19 @@ async fn callback_rejects_invalid_transaction_state() {
 			);
 		}
 
-		let err = policy
-			.apply(None, &mut req, policy_client())
+		let err = test_helpers::test_policy(&policy, &mut req)
 			.await
-			.expect_err(name);
+			.expect_err(name)
+			.downcast();
 		match expected_error {
-			Error::MissingTransaction => assert!(matches!(err, Error::MissingTransaction), "{name}"),
-			Error::CsrfMismatch => assert!(matches!(err, Error::CsrfMismatch), "{name}"),
+			Error::MissingTransaction => assert!(
+				matches!(err, ProxyError::OidcFailure(Error::MissingTransaction)),
+				"{name}"
+			),
+			Error::CsrfMismatch => assert!(
+				matches!(err, ProxyError::OidcFailure(Error::CsrfMismatch)),
+				"{name}"
+			),
 			_ => unreachable!("unexpected test error"),
 		}
 	}
@@ -704,8 +708,7 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		),
 	);
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
+	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("callback apply");
 	let response = response.direct_response.expect("redirect response");
@@ -742,8 +745,7 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		"https://app.example.com/protected",
 		Some("text/html"),
 	);
-	let first_response = policy
-		.apply(None, &mut first_req, policy_client())
+	let first_response = test_helpers::test_policy(&policy, &mut first_req)
 		.await
 		.expect("first login start")
 		.direct_response
@@ -768,8 +770,8 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		"https://app.example.com/protected",
 		Some("text/html"),
 	);
-	let second_response = policy
-		.apply(None, &mut second_req, policy_client())
+
+	let second_response = test_helpers::test_policy(&policy, &mut second_req)
 		.await
 		.expect("second login start")
 		.direct_response
@@ -817,8 +819,7 @@ async fn concurrent_login_attempts_use_distinct_transaction_cookies() {
 		format!("{}={}", second_cookie.name(), second_cookie.value()),
 	);
 
-	let callback_response = policy
-		.apply(None, &mut callback_req, policy_client())
+	let callback_response = test_helpers::test_policy(&policy, &mut callback_req)
 		.await
 		.expect("first callback succeeds")
 		.direct_response
@@ -875,8 +876,7 @@ async fn callback_matching_uses_path_not_redirect_host_or_port() {
 		),
 	);
 
-	let response = policy
-		.apply(None, &mut req, policy_client())
+	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("callback apply");
 	assert_eq!(

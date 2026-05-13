@@ -67,6 +67,13 @@ func (s *Store) Start(ctx context.Context) error {
 			if event.New == nil {
 				return
 			}
+			if event.Event == controllers.EventUpdate && event.Old != nil && event.Old.RequestKey != event.New.RequestKey {
+				// Retire the old keyset: stop fetching it but keep the cache
+				// entry so JWT validation continues working until the next
+				// successful fetch sweeps the orphaned entry.
+				logger.Debug("retiring stale keyset after request key change", "old_request_key", event.Old.RequestKey, "new_request_key", event.New.RequestKey)
+				s.jwksFetcher.RetireKeyset(event.Old.RequestKey)
+			}
 
 			request := event.New.JwksSource()
 			logger.Debug("updating keyset", "request_key", request.RequestKey, "config_map", JwksConfigMapName(s.storePrefix, request.RequestKey))

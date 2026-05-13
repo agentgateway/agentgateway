@@ -51,6 +51,8 @@ pub struct HTTP {
 	pub http2_connection_window_size: Option<u32>,
 	#[serde(default)]
 	pub http2_frame_size: Option<u32>,
+	#[serde(default)]
+	pub http2_max_header_size: Option<u32>,
 	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
@@ -80,6 +82,7 @@ impl Default for HTTP {
 			http2_window_size: None,
 			http2_connection_window_size: None,
 			http2_frame_size: None,
+			http2_max_header_size: None,
 
 			http2_keepalive_interval: None,
 			http2_keepalive_timeout: None,
@@ -104,6 +107,10 @@ pub struct TLS {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+	/// Key exchange groups allowed for negotiating TLS.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
 }
 
 impl Default for TLS {
@@ -114,6 +121,7 @@ impl Default for TLS {
 			min_version: None,
 			max_version: None,
 			cipher_suites: None,
+			key_exchange_groups: None,
 		}
 	}
 }
@@ -225,7 +233,7 @@ pub struct OtlpLoggingConfig {
 		feature = "schema",
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
-	pub policies: Vec<super::agent::BackendPolicy>,
+	pub policies: Vec<super::agent::BackendTrafficPolicy>,
 	#[serde(default)]
 	pub protocol: super::agent::TracingProtocol,
 	#[serde(

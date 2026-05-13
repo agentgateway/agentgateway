@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-with-extauth
+  namespace: agentgateway-base
+spec:
+  ports:
+    - name: http
+      port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-example-backend-extauth
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "backendextauth.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /secure
+      backendRefs:
+        - name: backend-with-extauth
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /open
+      backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-extauth-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - kind: Service
+    name: backend-with-extauth
+    group: ""
+  backend:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: ext-authz
+        port: 4444

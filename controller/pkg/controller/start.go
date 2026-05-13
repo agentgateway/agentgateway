@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"maps"
@@ -9,12 +10,10 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
-	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -43,11 +42,15 @@ type SetupOpts struct {
 
 	// CertWatcher is the shared certificate watcher for xDS TLS
 	// Used by the Gateway controller to trigger reconciliation on cert changes
-	CertWatcher *certwatcher.CertWatcher
+	CertWatcher CertificateWatcher
 
 	PprofBindAddress       string
 	HealthProbeBindAddress string
 	MetricsBindAddress     string
+}
+
+type CertificateWatcher interface {
+	RegisterCallback(func(tls.Certificate))
 }
 
 var setupLog = ctrl.Log.WithName("setup")
@@ -213,12 +216,12 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	if defaultTag == nil {
 		// Else, the binary is built with an explicit version
 		if version.Version != "" {
-			defaultTag = ptr.Of("v" + version.Version)
+			defaultTag = new("v" + version.Version)
 		} else {
 			// Else, detect automatically based on the build.
 			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
 			// that is used here + for nightly builds.
-			defaultTag = ptr.Of(version.GitVersion)
+			defaultTag = new(version.GitVersion)
 		}
 	}
 	gwCfg := GatewayConfig{
@@ -231,10 +234,11 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 			Tag:        defaultTag,
 		},
 		ControlPlane: deployer.ControlPlaneInfo{
-			XdsHost:      xdsHost,
-			AgwXdsPort:   agwXdsPort,
-			XdsTLS:       globalSettings.XdsTLS,
-			XdsTlsCaPath: apisettings.TLSRootCAPath,
+			XdsHost:          xdsHost,
+			AgwXdsPort:       agwXdsPort,
+			XdsTLS:           globalSettings.IsXdsTLSEnabled(),
+			XdsTLSSecretName: apisettings.TLSSecretName,
+			ControlPlaneNs:   namespaces.GetPodNamespace(),
 		},
 		AgwCollections:        c.cfg.AgwCollections,
 		AgentgatewayClassName: c.cfg.AgentgatewayClassName,

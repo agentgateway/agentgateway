@@ -20,7 +20,7 @@ import (
 // This test requires a dedicated installation with TLS enabled for xDS communication.
 func TestControlPlaneTLS(t *testing.T) {
 	cleanupCtx := context.Background()
-	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "kgateway-tls-test")
+	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "agentgateway-tls-test")
 
 	testInstallation := e2e.CreateTestInstallation(
 		t,
@@ -38,7 +38,7 @@ func TestControlPlaneTLS(t *testing.T) {
 	}
 
 	// Create the installation namespace first if it doesn't exist, since we need to create
-	// the TLS secret in it before kgateway starts.
+	// the TLS secret in it before agentgateway starts.
 	nsYAML := nsManifest(installNs)
 	testutils.Cleanup(t, func() {
 		if err := testInstallation.Actions.Kubectl().Delete(cleanupCtx, []byte(nsYAML)); err != nil {
@@ -50,8 +50,8 @@ func TestControlPlaneTLS(t *testing.T) {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
 
-	// Create the TLS secret before installing kgateway. The secret must exist in the
-	// installation namespace before kgateway starts, as it's required for the control plane
+	// Create the TLS secret before installing agentgateway. The secret must exist in the
+	// installation namespace before agentgateway starts, as it's required for the control plane
 	// to initialize the xDS TLS certificate watcher. No need to register the cleanup function
 	// here, as the secret will be cleaned up automatically when the namespace is deleted.
 	// Use the same certificate for both ca.crt and tls.crt (self-signed).
@@ -63,13 +63,13 @@ func TestControlPlaneTLS(t *testing.T) {
 		t.Fatalf("failed to create TLS secret: %v", err)
 	}
 
-	// Install kgateway with TLS enabled
+	// Install agentgateway with TLS enabled
 	testutils.Cleanup(t, func() {
 		if !nsEnvPredefined {
 			os.Unsetenv(testutils.InstallNamespace)
 		}
 		// use a separate context than the one used for the test, as the test context
-		// might be cancelled if we fail to install kgateway.
+		// might be cancelled if we fail to install agentgateway.
 		testInstallation.Uninstall(cleanupCtx, t)
 	})
 	testInstallation.InstallFromLocalChart(t.Context(), t)

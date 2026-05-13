@@ -102,7 +102,7 @@ func translatePoliciesForInferencePool(
 	inferencePolicyTLS := &api.Policy{
 		Key:    pool.Namespace + "/" + pool.Name + ":inferencetls",
 		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, ptr.Of(strconv.Itoa(int(eppPort))))},
+		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{

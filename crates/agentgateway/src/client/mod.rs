@@ -78,15 +78,61 @@ pub struct TunnelConfig {
 	pub token: Option<HeaderValue>,
 }
 
+/// The role this agentgateway is acting as when originating an HBONE CONNECT.
+/// Will be used as the `x-istio-source` header value.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[non_exhaustive]
+pub enum HboneSourceRole {
+	Waypoint,
+}
+
+impl HboneSourceRole {
+	pub fn as_header_value(self) -> &'static str {
+		match self {
+			HboneSourceRole::Waypoint => "waypoint",
+		}
+	}
+
+	/// Map an originating bind's tunnel protocol to the role it identifies as on
+	/// outbound HBONE CONNECTs. Returns `None` when no source role applies.
+	pub fn from_tunnel(tp: types::agent::TunnelProtocol) -> Option<Self> {
+		use types::agent::TunnelProtocol;
+		match tp {
+			TunnelProtocol::HboneWaypoint => Some(HboneSourceRole::Waypoint),
+			TunnelProtocol::Direct | TunnelProtocol::HboneGateway | TunnelProtocol::Proxy => None,
+		}
+	}
+}
+
+/// Headers added to outbound HBONE CONNECT requests so that downstream Istio
+/// components can identify the originator.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct HboneHeaders {
+	pub source: Option<HboneSourceRole>,
+	pub forwarded_network: Strng,
+	/// Baggage describing the originating workload (cluster/namespace/etc.).
+	/// Only emitted on the inner CONNECT.
+	pub baggage: Option<Strng>,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Transport {
 	Plain(ApplicationTransport),
 	Tunnel(ApplicationTransport, TunnelConfig),
-	Hbone(ApplicationTransport, Vec<Identity>),
+	Hbone(ApplicationTransport, Vec<Identity>, HboneHeaders),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
 		waypoint_identities: Vec<Identity>, // Identities of waypoint/workload (workload + service SANs)
+		inner: ApplicationTransport,
+		headers: HboneHeaders,
+	},
+	/// HBONE tunnel to a waypoint proxy. The CONNECT URI uses the service target
+	/// (VIP or hostname) so the waypoint can route, while the physical connection
+	/// goes to the waypoint address.
+	HboneWaypoint {
+		waypoint_address: SocketAddr, // Physical address of waypoint (IP:hbone_port)
+		identities: Vec<Identity>,    // Service SANs for mTLS verification
 		inner: ApplicationTransport,
 	},
 }
@@ -108,25 +154,26 @@ impl Transport {
 		match self {
 			Transport::Plain(inner) => inner,
 			Transport::Tunnel(inner, _) => inner,
-			Transport::Hbone(inner, _) => inner,
+			Transport::Hbone(inner, _, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
+			Transport::HboneWaypoint { inner, .. } => inner,
 		}
 	}
 
 	pub fn skip_dns_resolution(&self) -> bool {
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// Same with Tunnel
+		// Same with Tunnel and HboneWaypoint (we connect to the waypoint address directly).
 		matches!(
 			self,
-			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _)
+			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _) | Transport::HboneWaypoint { .. }
 		)
 	}
 
 	pub fn name(&self) -> &'static str {
 		match self {
-			Transport::Hbone(ApplicationTransport::Plaintext, _) => "hbone",
-			Transport::Hbone(ApplicationTransport::Tls(_), _) => "hbone-tls",
+			Transport::Hbone(ApplicationTransport::Plaintext, _, _) => "hbone",
+			Transport::Hbone(ApplicationTransport::Tls(_), _, _) => "hbone-tls",
 			Transport::Plain(ApplicationTransport::Plaintext) => "plaintext",
 			Transport::Plain(ApplicationTransport::Tls(_)) => "tls",
 			Transport::Tunnel(ApplicationTransport::Plaintext, _) => "tunnel",
@@ -139,6 +186,14 @@ impl Transport {
 				inner: ApplicationTransport::Tls(_),
 				..
 			} => "doublehbone-tls",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Plaintext,
+				..
+			} => "hbone-waypoint",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Tls(_),
+				..
+			} => "hbone-waypoint-tls",
 		}
 	}
 }
@@ -281,12 +336,12 @@ impl Connector {
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
-			Transport::Hbone(_, identities) => {
+			Transport::Hbone(_, identities, headers) => {
 				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-				hbone_tunnel::handshake(pool, ep, identities).await?
+				hbone_tunnel::handshake(pool, ep, identities, headers).await?
 			},
 
 			Transport::DoubleHbone {
@@ -294,6 +349,7 @@ impl Connector {
 				gateway_identity,
 				waypoint_identities,
 				inner: _,
+				headers,
 			} => {
 				let pool = self
 					.hbone_pool
@@ -306,8 +362,21 @@ impl Connector {
 					gateway_address,
 					gateway_identity,
 					waypoint_identities,
+					headers,
 				)
 				.await?
+			},
+
+			Transport::HboneWaypoint {
+				waypoint_address,
+				identities,
+				inner: _,
+			} => {
+				let pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				hbone_tunnel::handshake_waypoint(pool, &target, waypoint_address, identities).await?
 			},
 		};
 
@@ -623,5 +692,34 @@ impl Client {
 			.insert(transport::BufferLimit::new(buffer_limit));
 		resp.extensions_mut().insert(ResolvedDestination(dest));
 		Ok(resp)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::agent::TunnelProtocol;
+
+	#[test]
+	fn waypoint_bind_renders_as_waypoint() {
+		assert_eq!(
+			HboneSourceRole::from_tunnel(TunnelProtocol::HboneWaypoint).map(|r| r.as_header_value()),
+			Some("waypoint"),
+		);
+	}
+
+	#[test]
+	fn non_waypoint_tunnel_protocols_have_no_source_role() {
+		for tp in [
+			TunnelProtocol::Direct,
+			TunnelProtocol::HboneGateway,
+			TunnelProtocol::Proxy,
+		] {
+			assert_eq!(
+				HboneSourceRole::from_tunnel(tp),
+				None,
+				"tunnel protocol {tp:?} should map to no source role",
+			);
+		}
 	}
 }

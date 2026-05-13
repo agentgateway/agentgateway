@@ -2,20 +2,58 @@
 
 use std::path::PathBuf;
 
+use agentgateway::ConfigSource;
 use clap::{Args as ClapArgs, Parser, Subcommand};
 
 mod commands;
 
-#[cfg(feature = "jemalloc")]
-#[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+#[cfg(not(any(feature = "glibc", feature = "jemalloc", feature = "mimalloc",)))]
+compile_error!("exactly one allocator feature must be enabled: glibc, jemalloc, or mimalloc");
 
-// Enable profiling, unless on musl due to https://github.com/tikv/jemallocator/issues/146
-#[cfg(not(target_env = "musl"))]
-#[cfg(feature = "jemalloc")]
+#[cfg(any(
+	all(feature = "glibc", feature = "jemalloc"),
+	all(feature = "glibc", feature = "mimalloc"),
+	all(feature = "jemalloc", feature = "mimalloc"),
+))]
+compile_error!(
+	"allocator features are mutually exclusive; enable exactly one of glibc, jemalloc, or mimalloc"
+);
+
+#[cfg(any(feature = "glibc", all(feature = "jemalloc", not(target_os = "linux"))))]
+#[global_allocator]
+static GLOBAL: pprof_alloc::PprofAlloc<std::alloc::System> =
+	pprof_alloc::PprofAlloc::from_allocator(std::alloc::System)
+		.with_pprof_sample_rate_from_env(pprof_alloc::DEFAULT_PPROF_SAMPLE_RATE)
+		.with_stats();
+
+#[cfg(any(feature = "glibc", all(feature = "jemalloc", not(target_os = "linux"))))]
+pprof_alloc::declare_allocator_kind!(pprof_alloc::allocator::AllocatorKind::Glibc);
+
+#[cfg(all(feature = "jemalloc", target_os = "linux"))]
+#[global_allocator]
+static GLOBAL: pprof_alloc::PprofAlloc<tikv_jemallocator::Jemalloc> =
+	pprof_alloc::PprofAlloc::from_allocator(tikv_jemallocator::Jemalloc)
+		.with_pprof_sample_rate_from_env(pprof_alloc::DEFAULT_PPROF_SAMPLE_RATE)
+		.with_stats();
+
+#[cfg(all(feature = "jemalloc", target_os = "linux"))]
+pprof_alloc::declare_allocator_kind!(pprof_alloc::allocator::AllocatorKind::Jemalloc);
+
+#[cfg(feature = "mimalloc")]
+#[global_allocator]
+static GLOBAL: pprof_alloc::PprofAlloc<mimalloc::MiMalloc> =
+	pprof_alloc::PprofAlloc::from_allocator(mimalloc::MiMalloc)
+		.with_pprof_sample_rate_from_env(pprof_alloc::DEFAULT_PPROF_SAMPLE_RATE)
+		.with_stats();
+
+#[cfg(feature = "mimalloc")]
+pprof_alloc::declare_allocator_kind!(pprof_alloc::allocator::AllocatorKind::Mimalloc);
+
+#[cfg(all(feature = "jemalloc", target_os = "linux"))]
 #[allow(non_upper_case_globals)]
 #[unsafe(export_name = "malloc_conf")]
-pub static malloc_conf: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
+pub static malloc_conf: &[u8] =
+	b"thp:never,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000\0";
 
 #[derive(ClapArgs, Debug, Clone)]
 pub(crate) struct ConfigArgs {
@@ -102,14 +140,34 @@ pub fn run() -> anyhow::Result<()> {
 
 pub(crate) fn read_config_contents(
 	config: &ConfigArgs,
-) -> anyhow::Result<(String, Option<PathBuf>)> {
+) -> anyhow::Result<(String, Option<ConfigSource>)> {
 	match (&config.config, &config.file) {
 		(Some(_), Some(_)) => anyhow::bail!("only one of --config or --file"),
-		(Some(config), None) => Ok((config.clone(), None)),
+		(Some(config), None) => Ok((
+			config.clone(),
+			Some(ConfigSource::Static(config.clone().into())),
+		)),
 		(None, Some(file)) => {
+			let file = if file == std::path::Path::new("-") {
+				&PathBuf::from("/dev/stdin")
+			} else {
+				file
+			};
+
 			let contents = fs_err::read_to_string(file)?;
-			Ok((contents, Some(file.clone())))
+			let source = if is_read_once_path(file) {
+				ConfigSource::Static(contents.clone().into())
+			} else {
+				ConfigSource::File(file.clone())
+			};
+			Ok((contents, Some(source)))
 		},
 		(None, None) => Ok(("{}".to_string(), None)),
 	}
+}
+
+fn is_read_once_path(path: &std::path::Path) -> bool {
+	path == std::path::Path::new("/dev/stdin")
+		|| path.starts_with("/dev/fd")
+		|| path.starts_with("/proc/self/fd")
 }

@@ -55,8 +55,8 @@ spec:
               - webhook:
                   backendRef:
                     name: hello
-                    kind: Backend
-                    group: gateway.kgateway.dev
+                    kind: AgentgatewayBackend
+                    group: agentgateway.dev
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

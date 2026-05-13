@@ -1,0 +1,96 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: selector-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: labeled-ls
+  namespace: default
+  labels:
+    env: staging
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: selector-gw
+  listeners:
+  - name: extra
+    protocol: HTTP
+    port: 9090
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: selector-policy
+  namespace: default
+spec:
+  targetSelectors:
+  - group: gateway.networking.k8s.io
+    kind: ListenerSet
+    matchLabels:
+      env: staging
+  traffic:
+    timeouts:
+      request: 30s
+
+---
+# Output
+output:
+- gateway:
+    Name: selector-gw
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/selector-policy:timeout:default/labeled-ls
+      name:
+        kind: AgentgatewayPolicy
+        name: selector-policy
+        namespace: default
+      target:
+        listenerSet:
+          name: labeled-ls
+          namespace: default
+      traffic:
+        timeout:
+          request: 30s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: selector-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: selector-gw
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

@@ -359,9 +359,18 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		if let Some(llm) = resp.extensions().get::<LLMContext>() {
+			self.llm = ExtensionOrDirect::Direct(Some(llm));
+		}
+		if let Some(metadata) = resp.extensions().get::<TransformationMetadata>() {
+			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
+		}
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		if let Some(metadata) = resp.metadata.as_ref() {
+			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
+		}
 	}
 	pub fn new_empty() -> Self {
 		Default::default()
@@ -407,6 +416,17 @@ impl<'a> Executor<'a> {
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
+		this
+	}
+	pub fn new_llm_rate_limit_streaming(
+		req: Option<&'a RequestSnapshot>,
+		llm: &'a LLMContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.llm = ExtensionOrDirect::Direct(Some(llm));
 		this
 	}
 	pub fn new_tcp_logger(
@@ -568,6 +588,7 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
+		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
 	}
 }
 
@@ -656,6 +677,7 @@ pub struct ResponseSnapshot {
 	pub headers: http::HeaderMap,
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
+	pub metadata: Option<TransformationMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -964,7 +986,7 @@ impl PartialEq for RequestRef<'_> {
 #[apply(schema!)]
 #[derive(Eq, PartialEq, cel::DynamicType)]
 pub struct LLMContext {
-	/// Whether the LLM response is streamed.
+	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
 	/// The model requested for the LLM request. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]
@@ -1340,33 +1362,38 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
-		if name == "cookie" {
-			if ftx.args.len() != 1 {
-				return Some(Err(ExecutionError::invalid_argument_count(
-					1,
-					ftx.args.len(),
-				)));
-			}
-			let name = match ftx.arg::<StringValue>(0) {
-				Ok(name) => name,
-				Err(err) => return Some(Err(err)),
-			};
-			return Some(self.cookie_value(name.as_ref()));
+		match name {
+			"cookie" => {
+				if ftx.args.len() != 1 {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						1,
+						ftx.args.len(),
+					)));
+				}
+				let name = match ftx.arg::<StringValue>(0) {
+					Ok(name) => name,
+					Err(err) => return Some(Err(err)),
+				};
+				Some(self.cookie_value(name.as_ref()))
+			},
+			"redacted" | "join" | "raw" | "split" => {
+				if !ftx.args.is_empty() {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						0,
+						ftx.args.len(),
+					)));
+				}
+				let next = match name {
+					"redacted" => self.clone().redacted(),
+					"join" => self.clone().join(),
+					"raw" => self.clone().raw(),
+					"split" => self.clone().split(),
+					_ => unreachable!(),
+				};
+				Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
+			},
+			_ => None,
 		}
-		if !ftx.args.is_empty() {
-			return Some(Err(ExecutionError::invalid_argument_count(
-				0,
-				ftx.args.len(),
-			)));
-		}
-		let next = match name {
-			"redacted" => self.clone().redacted(),
-			"join" => self.clone().join(),
-			"raw" => self.clone().raw(),
-			"split" => self.clone().split(),
-			_ => return None,
-		};
-		Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
 	}
 }
 

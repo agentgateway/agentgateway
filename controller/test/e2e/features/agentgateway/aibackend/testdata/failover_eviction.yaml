@@ -59,6 +59,25 @@ spec:
         value: "1"
 ---
 apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: model-header-transformation
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: llm-failover
+  traffic:
+    transformation:
+      response:
+        add:
+          - name: x-backend-model
+            value: 'default(llm.responseModel, "not-set")'
+          - name: x-model-swapped
+            value: 'string(default(llm.responseModel, "")==default(llm.requestModel, ""))'
+---
+apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
   name: openai-failover

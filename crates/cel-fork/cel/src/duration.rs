@@ -7,11 +7,6 @@ use nom::combinator::{map, opt};
 use nom::multi::many1;
 use nom::number::complete::double;
 
-// Constants representing time units in nanoseconds
-const SECOND: u64 = 1_000_000_000;
-const MILLISECOND: u64 = 1_000_000;
-const MICROSECOND: u64 = 1_000;
-
 /// Parses a duration string into a [`Duration`]. Duration strings support the
 /// following grammar:
 ///
@@ -90,123 +85,23 @@ fn to_duration(num: f64, unit: Unit) -> Duration {
 	Duration::nanoseconds((num * unit.nanos() as f64).trunc() as i64)
 }
 
-/// Formats a [`Duration`] into a string. String returns a string representing the
-/// duration in the form "72h3m0.5s". Leading zero units are omitted. As a special
-/// case, durations less than one second format use a smaller unit (milli-, micro-,
-/// or nanoseconds) to ensure that the leading digit is non-zero. The zero duration
-/// formats as 0s.
-///
-/// This is a direct port of the Go version of the time.Duration(0).String() function.
-pub fn format_duration(d: &Duration) -> String {
-	let buf = &mut [0u8; 32];
-	let mut w = buf.len();
+/// Formats a [`Duration`] according to the CEL string conversion and protobuf
+/// JSON representation: total seconds plus optional fractional seconds and an
+/// `s` suffix.
+pub fn format_duration(d: &Duration) -> Option<String> {
+	let seconds = d.num_seconds();
+	let nanos = d.subsec_nanos();
+	let sign = if seconds < 0 || nanos < 0 { "-" } else { "" };
+	let seconds = seconds.unsigned_abs();
+	let nanos = nanos.unsigned_abs();
 
-	let mut neg = false;
-	let mut u = d
-		.num_nanoseconds()
-		.map(|n| {
-			if n < 0 {
-				neg = true;
-			}
-			n as u64
-		})
-		.unwrap_or_else(|| {
-			let s = d.num_seconds();
-			if s < 0 {
-				neg = true;
-			}
-			s as u64 * SECOND
-		});
-
-	if u < SECOND {
-		// Special case: if duration is smaller than a second,
-		// use smaller units, like 1.2ms
-		let mut _prec = 0;
-		w -= 1;
-		buf[w] = b's';
-		w -= 1;
-
-		if u == 0 {
-			return "0s".to_string();
-		} else if u < MICROSECOND {
-			_prec = 0;
-			buf[w] = b'n';
-		} else if u < MILLISECOND {
-			_prec = 3;
-			// U+00B5 'µ' micro sign == 0xC2 0xB5
-			buf[w] = 0xB5;
-			w -= 1;
-			buf[w] = 0xC2;
-		} else {
-			_prec = 6;
-			buf[w] = b'm';
-		}
-		(w, u) = format_float(&mut buf[..w], u, _prec);
-		w = format_int(&mut buf[..w], u);
-	} else {
-		w -= 1;
-		buf[w] = b's';
-		(w, u) = format_float(&mut buf[..w], u, 9);
-
-		// u is now integer number of seconds
-		w = format_int(&mut buf[..w], u % 60);
-		u /= 60;
-
-		// u is now integer number of minutes
-		if u > 0 {
-			w -= 1;
-			buf[w] = b'm';
-			w = format_int(&mut buf[..w], u % 60);
-			u /= 60;
-
-			// u is now integer number of hours
-			if u > 0 {
-				w -= 1;
-				buf[w] = b'h';
-				w = format_int(&mut buf[..w], u);
-			}
-		}
+	if nanos == 0 {
+		return Some(format!("{sign}{seconds}s"));
 	}
 
-	if neg {
-		w -= 1;
-		buf[w] = b'-';
-	}
-	String::from_utf8_lossy(&buf[w..]).into_owned()
-}
-
-fn format_float(buf: &mut [u8], mut v: u64, prec: usize) -> (usize, u64) {
-	let mut w = buf.len();
-	let mut print = false;
-	for _ in 0..prec {
-		let digit = v % 10;
-		print = print || digit != 0;
-		if print {
-			w -= 1;
-			buf[w] = digit as u8 + b'0';
-		}
-		v /= 10;
-	}
-	if print {
-		w -= 1;
-		buf[w] = b'.';
-	}
-	(w, v)
-}
-
-fn format_int(buf: &mut [u8], mut v: u64) -> usize {
-	let mut w = buf.len();
-	if v == 0 {
-		w -= 1;
-		buf[w] = b'0';
-	} else {
-		while v > 0 {
-			w -= 1;
-			buf[w] = (v % 10) as u8 + b'0';
-			v /= 10;
-		}
-	}
-	w
+	let fraction = format!("{nanos:09}");
+	let fraction = fraction.trim_end_matches('0');
+	Some(format!("{sign}{seconds}.{fraction}s"))
 }
 
 #[cfg(test)]
@@ -220,9 +115,45 @@ mod tests {
 		assert_eq!(duration, expected, "{input}");
 	}
 
-	fn assert_print_duration(input: Duration, expected: &str) {
-		let actual = format_duration(&input);
-		assert_eq!(actual, expected, "{input}");
+	#[test]
+	fn test_format_duration() {
+		assert_eq!(format_duration(&Duration::zero()), Some("0s".to_string()));
+		assert_eq!(
+			format_duration(&(Duration::seconds(61) + Duration::milliseconds(500))),
+			Some("61.5s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::milliseconds(100)),
+			Some("0.1s".to_string())
+		);
+		assert_eq!(
+			format_duration(&(Duration::minutes(1) + Duration::milliseconds(1))),
+			Some("60.001s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::nanoseconds(1)),
+			Some("0.000000001s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::nanoseconds(-1)),
+			Some("-0.000000001s".to_string())
+		);
+		assert_eq!(
+			format_duration(&(Duration::seconds(-1) - Duration::milliseconds(500))),
+			Some("-1.5s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::nanoseconds(i64::MAX)),
+			Some("9223372036.854775807s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::nanoseconds(i64::MIN)),
+			Some("-9223372036.854775808s".to_string())
+		);
+		assert_eq!(
+			format_duration(&Duration::milliseconds(i64::MAX)),
+			Some("9223372036854775.807s".to_string())
+		);
 	}
 
 	macro_rules! assert_durations {
@@ -231,17 +162,6 @@ mod tests {
             fn test_durations() {
                 $(
                     assert_duration($str, $duration);
-                )*
-            }
-        };
-    }
-
-	macro_rules! assert_duration_format {
-        ($($duration:expr => $str:expr),*$(,)?) => {
-            #[test]
-            fn test_format_durations() {
-                $(
-                    assert_print_duration($duration, $str);
                 )*
             }
         };
@@ -264,19 +184,5 @@ mod tests {
 			"0h0m1s" => Duration::seconds(1),
 			"0" => Duration::zero(),
 			"-0" => Duration::zero(),
-	}
-
-	assert_duration_format! {
-			Duration::zero() => "0s",
-			Duration::nanoseconds(1) => "1ns",
-			Duration::nanoseconds(1100) => "1.1µs",
-			Duration::microseconds(2200) => "2.2ms",
-			Duration::milliseconds(3300) => "3.3s",
-			Duration::minutes(4) + Duration::seconds(5) => "4m5s",
-			Duration::minutes(4) + Duration::milliseconds(5001) => "4m5.001s",
-			Duration::hours(5) + Duration::minutes(6) + Duration::milliseconds(7001) => "5h6m7.001s",
-			Duration::minutes(8) + Duration::nanoseconds(1) => "8m0.000000001s",
-			Duration::nanoseconds(i64::MAX) => "2562047h47m16.854775807s",
-			Duration::nanoseconds(i64::MIN) => "-2562047h47m16.854775808s",
 	}
 }

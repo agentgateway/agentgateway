@@ -187,6 +187,52 @@ func (Bind_TunnelProtocol) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{1, 1}
 }
 
+type TLSConfig_CertificateSource int32
+
+const (
+	TLSConfig_INLINE         TLSConfig_CertificateSource = 0
+	TLSConfig_ISTIO_WORKLOAD TLSConfig_CertificateSource = 1
+)
+
+// Enum value maps for TLSConfig_CertificateSource.
+var (
+	TLSConfig_CertificateSource_name = map[int32]string{
+		0: "INLINE",
+		1: "ISTIO_WORKLOAD",
+	}
+	TLSConfig_CertificateSource_value = map[string]int32{
+		"INLINE":         0,
+		"ISTIO_WORKLOAD": 1,
+	}
+)
+
+func (x TLSConfig_CertificateSource) Enum() *TLSConfig_CertificateSource {
+	p := new(TLSConfig_CertificateSource)
+	*p = x
+	return p
+}
+
+func (x TLSConfig_CertificateSource) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TLSConfig_CertificateSource) Descriptor() protoreflect.EnumDescriptor {
+	return file_resource_proto_enumTypes[3].Descriptor()
+}
+
+func (TLSConfig_CertificateSource) Type() protoreflect.EnumType {
+	return &file_resource_proto_enumTypes[3]
+}
+
+func (x TLSConfig_CertificateSource) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TLSConfig_CertificateSource.Descriptor instead.
+func (TLSConfig_CertificateSource) EnumDescriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{14, 0}
+}
+
 type TLSConfig_TLSVersion int32
 
 const (
@@ -220,11 +266,11 @@ func (x TLSConfig_TLSVersion) String() string {
 }
 
 func (TLSConfig_TLSVersion) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[3].Descriptor()
+	return file_resource_proto_enumTypes[4].Descriptor()
 }
 
 func (TLSConfig_TLSVersion) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[3]
+	return &file_resource_proto_enumTypes[4]
 }
 
 func (x TLSConfig_TLSVersion) Number() protoreflect.EnumNumber {
@@ -233,7 +279,7 @@ func (x TLSConfig_TLSVersion) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TLSConfig_TLSVersion.Descriptor instead.
 func (TLSConfig_TLSVersion) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{12, 0}
+	return file_resource_proto_rawDescGZIP(), []int{14, 1}
 }
 
 type TLSConfig_MTLSMode int32
@@ -242,6 +288,8 @@ const (
 	TLSConfig_STRICT TLSConfig_MTLSMode = 0
 	// Request a TLS certificate, but if one is not presented or invalid, allow the connection.
 	TLSConfig_ALLOW_INSECURE_FALLBACK TLSConfig_MTLSMode = 1
+	// Do not request or require a client TLS certificate.
+	TLSConfig_DISABLE TLSConfig_MTLSMode = 2
 )
 
 // Enum value maps for TLSConfig_MTLSMode.
@@ -249,10 +297,12 @@ var (
 	TLSConfig_MTLSMode_name = map[int32]string{
 		0: "STRICT",
 		1: "ALLOW_INSECURE_FALLBACK",
+		2: "DISABLE",
 	}
 	TLSConfig_MTLSMode_value = map[string]int32{
 		"STRICT":                  0,
 		"ALLOW_INSECURE_FALLBACK": 1,
+		"DISABLE":                 2,
 	}
 )
 
@@ -267,11 +317,11 @@ func (x TLSConfig_MTLSMode) String() string {
 }
 
 func (TLSConfig_MTLSMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[4].Descriptor()
+	return file_resource_proto_enumTypes[5].Descriptor()
 }
 
 func (TLSConfig_MTLSMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[4]
+	return &file_resource_proto_enumTypes[5]
 }
 
 func (x TLSConfig_MTLSMode) Number() protoreflect.EnumNumber {
@@ -280,7 +330,7 @@ func (x TLSConfig_MTLSMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TLSConfig_MTLSMode.Descriptor instead.
 func (TLSConfig_MTLSMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{12, 1}
+	return file_resource_proto_rawDescGZIP(), []int{14, 2}
 }
 
 // Cipher suites supported by agentgateway
@@ -341,11 +391,11 @@ func (x TLSConfig_CipherSuite) String() string {
 }
 
 func (TLSConfig_CipherSuite) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[5].Descriptor()
+	return file_resource_proto_enumTypes[6].Descriptor()
 }
 
 func (TLSConfig_CipherSuite) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[5]
+	return &file_resource_proto_enumTypes[6]
 }
 
 func (x TLSConfig_CipherSuite) Number() protoreflect.EnumNumber {
@@ -354,7 +404,64 @@ func (x TLSConfig_CipherSuite) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TLSConfig_CipherSuite.Descriptor instead.
 func (TLSConfig_CipherSuite) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{12, 2}
+	return file_resource_proto_rawDescGZIP(), []int{14, 3}
+}
+
+// Key exchange groups supported by agentgateway.
+// Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`DEFAULT_KEY_EXCHANGE_GROUPS`).
+type TLSConfig_KeyExchangeGroup int32
+
+const (
+	TLSConfig_KEY_EXCHANGE_GROUP_UNSPECIFIED TLSConfig_KeyExchangeGroup = 0
+	TLSConfig_X25519                         TLSConfig_KeyExchangeGroup = 1
+	TLSConfig_P256                           TLSConfig_KeyExchangeGroup = 2
+	TLSConfig_P384                           TLSConfig_KeyExchangeGroup = 3
+	TLSConfig_X25519_MLKEM768                TLSConfig_KeyExchangeGroup = 4
+)
+
+// Enum value maps for TLSConfig_KeyExchangeGroup.
+var (
+	TLSConfig_KeyExchangeGroup_name = map[int32]string{
+		0: "KEY_EXCHANGE_GROUP_UNSPECIFIED",
+		1: "X25519",
+		2: "P256",
+		3: "P384",
+		4: "X25519_MLKEM768",
+	}
+	TLSConfig_KeyExchangeGroup_value = map[string]int32{
+		"KEY_EXCHANGE_GROUP_UNSPECIFIED": 0,
+		"X25519":                         1,
+		"P256":                           2,
+		"P384":                           3,
+		"X25519_MLKEM768":                4,
+	}
+)
+
+func (x TLSConfig_KeyExchangeGroup) Enum() *TLSConfig_KeyExchangeGroup {
+	p := new(TLSConfig_KeyExchangeGroup)
+	*p = x
+	return p
+}
+
+func (x TLSConfig_KeyExchangeGroup) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TLSConfig_KeyExchangeGroup) Descriptor() protoreflect.EnumDescriptor {
+	return file_resource_proto_enumTypes[7].Descriptor()
+}
+
+func (TLSConfig_KeyExchangeGroup) Type() protoreflect.EnumType {
+	return &file_resource_proto_enumTypes[7]
+}
+
+func (x TLSConfig_KeyExchangeGroup) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TLSConfig_KeyExchangeGroup.Descriptor instead.
+func (TLSConfig_KeyExchangeGroup) EnumDescriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{14, 4}
 }
 
 type FrontendPolicySpec_Logging_OtlpAccessLog_Protocol int32
@@ -387,11 +494,11 @@ func (x FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) String() string {
 }
 
 func (FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[6].Descriptor()
+	return file_resource_proto_enumTypes[8].Descriptor()
 }
 
 func (FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[6]
+	return &file_resource_proto_enumTypes[8]
 }
 
 func (x FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Number() protoreflect.EnumNumber {
@@ -400,7 +507,7 @@ func (x FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Number() protoreflect
 
 // Deprecated: Use FrontendPolicySpec_Logging_OtlpAccessLog_Protocol.Descriptor instead.
 func (FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 4, 2, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 4, 2, 0}
 }
 
 type FrontendPolicySpec_Tracing_Protocol int32
@@ -433,11 +540,11 @@ func (x FrontendPolicySpec_Tracing_Protocol) String() string {
 }
 
 func (FrontendPolicySpec_Tracing_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[7].Descriptor()
+	return file_resource_proto_enumTypes[9].Descriptor()
 }
 
 func (FrontendPolicySpec_Tracing_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[7]
+	return &file_resource_proto_enumTypes[9]
 }
 
 func (x FrontendPolicySpec_Tracing_Protocol) Number() protoreflect.EnumNumber {
@@ -446,7 +553,7 @@ func (x FrontendPolicySpec_Tracing_Protocol) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use FrontendPolicySpec_Tracing_Protocol.Descriptor instead.
 func (FrontendPolicySpec_Tracing_Protocol) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 5, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 5, 0}
 }
 
 type FrontendPolicySpec_ProxyProtocol_Version int32
@@ -482,11 +589,11 @@ func (x FrontendPolicySpec_ProxyProtocol_Version) String() string {
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Version) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[8].Descriptor()
+	return file_resource_proto_enumTypes[10].Descriptor()
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Version) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[8]
+	return &file_resource_proto_enumTypes[10]
 }
 
 func (x FrontendPolicySpec_ProxyProtocol_Version) Number() protoreflect.EnumNumber {
@@ -495,7 +602,7 @@ func (x FrontendPolicySpec_ProxyProtocol_Version) Number() protoreflect.EnumNumb
 
 // Deprecated: Use FrontendPolicySpec_ProxyProtocol_Version.Descriptor instead.
 func (FrontendPolicySpec_ProxyProtocol_Version) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 7, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 7, 0}
 }
 
 type FrontendPolicySpec_ProxyProtocol_Mode int32
@@ -528,11 +635,11 @@ func (x FrontendPolicySpec_ProxyProtocol_Mode) String() string {
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[9].Descriptor()
+	return file_resource_proto_enumTypes[11].Descriptor()
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[9]
+	return &file_resource_proto_enumTypes[11]
 }
 
 func (x FrontendPolicySpec_ProxyProtocol_Mode) Number() protoreflect.EnumNumber {
@@ -541,7 +648,7 @@ func (x FrontendPolicySpec_ProxyProtocol_Mode) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use FrontendPolicySpec_ProxyProtocol_Mode.Descriptor instead.
 func (FrontendPolicySpec_ProxyProtocol_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 7, 1}
+	return file_resource_proto_rawDescGZIP(), []int{47, 7, 1}
 }
 
 type TrafficPolicySpec_PolicyPhase int32
@@ -574,11 +681,11 @@ func (x TrafficPolicySpec_PolicyPhase) String() string {
 }
 
 func (TrafficPolicySpec_PolicyPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[10].Descriptor()
+	return file_resource_proto_enumTypes[12].Descriptor()
 }
 
 func (TrafficPolicySpec_PolicyPhase) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[10]
+	return &file_resource_proto_enumTypes[12]
 }
 
 func (x TrafficPolicySpec_PolicyPhase) Number() protoreflect.EnumNumber {
@@ -587,7 +694,7 @@ func (x TrafficPolicySpec_PolicyPhase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TrafficPolicySpec_PolicyPhase.Descriptor instead.
 func (TrafficPolicySpec_PolicyPhase) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0}
 }
 
 type TrafficPolicySpec_RemoteRateLimit_Type int32
@@ -620,11 +727,11 @@ func (x TrafficPolicySpec_RemoteRateLimit_Type) String() string {
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[11].Descriptor()
+	return file_resource_proto_enumTypes[13].Descriptor()
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_Type) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[11]
+	return &file_resource_proto_enumTypes[13]
 }
 
 func (x TrafficPolicySpec_RemoteRateLimit_Type) Number() protoreflect.EnumNumber {
@@ -633,7 +740,7 @@ func (x TrafficPolicySpec_RemoteRateLimit_Type) Number() protoreflect.EnumNumber
 
 // Deprecated: Use TrafficPolicySpec_RemoteRateLimit_Type.Descriptor instead.
 func (TrafficPolicySpec_RemoteRateLimit_Type) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0, 0}
 }
 
 // Defines how the proxy behaves when the remote rate limit service is
@@ -668,11 +775,11 @@ func (x TrafficPolicySpec_RemoteRateLimit_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[12].Descriptor()
+	return file_resource_proto_enumTypes[14].Descriptor()
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[12]
+	return &file_resource_proto_enumTypes[14]
 }
 
 func (x TrafficPolicySpec_RemoteRateLimit_FailureMode) Number() protoreflect.EnumNumber {
@@ -681,7 +788,7 @@ func (x TrafficPolicySpec_RemoteRateLimit_FailureMode) Number() protoreflect.Enu
 
 // Deprecated: Use TrafficPolicySpec_RemoteRateLimit_FailureMode.Descriptor instead.
 func (TrafficPolicySpec_RemoteRateLimit_FailureMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0, 1}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0, 1}
 }
 
 type TrafficPolicySpec_LocalRateLimit_Type int32
@@ -714,11 +821,11 @@ func (x TrafficPolicySpec_LocalRateLimit_Type) String() string {
 }
 
 func (TrafficPolicySpec_LocalRateLimit_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[13].Descriptor()
+	return file_resource_proto_enumTypes[15].Descriptor()
 }
 
 func (TrafficPolicySpec_LocalRateLimit_Type) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[13]
+	return &file_resource_proto_enumTypes[15]
 }
 
 func (x TrafficPolicySpec_LocalRateLimit_Type) Number() protoreflect.EnumNumber {
@@ -727,7 +834,7 @@ func (x TrafficPolicySpec_LocalRateLimit_Type) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use TrafficPolicySpec_LocalRateLimit_Type.Descriptor instead.
 func (TrafficPolicySpec_LocalRateLimit_Type) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 1, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 1, 0}
 }
 
 type TrafficPolicySpec_ExternalAuth_FailureMode int32
@@ -763,11 +870,11 @@ func (x TrafficPolicySpec_ExternalAuth_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_ExternalAuth_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[14].Descriptor()
+	return file_resource_proto_enumTypes[16].Descriptor()
 }
 
 func (TrafficPolicySpec_ExternalAuth_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[14]
+	return &file_resource_proto_enumTypes[16]
 }
 
 func (x TrafficPolicySpec_ExternalAuth_FailureMode) Number() protoreflect.EnumNumber {
@@ -776,7 +883,7 @@ func (x TrafficPolicySpec_ExternalAuth_FailureMode) Number() protoreflect.EnumNu
 
 // Deprecated: Use TrafficPolicySpec_ExternalAuth_FailureMode.Descriptor instead.
 func (TrafficPolicySpec_ExternalAuth_FailureMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 2, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 2, 0}
 }
 
 // Validation mode for JWT authentication
@@ -816,11 +923,11 @@ func (x TrafficPolicySpec_JWT_Mode) String() string {
 }
 
 func (TrafficPolicySpec_JWT_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[15].Descriptor()
+	return file_resource_proto_enumTypes[17].Descriptor()
 }
 
 func (TrafficPolicySpec_JWT_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[15]
+	return &file_resource_proto_enumTypes[17]
 }
 
 func (x TrafficPolicySpec_JWT_Mode) Number() protoreflect.EnumNumber {
@@ -829,7 +936,7 @@ func (x TrafficPolicySpec_JWT_Mode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TrafficPolicySpec_JWT_Mode.Descriptor instead.
 func (TrafficPolicySpec_JWT_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 5, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 5, 0}
 }
 
 // Validation mode for basic authentication
@@ -865,11 +972,11 @@ func (x TrafficPolicySpec_BasicAuthentication_Mode) String() string {
 }
 
 func (TrafficPolicySpec_BasicAuthentication_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[16].Descriptor()
+	return file_resource_proto_enumTypes[18].Descriptor()
 }
 
 func (TrafficPolicySpec_BasicAuthentication_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[16]
+	return &file_resource_proto_enumTypes[18]
 }
 
 func (x TrafficPolicySpec_BasicAuthentication_Mode) Number() protoreflect.EnumNumber {
@@ -878,7 +985,7 @@ func (x TrafficPolicySpec_BasicAuthentication_Mode) Number() protoreflect.EnumNu
 
 // Deprecated: Use TrafficPolicySpec_BasicAuthentication_Mode.Descriptor instead.
 func (TrafficPolicySpec_BasicAuthentication_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 6, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 6, 0}
 }
 
 // Validation mode for API Key authentication
@@ -914,11 +1021,11 @@ func (x TrafficPolicySpec_APIKey_Mode) String() string {
 }
 
 func (TrafficPolicySpec_APIKey_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[17].Descriptor()
+	return file_resource_proto_enumTypes[19].Descriptor()
 }
 
 func (TrafficPolicySpec_APIKey_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[17]
+	return &file_resource_proto_enumTypes[19]
 }
 
 func (x TrafficPolicySpec_APIKey_Mode) Number() protoreflect.EnumNumber {
@@ -927,7 +1034,7 @@ func (x TrafficPolicySpec_APIKey_Mode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TrafficPolicySpec_APIKey_Mode.Descriptor instead.
 func (TrafficPolicySpec_APIKey_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 7, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 7, 0}
 }
 
 type TrafficPolicySpec_ExtProc_FailureMode int32
@@ -960,11 +1067,11 @@ func (x TrafficPolicySpec_ExtProc_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_ExtProc_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[18].Descriptor()
+	return file_resource_proto_enumTypes[20].Descriptor()
 }
 
 func (TrafficPolicySpec_ExtProc_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[18]
+	return &file_resource_proto_enumTypes[20]
 }
 
 func (x TrafficPolicySpec_ExtProc_FailureMode) Number() protoreflect.EnumNumber {
@@ -973,7 +1080,7 @@ func (x TrafficPolicySpec_ExtProc_FailureMode) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use TrafficPolicySpec_ExtProc_FailureMode.Descriptor instead.
 func (TrafficPolicySpec_ExtProc_FailureMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 12, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 12, 0}
 }
 
 type TrafficPolicySpec_HostRewrite_Mode int32
@@ -1006,11 +1113,11 @@ func (x TrafficPolicySpec_HostRewrite_Mode) String() string {
 }
 
 func (TrafficPolicySpec_HostRewrite_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[19].Descriptor()
+	return file_resource_proto_enumTypes[21].Descriptor()
 }
 
 func (TrafficPolicySpec_HostRewrite_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[19]
+	return &file_resource_proto_enumTypes[21]
 }
 
 func (x TrafficPolicySpec_HostRewrite_Mode) Number() protoreflect.EnumNumber {
@@ -1019,7 +1126,7 @@ func (x TrafficPolicySpec_HostRewrite_Mode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TrafficPolicySpec_HostRewrite_Mode.Descriptor instead.
 func (TrafficPolicySpec_HostRewrite_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 13, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 13, 0}
 }
 
 type BackendPolicySpec_Ai_BuiltinRegexRule int32
@@ -1064,11 +1171,11 @@ func (x BackendPolicySpec_Ai_BuiltinRegexRule) String() string {
 }
 
 func (BackendPolicySpec_Ai_BuiltinRegexRule) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[20].Descriptor()
+	return file_resource_proto_enumTypes[22].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_BuiltinRegexRule) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[20]
+	return &file_resource_proto_enumTypes[22]
 }
 
 func (x BackendPolicySpec_Ai_BuiltinRegexRule) Number() protoreflect.EnumNumber {
@@ -1077,7 +1184,7 @@ func (x BackendPolicySpec_Ai_BuiltinRegexRule) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use BackendPolicySpec_Ai_BuiltinRegexRule.Descriptor instead.
 func (BackendPolicySpec_Ai_BuiltinRegexRule) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 0}
 }
 
 type BackendPolicySpec_Ai_ActionKind int32
@@ -1113,11 +1220,11 @@ func (x BackendPolicySpec_Ai_ActionKind) String() string {
 }
 
 func (BackendPolicySpec_Ai_ActionKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[21].Descriptor()
+	return file_resource_proto_enumTypes[23].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_ActionKind) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[21]
+	return &file_resource_proto_enumTypes[23]
 }
 
 func (x BackendPolicySpec_Ai_ActionKind) Number() protoreflect.EnumNumber {
@@ -1126,7 +1233,7 @@ func (x BackendPolicySpec_Ai_ActionKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BackendPolicySpec_Ai_ActionKind.Descriptor instead.
 func (BackendPolicySpec_Ai_ActionKind) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 1}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 1}
 }
 
 // RouteType specifies how incoming requests should be processed
@@ -1195,11 +1302,11 @@ func (x BackendPolicySpec_Ai_RouteType) String() string {
 }
 
 func (BackendPolicySpec_Ai_RouteType) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[22].Descriptor()
+	return file_resource_proto_enumTypes[24].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_RouteType) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[22]
+	return &file_resource_proto_enumTypes[24]
 }
 
 func (x BackendPolicySpec_Ai_RouteType) Number() protoreflect.EnumNumber {
@@ -1208,7 +1315,7 @@ func (x BackendPolicySpec_Ai_RouteType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use BackendPolicySpec_Ai_RouteType.Descriptor instead.
 func (BackendPolicySpec_Ai_RouteType) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 2}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 2}
 }
 
 type BackendPolicySpec_InferenceRouting_FailureMode int32
@@ -1244,11 +1351,11 @@ func (x BackendPolicySpec_InferenceRouting_FailureMode) String() string {
 }
 
 func (BackendPolicySpec_InferenceRouting_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[23].Descriptor()
+	return file_resource_proto_enumTypes[25].Descriptor()
 }
 
 func (BackendPolicySpec_InferenceRouting_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[23]
+	return &file_resource_proto_enumTypes[25]
 }
 
 func (x BackendPolicySpec_InferenceRouting_FailureMode) Number() protoreflect.EnumNumber {
@@ -1257,7 +1364,7 @@ func (x BackendPolicySpec_InferenceRouting_FailureMode) Number() protoreflect.En
 
 // Deprecated: Use BackendPolicySpec_InferenceRouting_FailureMode.Descriptor instead.
 func (BackendPolicySpec_InferenceRouting_FailureMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 2, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 2, 0}
 }
 
 type BackendPolicySpec_BackendTLS_VerificationMode int32
@@ -1293,11 +1400,11 @@ func (x BackendPolicySpec_BackendTLS_VerificationMode) String() string {
 }
 
 func (BackendPolicySpec_BackendTLS_VerificationMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[24].Descriptor()
+	return file_resource_proto_enumTypes[26].Descriptor()
 }
 
 func (BackendPolicySpec_BackendTLS_VerificationMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[24]
+	return &file_resource_proto_enumTypes[26]
 }
 
 func (x BackendPolicySpec_BackendTLS_VerificationMode) Number() protoreflect.EnumNumber {
@@ -1306,7 +1413,7 @@ func (x BackendPolicySpec_BackendTLS_VerificationMode) Number() protoreflect.Enu
 
 // Deprecated: Use BackendPolicySpec_BackendTLS_VerificationMode.Descriptor instead.
 func (BackendPolicySpec_BackendTLS_VerificationMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 5, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 5, 0}
 }
 
 type BackendPolicySpec_BackendHTTP_HttpVersion int32
@@ -1342,11 +1449,11 @@ func (x BackendPolicySpec_BackendHTTP_HttpVersion) String() string {
 }
 
 func (BackendPolicySpec_BackendHTTP_HttpVersion) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[25].Descriptor()
+	return file_resource_proto_enumTypes[27].Descriptor()
 }
 
 func (BackendPolicySpec_BackendHTTP_HttpVersion) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[25]
+	return &file_resource_proto_enumTypes[27]
 }
 
 func (x BackendPolicySpec_BackendHTTP_HttpVersion) Number() protoreflect.EnumNumber {
@@ -1355,7 +1462,7 @@ func (x BackendPolicySpec_BackendHTTP_HttpVersion) Number() protoreflect.EnumNum
 
 // Deprecated: Use BackendPolicySpec_BackendHTTP_HttpVersion.Descriptor instead.
 func (BackendPolicySpec_BackendHTTP_HttpVersion) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 6, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 6, 0}
 }
 
 type BackendPolicySpec_McpAuthentication_McpIDP int32
@@ -1391,11 +1498,11 @@ func (x BackendPolicySpec_McpAuthentication_McpIDP) String() string {
 }
 
 func (BackendPolicySpec_McpAuthentication_McpIDP) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[26].Descriptor()
+	return file_resource_proto_enumTypes[28].Descriptor()
 }
 
 func (BackendPolicySpec_McpAuthentication_McpIDP) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[26]
+	return &file_resource_proto_enumTypes[28]
 }
 
 func (x BackendPolicySpec_McpAuthentication_McpIDP) Number() protoreflect.EnumNumber {
@@ -1404,7 +1511,7 @@ func (x BackendPolicySpec_McpAuthentication_McpIDP) Number() protoreflect.EnumNu
 
 // Deprecated: Use BackendPolicySpec_McpAuthentication_McpIDP.Descriptor instead.
 func (BackendPolicySpec_McpAuthentication_McpIDP) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 10, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 10, 0}
 }
 
 // Validation mode for JWT authentication
@@ -1444,11 +1551,11 @@ func (x BackendPolicySpec_McpAuthentication_Mode) String() string {
 }
 
 func (BackendPolicySpec_McpAuthentication_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[27].Descriptor()
+	return file_resource_proto_enumTypes[29].Descriptor()
 }
 
 func (BackendPolicySpec_McpAuthentication_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[27]
+	return &file_resource_proto_enumTypes[29]
 }
 
 func (x BackendPolicySpec_McpAuthentication_Mode) Number() protoreflect.EnumNumber {
@@ -1457,7 +1564,7 @@ func (x BackendPolicySpec_McpAuthentication_Mode) Number() protoreflect.EnumNumb
 
 // Deprecated: Use BackendPolicySpec_McpAuthentication_Mode.Descriptor instead.
 func (BackendPolicySpec_McpAuthentication_Mode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 10, 1}
+	return file_resource_proto_rawDescGZIP(), []int{50, 10, 1}
 }
 
 type AIBackend_AzureResourceType int32
@@ -1490,11 +1597,11 @@ func (x AIBackend_AzureResourceType) String() string {
 }
 
 func (AIBackend_AzureResourceType) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[28].Descriptor()
+	return file_resource_proto_enumTypes[30].Descriptor()
 }
 
 func (AIBackend_AzureResourceType) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[28]
+	return &file_resource_proto_enumTypes[30]
 }
 
 func (x AIBackend_AzureResourceType) Number() protoreflect.EnumNumber {
@@ -1503,7 +1610,7 @@ func (x AIBackend_AzureResourceType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AIBackend_AzureResourceType.Descriptor instead.
 func (AIBackend_AzureResourceType) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 0}
+	return file_resource_proto_rawDescGZIP(), []int{55, 0}
 }
 
 type MCPBackend_StatefulMode int32
@@ -1536,11 +1643,11 @@ func (x MCPBackend_StatefulMode) String() string {
 }
 
 func (MCPBackend_StatefulMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[29].Descriptor()
+	return file_resource_proto_enumTypes[31].Descriptor()
 }
 
 func (MCPBackend_StatefulMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[29]
+	return &file_resource_proto_enumTypes[31]
 }
 
 func (x MCPBackend_StatefulMode) Number() protoreflect.EnumNumber {
@@ -1549,7 +1656,7 @@ func (x MCPBackend_StatefulMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MCPBackend_StatefulMode.Descriptor instead.
 func (MCPBackend_StatefulMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{54, 0}
+	return file_resource_proto_rawDescGZIP(), []int{56, 0}
 }
 
 type MCPBackend_PrefixMode int32
@@ -1582,11 +1689,11 @@ func (x MCPBackend_PrefixMode) String() string {
 }
 
 func (MCPBackend_PrefixMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[30].Descriptor()
+	return file_resource_proto_enumTypes[32].Descriptor()
 }
 
 func (MCPBackend_PrefixMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[30]
+	return &file_resource_proto_enumTypes[32]
 }
 
 func (x MCPBackend_PrefixMode) Number() protoreflect.EnumNumber {
@@ -1595,7 +1702,7 @@ func (x MCPBackend_PrefixMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MCPBackend_PrefixMode.Descriptor instead.
 func (MCPBackend_PrefixMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{54, 1}
+	return file_resource_proto_rawDescGZIP(), []int{56, 1}
 }
 
 // failure_mode controls behavior when MCP targets fail to initialize or
@@ -1630,11 +1737,11 @@ func (x MCPBackend_FailureMode) String() string {
 }
 
 func (MCPBackend_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[31].Descriptor()
+	return file_resource_proto_enumTypes[33].Descriptor()
 }
 
 func (MCPBackend_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[31]
+	return &file_resource_proto_enumTypes[33]
 }
 
 func (x MCPBackend_FailureMode) Number() protoreflect.EnumNumber {
@@ -1643,7 +1750,7 @@ func (x MCPBackend_FailureMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MCPBackend_FailureMode.Descriptor instead.
 func (MCPBackend_FailureMode) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{54, 2}
+	return file_resource_proto_rawDescGZIP(), []int{56, 2}
 }
 
 type MCPTarget_Protocol int32
@@ -1679,11 +1786,11 @@ func (x MCPTarget_Protocol) String() string {
 }
 
 func (MCPTarget_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[32].Descriptor()
+	return file_resource_proto_enumTypes[34].Descriptor()
 }
 
 func (MCPTarget_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[32]
+	return &file_resource_proto_enumTypes[34]
 }
 
 func (x MCPTarget_Protocol) Number() protoreflect.EnumNumber {
@@ -1692,7 +1799,7 @@ func (x MCPTarget_Protocol) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use MCPTarget_Protocol.Descriptor instead.
 func (MCPTarget_Protocol) EnumDescriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{55, 0}
+	return file_resource_proto_rawDescGZIP(), []int{57, 0}
 }
 
 type Resource struct {
@@ -2556,6 +2663,125 @@ func (x *TCPRoute) GetBackends() []*RouteBackend {
 	return nil
 }
 
+type ConditionalPolicies struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Policies      []*ConditionalPolicy   `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConditionalPolicies) Reset() {
+	*x = ConditionalPolicies{}
+	mi := &file_resource_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConditionalPolicies) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConditionalPolicies) ProtoMessage() {}
+
+func (x *ConditionalPolicies) ProtoReflect() protoreflect.Message {
+	mi := &file_resource_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConditionalPolicies.ProtoReflect.Descriptor instead.
+func (*ConditionalPolicies) Descriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ConditionalPolicies) GetPolicies() []*ConditionalPolicy {
+	if x != nil {
+		return x.Policies
+	}
+	return nil
+}
+
+type ConditionalPolicy struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Condition *string                `protobuf:"bytes,1,opt,name=condition,proto3,oneof" json:"condition,omitempty"`
+	// Types that are valid to be assigned to Kind:
+	//
+	//	*ConditionalPolicy_Traffic
+	Kind          isConditionalPolicy_Kind `protobuf_oneof:"kind"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConditionalPolicy) Reset() {
+	*x = ConditionalPolicy{}
+	mi := &file_resource_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConditionalPolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConditionalPolicy) ProtoMessage() {}
+
+func (x *ConditionalPolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_resource_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConditionalPolicy.ProtoReflect.Descriptor instead.
+func (*ConditionalPolicy) Descriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ConditionalPolicy) GetCondition() string {
+	if x != nil && x.Condition != nil {
+		return *x.Condition
+	}
+	return ""
+}
+
+func (x *ConditionalPolicy) GetKind() isConditionalPolicy_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return nil
+}
+
+func (x *ConditionalPolicy) GetTraffic() *TrafficPolicySpec {
+	if x != nil {
+		if x, ok := x.Kind.(*ConditionalPolicy_Traffic); ok {
+			return x.Traffic
+		}
+	}
+	return nil
+}
+
+type isConditionalPolicy_Kind interface {
+	isConditionalPolicy_Kind()
+}
+
+type ConditionalPolicy_Traffic struct {
+	// Currently only traffic is supported
+	Traffic *TrafficPolicySpec `protobuf:"bytes,2,opt,name=traffic,proto3,oneof"`
+}
+
+func (*ConditionalPolicy_Traffic) isConditionalPolicy_Kind() {}
+
 type Policy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique key for this policy
@@ -2568,6 +2794,7 @@ type Policy struct {
 	//	*Policy_Traffic
 	//	*Policy_Backend
 	//	*Policy_Frontend
+	//	*Policy_Conditional
 	Kind          isPolicy_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2575,7 +2802,7 @@ type Policy struct {
 
 func (x *Policy) Reset() {
 	*x = Policy{}
-	mi := &file_resource_proto_msgTypes[10]
+	mi := &file_resource_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2587,7 +2814,7 @@ func (x *Policy) String() string {
 func (*Policy) ProtoMessage() {}
 
 func (x *Policy) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[10]
+	mi := &file_resource_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2600,7 +2827,7 @@ func (x *Policy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Policy.ProtoReflect.Descriptor instead.
 func (*Policy) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{10}
+	return file_resource_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Policy) GetKey() string {
@@ -2658,6 +2885,15 @@ func (x *Policy) GetFrontend() *FrontendPolicySpec {
 	return nil
 }
 
+func (x *Policy) GetConditional() *ConditionalPolicies {
+	if x != nil {
+		if x, ok := x.Kind.(*Policy_Conditional); ok {
+			return x.Conditional
+		}
+	}
+	return nil
+}
+
 type isPolicy_Kind interface {
 	isPolicy_Kind()
 }
@@ -2674,11 +2910,17 @@ type Policy_Frontend struct {
 	Frontend *FrontendPolicySpec `protobuf:"bytes,6,opt,name=frontend,proto3,oneof"`
 }
 
+type Policy_Conditional struct {
+	Conditional *ConditionalPolicies `protobuf:"bytes,7,opt,name=conditional,proto3,oneof"`
+}
+
 func (*Policy_Traffic) isPolicy_Kind() {}
 
 func (*Policy_Backend) isPolicy_Kind() {}
 
 func (*Policy_Frontend) isPolicy_Kind() {}
+
+func (*Policy_Conditional) isPolicy_Kind() {}
 
 type Backend struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -2701,7 +2943,7 @@ type Backend struct {
 
 func (x *Backend) Reset() {
 	*x = Backend{}
-	mi := &file_resource_proto_msgTypes[11]
+	mi := &file_resource_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2713,7 +2955,7 @@ func (x *Backend) String() string {
 func (*Backend) ProtoMessage() {}
 
 func (x *Backend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[11]
+	mi := &file_resource_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2726,7 +2968,7 @@ func (x *Backend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Backend.ProtoReflect.Descriptor instead.
 func (*Backend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{11}
+	return file_resource_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Backend) GetKey() string {
@@ -2841,18 +3083,22 @@ type TLSConfig struct {
 	Cert       []byte                 `protobuf:"bytes,1,opt,name=cert,proto3" json:"cert,omitempty"`
 	PrivateKey []byte                 `protobuf:"bytes,2,opt,name=private_key,json=privateKey,proto3" json:"private_key,omitempty"`
 	// Root to verify client certificates. If not set, mTLS will not be used
-	Root          []byte                  `protobuf:"bytes,3,opt,name=root,proto3,oneof" json:"root,omitempty"`
-	CipherSuites  []TLSConfig_CipherSuite `protobuf:"varint,4,rep,packed,name=cipher_suites,json=cipherSuites,proto3,enum=agentgateway.dev.resource.TLSConfig_CipherSuite" json:"cipher_suites,omitempty"`
-	MinVersion    *TLSConfig_TLSVersion   `protobuf:"varint,5,opt,name=min_version,json=minVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"min_version,omitempty"`
-	MaxVersion    *TLSConfig_TLSVersion   `protobuf:"varint,6,opt,name=max_version,json=maxVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"max_version,omitempty"`
-	MtlsMode      TLSConfig_MTLSMode      `protobuf:"varint,7,opt,name=mtls_mode,json=mtlsMode,proto3,enum=agentgateway.dev.resource.TLSConfig_MTLSMode" json:"mtls_mode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Root         []byte                  `protobuf:"bytes,3,opt,name=root,proto3,oneof" json:"root,omitempty"`
+	CipherSuites []TLSConfig_CipherSuite `protobuf:"varint,4,rep,packed,name=cipher_suites,json=cipherSuites,proto3,enum=agentgateway.dev.resource.TLSConfig_CipherSuite" json:"cipher_suites,omitempty"`
+	MinVersion   *TLSConfig_TLSVersion   `protobuf:"varint,5,opt,name=min_version,json=minVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"min_version,omitempty"`
+	MaxVersion   *TLSConfig_TLSVersion   `protobuf:"varint,6,opt,name=max_version,json=maxVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"max_version,omitempty"`
+	MtlsMode     TLSConfig_MTLSMode      `protobuf:"varint,7,opt,name=mtls_mode,json=mtlsMode,proto3,enum=agentgateway.dev.resource.TLSConfig_MTLSMode" json:"mtls_mode,omitempty"`
+	// Key exchange groups allowed for negotiating TLS.
+	// If empty, defaults are used.
+	KeyExchangeGroups []TLSConfig_KeyExchangeGroup `protobuf:"varint,8,rep,packed,name=key_exchange_groups,json=keyExchangeGroups,proto3,enum=agentgateway.dev.resource.TLSConfig_KeyExchangeGroup" json:"key_exchange_groups,omitempty"`
+	CertificateSource TLSConfig_CertificateSource  `protobuf:"varint,9,opt,name=certificate_source,json=certificateSource,proto3,enum=agentgateway.dev.resource.TLSConfig_CertificateSource" json:"certificate_source,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TLSConfig) Reset() {
 	*x = TLSConfig{}
-	mi := &file_resource_proto_msgTypes[12]
+	mi := &file_resource_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2864,7 +3110,7 @@ func (x *TLSConfig) String() string {
 func (*TLSConfig) ProtoMessage() {}
 
 func (x *TLSConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[12]
+	mi := &file_resource_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2877,7 +3123,7 @@ func (x *TLSConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSConfig.ProtoReflect.Descriptor instead.
 func (*TLSConfig) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{12}
+	return file_resource_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TLSConfig) GetCert() []byte {
@@ -2929,6 +3175,20 @@ func (x *TLSConfig) GetMtlsMode() TLSConfig_MTLSMode {
 	return TLSConfig_STRICT
 }
 
+func (x *TLSConfig) GetKeyExchangeGroups() []TLSConfig_KeyExchangeGroup {
+	if x != nil {
+		return x.KeyExchangeGroups
+	}
+	return nil
+}
+
+func (x *TLSConfig) GetCertificateSource() TLSConfig_CertificateSource {
+	if x != nil {
+		return x.CertificateSource
+	}
+	return TLSConfig_INLINE
+}
+
 type Timeout struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Request        *durationpb.Duration   `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
@@ -2939,7 +3199,7 @@ type Timeout struct {
 
 func (x *Timeout) Reset() {
 	*x = Timeout{}
-	mi := &file_resource_proto_msgTypes[13]
+	mi := &file_resource_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2951,7 +3211,7 @@ func (x *Timeout) String() string {
 func (*Timeout) ProtoMessage() {}
 
 func (x *Timeout) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[13]
+	mi := &file_resource_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2964,7 +3224,7 @@ func (x *Timeout) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Timeout.ProtoReflect.Descriptor instead.
 func (*Timeout) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{13}
+	return file_resource_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Timeout) GetRequest() *durationpb.Duration {
@@ -2992,7 +3252,7 @@ type Retry struct {
 
 func (x *Retry) Reset() {
 	*x = Retry{}
-	mi := &file_resource_proto_msgTypes[14]
+	mi := &file_resource_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3004,7 +3264,7 @@ func (x *Retry) String() string {
 func (*Retry) ProtoMessage() {}
 
 func (x *Retry) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[14]
+	mi := &file_resource_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3017,7 +3277,7 @@ func (x *Retry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Retry.ProtoReflect.Descriptor instead.
 func (*Retry) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{14}
+	return file_resource_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Retry) GetRetryStatusCodes() []int32 {
@@ -3057,7 +3317,7 @@ type BackendAuthPolicy struct {
 
 func (x *BackendAuthPolicy) Reset() {
 	*x = BackendAuthPolicy{}
-	mi := &file_resource_proto_msgTypes[15]
+	mi := &file_resource_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3069,7 +3329,7 @@ func (x *BackendAuthPolicy) String() string {
 func (*BackendAuthPolicy) ProtoMessage() {}
 
 func (x *BackendAuthPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[15]
+	mi := &file_resource_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3082,7 +3342,7 @@ func (x *BackendAuthPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendAuthPolicy.ProtoReflect.Descriptor instead.
 func (*BackendAuthPolicy) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{15}
+	return file_resource_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *BackendAuthPolicy) GetKind() isBackendAuthPolicy_Kind {
@@ -3185,7 +3445,7 @@ type AuthorizationLocation struct {
 
 func (x *AuthorizationLocation) Reset() {
 	*x = AuthorizationLocation{}
-	mi := &file_resource_proto_msgTypes[16]
+	mi := &file_resource_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3197,7 +3457,7 @@ func (x *AuthorizationLocation) String() string {
 func (*AuthorizationLocation) ProtoMessage() {}
 
 func (x *AuthorizationLocation) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[16]
+	mi := &file_resource_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3210,7 +3470,7 @@ func (x *AuthorizationLocation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizationLocation.ProtoReflect.Descriptor instead.
 func (*AuthorizationLocation) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{16}
+	return file_resource_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AuthorizationLocation) GetKind() isAuthorizationLocation_Kind {
@@ -3278,7 +3538,7 @@ type Passthrough struct {
 
 func (x *Passthrough) Reset() {
 	*x = Passthrough{}
-	mi := &file_resource_proto_msgTypes[17]
+	mi := &file_resource_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3290,7 +3550,7 @@ func (x *Passthrough) String() string {
 func (*Passthrough) ProtoMessage() {}
 
 func (x *Passthrough) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[17]
+	mi := &file_resource_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3303,7 +3563,7 @@ func (x *Passthrough) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Passthrough.ProtoReflect.Descriptor instead.
 func (*Passthrough) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{17}
+	return file_resource_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Passthrough) GetAuthorizationLocation() *AuthorizationLocation {
@@ -3324,7 +3584,7 @@ type Key struct {
 
 func (x *Key) Reset() {
 	*x = Key{}
-	mi := &file_resource_proto_msgTypes[18]
+	mi := &file_resource_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3336,7 +3596,7 @@ func (x *Key) String() string {
 func (*Key) ProtoMessage() {}
 
 func (x *Key) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[18]
+	mi := &file_resource_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3349,7 +3609,7 @@ func (x *Key) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Key.ProtoReflect.Descriptor instead.
 func (*Key) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{18}
+	return file_resource_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Key) GetSecret() string {
@@ -3369,6 +3629,8 @@ func (x *Key) GetAuthorizationLocation() *AuthorizationLocation {
 // GCP-specific backend authentication.
 type Gcp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
+	// ADC-compatible Google credential JSON. If unset, ambient credentials are used.
+	Credential *string `protobuf:"bytes,3,opt,name=credential,proto3,oneof" json:"credential,omitempty"`
 	// Types that are valid to be assigned to TokenType:
 	//
 	//	*Gcp_AccessToken_
@@ -3380,7 +3642,7 @@ type Gcp struct {
 
 func (x *Gcp) Reset() {
 	*x = Gcp{}
-	mi := &file_resource_proto_msgTypes[19]
+	mi := &file_resource_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3392,7 +3654,7 @@ func (x *Gcp) String() string {
 func (*Gcp) ProtoMessage() {}
 
 func (x *Gcp) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[19]
+	mi := &file_resource_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3405,7 +3667,14 @@ func (x *Gcp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gcp.ProtoReflect.Descriptor instead.
 func (*Gcp) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{19}
+	return file_resource_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *Gcp) GetCredential() string {
+	if x != nil && x.Credential != nil {
+		return *x.Credential
+	}
+	return ""
 }
 
 func (x *Gcp) GetTokenType() isGcp_TokenType {
@@ -3464,7 +3733,7 @@ type Aws struct {
 
 func (x *Aws) Reset() {
 	*x = Aws{}
-	mi := &file_resource_proto_msgTypes[20]
+	mi := &file_resource_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3476,7 +3745,7 @@ func (x *Aws) String() string {
 func (*Aws) ProtoMessage() {}
 
 func (x *Aws) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[20]
+	mi := &file_resource_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3489,7 +3758,7 @@ func (x *Aws) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Aws.ProtoReflect.Descriptor instead.
 func (*Aws) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{20}
+	return file_resource_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Aws) GetKind() isAws_Kind {
@@ -3548,7 +3817,7 @@ type Azure struct {
 
 func (x *Azure) Reset() {
 	*x = Azure{}
-	mi := &file_resource_proto_msgTypes[21]
+	mi := &file_resource_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3560,7 +3829,7 @@ func (x *Azure) String() string {
 func (*Azure) ProtoMessage() {}
 
 func (x *Azure) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[21]
+	mi := &file_resource_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3573,7 +3842,7 @@ func (x *Azure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Azure.ProtoReflect.Descriptor instead.
 func (*Azure) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{21}
+	return file_resource_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Azure) GetKind() isAzure_Kind {
@@ -3649,7 +3918,7 @@ type AwsExplicitConfig struct {
 
 func (x *AwsExplicitConfig) Reset() {
 	*x = AwsExplicitConfig{}
-	mi := &file_resource_proto_msgTypes[22]
+	mi := &file_resource_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3661,7 +3930,7 @@ func (x *AwsExplicitConfig) String() string {
 func (*AwsExplicitConfig) ProtoMessage() {}
 
 func (x *AwsExplicitConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[22]
+	mi := &file_resource_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3674,7 +3943,7 @@ func (x *AwsExplicitConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsExplicitConfig.ProtoReflect.Descriptor instead.
 func (*AwsExplicitConfig) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{22}
+	return file_resource_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *AwsExplicitConfig) GetAccessKeyId() string {
@@ -3714,7 +3983,7 @@ type AwsImplicit struct {
 
 func (x *AwsImplicit) Reset() {
 	*x = AwsImplicit{}
-	mi := &file_resource_proto_msgTypes[23]
+	mi := &file_resource_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3726,7 +3995,7 @@ func (x *AwsImplicit) String() string {
 func (*AwsImplicit) ProtoMessage() {}
 
 func (x *AwsImplicit) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[23]
+	mi := &file_resource_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3739,7 +4008,7 @@ func (x *AwsImplicit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsImplicit.ProtoReflect.Descriptor instead.
 func (*AwsImplicit) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{23}
+	return file_resource_proto_rawDescGZIP(), []int{25}
 }
 
 // Explicit Azure credentials configuration
@@ -3757,7 +4026,7 @@ type AzureExplicitConfig struct {
 
 func (x *AzureExplicitConfig) Reset() {
 	*x = AzureExplicitConfig{}
-	mi := &file_resource_proto_msgTypes[24]
+	mi := &file_resource_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3769,7 +4038,7 @@ func (x *AzureExplicitConfig) String() string {
 func (*AzureExplicitConfig) ProtoMessage() {}
 
 func (x *AzureExplicitConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[24]
+	mi := &file_resource_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3782,7 +4051,7 @@ func (x *AzureExplicitConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureExplicitConfig.ProtoReflect.Descriptor instead.
 func (*AzureExplicitConfig) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{24}
+	return file_resource_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AzureExplicitConfig) GetCredentialSource() isAzureExplicitConfig_CredentialSource {
@@ -3856,7 +4125,7 @@ type AzureClientSecret struct {
 
 func (x *AzureClientSecret) Reset() {
 	*x = AzureClientSecret{}
-	mi := &file_resource_proto_msgTypes[25]
+	mi := &file_resource_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3868,7 +4137,7 @@ func (x *AzureClientSecret) String() string {
 func (*AzureClientSecret) ProtoMessage() {}
 
 func (x *AzureClientSecret) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[25]
+	mi := &file_resource_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3881,7 +4150,7 @@ func (x *AzureClientSecret) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureClientSecret.ProtoReflect.Descriptor instead.
 func (*AzureClientSecret) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{25}
+	return file_resource_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AzureClientSecret) GetTenantId() string {
@@ -3916,7 +4185,7 @@ type AzureManagedIdentityCredential struct {
 
 func (x *AzureManagedIdentityCredential) Reset() {
 	*x = AzureManagedIdentityCredential{}
-	mi := &file_resource_proto_msgTypes[26]
+	mi := &file_resource_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3928,7 +4197,7 @@ func (x *AzureManagedIdentityCredential) String() string {
 func (*AzureManagedIdentityCredential) ProtoMessage() {}
 
 func (x *AzureManagedIdentityCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[26]
+	mi := &file_resource_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3941,7 +4210,7 @@ func (x *AzureManagedIdentityCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureManagedIdentityCredential.ProtoReflect.Descriptor instead.
 func (*AzureManagedIdentityCredential) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{26}
+	return file_resource_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AzureManagedIdentityCredential) GetUserAssignedIdentity() *AzureManagedIdentityCredential_UserAssignedIdentity {
@@ -3960,7 +4229,7 @@ type AzureWorkloadIdentityCredential struct {
 
 func (x *AzureWorkloadIdentityCredential) Reset() {
 	*x = AzureWorkloadIdentityCredential{}
-	mi := &file_resource_proto_msgTypes[27]
+	mi := &file_resource_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3972,7 +4241,7 @@ func (x *AzureWorkloadIdentityCredential) String() string {
 func (*AzureWorkloadIdentityCredential) ProtoMessage() {}
 
 func (x *AzureWorkloadIdentityCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[27]
+	mi := &file_resource_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4254,7 @@ func (x *AzureWorkloadIdentityCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureWorkloadIdentityCredential.ProtoReflect.Descriptor instead.
 func (*AzureWorkloadIdentityCredential) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{27}
+	return file_resource_proto_rawDescGZIP(), []int{29}
 }
 
 // Use implicit Azure authentication for developer use-cases only
@@ -3997,7 +4266,7 @@ type AzureDeveloperImplicit struct {
 
 func (x *AzureDeveloperImplicit) Reset() {
 	*x = AzureDeveloperImplicit{}
-	mi := &file_resource_proto_msgTypes[28]
+	mi := &file_resource_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4009,7 +4278,7 @@ func (x *AzureDeveloperImplicit) String() string {
 func (*AzureDeveloperImplicit) ProtoMessage() {}
 
 func (x *AzureDeveloperImplicit) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[28]
+	mi := &file_resource_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4022,7 +4291,7 @@ func (x *AzureDeveloperImplicit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureDeveloperImplicit.ProtoReflect.Descriptor instead.
 func (*AzureDeveloperImplicit) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{28}
+	return file_resource_proto_rawDescGZIP(), []int{30}
 }
 
 // Automatically detect authentication method based on environment.
@@ -4035,7 +4304,7 @@ type AzureImplicit struct {
 
 func (x *AzureImplicit) Reset() {
 	*x = AzureImplicit{}
-	mi := &file_resource_proto_msgTypes[29]
+	mi := &file_resource_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4047,7 +4316,7 @@ func (x *AzureImplicit) String() string {
 func (*AzureImplicit) ProtoMessage() {}
 
 func (x *AzureImplicit) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[29]
+	mi := &file_resource_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4060,7 +4329,7 @@ func (x *AzureImplicit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AzureImplicit.ProtoReflect.Descriptor instead.
 func (*AzureImplicit) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{29}
+	return file_resource_proto_rawDescGZIP(), []int{31}
 }
 
 type RouteMatch struct {
@@ -4075,7 +4344,7 @@ type RouteMatch struct {
 
 func (x *RouteMatch) Reset() {
 	*x = RouteMatch{}
-	mi := &file_resource_proto_msgTypes[30]
+	mi := &file_resource_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4087,7 +4356,7 @@ func (x *RouteMatch) String() string {
 func (*RouteMatch) ProtoMessage() {}
 
 func (x *RouteMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[30]
+	mi := &file_resource_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4100,7 +4369,7 @@ func (x *RouteMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteMatch.ProtoReflect.Descriptor instead.
 func (*RouteMatch) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{30}
+	return file_resource_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RouteMatch) GetPath() *PathMatch {
@@ -4145,7 +4414,7 @@ type PathMatch struct {
 
 func (x *PathMatch) Reset() {
 	*x = PathMatch{}
-	mi := &file_resource_proto_msgTypes[31]
+	mi := &file_resource_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4157,7 +4426,7 @@ func (x *PathMatch) String() string {
 func (*PathMatch) ProtoMessage() {}
 
 func (x *PathMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[31]
+	mi := &file_resource_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4170,7 +4439,7 @@ func (x *PathMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathMatch.ProtoReflect.Descriptor instead.
 func (*PathMatch) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{31}
+	return file_resource_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PathMatch) GetKind() isPathMatch_Kind {
@@ -4243,7 +4512,7 @@ type QueryMatch struct {
 
 func (x *QueryMatch) Reset() {
 	*x = QueryMatch{}
-	mi := &file_resource_proto_msgTypes[32]
+	mi := &file_resource_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4255,7 +4524,7 @@ func (x *QueryMatch) String() string {
 func (*QueryMatch) ProtoMessage() {}
 
 func (x *QueryMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[32]
+	mi := &file_resource_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4268,7 +4537,7 @@ func (x *QueryMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryMatch.ProtoReflect.Descriptor instead.
 func (*QueryMatch) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{32}
+	return file_resource_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *QueryMatch) GetName() string {
@@ -4328,7 +4597,7 @@ type MethodMatch struct {
 
 func (x *MethodMatch) Reset() {
 	*x = MethodMatch{}
-	mi := &file_resource_proto_msgTypes[33]
+	mi := &file_resource_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4340,7 +4609,7 @@ func (x *MethodMatch) String() string {
 func (*MethodMatch) ProtoMessage() {}
 
 func (x *MethodMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[33]
+	mi := &file_resource_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4353,7 +4622,7 @@ func (x *MethodMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MethodMatch.ProtoReflect.Descriptor instead.
 func (*MethodMatch) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{33}
+	return file_resource_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *MethodMatch) GetExact() string {
@@ -4377,7 +4646,7 @@ type HeaderMatch struct {
 
 func (x *HeaderMatch) Reset() {
 	*x = HeaderMatch{}
-	mi := &file_resource_proto_msgTypes[34]
+	mi := &file_resource_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4389,7 +4658,7 @@ func (x *HeaderMatch) String() string {
 func (*HeaderMatch) ProtoMessage() {}
 
 func (x *HeaderMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[34]
+	mi := &file_resource_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4402,7 +4671,7 @@ func (x *HeaderMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeaderMatch.ProtoReflect.Descriptor instead.
 func (*HeaderMatch) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{34}
+	return file_resource_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *HeaderMatch) GetName() string {
@@ -4468,7 +4737,7 @@ type CORS struct {
 
 func (x *CORS) Reset() {
 	*x = CORS{}
-	mi := &file_resource_proto_msgTypes[35]
+	mi := &file_resource_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4480,7 +4749,7 @@ func (x *CORS) String() string {
 func (*CORS) ProtoMessage() {}
 
 func (x *CORS) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[35]
+	mi := &file_resource_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4493,7 +4762,7 @@ func (x *CORS) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CORS.ProtoReflect.Descriptor instead.
 func (*CORS) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{35}
+	return file_resource_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *CORS) GetAllowCredentials() bool {
@@ -4548,7 +4817,7 @@ type DirectResponse struct {
 
 func (x *DirectResponse) Reset() {
 	*x = DirectResponse{}
-	mi := &file_resource_proto_msgTypes[36]
+	mi := &file_resource_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4560,7 +4829,7 @@ func (x *DirectResponse) String() string {
 func (*DirectResponse) ProtoMessage() {}
 
 func (x *DirectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[36]
+	mi := &file_resource_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4573,7 +4842,7 @@ func (x *DirectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirectResponse.ProtoReflect.Descriptor instead.
 func (*DirectResponse) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{36}
+	return file_resource_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *DirectResponse) GetStatus() uint32 {
@@ -4601,7 +4870,7 @@ type HeaderModifier struct {
 
 func (x *HeaderModifier) Reset() {
 	*x = HeaderModifier{}
-	mi := &file_resource_proto_msgTypes[37]
+	mi := &file_resource_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4613,7 +4882,7 @@ func (x *HeaderModifier) String() string {
 func (*HeaderModifier) ProtoMessage() {}
 
 func (x *HeaderModifier) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[37]
+	mi := &file_resource_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4626,7 +4895,7 @@ func (x *HeaderModifier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeaderModifier.ProtoReflect.Descriptor instead.
 func (*HeaderModifier) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{37}
+	return file_resource_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *HeaderModifier) GetAdd() []*Header {
@@ -4659,7 +4928,7 @@ type RequestMirrors struct {
 
 func (x *RequestMirrors) Reset() {
 	*x = RequestMirrors{}
-	mi := &file_resource_proto_msgTypes[38]
+	mi := &file_resource_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4671,7 +4940,7 @@ func (x *RequestMirrors) String() string {
 func (*RequestMirrors) ProtoMessage() {}
 
 func (x *RequestMirrors) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[38]
+	mi := &file_resource_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4684,7 +4953,7 @@ func (x *RequestMirrors) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestMirrors.ProtoReflect.Descriptor instead.
 func (*RequestMirrors) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{38}
+	return file_resource_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RequestMirrors) GetMirrors() []*RequestMirrors_Mirror {
@@ -4711,7 +4980,7 @@ type RequestRedirect struct {
 
 func (x *RequestRedirect) Reset() {
 	*x = RequestRedirect{}
-	mi := &file_resource_proto_msgTypes[39]
+	mi := &file_resource_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4723,7 +4992,7 @@ func (x *RequestRedirect) String() string {
 func (*RequestRedirect) ProtoMessage() {}
 
 func (x *RequestRedirect) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[39]
+	mi := &file_resource_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4736,7 +5005,7 @@ func (x *RequestRedirect) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestRedirect.ProtoReflect.Descriptor instead.
 func (*RequestRedirect) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{39}
+	return file_resource_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RequestRedirect) GetScheme() string {
@@ -4822,7 +5091,7 @@ type UrlRewrite struct {
 
 func (x *UrlRewrite) Reset() {
 	*x = UrlRewrite{}
-	mi := &file_resource_proto_msgTypes[40]
+	mi := &file_resource_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4834,7 +5103,7 @@ func (x *UrlRewrite) String() string {
 func (*UrlRewrite) ProtoMessage() {}
 
 func (x *UrlRewrite) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[40]
+	mi := &file_resource_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4847,7 +5116,7 @@ func (x *UrlRewrite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UrlRewrite.ProtoReflect.Descriptor instead.
 func (*UrlRewrite) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{40}
+	return file_resource_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *UrlRewrite) GetHost() string {
@@ -4908,7 +5177,7 @@ type Header struct {
 
 func (x *Header) Reset() {
 	*x = Header{}
-	mi := &file_resource_proto_msgTypes[41]
+	mi := &file_resource_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4920,7 +5189,7 @@ func (x *Header) String() string {
 func (*Header) ProtoMessage() {}
 
 func (x *Header) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[41]
+	mi := &file_resource_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4933,7 +5202,7 @@ func (x *Header) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Header.ProtoReflect.Descriptor instead.
 func (*Header) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{41}
+	return file_resource_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *Header) GetName() string {
@@ -4962,7 +5231,7 @@ type RouteBackend struct {
 
 func (x *RouteBackend) Reset() {
 	*x = RouteBackend{}
-	mi := &file_resource_proto_msgTypes[42]
+	mi := &file_resource_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4974,7 +5243,7 @@ func (x *RouteBackend) String() string {
 func (*RouteBackend) ProtoMessage() {}
 
 func (x *RouteBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[42]
+	mi := &file_resource_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4987,7 +5256,7 @@ func (x *RouteBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteBackend.ProtoReflect.Descriptor instead.
 func (*RouteBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{42}
+	return file_resource_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *RouteBackend) GetBackend() *BackendReference {
@@ -5026,6 +5295,7 @@ type PolicyTarget struct {
 	//	*PolicyTarget_Route
 	//	*PolicyTarget_Backend
 	//	*PolicyTarget_Service
+	//	*PolicyTarget_ListenerSet
 	Kind          isPolicyTarget_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5033,7 +5303,7 @@ type PolicyTarget struct {
 
 func (x *PolicyTarget) Reset() {
 	*x = PolicyTarget{}
-	mi := &file_resource_proto_msgTypes[43]
+	mi := &file_resource_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5045,7 +5315,7 @@ func (x *PolicyTarget) String() string {
 func (*PolicyTarget) ProtoMessage() {}
 
 func (x *PolicyTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[43]
+	mi := &file_resource_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5058,7 +5328,7 @@ func (x *PolicyTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTarget.ProtoReflect.Descriptor instead.
 func (*PolicyTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{43}
+	return file_resource_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *PolicyTarget) GetKind() isPolicyTarget_Kind {
@@ -5104,6 +5374,15 @@ func (x *PolicyTarget) GetService() *PolicyTarget_ServiceTarget {
 	return nil
 }
 
+func (x *PolicyTarget) GetListenerSet() *PolicyTarget_ListenerSetTarget {
+	if x != nil {
+		if x, ok := x.Kind.(*PolicyTarget_ListenerSet); ok {
+			return x.ListenerSet
+		}
+	}
+	return nil
+}
+
 type isPolicyTarget_Kind interface {
 	isPolicyTarget_Kind()
 }
@@ -5124,6 +5403,10 @@ type PolicyTarget_Service struct {
 	Service *PolicyTarget_ServiceTarget `protobuf:"bytes,4,opt,name=service,proto3,oneof"`
 }
 
+type PolicyTarget_ListenerSet struct {
+	ListenerSet *PolicyTarget_ListenerSetTarget `protobuf:"bytes,5,opt,name=listener_set,json=listenerSet,proto3,oneof"`
+}
+
 func (*PolicyTarget_Gateway) isPolicyTarget_Kind() {}
 
 func (*PolicyTarget_Route) isPolicyTarget_Kind() {}
@@ -5131,6 +5414,8 @@ func (*PolicyTarget_Route) isPolicyTarget_Kind() {}
 func (*PolicyTarget_Backend) isPolicyTarget_Kind() {}
 
 func (*PolicyTarget_Service) isPolicyTarget_Kind() {}
+
+func (*PolicyTarget_ListenerSet) isPolicyTarget_Kind() {}
 
 type KeepaliveConfig struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -5146,7 +5431,7 @@ type KeepaliveConfig struct {
 
 func (x *KeepaliveConfig) Reset() {
 	*x = KeepaliveConfig{}
-	mi := &file_resource_proto_msgTypes[44]
+	mi := &file_resource_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5158,7 +5443,7 @@ func (x *KeepaliveConfig) String() string {
 func (*KeepaliveConfig) ProtoMessage() {}
 
 func (x *KeepaliveConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[44]
+	mi := &file_resource_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5171,7 +5456,7 @@ func (x *KeepaliveConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeepaliveConfig.ProtoReflect.Descriptor instead.
 func (*KeepaliveConfig) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{44}
+	return file_resource_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *KeepaliveConfig) GetTime() *durationpb.Duration {
@@ -5214,7 +5499,7 @@ type FrontendPolicySpec struct {
 
 func (x *FrontendPolicySpec) Reset() {
 	*x = FrontendPolicySpec{}
-	mi := &file_resource_proto_msgTypes[45]
+	mi := &file_resource_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5226,7 +5511,7 @@ func (x *FrontendPolicySpec) String() string {
 func (*FrontendPolicySpec) ProtoMessage() {}
 
 func (x *FrontendPolicySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[45]
+	mi := &file_resource_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5239,7 +5524,7 @@ func (x *FrontendPolicySpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45}
+	return file_resource_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *FrontendPolicySpec) GetKind() isFrontendPolicySpec_Kind {
@@ -5387,7 +5672,7 @@ type JWTValidationOptions struct {
 
 func (x *JWTValidationOptions) Reset() {
 	*x = JWTValidationOptions{}
-	mi := &file_resource_proto_msgTypes[46]
+	mi := &file_resource_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5399,7 +5684,7 @@ func (x *JWTValidationOptions) String() string {
 func (*JWTValidationOptions) ProtoMessage() {}
 
 func (x *JWTValidationOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[46]
+	mi := &file_resource_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5412,7 +5697,7 @@ func (x *JWTValidationOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JWTValidationOptions.ProtoReflect.Descriptor instead.
 func (*JWTValidationOptions) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{46}
+	return file_resource_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *JWTValidationOptions) GetRequiredClaims() []string {
@@ -5454,7 +5739,7 @@ type TrafficPolicySpec struct {
 
 func (x *TrafficPolicySpec) Reset() {
 	*x = TrafficPolicySpec{}
-	mi := &file_resource_proto_msgTypes[47]
+	mi := &file_resource_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5466,7 +5751,7 @@ func (x *TrafficPolicySpec) String() string {
 func (*TrafficPolicySpec) ProtoMessage() {}
 
 func (x *TrafficPolicySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[47]
+	mi := &file_resource_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5479,7 +5764,7 @@ func (x *TrafficPolicySpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47}
+	return file_resource_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *TrafficPolicySpec) GetPhase() TrafficPolicySpec_PolicyPhase {
@@ -5820,6 +6105,7 @@ type BackendPolicySpec struct {
 	//	*BackendPolicySpec_Transformation
 	//	*BackendPolicySpec_Health_
 	//	*BackendPolicySpec_BackendTunnel_
+	//	*BackendPolicySpec_ExtAuthz
 	Kind          isBackendPolicySpec_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5827,7 +6113,7 @@ type BackendPolicySpec struct {
 
 func (x *BackendPolicySpec) Reset() {
 	*x = BackendPolicySpec{}
-	mi := &file_resource_proto_msgTypes[48]
+	mi := &file_resource_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5839,7 +6125,7 @@ func (x *BackendPolicySpec) String() string {
 func (*BackendPolicySpec) ProtoMessage() {}
 
 func (x *BackendPolicySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[48]
+	mi := &file_resource_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5852,7 +6138,7 @@ func (x *BackendPolicySpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48}
+	return file_resource_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *BackendPolicySpec) GetKind() isBackendPolicySpec_Kind {
@@ -6006,6 +6292,15 @@ func (x *BackendPolicySpec) GetBackendTunnel() *BackendPolicySpec_BackendTunnel 
 	return nil
 }
 
+func (x *BackendPolicySpec) GetExtAuthz() *TrafficPolicySpec_ExternalAuth {
+	if x != nil {
+		if x, ok := x.Kind.(*BackendPolicySpec_ExtAuthz); ok {
+			return x.ExtAuthz
+		}
+	}
+	return nil
+}
+
 type isBackendPolicySpec_Kind interface {
 	isBackendPolicySpec_Kind()
 }
@@ -6074,6 +6369,10 @@ type BackendPolicySpec_BackendTunnel_ struct {
 	BackendTunnel *BackendPolicySpec_BackendTunnel `protobuf:"bytes,16,opt,name=backend_tunnel,json=backendTunnel,proto3,oneof"`
 }
 
+type BackendPolicySpec_ExtAuthz struct {
+	ExtAuthz *TrafficPolicySpec_ExternalAuth `protobuf:"bytes,17,opt,name=ext_authz,json=extAuthz,proto3,oneof"`
+}
+
 func (*BackendPolicySpec_A2A_) isBackendPolicySpec_Kind() {}
 
 func (*BackendPolicySpec_InferenceRouting_) isBackendPolicySpec_Kind() {}
@@ -6106,6 +6405,8 @@ func (*BackendPolicySpec_Health_) isBackendPolicySpec_Kind() {}
 
 func (*BackendPolicySpec_BackendTunnel_) isBackendPolicySpec_Kind() {}
 
+func (*BackendPolicySpec_ExtAuthz) isBackendPolicySpec_Kind() {}
+
 type StaticBackend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
@@ -6117,7 +6418,7 @@ type StaticBackend struct {
 
 func (x *StaticBackend) Reset() {
 	*x = StaticBackend{}
-	mi := &file_resource_proto_msgTypes[49]
+	mi := &file_resource_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6129,7 +6430,7 @@ func (x *StaticBackend) String() string {
 func (*StaticBackend) ProtoMessage() {}
 
 func (x *StaticBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[49]
+	mi := &file_resource_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6142,7 +6443,7 @@ func (x *StaticBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StaticBackend.ProtoReflect.Descriptor instead.
 func (*StaticBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{49}
+	return file_resource_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *StaticBackend) GetHost() string {
@@ -6174,7 +6475,7 @@ type DynamicForwardProxy struct {
 
 func (x *DynamicForwardProxy) Reset() {
 	*x = DynamicForwardProxy{}
-	mi := &file_resource_proto_msgTypes[50]
+	mi := &file_resource_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6186,7 +6487,7 @@ func (x *DynamicForwardProxy) String() string {
 func (*DynamicForwardProxy) ProtoMessage() {}
 
 func (x *DynamicForwardProxy) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[50]
+	mi := &file_resource_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6199,7 +6500,7 @@ func (x *DynamicForwardProxy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DynamicForwardProxy.ProtoReflect.Descriptor instead.
 func (*DynamicForwardProxy) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{50}
+	return file_resource_proto_rawDescGZIP(), []int{52}
 }
 
 type AwsBackend struct {
@@ -6214,7 +6515,7 @@ type AwsBackend struct {
 
 func (x *AwsBackend) Reset() {
 	*x = AwsBackend{}
-	mi := &file_resource_proto_msgTypes[51]
+	mi := &file_resource_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6226,7 +6527,7 @@ func (x *AwsBackend) String() string {
 func (*AwsBackend) ProtoMessage() {}
 
 func (x *AwsBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[51]
+	mi := &file_resource_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6239,7 +6540,7 @@ func (x *AwsBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsBackend.ProtoReflect.Descriptor instead.
 func (*AwsBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{51}
+	return file_resource_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *AwsBackend) GetService() isAwsBackend_Service {
@@ -6278,7 +6579,7 @@ type AwsAgentCoreBackend struct {
 
 func (x *AwsAgentCoreBackend) Reset() {
 	*x = AwsAgentCoreBackend{}
-	mi := &file_resource_proto_msgTypes[52]
+	mi := &file_resource_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6290,7 +6591,7 @@ func (x *AwsAgentCoreBackend) String() string {
 func (*AwsAgentCoreBackend) ProtoMessage() {}
 
 func (x *AwsAgentCoreBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[52]
+	mi := &file_resource_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6303,7 +6604,7 @@ func (x *AwsAgentCoreBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AwsAgentCoreBackend.ProtoReflect.Descriptor instead.
 func (*AwsAgentCoreBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{52}
+	return file_resource_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *AwsAgentCoreBackend) GetAgentRuntimeArn() string {
@@ -6329,7 +6630,7 @@ type AIBackend struct {
 
 func (x *AIBackend) Reset() {
 	*x = AIBackend{}
-	mi := &file_resource_proto_msgTypes[53]
+	mi := &file_resource_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6341,7 +6642,7 @@ func (x *AIBackend) String() string {
 func (*AIBackend) ProtoMessage() {}
 
 func (x *AIBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[53]
+	mi := &file_resource_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6354,7 +6655,7 @@ func (x *AIBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend.ProtoReflect.Descriptor instead.
 func (*AIBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53}
+	return file_resource_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *AIBackend) GetProviderGroups() []*AIBackend_ProviderGroup {
@@ -6380,7 +6681,7 @@ type MCPBackend struct {
 
 func (x *MCPBackend) Reset() {
 	*x = MCPBackend{}
-	mi := &file_resource_proto_msgTypes[54]
+	mi := &file_resource_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6392,7 +6693,7 @@ func (x *MCPBackend) String() string {
 func (*MCPBackend) ProtoMessage() {}
 
 func (x *MCPBackend) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[54]
+	mi := &file_resource_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6405,7 +6706,7 @@ func (x *MCPBackend) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MCPBackend.ProtoReflect.Descriptor instead.
 func (*MCPBackend) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{54}
+	return file_resource_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *MCPBackend) GetTargets() []*MCPTarget {
@@ -6448,7 +6749,7 @@ type MCPTarget struct {
 
 func (x *MCPTarget) Reset() {
 	*x = MCPTarget{}
-	mi := &file_resource_proto_msgTypes[55]
+	mi := &file_resource_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6460,7 +6761,7 @@ func (x *MCPTarget) String() string {
 func (*MCPTarget) ProtoMessage() {}
 
 func (x *MCPTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[55]
+	mi := &file_resource_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6473,7 +6774,7 @@ func (x *MCPTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MCPTarget.ProtoReflect.Descriptor instead.
 func (*MCPTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{55}
+	return file_resource_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *MCPTarget) GetName() string {
@@ -6519,7 +6820,7 @@ type BackendReference struct {
 
 func (x *BackendReference) Reset() {
 	*x = BackendReference{}
-	mi := &file_resource_proto_msgTypes[56]
+	mi := &file_resource_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6531,7 +6832,7 @@ func (x *BackendReference) String() string {
 func (*BackendReference) ProtoMessage() {}
 
 func (x *BackendReference) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[56]
+	mi := &file_resource_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6544,7 +6845,7 @@ func (x *BackendReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendReference.ProtoReflect.Descriptor instead.
 func (*BackendReference) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{56}
+	return file_resource_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *BackendReference) GetKind() isBackendReference_Kind {
@@ -6605,7 +6906,7 @@ type Alpn struct {
 
 func (x *Alpn) Reset() {
 	*x = Alpn{}
-	mi := &file_resource_proto_msgTypes[57]
+	mi := &file_resource_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6617,7 +6918,7 @@ func (x *Alpn) String() string {
 func (*Alpn) ProtoMessage() {}
 
 func (x *Alpn) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[57]
+	mi := &file_resource_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6630,7 +6931,7 @@ func (x *Alpn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Alpn.ProtoReflect.Descriptor instead.
 func (*Alpn) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{57}
+	return file_resource_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *Alpn) GetProtocols() []string {
@@ -6650,7 +6951,7 @@ type AuthorizationLocation_Header struct {
 
 func (x *AuthorizationLocation_Header) Reset() {
 	*x = AuthorizationLocation_Header{}
-	mi := &file_resource_proto_msgTypes[58]
+	mi := &file_resource_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6662,7 +6963,7 @@ func (x *AuthorizationLocation_Header) String() string {
 func (*AuthorizationLocation_Header) ProtoMessage() {}
 
 func (x *AuthorizationLocation_Header) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[58]
+	mi := &file_resource_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6675,7 +6976,7 @@ func (x *AuthorizationLocation_Header) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizationLocation_Header.ProtoReflect.Descriptor instead.
 func (*AuthorizationLocation_Header) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{16, 0}
+	return file_resource_proto_rawDescGZIP(), []int{18, 0}
 }
 
 func (x *AuthorizationLocation_Header) GetName() string {
@@ -6701,7 +7002,7 @@ type AuthorizationLocation_QueryParameter struct {
 
 func (x *AuthorizationLocation_QueryParameter) Reset() {
 	*x = AuthorizationLocation_QueryParameter{}
-	mi := &file_resource_proto_msgTypes[59]
+	mi := &file_resource_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6713,7 +7014,7 @@ func (x *AuthorizationLocation_QueryParameter) String() string {
 func (*AuthorizationLocation_QueryParameter) ProtoMessage() {}
 
 func (x *AuthorizationLocation_QueryParameter) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[59]
+	mi := &file_resource_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6726,7 +7027,7 @@ func (x *AuthorizationLocation_QueryParameter) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use AuthorizationLocation_QueryParameter.ProtoReflect.Descriptor instead.
 func (*AuthorizationLocation_QueryParameter) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{16, 1}
+	return file_resource_proto_rawDescGZIP(), []int{18, 1}
 }
 
 func (x *AuthorizationLocation_QueryParameter) GetName() string {
@@ -6745,7 +7046,7 @@ type AuthorizationLocation_Cookie struct {
 
 func (x *AuthorizationLocation_Cookie) Reset() {
 	*x = AuthorizationLocation_Cookie{}
-	mi := &file_resource_proto_msgTypes[60]
+	mi := &file_resource_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6757,7 +7058,7 @@ func (x *AuthorizationLocation_Cookie) String() string {
 func (*AuthorizationLocation_Cookie) ProtoMessage() {}
 
 func (x *AuthorizationLocation_Cookie) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[60]
+	mi := &file_resource_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6770,7 +7071,7 @@ func (x *AuthorizationLocation_Cookie) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizationLocation_Cookie.ProtoReflect.Descriptor instead.
 func (*AuthorizationLocation_Cookie) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{16, 2}
+	return file_resource_proto_rawDescGZIP(), []int{18, 2}
 }
 
 func (x *AuthorizationLocation_Cookie) GetName() string {
@@ -6788,7 +7089,7 @@ type Gcp_AccessToken struct {
 
 func (x *Gcp_AccessToken) Reset() {
 	*x = Gcp_AccessToken{}
-	mi := &file_resource_proto_msgTypes[61]
+	mi := &file_resource_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6800,7 +7101,7 @@ func (x *Gcp_AccessToken) String() string {
 func (*Gcp_AccessToken) ProtoMessage() {}
 
 func (x *Gcp_AccessToken) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[61]
+	mi := &file_resource_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6813,7 +7114,7 @@ func (x *Gcp_AccessToken) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gcp_AccessToken.ProtoReflect.Descriptor instead.
 func (*Gcp_AccessToken) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{19, 0}
+	return file_resource_proto_rawDescGZIP(), []int{21, 0}
 }
 
 type Gcp_IdToken struct {
@@ -6826,7 +7127,7 @@ type Gcp_IdToken struct {
 
 func (x *Gcp_IdToken) Reset() {
 	*x = Gcp_IdToken{}
-	mi := &file_resource_proto_msgTypes[62]
+	mi := &file_resource_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6838,7 +7139,7 @@ func (x *Gcp_IdToken) String() string {
 func (*Gcp_IdToken) ProtoMessage() {}
 
 func (x *Gcp_IdToken) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[62]
+	mi := &file_resource_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6851,7 +7152,7 @@ func (x *Gcp_IdToken) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gcp_IdToken.ProtoReflect.Descriptor instead.
 func (*Gcp_IdToken) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{19, 1}
+	return file_resource_proto_rawDescGZIP(), []int{21, 1}
 }
 
 func (x *Gcp_IdToken) GetAudience() string {
@@ -6875,7 +7176,7 @@ type AzureManagedIdentityCredential_UserAssignedIdentity struct {
 
 func (x *AzureManagedIdentityCredential_UserAssignedIdentity) Reset() {
 	*x = AzureManagedIdentityCredential_UserAssignedIdentity{}
-	mi := &file_resource_proto_msgTypes[63]
+	mi := &file_resource_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6887,7 +7188,7 @@ func (x *AzureManagedIdentityCredential_UserAssignedIdentity) String() string {
 func (*AzureManagedIdentityCredential_UserAssignedIdentity) ProtoMessage() {}
 
 func (x *AzureManagedIdentityCredential_UserAssignedIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[63]
+	mi := &file_resource_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6900,7 +7201,7 @@ func (x *AzureManagedIdentityCredential_UserAssignedIdentity) ProtoReflect() pro
 
 // Deprecated: Use AzureManagedIdentityCredential_UserAssignedIdentity.ProtoReflect.Descriptor instead.
 func (*AzureManagedIdentityCredential_UserAssignedIdentity) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{26, 0}
+	return file_resource_proto_rawDescGZIP(), []int{28, 0}
 }
 
 func (x *AzureManagedIdentityCredential_UserAssignedIdentity) GetId() isAzureManagedIdentityCredential_UserAssignedIdentity_Id {
@@ -6973,7 +7274,7 @@ type RequestMirrors_Mirror struct {
 
 func (x *RequestMirrors_Mirror) Reset() {
 	*x = RequestMirrors_Mirror{}
-	mi := &file_resource_proto_msgTypes[64]
+	mi := &file_resource_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6985,7 +7286,7 @@ func (x *RequestMirrors_Mirror) String() string {
 func (*RequestMirrors_Mirror) ProtoMessage() {}
 
 func (x *RequestMirrors_Mirror) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[64]
+	mi := &file_resource_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6998,7 +7299,7 @@ func (x *RequestMirrors_Mirror) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestMirrors_Mirror.ProtoReflect.Descriptor instead.
 func (*RequestMirrors_Mirror) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{38, 0}
+	return file_resource_proto_rawDescGZIP(), []int{40, 0}
 }
 
 func (x *RequestMirrors_Mirror) GetBackend() *BackendReference {
@@ -7026,7 +7327,7 @@ type PolicyTarget_ServiceTarget struct {
 
 func (x *PolicyTarget_ServiceTarget) Reset() {
 	*x = PolicyTarget_ServiceTarget{}
-	mi := &file_resource_proto_msgTypes[65]
+	mi := &file_resource_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7038,7 +7339,7 @@ func (x *PolicyTarget_ServiceTarget) String() string {
 func (*PolicyTarget_ServiceTarget) ProtoMessage() {}
 
 func (x *PolicyTarget_ServiceTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[65]
+	mi := &file_resource_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7051,7 +7352,7 @@ func (x *PolicyTarget_ServiceTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTarget_ServiceTarget.ProtoReflect.Descriptor instead.
 func (*PolicyTarget_ServiceTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{43, 0}
+	return file_resource_proto_rawDescGZIP(), []int{45, 0}
 }
 
 func (x *PolicyTarget_ServiceTarget) GetNamespace() string {
@@ -7086,7 +7387,7 @@ type PolicyTarget_BackendTarget struct {
 
 func (x *PolicyTarget_BackendTarget) Reset() {
 	*x = PolicyTarget_BackendTarget{}
-	mi := &file_resource_proto_msgTypes[66]
+	mi := &file_resource_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7098,7 +7399,7 @@ func (x *PolicyTarget_BackendTarget) String() string {
 func (*PolicyTarget_BackendTarget) ProtoMessage() {}
 
 func (x *PolicyTarget_BackendTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[66]
+	mi := &file_resource_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7111,7 +7412,7 @@ func (x *PolicyTarget_BackendTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTarget_BackendTarget.ProtoReflect.Descriptor instead.
 func (*PolicyTarget_BackendTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{43, 1}
+	return file_resource_proto_rawDescGZIP(), []int{45, 1}
 }
 
 func (x *PolicyTarget_BackendTarget) GetName() string {
@@ -7147,7 +7448,7 @@ type PolicyTarget_GatewayTarget struct {
 
 func (x *PolicyTarget_GatewayTarget) Reset() {
 	*x = PolicyTarget_GatewayTarget{}
-	mi := &file_resource_proto_msgTypes[67]
+	mi := &file_resource_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7159,7 +7460,7 @@ func (x *PolicyTarget_GatewayTarget) String() string {
 func (*PolicyTarget_GatewayTarget) ProtoMessage() {}
 
 func (x *PolicyTarget_GatewayTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[67]
+	mi := &file_resource_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7172,7 +7473,7 @@ func (x *PolicyTarget_GatewayTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTarget_GatewayTarget.ProtoReflect.Descriptor instead.
 func (*PolicyTarget_GatewayTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{43, 2}
+	return file_resource_proto_rawDescGZIP(), []int{45, 2}
 }
 
 func (x *PolicyTarget_GatewayTarget) GetName() string {
@@ -7215,7 +7516,7 @@ type PolicyTarget_RouteTarget struct {
 
 func (x *PolicyTarget_RouteTarget) Reset() {
 	*x = PolicyTarget_RouteTarget{}
-	mi := &file_resource_proto_msgTypes[68]
+	mi := &file_resource_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7227,7 +7528,7 @@ func (x *PolicyTarget_RouteTarget) String() string {
 func (*PolicyTarget_RouteTarget) ProtoMessage() {}
 
 func (x *PolicyTarget_RouteTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[68]
+	mi := &file_resource_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7240,7 +7541,7 @@ func (x *PolicyTarget_RouteTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyTarget_RouteTarget.ProtoReflect.Descriptor instead.
 func (*PolicyTarget_RouteTarget) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{43, 3}
+	return file_resource_proto_rawDescGZIP(), []int{45, 3}
 }
 
 func (x *PolicyTarget_RouteTarget) GetName() string {
@@ -7271,6 +7572,66 @@ func (x *PolicyTarget_RouteTarget) GetKind() string {
 	return ""
 }
 
+type PolicyTarget_ListenerSetTarget struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace     string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Section       *string                `protobuf:"bytes,3,opt,name=section,proto3,oneof" json:"section,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PolicyTarget_ListenerSetTarget) Reset() {
+	*x = PolicyTarget_ListenerSetTarget{}
+	mi := &file_resource_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PolicyTarget_ListenerSetTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PolicyTarget_ListenerSetTarget) ProtoMessage() {}
+
+func (x *PolicyTarget_ListenerSetTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_resource_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PolicyTarget_ListenerSetTarget.ProtoReflect.Descriptor instead.
+func (*PolicyTarget_ListenerSetTarget) Descriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{45, 4}
+}
+
+func (x *PolicyTarget_ListenerSetTarget) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PolicyTarget_ListenerSetTarget) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *PolicyTarget_ListenerSetTarget) GetSection() string {
+	if x != nil && x.Section != nil {
+		return *x.Section
+	}
+	return ""
+}
+
 type FrontendPolicySpec_HTTP struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	MaxBufferSize             *uint32                `protobuf:"varint,1,opt,name=max_buffer_size,json=maxBufferSize,proto3,oneof" json:"max_buffer_size,omitempty"`
@@ -7282,13 +7643,14 @@ type FrontendPolicySpec_HTTP struct {
 	Http2KeepaliveInterval    *durationpb.Duration   `protobuf:"bytes,7,opt,name=http2_keepalive_interval,json=http2KeepaliveInterval,proto3" json:"http2_keepalive_interval,omitempty"`
 	Http2KeepaliveTimeout     *durationpb.Duration   `protobuf:"bytes,8,opt,name=http2_keepalive_timeout,json=http2KeepaliveTimeout,proto3" json:"http2_keepalive_timeout,omitempty"`
 	MaxConnectionDuration     *durationpb.Duration   `protobuf:"bytes,9,opt,name=max_connection_duration,json=maxConnectionDuration,proto3" json:"max_connection_duration,omitempty"`
+	Http2MaxHeaderSize        *uint32                `protobuf:"varint,10,opt,name=http2_max_header_size,json=http2MaxHeaderSize,proto3,oneof" json:"http2_max_header_size,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *FrontendPolicySpec_HTTP) Reset() {
 	*x = FrontendPolicySpec_HTTP{}
-	mi := &file_resource_proto_msgTypes[69]
+	mi := &file_resource_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7300,7 +7662,7 @@ func (x *FrontendPolicySpec_HTTP) String() string {
 func (*FrontendPolicySpec_HTTP) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[69]
+	mi := &file_resource_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7313,7 +7675,7 @@ func (x *FrontendPolicySpec_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_HTTP.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_HTTP) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 0}
 }
 
 func (x *FrontendPolicySpec_HTTP) GetMaxBufferSize() uint32 {
@@ -7379,6 +7741,13 @@ func (x *FrontendPolicySpec_HTTP) GetMaxConnectionDuration() *durationpb.Duratio
 	return nil
 }
 
+func (x *FrontendPolicySpec_HTTP) GetHttp2MaxHeaderSize() uint32 {
+	if x != nil && x.Http2MaxHeaderSize != nil {
+		return *x.Http2MaxHeaderSize
+	}
+	return 0
+}
+
 type FrontendPolicySpec_TLS struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TLS handshake timeout
@@ -7392,15 +7761,18 @@ type FrontendPolicySpec_TLS struct {
 	CipherSuites []TLSConfig_CipherSuite `protobuf:"varint,3,rep,packed,name=cipher_suites,json=cipherSuites,proto3,enum=agentgateway.dev.resource.TLSConfig_CipherSuite" json:"cipher_suites,omitempty"`
 	// TLS version range allowed for negotiating TLS.
 	// If unset, defaults are used.
-	MinVersion    *TLSConfig_TLSVersion `protobuf:"varint,4,opt,name=min_version,json=minVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"min_version,omitempty"`
-	MaxVersion    *TLSConfig_TLSVersion `protobuf:"varint,5,opt,name=max_version,json=maxVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"max_version,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MinVersion *TLSConfig_TLSVersion `protobuf:"varint,4,opt,name=min_version,json=minVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"min_version,omitempty"`
+	MaxVersion *TLSConfig_TLSVersion `protobuf:"varint,5,opt,name=max_version,json=maxVersion,proto3,enum=agentgateway.dev.resource.TLSConfig_TLSVersion,oneof" json:"max_version,omitempty"`
+	// Key exchange groups allowed for negotiating TLS.
+	// If empty, defaults are used.
+	KeyExchangeGroups []TLSConfig_KeyExchangeGroup `protobuf:"varint,6,rep,packed,name=key_exchange_groups,json=keyExchangeGroups,proto3,enum=agentgateway.dev.resource.TLSConfig_KeyExchangeGroup" json:"key_exchange_groups,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *FrontendPolicySpec_TLS) Reset() {
 	*x = FrontendPolicySpec_TLS{}
-	mi := &file_resource_proto_msgTypes[70]
+	mi := &file_resource_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7412,7 +7784,7 @@ func (x *FrontendPolicySpec_TLS) String() string {
 func (*FrontendPolicySpec_TLS) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_TLS) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[70]
+	mi := &file_resource_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7425,7 +7797,7 @@ func (x *FrontendPolicySpec_TLS) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_TLS.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_TLS) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 1}
+	return file_resource_proto_rawDescGZIP(), []int{47, 1}
 }
 
 func (x *FrontendPolicySpec_TLS) GetHandshakeTimeout() *durationpb.Duration {
@@ -7463,6 +7835,13 @@ func (x *FrontendPolicySpec_TLS) GetMaxVersion() TLSConfig_TLSVersion {
 	return TLSConfig_TLS_VERSION_UNSPECIFIED
 }
 
+func (x *FrontendPolicySpec_TLS) GetKeyExchangeGroups() []TLSConfig_KeyExchangeGroup {
+	if x != nil {
+		return x.KeyExchangeGroups
+	}
+	return nil
+}
+
 type FrontendPolicySpec_TCP struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TCP keepalive configuration
@@ -7473,7 +7852,7 @@ type FrontendPolicySpec_TCP struct {
 
 func (x *FrontendPolicySpec_TCP) Reset() {
 	*x = FrontendPolicySpec_TCP{}
-	mi := &file_resource_proto_msgTypes[71]
+	mi := &file_resource_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7485,7 +7864,7 @@ func (x *FrontendPolicySpec_TCP) String() string {
 func (*FrontendPolicySpec_TCP) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_TCP) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[71]
+	mi := &file_resource_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7498,7 +7877,7 @@ func (x *FrontendPolicySpec_TCP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_TCP.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_TCP) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 2}
+	return file_resource_proto_rawDescGZIP(), []int{47, 2}
 }
 
 func (x *FrontendPolicySpec_TCP) GetKeepalives() *KeepaliveConfig {
@@ -7519,7 +7898,7 @@ type FrontendPolicySpec_NetworkAuthorization struct {
 
 func (x *FrontendPolicySpec_NetworkAuthorization) Reset() {
 	*x = FrontendPolicySpec_NetworkAuthorization{}
-	mi := &file_resource_proto_msgTypes[72]
+	mi := &file_resource_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7531,7 +7910,7 @@ func (x *FrontendPolicySpec_NetworkAuthorization) String() string {
 func (*FrontendPolicySpec_NetworkAuthorization) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_NetworkAuthorization) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[72]
+	mi := &file_resource_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7544,7 +7923,7 @@ func (x *FrontendPolicySpec_NetworkAuthorization) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use FrontendPolicySpec_NetworkAuthorization.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_NetworkAuthorization) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 3}
+	return file_resource_proto_rawDescGZIP(), []int{47, 3}
 }
 
 func (x *FrontendPolicySpec_NetworkAuthorization) GetAllow() []string {
@@ -7583,7 +7962,7 @@ type FrontendPolicySpec_Logging struct {
 
 func (x *FrontendPolicySpec_Logging) Reset() {
 	*x = FrontendPolicySpec_Logging{}
-	mi := &file_resource_proto_msgTypes[73]
+	mi := &file_resource_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7595,7 +7974,7 @@ func (x *FrontendPolicySpec_Logging) String() string {
 func (*FrontendPolicySpec_Logging) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Logging) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[73]
+	mi := &file_resource_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7608,7 +7987,7 @@ func (x *FrontendPolicySpec_Logging) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_Logging.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Logging) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 4}
+	return file_resource_proto_rawDescGZIP(), []int{47, 4}
 }
 
 func (x *FrontendPolicySpec_Logging) GetFilter() string {
@@ -7661,7 +8040,7 @@ type FrontendPolicySpec_Tracing struct {
 
 func (x *FrontendPolicySpec_Tracing) Reset() {
 	*x = FrontendPolicySpec_Tracing{}
-	mi := &file_resource_proto_msgTypes[74]
+	mi := &file_resource_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7673,7 +8052,7 @@ func (x *FrontendPolicySpec_Tracing) String() string {
 func (*FrontendPolicySpec_Tracing) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Tracing) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[74]
+	mi := &file_resource_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7686,7 +8065,7 @@ func (x *FrontendPolicySpec_Tracing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_Tracing.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Tracing) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 5}
+	return file_resource_proto_rawDescGZIP(), []int{47, 5}
 }
 
 func (x *FrontendPolicySpec_Tracing) GetProviderBackend() *BackendReference {
@@ -7755,7 +8134,7 @@ type FrontendPolicySpec_TracingAttribute struct {
 
 func (x *FrontendPolicySpec_TracingAttribute) Reset() {
 	*x = FrontendPolicySpec_TracingAttribute{}
-	mi := &file_resource_proto_msgTypes[75]
+	mi := &file_resource_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7767,7 +8146,7 @@ func (x *FrontendPolicySpec_TracingAttribute) String() string {
 func (*FrontendPolicySpec_TracingAttribute) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_TracingAttribute) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[75]
+	mi := &file_resource_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7780,7 +8159,7 @@ func (x *FrontendPolicySpec_TracingAttribute) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use FrontendPolicySpec_TracingAttribute.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_TracingAttribute) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 6}
+	return file_resource_proto_rawDescGZIP(), []int{47, 6}
 }
 
 func (x *FrontendPolicySpec_TracingAttribute) GetName() string {
@@ -7807,7 +8186,7 @@ type FrontendPolicySpec_ProxyProtocol struct {
 
 func (x *FrontendPolicySpec_ProxyProtocol) Reset() {
 	*x = FrontendPolicySpec_ProxyProtocol{}
-	mi := &file_resource_proto_msgTypes[76]
+	mi := &file_resource_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7819,7 +8198,7 @@ func (x *FrontendPolicySpec_ProxyProtocol) String() string {
 func (*FrontendPolicySpec_ProxyProtocol) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_ProxyProtocol) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[76]
+	mi := &file_resource_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7832,7 +8211,7 @@ func (x *FrontendPolicySpec_ProxyProtocol) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_ProxyProtocol.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_ProxyProtocol) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 7}
+	return file_resource_proto_rawDescGZIP(), []int{47, 7}
 }
 
 func (x *FrontendPolicySpec_ProxyProtocol) GetVersion() FrontendPolicySpec_ProxyProtocol_Version {
@@ -7860,7 +8239,7 @@ type FrontendPolicySpec_Metrics struct {
 
 func (x *FrontendPolicySpec_Metrics) Reset() {
 	*x = FrontendPolicySpec_Metrics{}
-	mi := &file_resource_proto_msgTypes[77]
+	mi := &file_resource_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7872,7 +8251,7 @@ func (x *FrontendPolicySpec_Metrics) String() string {
 func (*FrontendPolicySpec_Metrics) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Metrics) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[77]
+	mi := &file_resource_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7885,7 +8264,7 @@ func (x *FrontendPolicySpec_Metrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_Metrics.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Metrics) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 8}
+	return file_resource_proto_rawDescGZIP(), []int{47, 8}
 }
 
 func (x *FrontendPolicySpec_Metrics) GetFields() *FrontendPolicySpec_Metrics_Fields {
@@ -7905,7 +8284,7 @@ type FrontendPolicySpec_Logging_Field struct {
 
 func (x *FrontendPolicySpec_Logging_Field) Reset() {
 	*x = FrontendPolicySpec_Logging_Field{}
-	mi := &file_resource_proto_msgTypes[78]
+	mi := &file_resource_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7917,7 +8296,7 @@ func (x *FrontendPolicySpec_Logging_Field) String() string {
 func (*FrontendPolicySpec_Logging_Field) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Logging_Field) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[78]
+	mi := &file_resource_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7930,7 +8309,7 @@ func (x *FrontendPolicySpec_Logging_Field) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_Logging_Field.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Logging_Field) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 4, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 4, 0}
 }
 
 func (x *FrontendPolicySpec_Logging_Field) GetName() string {
@@ -7960,7 +8339,7 @@ type FrontendPolicySpec_Logging_Fields struct {
 
 func (x *FrontendPolicySpec_Logging_Fields) Reset() {
 	*x = FrontendPolicySpec_Logging_Fields{}
-	mi := &file_resource_proto_msgTypes[79]
+	mi := &file_resource_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7972,7 +8351,7 @@ func (x *FrontendPolicySpec_Logging_Fields) String() string {
 func (*FrontendPolicySpec_Logging_Fields) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Logging_Fields) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[79]
+	mi := &file_resource_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7985,7 +8364,7 @@ func (x *FrontendPolicySpec_Logging_Fields) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use FrontendPolicySpec_Logging_Fields.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Logging_Fields) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 4, 1}
+	return file_resource_proto_rawDescGZIP(), []int{47, 4, 1}
 }
 
 func (x *FrontendPolicySpec_Logging_Fields) GetRemove() []string {
@@ -8020,7 +8399,7 @@ type FrontendPolicySpec_Logging_OtlpAccessLog struct {
 
 func (x *FrontendPolicySpec_Logging_OtlpAccessLog) Reset() {
 	*x = FrontendPolicySpec_Logging_OtlpAccessLog{}
-	mi := &file_resource_proto_msgTypes[80]
+	mi := &file_resource_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8032,7 +8411,7 @@ func (x *FrontendPolicySpec_Logging_OtlpAccessLog) String() string {
 func (*FrontendPolicySpec_Logging_OtlpAccessLog) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Logging_OtlpAccessLog) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[80]
+	mi := &file_resource_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8045,7 +8424,7 @@ func (x *FrontendPolicySpec_Logging_OtlpAccessLog) ProtoReflect() protoreflect.M
 
 // Deprecated: Use FrontendPolicySpec_Logging_OtlpAccessLog.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Logging_OtlpAccessLog) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 4, 2}
+	return file_resource_proto_rawDescGZIP(), []int{47, 4, 2}
 }
 
 func (x *FrontendPolicySpec_Logging_OtlpAccessLog) GetProviderBackend() *BackendReference {
@@ -8086,7 +8465,7 @@ type FrontendPolicySpec_Metrics_Field struct {
 
 func (x *FrontendPolicySpec_Metrics_Field) Reset() {
 	*x = FrontendPolicySpec_Metrics_Field{}
-	mi := &file_resource_proto_msgTypes[81]
+	mi := &file_resource_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8098,7 +8477,7 @@ func (x *FrontendPolicySpec_Metrics_Field) String() string {
 func (*FrontendPolicySpec_Metrics_Field) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Metrics_Field) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[81]
+	mi := &file_resource_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8111,7 +8490,7 @@ func (x *FrontendPolicySpec_Metrics_Field) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FrontendPolicySpec_Metrics_Field.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Metrics_Field) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 8, 0}
+	return file_resource_proto_rawDescGZIP(), []int{47, 8, 0}
 }
 
 func (x *FrontendPolicySpec_Metrics_Field) GetName() string {
@@ -8137,7 +8516,7 @@ type FrontendPolicySpec_Metrics_Fields struct {
 
 func (x *FrontendPolicySpec_Metrics_Fields) Reset() {
 	*x = FrontendPolicySpec_Metrics_Fields{}
-	mi := &file_resource_proto_msgTypes[82]
+	mi := &file_resource_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8149,7 +8528,7 @@ func (x *FrontendPolicySpec_Metrics_Fields) String() string {
 func (*FrontendPolicySpec_Metrics_Fields) ProtoMessage() {}
 
 func (x *FrontendPolicySpec_Metrics_Fields) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[82]
+	mi := &file_resource_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8162,7 +8541,7 @@ func (x *FrontendPolicySpec_Metrics_Fields) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use FrontendPolicySpec_Metrics_Fields.ProtoReflect.Descriptor instead.
 func (*FrontendPolicySpec_Metrics_Fields) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{45, 8, 1}
+	return file_resource_proto_rawDescGZIP(), []int{47, 8, 1}
 }
 
 func (x *FrontendPolicySpec_Metrics_Fields) GetAdd() []*FrontendPolicySpec_Metrics_Field {
@@ -8184,7 +8563,7 @@ type TrafficPolicySpec_RemoteRateLimit struct {
 
 func (x *TrafficPolicySpec_RemoteRateLimit) Reset() {
 	*x = TrafficPolicySpec_RemoteRateLimit{}
-	mi := &file_resource_proto_msgTypes[83]
+	mi := &file_resource_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8196,7 +8575,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit) String() string {
 func (*TrafficPolicySpec_RemoteRateLimit) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_RemoteRateLimit) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[83]
+	mi := &file_resource_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8209,7 +8588,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use TrafficPolicySpec_RemoteRateLimit.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_RemoteRateLimit) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0}
 }
 
 func (x *TrafficPolicySpec_RemoteRateLimit) GetDomain() string {
@@ -8252,7 +8631,7 @@ type TrafficPolicySpec_LocalRateLimit struct {
 
 func (x *TrafficPolicySpec_LocalRateLimit) Reset() {
 	*x = TrafficPolicySpec_LocalRateLimit{}
-	mi := &file_resource_proto_msgTypes[84]
+	mi := &file_resource_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8264,7 +8643,7 @@ func (x *TrafficPolicySpec_LocalRateLimit) String() string {
 func (*TrafficPolicySpec_LocalRateLimit) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_LocalRateLimit) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[84]
+	mi := &file_resource_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8277,7 +8656,7 @@ func (x *TrafficPolicySpec_LocalRateLimit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_LocalRateLimit.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_LocalRateLimit) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 1}
+	return file_resource_proto_rawDescGZIP(), []int{49, 1}
 }
 
 func (x *TrafficPolicySpec_LocalRateLimit) GetMaxTokens() uint64 {
@@ -8326,7 +8705,7 @@ type TrafficPolicySpec_ExternalAuth struct {
 
 func (x *TrafficPolicySpec_ExternalAuth) Reset() {
 	*x = TrafficPolicySpec_ExternalAuth{}
-	mi := &file_resource_proto_msgTypes[85]
+	mi := &file_resource_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8338,7 +8717,7 @@ func (x *TrafficPolicySpec_ExternalAuth) String() string {
 func (*TrafficPolicySpec_ExternalAuth) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExternalAuth) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[85]
+	mi := &file_resource_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8351,7 +8730,7 @@ func (x *TrafficPolicySpec_ExternalAuth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_ExternalAuth.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExternalAuth) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 2}
+	return file_resource_proto_rawDescGZIP(), []int{49, 2}
 }
 
 func (x *TrafficPolicySpec_ExternalAuth) GetTarget() *BackendReference {
@@ -8441,7 +8820,7 @@ type TrafficPolicySpec_RBAC struct {
 
 func (x *TrafficPolicySpec_RBAC) Reset() {
 	*x = TrafficPolicySpec_RBAC{}
-	mi := &file_resource_proto_msgTypes[86]
+	mi := &file_resource_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8453,7 +8832,7 @@ func (x *TrafficPolicySpec_RBAC) String() string {
 func (*TrafficPolicySpec_RBAC) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_RBAC) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[86]
+	mi := &file_resource_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8466,7 +8845,7 @@ func (x *TrafficPolicySpec_RBAC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_RBAC.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_RBAC) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 3}
+	return file_resource_proto_rawDescGZIP(), []int{49, 3}
 }
 
 func (x *TrafficPolicySpec_RBAC) GetAllow() []string {
@@ -8510,7 +8889,7 @@ type TrafficPolicySpec_JWTProvider struct {
 
 func (x *TrafficPolicySpec_JWTProvider) Reset() {
 	*x = TrafficPolicySpec_JWTProvider{}
-	mi := &file_resource_proto_msgTypes[87]
+	mi := &file_resource_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8522,7 +8901,7 @@ func (x *TrafficPolicySpec_JWTProvider) String() string {
 func (*TrafficPolicySpec_JWTProvider) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_JWTProvider) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[87]
+	mi := &file_resource_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8535,7 +8914,7 @@ func (x *TrafficPolicySpec_JWTProvider) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_JWTProvider.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_JWTProvider) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 4}
+	return file_resource_proto_rawDescGZIP(), []int{49, 4}
 }
 
 func (x *TrafficPolicySpec_JWTProvider) GetIssuer() string {
@@ -8600,7 +8979,7 @@ type TrafficPolicySpec_JWT struct {
 
 func (x *TrafficPolicySpec_JWT) Reset() {
 	*x = TrafficPolicySpec_JWT{}
-	mi := &file_resource_proto_msgTypes[88]
+	mi := &file_resource_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8612,7 +8991,7 @@ func (x *TrafficPolicySpec_JWT) String() string {
 func (*TrafficPolicySpec_JWT) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_JWT) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[88]
+	mi := &file_resource_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8625,7 +9004,7 @@ func (x *TrafficPolicySpec_JWT) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_JWT.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_JWT) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 5}
+	return file_resource_proto_rawDescGZIP(), []int{49, 5}
 }
 
 func (x *TrafficPolicySpec_JWT) GetMode() TrafficPolicySpec_JWT_Mode {
@@ -8672,7 +9051,7 @@ type TrafficPolicySpec_BasicAuthentication struct {
 
 func (x *TrafficPolicySpec_BasicAuthentication) Reset() {
 	*x = TrafficPolicySpec_BasicAuthentication{}
-	mi := &file_resource_proto_msgTypes[89]
+	mi := &file_resource_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8684,7 +9063,7 @@ func (x *TrafficPolicySpec_BasicAuthentication) String() string {
 func (*TrafficPolicySpec_BasicAuthentication) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_BasicAuthentication) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[89]
+	mi := &file_resource_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8697,7 +9076,7 @@ func (x *TrafficPolicySpec_BasicAuthentication) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use TrafficPolicySpec_BasicAuthentication.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_BasicAuthentication) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 6}
+	return file_resource_proto_rawDescGZIP(), []int{49, 6}
 }
 
 func (x *TrafficPolicySpec_BasicAuthentication) GetHtpasswdContent() string {
@@ -8741,7 +9120,7 @@ type TrafficPolicySpec_APIKey struct {
 
 func (x *TrafficPolicySpec_APIKey) Reset() {
 	*x = TrafficPolicySpec_APIKey{}
-	mi := &file_resource_proto_msgTypes[90]
+	mi := &file_resource_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8753,7 +9132,7 @@ func (x *TrafficPolicySpec_APIKey) String() string {
 func (*TrafficPolicySpec_APIKey) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_APIKey) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[90]
+	mi := &file_resource_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8766,7 +9145,7 @@ func (x *TrafficPolicySpec_APIKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_APIKey.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_APIKey) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 7}
+	return file_resource_proto_rawDescGZIP(), []int{49, 7}
 }
 
 func (x *TrafficPolicySpec_APIKey) GetApiKeys() []*TrafficPolicySpec_APIKey_User {
@@ -8800,7 +9179,7 @@ type TrafficPolicySpec_TransformationPolicy struct {
 
 func (x *TrafficPolicySpec_TransformationPolicy) Reset() {
 	*x = TrafficPolicySpec_TransformationPolicy{}
-	mi := &file_resource_proto_msgTypes[91]
+	mi := &file_resource_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8812,7 +9191,7 @@ func (x *TrafficPolicySpec_TransformationPolicy) String() string {
 func (*TrafficPolicySpec_TransformationPolicy) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_TransformationPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[91]
+	mi := &file_resource_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8825,7 +9204,7 @@ func (x *TrafficPolicySpec_TransformationPolicy) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use TrafficPolicySpec_TransformationPolicy.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_TransformationPolicy) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 8}
+	return file_resource_proto_rawDescGZIP(), []int{49, 8}
 }
 
 func (x *TrafficPolicySpec_TransformationPolicy) GetRequest() *TrafficPolicySpec_TransformationPolicy_Transform {
@@ -8852,7 +9231,7 @@ type TrafficPolicySpec_HeaderTransformation struct {
 
 func (x *TrafficPolicySpec_HeaderTransformation) Reset() {
 	*x = TrafficPolicySpec_HeaderTransformation{}
-	mi := &file_resource_proto_msgTypes[92]
+	mi := &file_resource_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8864,7 +9243,7 @@ func (x *TrafficPolicySpec_HeaderTransformation) String() string {
 func (*TrafficPolicySpec_HeaderTransformation) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_HeaderTransformation) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[92]
+	mi := &file_resource_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8877,7 +9256,7 @@ func (x *TrafficPolicySpec_HeaderTransformation) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use TrafficPolicySpec_HeaderTransformation.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_HeaderTransformation) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 9}
+	return file_resource_proto_rawDescGZIP(), []int{49, 9}
 }
 
 func (x *TrafficPolicySpec_HeaderTransformation) GetName() string {
@@ -8903,7 +9282,7 @@ type TrafficPolicySpec_BodyTransformation struct {
 
 func (x *TrafficPolicySpec_BodyTransformation) Reset() {
 	*x = TrafficPolicySpec_BodyTransformation{}
-	mi := &file_resource_proto_msgTypes[93]
+	mi := &file_resource_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8915,7 +9294,7 @@ func (x *TrafficPolicySpec_BodyTransformation) String() string {
 func (*TrafficPolicySpec_BodyTransformation) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_BodyTransformation) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[93]
+	mi := &file_resource_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8928,7 +9307,7 @@ func (x *TrafficPolicySpec_BodyTransformation) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use TrafficPolicySpec_BodyTransformation.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_BodyTransformation) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 10}
+	return file_resource_proto_rawDescGZIP(), []int{49, 10}
 }
 
 func (x *TrafficPolicySpec_BodyTransformation) GetExpression() string {
@@ -8951,7 +9330,7 @@ type TrafficPolicySpec_CSRF struct {
 
 func (x *TrafficPolicySpec_CSRF) Reset() {
 	*x = TrafficPolicySpec_CSRF{}
-	mi := &file_resource_proto_msgTypes[94]
+	mi := &file_resource_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8963,7 +9342,7 @@ func (x *TrafficPolicySpec_CSRF) String() string {
 func (*TrafficPolicySpec_CSRF) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_CSRF) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[94]
+	mi := &file_resource_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8976,7 +9355,7 @@ func (x *TrafficPolicySpec_CSRF) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_CSRF.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_CSRF) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 11}
+	return file_resource_proto_rawDescGZIP(), []int{49, 11}
 }
 
 func (x *TrafficPolicySpec_CSRF) GetAdditionalOrigins() []string {
@@ -8999,7 +9378,7 @@ type TrafficPolicySpec_ExtProc struct {
 
 func (x *TrafficPolicySpec_ExtProc) Reset() {
 	*x = TrafficPolicySpec_ExtProc{}
-	mi := &file_resource_proto_msgTypes[95]
+	mi := &file_resource_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9011,7 +9390,7 @@ func (x *TrafficPolicySpec_ExtProc) String() string {
 func (*TrafficPolicySpec_ExtProc) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExtProc) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[95]
+	mi := &file_resource_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9024,7 +9403,7 @@ func (x *TrafficPolicySpec_ExtProc) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_ExtProc.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExtProc) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 12}
+	return file_resource_proto_rawDescGZIP(), []int{49, 12}
 }
 
 func (x *TrafficPolicySpec_ExtProc) GetTarget() *BackendReference {
@@ -9071,7 +9450,7 @@ type TrafficPolicySpec_HostRewrite struct {
 
 func (x *TrafficPolicySpec_HostRewrite) Reset() {
 	*x = TrafficPolicySpec_HostRewrite{}
-	mi := &file_resource_proto_msgTypes[96]
+	mi := &file_resource_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9083,7 +9462,7 @@ func (x *TrafficPolicySpec_HostRewrite) String() string {
 func (*TrafficPolicySpec_HostRewrite) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_HostRewrite) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[96]
+	mi := &file_resource_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9096,7 +9475,7 @@ func (x *TrafficPolicySpec_HostRewrite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_HostRewrite.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_HostRewrite) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 13}
+	return file_resource_proto_rawDescGZIP(), []int{49, 13}
 }
 
 func (x *TrafficPolicySpec_HostRewrite) GetMode() TrafficPolicySpec_HostRewrite_Mode {
@@ -9111,13 +9490,14 @@ type TrafficPolicySpec_RemoteRateLimit_Descriptor struct {
 	Entries       []*TrafficPolicySpec_RemoteRateLimit_Entry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
 	Type          TrafficPolicySpec_RemoteRateLimit_Type     `protobuf:"varint,2,opt,name=type,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_RemoteRateLimit_Type" json:"type,omitempty"`
 	LimitOverride *string                                    `protobuf:"bytes,3,opt,name=limit_override,json=limitOverride,proto3,oneof" json:"limit_override,omitempty"` // CEL expr returning {unit, requestsPerUnit}
+	Cost          *string                                    `protobuf:"bytes,4,opt,name=cost,proto3,oneof" json:"cost,omitempty"`                                        // CEL expr
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) Reset() {
 	*x = TrafficPolicySpec_RemoteRateLimit_Descriptor{}
-	mi := &file_resource_proto_msgTypes[97]
+	mi := &file_resource_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9129,7 +9509,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) String() string {
 func (*TrafficPolicySpec_RemoteRateLimit_Descriptor) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[97]
+	mi := &file_resource_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9142,7 +9522,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) ProtoReflect() protorefle
 
 // Deprecated: Use TrafficPolicySpec_RemoteRateLimit_Descriptor.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_RemoteRateLimit_Descriptor) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0, 0}
 }
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) GetEntries() []*TrafficPolicySpec_RemoteRateLimit_Entry {
@@ -9166,6 +9546,13 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) GetLimitOverride() string
 	return ""
 }
 
+func (x *TrafficPolicySpec_RemoteRateLimit_Descriptor) GetCost() string {
+	if x != nil && x.Cost != nil {
+		return *x.Cost
+	}
+	return ""
+}
+
 type TrafficPolicySpec_RemoteRateLimit_Entry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
@@ -9176,7 +9563,7 @@ type TrafficPolicySpec_RemoteRateLimit_Entry struct {
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Entry) Reset() {
 	*x = TrafficPolicySpec_RemoteRateLimit_Entry{}
-	mi := &file_resource_proto_msgTypes[98]
+	mi := &file_resource_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9188,7 +9575,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Entry) String() string {
 func (*TrafficPolicySpec_RemoteRateLimit_Entry) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Entry) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[98]
+	mi := &file_resource_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9201,7 +9588,7 @@ func (x *TrafficPolicySpec_RemoteRateLimit_Entry) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use TrafficPolicySpec_RemoteRateLimit_Entry.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_RemoteRateLimit_Entry) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 0, 1}
+	return file_resource_proto_rawDescGZIP(), []int{49, 0, 1}
 }
 
 func (x *TrafficPolicySpec_RemoteRateLimit_Entry) GetKey() string {
@@ -9229,7 +9616,7 @@ type TrafficPolicySpec_ExternalAuth_BodyOptions struct {
 
 func (x *TrafficPolicySpec_ExternalAuth_BodyOptions) Reset() {
 	*x = TrafficPolicySpec_ExternalAuth_BodyOptions{}
-	mi := &file_resource_proto_msgTypes[99]
+	mi := &file_resource_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9241,7 +9628,7 @@ func (x *TrafficPolicySpec_ExternalAuth_BodyOptions) String() string {
 func (*TrafficPolicySpec_ExternalAuth_BodyOptions) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExternalAuth_BodyOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[99]
+	mi := &file_resource_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9254,7 +9641,7 @@ func (x *TrafficPolicySpec_ExternalAuth_BodyOptions) ProtoReflect() protoreflect
 
 // Deprecated: Use TrafficPolicySpec_ExternalAuth_BodyOptions.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExternalAuth_BodyOptions) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 2, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 2, 0}
 }
 
 func (x *TrafficPolicySpec_ExternalAuth_BodyOptions) GetMaxRequestBytes() uint32 {
@@ -9288,7 +9675,7 @@ type TrafficPolicySpec_ExternalAuth_GRPCProtocol struct {
 
 func (x *TrafficPolicySpec_ExternalAuth_GRPCProtocol) Reset() {
 	*x = TrafficPolicySpec_ExternalAuth_GRPCProtocol{}
-	mi := &file_resource_proto_msgTypes[100]
+	mi := &file_resource_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9300,7 +9687,7 @@ func (x *TrafficPolicySpec_ExternalAuth_GRPCProtocol) String() string {
 func (*TrafficPolicySpec_ExternalAuth_GRPCProtocol) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExternalAuth_GRPCProtocol) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[100]
+	mi := &file_resource_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9313,7 +9700,7 @@ func (x *TrafficPolicySpec_ExternalAuth_GRPCProtocol) ProtoReflect() protoreflec
 
 // Deprecated: Use TrafficPolicySpec_ExternalAuth_GRPCProtocol.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExternalAuth_GRPCProtocol) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 2, 1}
+	return file_resource_proto_rawDescGZIP(), []int{49, 2, 1}
 }
 
 func (x *TrafficPolicySpec_ExternalAuth_GRPCProtocol) GetContext() map[string]string {
@@ -9343,7 +9730,7 @@ type TrafficPolicySpec_ExternalAuth_HTTPProtocol struct {
 
 func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) Reset() {
 	*x = TrafficPolicySpec_ExternalAuth_HTTPProtocol{}
-	mi := &file_resource_proto_msgTypes[101]
+	mi := &file_resource_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9355,7 +9742,7 @@ func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) String() string {
 func (*TrafficPolicySpec_ExternalAuth_HTTPProtocol) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[101]
+	mi := &file_resource_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9368,7 +9755,7 @@ func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) ProtoReflect() protoreflec
 
 // Deprecated: Use TrafficPolicySpec_ExternalAuth_HTTPProtocol.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExternalAuth_HTTPProtocol) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 2, 2}
+	return file_resource_proto_rawDescGZIP(), []int{49, 2, 2}
 }
 
 func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) GetPath() string {
@@ -9416,7 +9803,7 @@ type TrafficPolicySpec_JWT_MCP struct {
 
 func (x *TrafficPolicySpec_JWT_MCP) Reset() {
 	*x = TrafficPolicySpec_JWT_MCP{}
-	mi := &file_resource_proto_msgTypes[106]
+	mi := &file_resource_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9428,7 +9815,7 @@ func (x *TrafficPolicySpec_JWT_MCP) String() string {
 func (*TrafficPolicySpec_JWT_MCP) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_JWT_MCP) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[106]
+	mi := &file_resource_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9441,7 +9828,7 @@ func (x *TrafficPolicySpec_JWT_MCP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_JWT_MCP.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_JWT_MCP) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 5, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 5, 0}
 }
 
 func (x *TrafficPolicySpec_JWT_MCP) GetProvider() BackendPolicySpec_McpAuthentication_McpIDP {
@@ -9468,7 +9855,7 @@ type TrafficPolicySpec_APIKey_User struct {
 
 func (x *TrafficPolicySpec_APIKey_User) Reset() {
 	*x = TrafficPolicySpec_APIKey_User{}
-	mi := &file_resource_proto_msgTypes[107]
+	mi := &file_resource_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9480,7 +9867,7 @@ func (x *TrafficPolicySpec_APIKey_User) String() string {
 func (*TrafficPolicySpec_APIKey_User) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_APIKey_User) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[107]
+	mi := &file_resource_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9493,7 +9880,7 @@ func (x *TrafficPolicySpec_APIKey_User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficPolicySpec_APIKey_User.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_APIKey_User) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 7, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 7, 0}
 }
 
 func (x *TrafficPolicySpec_APIKey_User) GetKey() string {
@@ -9523,7 +9910,7 @@ type TrafficPolicySpec_TransformationPolicy_Transform struct {
 
 func (x *TrafficPolicySpec_TransformationPolicy_Transform) Reset() {
 	*x = TrafficPolicySpec_TransformationPolicy_Transform{}
-	mi := &file_resource_proto_msgTypes[108]
+	mi := &file_resource_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9535,7 +9922,7 @@ func (x *TrafficPolicySpec_TransformationPolicy_Transform) String() string {
 func (*TrafficPolicySpec_TransformationPolicy_Transform) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_TransformationPolicy_Transform) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[108]
+	mi := &file_resource_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9548,7 +9935,7 @@ func (x *TrafficPolicySpec_TransformationPolicy_Transform) ProtoReflect() protor
 
 // Deprecated: Use TrafficPolicySpec_TransformationPolicy_Transform.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_TransformationPolicy_Transform) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 8, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 8, 0}
 }
 
 func (x *TrafficPolicySpec_TransformationPolicy_Transform) GetSet() []*TrafficPolicySpec_HeaderTransformation {
@@ -9595,7 +9982,7 @@ type TrafficPolicySpec_ExtProc_NamespacedMetadataContext struct {
 
 func (x *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) Reset() {
 	*x = TrafficPolicySpec_ExtProc_NamespacedMetadataContext{}
-	mi := &file_resource_proto_msgTypes[110]
+	mi := &file_resource_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9607,7 +9994,7 @@ func (x *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) String() string {
 func (*TrafficPolicySpec_ExtProc_NamespacedMetadataContext) ProtoMessage() {}
 
 func (x *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[110]
+	mi := &file_resource_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9620,7 +10007,7 @@ func (x *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) ProtoReflect() pro
 
 // Deprecated: Use TrafficPolicySpec_ExtProc_NamespacedMetadataContext.ProtoReflect.Descriptor instead.
 func (*TrafficPolicySpec_ExtProc_NamespacedMetadataContext) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{47, 12, 0}
+	return file_resource_proto_rawDescGZIP(), []int{49, 12, 0}
 }
 
 func (x *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) GetContext() map[string]string {
@@ -9654,7 +10041,7 @@ type BackendPolicySpec_Ai struct {
 
 func (x *BackendPolicySpec_Ai) Reset() {
 	*x = BackendPolicySpec_Ai{}
-	mi := &file_resource_proto_msgTypes[115]
+	mi := &file_resource_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9666,7 +10053,7 @@ func (x *BackendPolicySpec_Ai) String() string {
 func (*BackendPolicySpec_Ai) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[115]
+	mi := &file_resource_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9679,7 +10066,7 @@ func (x *BackendPolicySpec_Ai) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0}
 }
 
 func (x *BackendPolicySpec_Ai) GetPromptGuard() *BackendPolicySpec_Ai_PromptGuard {
@@ -9746,7 +10133,7 @@ type BackendPolicySpec_A2A struct {
 
 func (x *BackendPolicySpec_A2A) Reset() {
 	*x = BackendPolicySpec_A2A{}
-	mi := &file_resource_proto_msgTypes[116]
+	mi := &file_resource_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9758,7 +10145,7 @@ func (x *BackendPolicySpec_A2A) String() string {
 func (*BackendPolicySpec_A2A) ProtoMessage() {}
 
 func (x *BackendPolicySpec_A2A) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[116]
+	mi := &file_resource_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9771,7 +10158,7 @@ func (x *BackendPolicySpec_A2A) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_A2A.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_A2A) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 1}
+	return file_resource_proto_rawDescGZIP(), []int{50, 1}
 }
 
 type BackendPolicySpec_InferenceRouting struct {
@@ -9784,7 +10171,7 @@ type BackendPolicySpec_InferenceRouting struct {
 
 func (x *BackendPolicySpec_InferenceRouting) Reset() {
 	*x = BackendPolicySpec_InferenceRouting{}
-	mi := &file_resource_proto_msgTypes[117]
+	mi := &file_resource_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9796,7 +10183,7 @@ func (x *BackendPolicySpec_InferenceRouting) String() string {
 func (*BackendPolicySpec_InferenceRouting) ProtoMessage() {}
 
 func (x *BackendPolicySpec_InferenceRouting) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[117]
+	mi := &file_resource_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9809,7 +10196,7 @@ func (x *BackendPolicySpec_InferenceRouting) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use BackendPolicySpec_InferenceRouting.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_InferenceRouting) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 2}
+	return file_resource_proto_rawDescGZIP(), []int{50, 2}
 }
 
 func (x *BackendPolicySpec_InferenceRouting) GetEndpointPicker() *BackendReference {
@@ -9857,7 +10244,7 @@ type BackendPolicySpec_Eviction struct {
 
 func (x *BackendPolicySpec_Eviction) Reset() {
 	*x = BackendPolicySpec_Eviction{}
-	mi := &file_resource_proto_msgTypes[118]
+	mi := &file_resource_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9869,7 +10256,7 @@ func (x *BackendPolicySpec_Eviction) String() string {
 func (*BackendPolicySpec_Eviction) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Eviction) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[118]
+	mi := &file_resource_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9882,7 +10269,7 @@ func (x *BackendPolicySpec_Eviction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Eviction.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Eviction) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 3}
+	return file_resource_proto_rawDescGZIP(), []int{50, 3}
 }
 
 func (x *BackendPolicySpec_Eviction) GetDuration() *durationpb.Duration {
@@ -9928,7 +10315,7 @@ type BackendPolicySpec_Health struct {
 
 func (x *BackendPolicySpec_Health) Reset() {
 	*x = BackendPolicySpec_Health{}
-	mi := &file_resource_proto_msgTypes[119]
+	mi := &file_resource_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9940,7 +10327,7 @@ func (x *BackendPolicySpec_Health) String() string {
 func (*BackendPolicySpec_Health) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Health) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[119]
+	mi := &file_resource_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9953,7 +10340,7 @@ func (x *BackendPolicySpec_Health) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Health.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Health) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 4}
+	return file_resource_proto_rawDescGZIP(), []int{50, 4}
 }
 
 func (x *BackendPolicySpec_Health) GetUnhealthyCondition() string {
@@ -9986,14 +10373,17 @@ type BackendPolicySpec_BackendTLS struct {
 	// Unset: use defaults (h2,http/1.1)
 	// Set but empty: send none
 	// Set with values: send those values
-	Alpn          *Alpn `protobuf:"bytes,7,opt,name=alpn,proto3" json:"alpn,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Alpn *Alpn `protobuf:"bytes,7,opt,name=alpn,proto3" json:"alpn,omitempty"`
+	// Key exchange groups allowed for negotiating TLS.
+	// If empty, defaults are used.
+	KeyExchangeGroups []TLSConfig_KeyExchangeGroup `protobuf:"varint,8,rep,packed,name=key_exchange_groups,json=keyExchangeGroups,proto3,enum=agentgateway.dev.resource.TLSConfig_KeyExchangeGroup" json:"key_exchange_groups,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_BackendTLS) Reset() {
 	*x = BackendPolicySpec_BackendTLS{}
-	mi := &file_resource_proto_msgTypes[120]
+	mi := &file_resource_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10005,7 +10395,7 @@ func (x *BackendPolicySpec_BackendTLS) String() string {
 func (*BackendPolicySpec_BackendTLS) ProtoMessage() {}
 
 func (x *BackendPolicySpec_BackendTLS) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[120]
+	mi := &file_resource_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10018,7 +10408,7 @@ func (x *BackendPolicySpec_BackendTLS) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_BackendTLS.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_BackendTLS) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 5}
+	return file_resource_proto_rawDescGZIP(), []int{50, 5}
 }
 
 func (x *BackendPolicySpec_BackendTLS) GetCert() []byte {
@@ -10070,6 +10460,13 @@ func (x *BackendPolicySpec_BackendTLS) GetAlpn() *Alpn {
 	return nil
 }
 
+func (x *BackendPolicySpec_BackendTLS) GetKeyExchangeGroups() []TLSConfig_KeyExchangeGroup {
+	if x != nil {
+		return x.KeyExchangeGroups
+	}
+	return nil
+}
+
 type BackendPolicySpec_BackendHTTP struct {
 	state          protoimpl.MessageState                    `protogen:"open.v1"`
 	Version        BackendPolicySpec_BackendHTTP_HttpVersion `protobuf:"varint,1,opt,name=version,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_BackendHTTP_HttpVersion" json:"version,omitempty"`
@@ -10080,7 +10477,7 @@ type BackendPolicySpec_BackendHTTP struct {
 
 func (x *BackendPolicySpec_BackendHTTP) Reset() {
 	*x = BackendPolicySpec_BackendHTTP{}
-	mi := &file_resource_proto_msgTypes[121]
+	mi := &file_resource_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10092,7 +10489,7 @@ func (x *BackendPolicySpec_BackendHTTP) String() string {
 func (*BackendPolicySpec_BackendHTTP) ProtoMessage() {}
 
 func (x *BackendPolicySpec_BackendHTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[121]
+	mi := &file_resource_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10105,7 +10502,7 @@ func (x *BackendPolicySpec_BackendHTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_BackendHTTP.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_BackendHTTP) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 6}
+	return file_resource_proto_rawDescGZIP(), []int{50, 6}
 }
 
 func (x *BackendPolicySpec_BackendHTTP) GetVersion() BackendPolicySpec_BackendHTTP_HttpVersion {
@@ -10131,7 +10528,7 @@ type BackendPolicySpec_BackendTunnel struct {
 
 func (x *BackendPolicySpec_BackendTunnel) Reset() {
 	*x = BackendPolicySpec_BackendTunnel{}
-	mi := &file_resource_proto_msgTypes[122]
+	mi := &file_resource_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10143,7 +10540,7 @@ func (x *BackendPolicySpec_BackendTunnel) String() string {
 func (*BackendPolicySpec_BackendTunnel) ProtoMessage() {}
 
 func (x *BackendPolicySpec_BackendTunnel) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[122]
+	mi := &file_resource_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10156,7 +10553,7 @@ func (x *BackendPolicySpec_BackendTunnel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_BackendTunnel.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_BackendTunnel) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 7}
+	return file_resource_proto_rawDescGZIP(), []int{50, 7}
 }
 
 func (x *BackendPolicySpec_BackendTunnel) GetProxy() *BackendReference {
@@ -10176,7 +10573,7 @@ type BackendPolicySpec_BackendTCP struct {
 
 func (x *BackendPolicySpec_BackendTCP) Reset() {
 	*x = BackendPolicySpec_BackendTCP{}
-	mi := &file_resource_proto_msgTypes[123]
+	mi := &file_resource_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10188,7 +10585,7 @@ func (x *BackendPolicySpec_BackendTCP) String() string {
 func (*BackendPolicySpec_BackendTCP) ProtoMessage() {}
 
 func (x *BackendPolicySpec_BackendTCP) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[123]
+	mi := &file_resource_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10201,7 +10598,7 @@ func (x *BackendPolicySpec_BackendTCP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_BackendTCP.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_BackendTCP) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 8}
+	return file_resource_proto_rawDescGZIP(), []int{50, 8}
 }
 
 func (x *BackendPolicySpec_BackendTCP) GetKeepalive() *KeepaliveConfig {
@@ -10229,7 +10626,7 @@ type BackendPolicySpec_McpAuthorization struct {
 
 func (x *BackendPolicySpec_McpAuthorization) Reset() {
 	*x = BackendPolicySpec_McpAuthorization{}
-	mi := &file_resource_proto_msgTypes[124]
+	mi := &file_resource_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10241,7 +10638,7 @@ func (x *BackendPolicySpec_McpAuthorization) String() string {
 func (*BackendPolicySpec_McpAuthorization) ProtoMessage() {}
 
 func (x *BackendPolicySpec_McpAuthorization) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[124]
+	mi := &file_resource_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10254,7 +10651,7 @@ func (x *BackendPolicySpec_McpAuthorization) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use BackendPolicySpec_McpAuthorization.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_McpAuthorization) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 9}
+	return file_resource_proto_rawDescGZIP(), []int{50, 9}
 }
 
 func (x *BackendPolicySpec_McpAuthorization) GetAllow() []string {
@@ -10296,7 +10693,7 @@ type BackendPolicySpec_McpAuthentication struct {
 
 func (x *BackendPolicySpec_McpAuthentication) Reset() {
 	*x = BackendPolicySpec_McpAuthentication{}
-	mi := &file_resource_proto_msgTypes[125]
+	mi := &file_resource_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10308,7 +10705,7 @@ func (x *BackendPolicySpec_McpAuthentication) String() string {
 func (*BackendPolicySpec_McpAuthentication) ProtoMessage() {}
 
 func (x *BackendPolicySpec_McpAuthentication) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[125]
+	mi := &file_resource_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10321,7 +10718,7 @@ func (x *BackendPolicySpec_McpAuthentication) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use BackendPolicySpec_McpAuthentication.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_McpAuthentication) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 10}
+	return file_resource_proto_rawDescGZIP(), []int{50, 10}
 }
 
 func (x *BackendPolicySpec_McpAuthentication) GetIssuer() string {
@@ -10390,7 +10787,7 @@ type BackendPolicySpec_Ai_Message struct {
 
 func (x *BackendPolicySpec_Ai_Message) Reset() {
 	*x = BackendPolicySpec_Ai_Message{}
-	mi := &file_resource_proto_msgTypes[126]
+	mi := &file_resource_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10402,7 +10799,7 @@ func (x *BackendPolicySpec_Ai_Message) String() string {
 func (*BackendPolicySpec_Ai_Message) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_Message) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[126]
+	mi := &file_resource_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10415,7 +10812,7 @@ func (x *BackendPolicySpec_Ai_Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_Message.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_Message) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 0}
 }
 
 func (x *BackendPolicySpec_Ai_Message) GetRole() string {
@@ -10442,7 +10839,7 @@ type BackendPolicySpec_Ai_PromptEnrichment struct {
 
 func (x *BackendPolicySpec_Ai_PromptEnrichment) Reset() {
 	*x = BackendPolicySpec_Ai_PromptEnrichment{}
-	mi := &file_resource_proto_msgTypes[127]
+	mi := &file_resource_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10454,7 +10851,7 @@ func (x *BackendPolicySpec_Ai_PromptEnrichment) String() string {
 func (*BackendPolicySpec_Ai_PromptEnrichment) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_PromptEnrichment) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[127]
+	mi := &file_resource_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10467,7 +10864,7 @@ func (x *BackendPolicySpec_Ai_PromptEnrichment) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use BackendPolicySpec_Ai_PromptEnrichment.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_PromptEnrichment) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 1}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 1}
 }
 
 func (x *BackendPolicySpec_Ai_PromptEnrichment) GetAppend() []*BackendPolicySpec_Ai_Message {
@@ -10497,7 +10894,7 @@ type BackendPolicySpec_Ai_RegexRule struct {
 
 func (x *BackendPolicySpec_Ai_RegexRule) Reset() {
 	*x = BackendPolicySpec_Ai_RegexRule{}
-	mi := &file_resource_proto_msgTypes[128]
+	mi := &file_resource_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10509,7 +10906,7 @@ func (x *BackendPolicySpec_Ai_RegexRule) String() string {
 func (*BackendPolicySpec_Ai_RegexRule) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_RegexRule) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[128]
+	mi := &file_resource_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10522,7 +10919,7 @@ func (x *BackendPolicySpec_Ai_RegexRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_RegexRule.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_RegexRule) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 2}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 2}
 }
 
 func (x *BackendPolicySpec_Ai_RegexRule) GetKind() isBackendPolicySpec_Ai_RegexRule_Kind {
@@ -10576,7 +10973,7 @@ type BackendPolicySpec_Ai_RegexRules struct {
 
 func (x *BackendPolicySpec_Ai_RegexRules) Reset() {
 	*x = BackendPolicySpec_Ai_RegexRules{}
-	mi := &file_resource_proto_msgTypes[129]
+	mi := &file_resource_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10588,7 +10985,7 @@ func (x *BackendPolicySpec_Ai_RegexRules) String() string {
 func (*BackendPolicySpec_Ai_RegexRules) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_RegexRules) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[129]
+	mi := &file_resource_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10601,7 +10998,7 @@ func (x *BackendPolicySpec_Ai_RegexRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_RegexRules.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_RegexRules) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 3}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 3}
 }
 
 func (x *BackendPolicySpec_Ai_RegexRules) GetAction() BackendPolicySpec_Ai_ActionKind {
@@ -10628,7 +11025,7 @@ type BackendPolicySpec_Ai_Webhook struct {
 
 func (x *BackendPolicySpec_Ai_Webhook) Reset() {
 	*x = BackendPolicySpec_Ai_Webhook{}
-	mi := &file_resource_proto_msgTypes[130]
+	mi := &file_resource_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10640,7 +11037,7 @@ func (x *BackendPolicySpec_Ai_Webhook) String() string {
 func (*BackendPolicySpec_Ai_Webhook) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_Webhook) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[130]
+	mi := &file_resource_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10653,7 +11050,7 @@ func (x *BackendPolicySpec_Ai_Webhook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_Webhook.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_Webhook) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 4}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 4}
 }
 
 func (x *BackendPolicySpec_Ai_Webhook) GetBackend() *BackendReference {
@@ -10681,7 +11078,7 @@ type BackendPolicySpec_Ai_Moderation struct {
 
 func (x *BackendPolicySpec_Ai_Moderation) Reset() {
 	*x = BackendPolicySpec_Ai_Moderation{}
-	mi := &file_resource_proto_msgTypes[131]
+	mi := &file_resource_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10693,7 +11090,7 @@ func (x *BackendPolicySpec_Ai_Moderation) String() string {
 func (*BackendPolicySpec_Ai_Moderation) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_Moderation) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[131]
+	mi := &file_resource_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10706,7 +11103,7 @@ func (x *BackendPolicySpec_Ai_Moderation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_Moderation.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_Moderation) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 5}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 5}
 }
 
 func (x *BackendPolicySpec_Ai_Moderation) GetModel() string {
@@ -10736,7 +11133,7 @@ type BackendPolicySpec_Ai_BedrockGuardrails struct {
 
 func (x *BackendPolicySpec_Ai_BedrockGuardrails) Reset() {
 	*x = BackendPolicySpec_Ai_BedrockGuardrails{}
-	mi := &file_resource_proto_msgTypes[132]
+	mi := &file_resource_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10748,7 +11145,7 @@ func (x *BackendPolicySpec_Ai_BedrockGuardrails) String() string {
 func (*BackendPolicySpec_Ai_BedrockGuardrails) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_BedrockGuardrails) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[132]
+	mi := &file_resource_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10761,7 +11158,7 @@ func (x *BackendPolicySpec_Ai_BedrockGuardrails) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use BackendPolicySpec_Ai_BedrockGuardrails.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_BedrockGuardrails) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 6}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 6}
 }
 
 func (x *BackendPolicySpec_Ai_BedrockGuardrails) GetIdentifier() string {
@@ -10805,7 +11202,7 @@ type BackendPolicySpec_Ai_GoogleModelArmor struct {
 
 func (x *BackendPolicySpec_Ai_GoogleModelArmor) Reset() {
 	*x = BackendPolicySpec_Ai_GoogleModelArmor{}
-	mi := &file_resource_proto_msgTypes[133]
+	mi := &file_resource_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10817,7 +11214,7 @@ func (x *BackendPolicySpec_Ai_GoogleModelArmor) String() string {
 func (*BackendPolicySpec_Ai_GoogleModelArmor) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_GoogleModelArmor) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[133]
+	mi := &file_resource_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10830,7 +11227,7 @@ func (x *BackendPolicySpec_Ai_GoogleModelArmor) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use BackendPolicySpec_Ai_GoogleModelArmor.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_GoogleModelArmor) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 7}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 7}
 }
 
 func (x *BackendPolicySpec_Ai_GoogleModelArmor) GetTemplateId() string {
@@ -10880,7 +11277,7 @@ type BackendPolicySpec_Ai_AzureContentSafety struct {
 
 func (x *BackendPolicySpec_Ai_AzureContentSafety) Reset() {
 	*x = BackendPolicySpec_Ai_AzureContentSafety{}
-	mi := &file_resource_proto_msgTypes[134]
+	mi := &file_resource_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10892,7 +11289,7 @@ func (x *BackendPolicySpec_Ai_AzureContentSafety) String() string {
 func (*BackendPolicySpec_Ai_AzureContentSafety) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_AzureContentSafety) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[134]
+	mi := &file_resource_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10905,7 +11302,7 @@ func (x *BackendPolicySpec_Ai_AzureContentSafety) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use BackendPolicySpec_Ai_AzureContentSafety.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_AzureContentSafety) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 8}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 8}
 }
 
 func (x *BackendPolicySpec_Ai_AzureContentSafety) GetEndpoint() string {
@@ -10961,7 +11358,7 @@ type BackendPolicySpec_Ai_RequestRejection struct {
 
 func (x *BackendPolicySpec_Ai_RequestRejection) Reset() {
 	*x = BackendPolicySpec_Ai_RequestRejection{}
-	mi := &file_resource_proto_msgTypes[135]
+	mi := &file_resource_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10973,7 +11370,7 @@ func (x *BackendPolicySpec_Ai_RequestRejection) String() string {
 func (*BackendPolicySpec_Ai_RequestRejection) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_RequestRejection) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[135]
+	mi := &file_resource_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10986,7 +11383,7 @@ func (x *BackendPolicySpec_Ai_RequestRejection) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use BackendPolicySpec_Ai_RequestRejection.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_RequestRejection) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 9}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 9}
 }
 
 func (x *BackendPolicySpec_Ai_RequestRejection) GetBody() []byte {
@@ -11022,7 +11419,7 @@ type BackendPolicySpec_Ai_ResponseGuard struct {
 
 func (x *BackendPolicySpec_Ai_ResponseGuard) Reset() {
 	*x = BackendPolicySpec_Ai_ResponseGuard{}
-	mi := &file_resource_proto_msgTypes[136]
+	mi := &file_resource_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11034,7 +11431,7 @@ func (x *BackendPolicySpec_Ai_ResponseGuard) String() string {
 func (*BackendPolicySpec_Ai_ResponseGuard) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_ResponseGuard) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[136]
+	mi := &file_resource_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11047,7 +11444,7 @@ func (x *BackendPolicySpec_Ai_ResponseGuard) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use BackendPolicySpec_Ai_ResponseGuard.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_ResponseGuard) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 10}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 10}
 }
 
 func (x *BackendPolicySpec_Ai_ResponseGuard) GetRejection() *BackendPolicySpec_Ai_RequestRejection {
@@ -11166,7 +11563,7 @@ type BackendPolicySpec_Ai_RequestGuard struct {
 
 func (x *BackendPolicySpec_Ai_RequestGuard) Reset() {
 	*x = BackendPolicySpec_Ai_RequestGuard{}
-	mi := &file_resource_proto_msgTypes[137]
+	mi := &file_resource_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11178,7 +11575,7 @@ func (x *BackendPolicySpec_Ai_RequestGuard) String() string {
 func (*BackendPolicySpec_Ai_RequestGuard) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_RequestGuard) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[137]
+	mi := &file_resource_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11191,7 +11588,7 @@ func (x *BackendPolicySpec_Ai_RequestGuard) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use BackendPolicySpec_Ai_RequestGuard.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_RequestGuard) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 11}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 11}
 }
 
 func (x *BackendPolicySpec_Ai_RequestGuard) GetRejection() *BackendPolicySpec_Ai_RequestRejection {
@@ -11318,7 +11715,7 @@ type BackendPolicySpec_Ai_PromptGuard struct {
 
 func (x *BackendPolicySpec_Ai_PromptGuard) Reset() {
 	*x = BackendPolicySpec_Ai_PromptGuard{}
-	mi := &file_resource_proto_msgTypes[138]
+	mi := &file_resource_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11330,7 +11727,7 @@ func (x *BackendPolicySpec_Ai_PromptGuard) String() string {
 func (*BackendPolicySpec_Ai_PromptGuard) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_PromptGuard) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[138]
+	mi := &file_resource_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11343,7 +11740,7 @@ func (x *BackendPolicySpec_Ai_PromptGuard) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendPolicySpec_Ai_PromptGuard.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_PromptGuard) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 12}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 12}
 }
 
 func (x *BackendPolicySpec_Ai_PromptGuard) GetRequest() []*BackendPolicySpec_Ai_RequestGuard {
@@ -11374,7 +11771,7 @@ type BackendPolicySpec_Ai_PromptCaching struct {
 
 func (x *BackendPolicySpec_Ai_PromptCaching) Reset() {
 	*x = BackendPolicySpec_Ai_PromptCaching{}
-	mi := &file_resource_proto_msgTypes[139]
+	mi := &file_resource_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11386,7 +11783,7 @@ func (x *BackendPolicySpec_Ai_PromptCaching) String() string {
 func (*BackendPolicySpec_Ai_PromptCaching) ProtoMessage() {}
 
 func (x *BackendPolicySpec_Ai_PromptCaching) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[139]
+	mi := &file_resource_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11399,7 +11796,7 @@ func (x *BackendPolicySpec_Ai_PromptCaching) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use BackendPolicySpec_Ai_PromptCaching.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_Ai_PromptCaching) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 0, 13}
+	return file_resource_proto_rawDescGZIP(), []int{50, 0, 13}
 }
 
 func (x *BackendPolicySpec_Ai_PromptCaching) GetCacheSystem() bool {
@@ -11446,7 +11843,7 @@ type BackendPolicySpec_McpAuthentication_ResourceMetadata struct {
 
 func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) Reset() {
 	*x = BackendPolicySpec_McpAuthentication_ResourceMetadata{}
-	mi := &file_resource_proto_msgTypes[145]
+	mi := &file_resource_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11458,7 +11855,7 @@ func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) String() string {
 func (*BackendPolicySpec_McpAuthentication_ResourceMetadata) ProtoMessage() {}
 
 func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[145]
+	mi := &file_resource_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11471,7 +11868,7 @@ func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) ProtoReflect() pr
 
 // Deprecated: Use BackendPolicySpec_McpAuthentication_ResourceMetadata.ProtoReflect.Descriptor instead.
 func (*BackendPolicySpec_McpAuthentication_ResourceMetadata) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{48, 10, 0}
+	return file_resource_proto_rawDescGZIP(), []int{50, 10, 0}
 }
 
 func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) GetExtra() map[string]*structpb.Value {
@@ -11491,7 +11888,7 @@ type AIBackend_HostOverride struct {
 
 func (x *AIBackend_HostOverride) Reset() {
 	*x = AIBackend_HostOverride{}
-	mi := &file_resource_proto_msgTypes[147]
+	mi := &file_resource_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11503,7 +11900,7 @@ func (x *AIBackend_HostOverride) String() string {
 func (*AIBackend_HostOverride) ProtoMessage() {}
 
 func (x *AIBackend_HostOverride) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[147]
+	mi := &file_resource_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11516,7 +11913,7 @@ func (x *AIBackend_HostOverride) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_HostOverride.ProtoReflect.Descriptor instead.
 func (*AIBackend_HostOverride) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 0}
+	return file_resource_proto_rawDescGZIP(), []int{55, 0}
 }
 
 func (x *AIBackend_HostOverride) GetHost() string {
@@ -11542,7 +11939,7 @@ type AIBackend_OpenAI struct {
 
 func (x *AIBackend_OpenAI) Reset() {
 	*x = AIBackend_OpenAI{}
-	mi := &file_resource_proto_msgTypes[148]
+	mi := &file_resource_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11554,7 +11951,7 @@ func (x *AIBackend_OpenAI) String() string {
 func (*AIBackend_OpenAI) ProtoMessage() {}
 
 func (x *AIBackend_OpenAI) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[148]
+	mi := &file_resource_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11567,7 +11964,7 @@ func (x *AIBackend_OpenAI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_OpenAI.ProtoReflect.Descriptor instead.
 func (*AIBackend_OpenAI) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 1}
+	return file_resource_proto_rawDescGZIP(), []int{55, 1}
 }
 
 func (x *AIBackend_OpenAI) GetModel() string {
@@ -11586,7 +11983,7 @@ type AIBackend_Gemini struct {
 
 func (x *AIBackend_Gemini) Reset() {
 	*x = AIBackend_Gemini{}
-	mi := &file_resource_proto_msgTypes[149]
+	mi := &file_resource_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11598,7 +11995,7 @@ func (x *AIBackend_Gemini) String() string {
 func (*AIBackend_Gemini) ProtoMessage() {}
 
 func (x *AIBackend_Gemini) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[149]
+	mi := &file_resource_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11611,7 +12008,7 @@ func (x *AIBackend_Gemini) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Gemini.ProtoReflect.Descriptor instead.
 func (*AIBackend_Gemini) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 2}
+	return file_resource_proto_rawDescGZIP(), []int{55, 2}
 }
 
 func (x *AIBackend_Gemini) GetModel() string {
@@ -11632,7 +12029,7 @@ type AIBackend_Vertex struct {
 
 func (x *AIBackend_Vertex) Reset() {
 	*x = AIBackend_Vertex{}
-	mi := &file_resource_proto_msgTypes[150]
+	mi := &file_resource_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11644,7 +12041,7 @@ func (x *AIBackend_Vertex) String() string {
 func (*AIBackend_Vertex) ProtoMessage() {}
 
 func (x *AIBackend_Vertex) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[150]
+	mi := &file_resource_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11657,7 +12054,7 @@ func (x *AIBackend_Vertex) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Vertex.ProtoReflect.Descriptor instead.
 func (*AIBackend_Vertex) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 3}
+	return file_resource_proto_rawDescGZIP(), []int{55, 3}
 }
 
 func (x *AIBackend_Vertex) GetModel() string {
@@ -11690,7 +12087,7 @@ type AIBackend_Anthropic struct {
 
 func (x *AIBackend_Anthropic) Reset() {
 	*x = AIBackend_Anthropic{}
-	mi := &file_resource_proto_msgTypes[151]
+	mi := &file_resource_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11702,7 +12099,7 @@ func (x *AIBackend_Anthropic) String() string {
 func (*AIBackend_Anthropic) ProtoMessage() {}
 
 func (x *AIBackend_Anthropic) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[151]
+	mi := &file_resource_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11715,7 +12112,7 @@ func (x *AIBackend_Anthropic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Anthropic.ProtoReflect.Descriptor instead.
 func (*AIBackend_Anthropic) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 4}
+	return file_resource_proto_rawDescGZIP(), []int{55, 4}
 }
 
 func (x *AIBackend_Anthropic) GetModel() string {
@@ -11737,7 +12134,7 @@ type AIBackend_Bedrock struct {
 
 func (x *AIBackend_Bedrock) Reset() {
 	*x = AIBackend_Bedrock{}
-	mi := &file_resource_proto_msgTypes[152]
+	mi := &file_resource_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11749,7 +12146,7 @@ func (x *AIBackend_Bedrock) String() string {
 func (*AIBackend_Bedrock) ProtoMessage() {}
 
 func (x *AIBackend_Bedrock) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[152]
+	mi := &file_resource_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11762,7 +12159,7 @@ func (x *AIBackend_Bedrock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Bedrock.ProtoReflect.Descriptor instead.
 func (*AIBackend_Bedrock) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 5}
+	return file_resource_proto_rawDescGZIP(), []int{55, 5}
 }
 
 func (x *AIBackend_Bedrock) GetModel() string {
@@ -11805,7 +12202,7 @@ type AIBackend_AzureOpenAI struct {
 
 func (x *AIBackend_AzureOpenAI) Reset() {
 	*x = AIBackend_AzureOpenAI{}
-	mi := &file_resource_proto_msgTypes[153]
+	mi := &file_resource_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11817,7 +12214,7 @@ func (x *AIBackend_AzureOpenAI) String() string {
 func (*AIBackend_AzureOpenAI) ProtoMessage() {}
 
 func (x *AIBackend_AzureOpenAI) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[153]
+	mi := &file_resource_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11830,7 +12227,7 @@ func (x *AIBackend_AzureOpenAI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_AzureOpenAI.ProtoReflect.Descriptor instead.
 func (*AIBackend_AzureOpenAI) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 6}
+	return file_resource_proto_rawDescGZIP(), []int{55, 6}
 }
 
 func (x *AIBackend_AzureOpenAI) GetModel() string {
@@ -11881,7 +12278,7 @@ type AIBackend_Azure struct {
 
 func (x *AIBackend_Azure) Reset() {
 	*x = AIBackend_Azure{}
-	mi := &file_resource_proto_msgTypes[154]
+	mi := &file_resource_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11893,7 +12290,7 @@ func (x *AIBackend_Azure) String() string {
 func (*AIBackend_Azure) ProtoMessage() {}
 
 func (x *AIBackend_Azure) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[154]
+	mi := &file_resource_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11906,7 +12303,7 @@ func (x *AIBackend_Azure) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Azure.ProtoReflect.Descriptor instead.
 func (*AIBackend_Azure) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 7}
+	return file_resource_proto_rawDescGZIP(), []int{55, 7}
 }
 
 func (x *AIBackend_Azure) GetResourceName() string {
@@ -11967,7 +12364,7 @@ type AIBackend_Provider struct {
 
 func (x *AIBackend_Provider) Reset() {
 	*x = AIBackend_Provider{}
-	mi := &file_resource_proto_msgTypes[155]
+	mi := &file_resource_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11979,7 +12376,7 @@ func (x *AIBackend_Provider) String() string {
 func (*AIBackend_Provider) ProtoMessage() {}
 
 func (x *AIBackend_Provider) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[155]
+	mi := &file_resource_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11992,7 +12389,7 @@ func (x *AIBackend_Provider) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_Provider.ProtoReflect.Descriptor instead.
 func (*AIBackend_Provider) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 8}
+	return file_resource_proto_rawDescGZIP(), []int{55, 8}
 }
 
 func (x *AIBackend_Provider) GetName() string {
@@ -12155,7 +12552,7 @@ type AIBackend_ProviderGroup struct {
 
 func (x *AIBackend_ProviderGroup) Reset() {
 	*x = AIBackend_ProviderGroup{}
-	mi := &file_resource_proto_msgTypes[156]
+	mi := &file_resource_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12167,7 +12564,7 @@ func (x *AIBackend_ProviderGroup) String() string {
 func (*AIBackend_ProviderGroup) ProtoMessage() {}
 
 func (x *AIBackend_ProviderGroup) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[156]
+	mi := &file_resource_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12180,7 +12577,7 @@ func (x *AIBackend_ProviderGroup) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AIBackend_ProviderGroup.ProtoReflect.Descriptor instead.
 func (*AIBackend_ProviderGroup) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{53, 9}
+	return file_resource_proto_rawDescGZIP(), []int{55, 9}
 }
 
 func (x *AIBackend_ProviderGroup) GetProviders() []*AIBackend_Provider {
@@ -12200,7 +12597,7 @@ type BackendReference_Service struct {
 
 func (x *BackendReference_Service) Reset() {
 	*x = BackendReference_Service{}
-	mi := &file_resource_proto_msgTypes[157]
+	mi := &file_resource_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12212,7 +12609,7 @@ func (x *BackendReference_Service) String() string {
 func (*BackendReference_Service) ProtoMessage() {}
 
 func (x *BackendReference_Service) ProtoReflect() protoreflect.Message {
-	mi := &file_resource_proto_msgTypes[157]
+	mi := &file_resource_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12225,7 +12622,7 @@ func (x *BackendReference_Service) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackendReference_Service.ProtoReflect.Descriptor instead.
 func (*BackendReference_Service) Descriptor() ([]byte, []int) {
-	return file_resource_proto_rawDescGZIP(), []int{56, 0}
+	return file_resource_proto_rawDescGZIP(), []int{58, 0}
 }
 
 func (x *BackendReference_Service) GetNamespace() string {
@@ -12325,14 +12722,23 @@ const file_resource_proto_rawDesc = "" +
 	"serviceKey\x128\n" +
 	"\x04name\x18\x03 \x01(\v2$.agentgateway.dev.resource.RouteNameR\x04name\x12\x1c\n" +
 	"\thostnames\x18\x05 \x03(\tR\thostnames\x12C\n" +
-	"\bbackends\x18\x06 \x03(\v2'.agentgateway.dev.resource.RouteBackendR\bbackends\"\x86\x03\n" +
+	"\bbackends\x18\x06 \x03(\v2'.agentgateway.dev.resource.RouteBackendR\bbackends\"_\n" +
+	"\x13ConditionalPolicies\x12H\n" +
+	"\bpolicies\x18\x01 \x03(\v2,.agentgateway.dev.resource.ConditionalPolicyR\bpolicies\"\x96\x01\n" +
+	"\x11ConditionalPolicy\x12!\n" +
+	"\tcondition\x18\x01 \x01(\tH\x01R\tcondition\x88\x01\x01\x12H\n" +
+	"\atraffic\x18\x02 \x01(\v2,.agentgateway.dev.resource.TrafficPolicySpecH\x00R\atrafficB\x06\n" +
+	"\x04kindB\f\n" +
+	"\n" +
+	"_condition\"\xda\x03\n" +
 	"\x06Policy\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12@\n" +
 	"\x04name\x18\x02 \x01(\v2,.agentgateway.dev.resource.TypedResourceNameR\x04name\x12?\n" +
 	"\x06target\x18\x03 \x01(\v2'.agentgateway.dev.resource.PolicyTargetR\x06target\x12H\n" +
 	"\atraffic\x18\x04 \x01(\v2,.agentgateway.dev.resource.TrafficPolicySpecH\x00R\atraffic\x12H\n" +
 	"\abackend\x18\x05 \x01(\v2,.agentgateway.dev.resource.BackendPolicySpecH\x00R\abackend\x12K\n" +
-	"\bfrontend\x18\x06 \x01(\v2-.agentgateway.dev.resource.FrontendPolicySpecH\x00R\bfrontendB\x06\n" +
+	"\bfrontend\x18\x06 \x01(\v2-.agentgateway.dev.resource.FrontendPolicySpecH\x00R\bfrontend\x12R\n" +
+	"\vconditional\x18\a \x01(\v2..agentgateway.dev.resource.ConditionalPoliciesH\x00R\vconditionalB\x06\n" +
 	"\x04kind\"\xf5\x03\n" +
 	"\aBackend\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12;\n" +
@@ -12343,7 +12749,7 @@ const file_resource_proto_rawDesc = "" +
 	"\adynamic\x18\x06 \x01(\v2..agentgateway.dev.resource.DynamicForwardProxyH\x00R\adynamic\x129\n" +
 	"\x03aws\x18\b \x01(\v2%.agentgateway.dev.resource.AwsBackendH\x00R\x03aws\x12U\n" +
 	"\x0finline_policies\x18\a \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\x06\n" +
-	"\x04kind\"\x8b\b\n" +
+	"\x04kind\"\x88\v\n" +
 	"\tTLSConfig\x12\x12\n" +
 	"\x04cert\x18\x01 \x01(\fR\x04cert\x12\x1f\n" +
 	"\vprivate_key\x18\x02 \x01(\fR\n" +
@@ -12354,16 +12760,23 @@ const file_resource_proto_rawDesc = "" +
 	"minVersion\x88\x01\x01\x12U\n" +
 	"\vmax_version\x18\x06 \x01(\x0e2/.agentgateway.dev.resource.TLSConfig.TLSVersionH\x02R\n" +
 	"maxVersion\x88\x01\x01\x12J\n" +
-	"\tmtls_mode\x18\a \x01(\x0e2-.agentgateway.dev.resource.TLSConfig.MTLSModeR\bmtlsMode\"e\n" +
+	"\tmtls_mode\x18\a \x01(\x0e2-.agentgateway.dev.resource.TLSConfig.MTLSModeR\bmtlsMode\x12e\n" +
+	"\x13key_exchange_groups\x18\b \x03(\x0e25.agentgateway.dev.resource.TLSConfig.KeyExchangeGroupR\x11keyExchangeGroups\x12e\n" +
+	"\x12certificate_source\x18\t \x01(\x0e26.agentgateway.dev.resource.TLSConfig.CertificateSourceR\x11certificateSource\"3\n" +
+	"\x11CertificateSource\x12\n" +
+	"\n" +
+	"\x06INLINE\x10\x00\x12\x12\n" +
+	"\x0eISTIO_WORKLOAD\x10\x01\"e\n" +
 	"\n" +
 	"TLSVersion\x12\x1b\n" +
 	"\x17TLS_VERSION_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bTLS_V1_2\x10\x03\x12\f\n" +
-	"\bTLS_V1_3\x10\x04\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\bTLS_V1_0*\bTLS_V1_1\"3\n" +
+	"\bTLS_V1_3\x10\x04\"\x04\b\x01\x10\x01\"\x04\b\x02\x10\x02*\bTLS_V1_0*\bTLS_V1_1\"@\n" +
 	"\bMTLSMode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\x1b\n" +
-	"\x17ALLOW_INSECURE_FALLBACK\x10\x01\"\x99\x03\n" +
+	"\x17ALLOW_INSECURE_FALLBACK\x10\x01\x12\v\n" +
+	"\aDISABLE\x10\x02\"\x99\x03\n" +
 	"\vCipherSuite\x12\x1c\n" +
 	"\x18CIPHER_SUITE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16TLS_AES_256_GCM_SHA384\x10\x01\x12\x1a\n" +
@@ -12374,7 +12787,14 @@ const file_resource_proto_rawDesc = "" +
 	"-TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256\x10\x06\x12)\n" +
 	"%TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384\x10\a\x12)\n" +
 	"%TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256\x10\b\x12/\n" +
-	"+TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256\x10\tB\a\n" +
+	"+TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256\x10\t\"k\n" +
+	"\x10KeyExchangeGroup\x12\"\n" +
+	"\x1eKEY_EXCHANGE_GROUP_UNSPECIFIED\x10\x00\x12\n" +
+	"\n" +
+	"\x06X25519\x10\x01\x12\b\n" +
+	"\x04P256\x10\x02\x12\b\n" +
+	"\x04P384\x10\x03\x12\x13\n" +
+	"\x0fX25519_MLKEM768\x10\x04B\a\n" +
 	"\x05_rootB\x0e\n" +
 	"\f_min_versionB\x0e\n" +
 	"\f_max_version\"\x82\x01\n" +
@@ -12409,8 +12829,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\x86\x01\n" +
 	"\x03Key\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12g\n" +
-	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xf1\x01\n" +
-	"\x03Gcp\x12O\n" +
+	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xa5\x02\n" +
+	"\x03Gcp\x12#\n" +
+	"\n" +
+	"credential\x18\x03 \x01(\tH\x01R\n" +
+	"credential\x88\x01\x01\x12O\n" +
 	"\faccess_token\x18\x01 \x01(\v2*.agentgateway.dev.resource.Gcp.AccessTokenH\x00R\vaccessToken\x12C\n" +
 	"\bid_token\x18\x02 \x01(\v2&.agentgateway.dev.resource.Gcp.IdTokenH\x00R\aidToken\x1a\r\n" +
 	"\vAccessToken\x1a7\n" +
@@ -12418,7 +12841,8 @@ const file_resource_proto_rawDesc = "" +
 	"\baudience\x18\x01 \x01(\tH\x00R\baudience\x88\x01\x01B\v\n" +
 	"\t_audienceB\f\n" +
 	"\n" +
-	"token_type\"\xac\x01\n" +
+	"token_typeB\r\n" +
+	"\v_credential\"\xac\x01\n" +
 	"\x03Aws\x12W\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2,.agentgateway.dev.resource.AwsExplicitConfigH\x00R\x0eexplicitConfig\x12D\n" +
 	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicitB\x06\n" +
@@ -12524,12 +12948,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x0froute_group_key\x18\x06 \x01(\tH\x00R\rrouteGroupKey\x88\x01\x01\x12\x16\n" +
 	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12W\n" +
 	"\x10backend_policies\x18\x05 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPoliciesB\x12\n" +
-	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xd4\x06\n" +
+	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xa6\b\n" +
 	"\fPolicyTarget\x12Q\n" +
 	"\agateway\x18\x01 \x01(\v25.agentgateway.dev.resource.PolicyTarget.GatewayTargetH\x00R\agateway\x12K\n" +
 	"\x05route\x18\x02 \x01(\v23.agentgateway.dev.resource.PolicyTarget.RouteTargetH\x00R\x05route\x12Q\n" +
 	"\abackend\x18\x03 \x01(\v25.agentgateway.dev.resource.PolicyTarget.BackendTargetH\x00R\abackend\x12Q\n" +
-	"\aservice\x18\x04 \x01(\v25.agentgateway.dev.resource.PolicyTarget.ServiceTargetH\x00R\aservice\x1ak\n" +
+	"\aservice\x18\x04 \x01(\v25.agentgateway.dev.resource.PolicyTarget.ServiceTargetH\x00R\aservice\x12^\n" +
+	"\flistener_set\x18\x05 \x01(\v29.agentgateway.dev.resource.PolicyTarget.ListenerSetTargetH\x00R\vlistenerSet\x1ak\n" +
 	"\rServiceTarget\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x17\n" +
@@ -12554,14 +12979,20 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"route_rule\x18\x03 \x01(\tH\x00R\trouteRule\x88\x01\x01\x12\x12\n" +
 	"\x04kind\x18\x04 \x01(\tR\x04kindB\r\n" +
-	"\v_route_ruleB\x06\n" +
+	"\v_route_rule\x1ap\n" +
+	"\x11ListenerSetTarget\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x1d\n" +
+	"\asection\x18\x03 \x01(\tH\x00R\asection\x88\x01\x01B\n" +
+	"\n" +
+	"\b_sectionB\x06\n" +
 	"\x04kind\"\xa2\x01\n" +
 	"\x0fKeepaliveConfig\x12-\n" +
 	"\x04time\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x04time\x125\n" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\x9f\x1f\n" +
+	"\b_retries\"\xd8 \n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -12570,7 +13001,7 @@ const file_resource_proto_rawDesc = "" +
 	"\atracing\x18\x05 \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.TracingH\x00R\atracing\x12y\n" +
 	"\x15network_authorization\x18\x06 \x01(\v2B.agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorizationH\x00R\x14networkAuthorization\x12d\n" +
 	"\x0eproxy_protocol\x18\a \x01(\v2;.agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocolH\x00R\rproxyProtocol\x12Q\n" +
-	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\xc4\x05\n" +
+	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\x96\x06\n" +
 	"\x04HTTP\x12+\n" +
 	"\x0fmax_buffer_size\x18\x01 \x01(\rH\x00R\rmaxBufferSize\x88\x01\x01\x12/\n" +
 	"\x11http1_max_headers\x18\x02 \x01(\rH\x01R\x0fhttp1MaxHeaders\x88\x01\x01\x12G\n" +
@@ -12580,12 +13011,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x10http2_frame_size\x18\x06 \x01(\rH\x04R\x0ehttp2FrameSize\x88\x01\x01\x12S\n" +
 	"\x18http2_keepalive_interval\x18\a \x01(\v2\x19.google.protobuf.DurationR\x16http2KeepaliveInterval\x12Q\n" +
 	"\x17http2_keepalive_timeout\x18\b \x01(\v2\x19.google.protobuf.DurationR\x15http2KeepaliveTimeout\x12Q\n" +
-	"\x17max_connection_duration\x18\t \x01(\v2\x19.google.protobuf.DurationR\x15maxConnectionDurationB\x12\n" +
+	"\x17max_connection_duration\x18\t \x01(\v2\x19.google.protobuf.DurationR\x15maxConnectionDuration\x126\n" +
+	"\x15http2_max_header_size\x18\n" +
+	" \x01(\rH\x05R\x12http2MaxHeaderSize\x88\x01\x01B\x12\n" +
 	"\x10_max_buffer_sizeB\x14\n" +
 	"\x12_http1_max_headersB\x14\n" +
 	"\x12_http2_window_sizeB\x1f\n" +
 	"\x1d_http2_connection_window_sizeB\x13\n" +
-	"\x11_http2_frame_size\x1a\xa7\x03\n" +
+	"\x11_http2_frame_sizeB\x18\n" +
+	"\x16_http2_max_header_size\x1a\x8e\x04\n" +
 	"\x03TLS\x12F\n" +
 	"\x11handshake_timeout\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x10handshakeTimeout\x123\n" +
 	"\x04alpn\x18\x02 \x01(\v2\x1f.agentgateway.dev.resource.AlpnR\x04alpn\x12U\n" +
@@ -12593,7 +13027,8 @@ const file_resource_proto_rawDesc = "" +
 	"\vmin_version\x18\x04 \x01(\x0e2/.agentgateway.dev.resource.TLSConfig.TLSVersionH\x00R\n" +
 	"minVersion\x88\x01\x01\x12U\n" +
 	"\vmax_version\x18\x05 \x01(\x0e2/.agentgateway.dev.resource.TLSConfig.TLSVersionH\x01R\n" +
-	"maxVersion\x88\x01\x01B\x0e\n" +
+	"maxVersion\x88\x01\x01\x12e\n" +
+	"\x13key_exchange_groups\x18\x06 \x03(\x0e25.agentgateway.dev.resource.TLSConfig.KeyExchangeGroupR\x11keyExchangeGroupsB\x0e\n" +
 	"\f_min_versionB\x0e\n" +
 	"\f_max_version\x1aQ\n" +
 	"\x03TCP\x12J\n" +
@@ -12668,7 +13103,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xc1A\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xe3A\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -12694,18 +13129,20 @@ const file_resource_proto_rawDesc = "" +
 	"basic_auth\x18\x13 \x01(\v2@.agentgateway.dev.resource.TrafficPolicySpec.BasicAuthenticationH\x00R\tbasicAuth\x12W\n" +
 	"\fapi_key_auth\x18\x14 \x01(\v23.agentgateway.dev.resource.TrafficPolicySpec.APIKeyH\x00R\n" +
 	"apiKeyAuth\x12]\n" +
-	"\fhost_rewrite\x18\x15 \x01(\v28.agentgateway.dev.resource.TrafficPolicySpec.HostRewriteH\x00R\vhostRewrite\x1a\xcb\x05\n" +
+	"\fhost_rewrite\x18\x15 \x01(\v28.agentgateway.dev.resource.TrafficPolicySpec.HostRewriteH\x00R\vhostRewrite\x1a\xed\x05\n" +
 	"\x0fRemoteRateLimit\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12i\n" +
 	"\vdescriptors\x18\x02 \x03(\v2G.agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.DescriptorR\vdescriptors\x12C\n" +
 	"\x06target\x18\x03 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12k\n" +
-	"\ffailure_mode\x18\x04 \x01(\x0e2H.agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureModeR\vfailureMode\x1a\x80\x02\n" +
+	"\ffailure_mode\x18\x04 \x01(\x0e2H.agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureModeR\vfailureMode\x1a\xa2\x02\n" +
 	"\n" +
 	"Descriptor\x12\\\n" +
 	"\aentries\x18\x01 \x03(\v2B.agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.EntryR\aentries\x12U\n" +
 	"\x04type\x18\x02 \x01(\x0e2A.agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.TypeR\x04type\x12*\n" +
-	"\x0elimit_override\x18\x03 \x01(\tH\x00R\rlimitOverride\x88\x01\x01B\x11\n" +
-	"\x0f_limit_override\x1a/\n" +
+	"\x0elimit_override\x18\x03 \x01(\tH\x00R\rlimitOverride\x88\x01\x01\x12\x17\n" +
+	"\x04cost\x18\x04 \x01(\tH\x01R\x04cost\x88\x01\x01B\x11\n" +
+	"\x0f_limit_overrideB\a\n" +
+	"\x05_cost\x1a/\n" +
 	"\x05Entry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\" \n" +
@@ -12866,7 +13303,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xe5H\n" +
+	"\x04kind\"\xa6J\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -12886,7 +13323,8 @@ const file_resource_proto_rawDesc = "" +
 	"backendTcp\x12k\n" +
 	"\x0etransformation\x18\x0e \x01(\v2A.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicyH\x00R\x0etransformation\x12M\n" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
-	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x1a\xd9'\n" +
+	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
+	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x1a\xd9'\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -13038,7 +13476,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11_health_thresholdJ\x04\b\x02\x10\x03J\x04\b\x04\x10\x05R\x11max_eviction_timeR\x14max_eviction_percent\x1a\x8c\x01\n" +
 	"\x06Health\x12/\n" +
 	"\x13unhealthy_condition\x18\x01 \x01(\tR\x12unhealthyCondition\x12Q\n" +
-	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xbe\x03\n" +
+	"\beviction\x18\x02 \x01(\v25.agentgateway.dev.resource.BackendPolicySpec.EvictionR\beviction\x1a\xa5\x04\n" +
 	"\n" +
 	"BackendTLS\x12\x17\n" +
 	"\x04cert\x18\x01 \x01(\fH\x00R\x04cert\x88\x01\x01\x12\x15\n" +
@@ -13047,7 +13485,8 @@ const file_resource_proto_rawDesc = "" +
 	"\fverification\x18\x04 \x01(\x0e2H.agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationModeR\fverification\x12\x1f\n" +
 	"\bhostname\x18\x05 \x01(\tH\x03R\bhostname\x88\x01\x01\x127\n" +
 	"\x18verify_subject_alt_names\x18\x06 \x03(\tR\x15verifySubjectAltNames\x123\n" +
-	"\x04alpn\x18\a \x01(\v2\x1f.agentgateway.dev.resource.AlpnR\x04alpn\"C\n" +
+	"\x04alpn\x18\a \x01(\v2\x1f.agentgateway.dev.resource.AlpnR\x04alpn\x12e\n" +
+	"\x13key_exchange_groups\x18\b \x03(\x0e25.agentgateway.dev.resource.TLSConfig.KeyExchangeGroupR\x11keyExchangeGroups\"C\n" +
 	"\x10VerificationMode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\x11\n" +
@@ -13244,478 +13683,492 @@ func file_resource_proto_rawDescGZIP() []byte {
 	return file_resource_proto_rawDescData
 }
 
-var file_resource_proto_enumTypes = make([]protoimpl.EnumInfo, 33)
-var file_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 158)
+var file_resource_proto_enumTypes = make([]protoimpl.EnumInfo, 35)
+var file_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 161)
 var file_resource_proto_goTypes = []any{
-	(Protocol)(0),              // 0: agentgateway.dev.resource.Protocol
-	(Bind_Protocol)(0),         // 1: agentgateway.dev.resource.Bind.Protocol
-	(Bind_TunnelProtocol)(0),   // 2: agentgateway.dev.resource.Bind.TunnelProtocol
-	(TLSConfig_TLSVersion)(0),  // 3: agentgateway.dev.resource.TLSConfig.TLSVersion
-	(TLSConfig_MTLSMode)(0),    // 4: agentgateway.dev.resource.TLSConfig.MTLSMode
-	(TLSConfig_CipherSuite)(0), // 5: agentgateway.dev.resource.TLSConfig.CipherSuite
-	(FrontendPolicySpec_Logging_OtlpAccessLog_Protocol)(0),      // 6: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
-	(FrontendPolicySpec_Tracing_Protocol)(0),                    // 7: agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
-	(FrontendPolicySpec_ProxyProtocol_Version)(0),               // 8: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
-	(FrontendPolicySpec_ProxyProtocol_Mode)(0),                  // 9: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
-	(TrafficPolicySpec_PolicyPhase)(0),                          // 10: agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
-	(TrafficPolicySpec_RemoteRateLimit_Type)(0),                 // 11: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
-	(TrafficPolicySpec_RemoteRateLimit_FailureMode)(0),          // 12: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
-	(TrafficPolicySpec_LocalRateLimit_Type)(0),                  // 13: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
-	(TrafficPolicySpec_ExternalAuth_FailureMode)(0),             // 14: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
-	(TrafficPolicySpec_JWT_Mode)(0),                             // 15: agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
-	(TrafficPolicySpec_BasicAuthentication_Mode)(0),             // 16: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
-	(TrafficPolicySpec_APIKey_Mode)(0),                          // 17: agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
-	(TrafficPolicySpec_ExtProc_FailureMode)(0),                  // 18: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
-	(TrafficPolicySpec_HostRewrite_Mode)(0),                     // 19: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
-	(BackendPolicySpec_Ai_BuiltinRegexRule)(0),                  // 20: agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
-	(BackendPolicySpec_Ai_ActionKind)(0),                        // 21: agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
-	(BackendPolicySpec_Ai_RouteType)(0),                         // 22: agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
-	(BackendPolicySpec_InferenceRouting_FailureMode)(0),         // 23: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	(BackendPolicySpec_BackendTLS_VerificationMode)(0),          // 24: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
-	(BackendPolicySpec_BackendHTTP_HttpVersion)(0),              // 25: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
-	(BackendPolicySpec_McpAuthentication_McpIDP)(0),             // 26: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 27: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
-	(AIBackend_AzureResourceType)(0),                            // 28: agentgateway.dev.resource.AIBackend.AzureResourceType
-	(MCPBackend_StatefulMode)(0),                                // 29: agentgateway.dev.resource.MCPBackend.StatefulMode
-	(MCPBackend_PrefixMode)(0),                                  // 30: agentgateway.dev.resource.MCPBackend.PrefixMode
-	(MCPBackend_FailureMode)(0),                                 // 31: agentgateway.dev.resource.MCPBackend.FailureMode
-	(MCPTarget_Protocol)(0),                                     // 32: agentgateway.dev.resource.MCPTarget.Protocol
-	(*Resource)(nil),                                            // 33: agentgateway.dev.resource.Resource
-	(*Bind)(nil),                                                // 34: agentgateway.dev.resource.Bind
-	(*RouteName)(nil),                                           // 35: agentgateway.dev.resource.RouteName
-	(*ListenerName)(nil),                                        // 36: agentgateway.dev.resource.ListenerName
-	(*ResourceName)(nil),                                        // 37: agentgateway.dev.resource.ResourceName
-	(*TypedResourceName)(nil),                                   // 38: agentgateway.dev.resource.TypedResourceName
-	(*Listener)(nil),                                            // 39: agentgateway.dev.resource.Listener
-	(*Route)(nil),                                               // 40: agentgateway.dev.resource.Route
-	(*RouteGroup)(nil),                                          // 41: agentgateway.dev.resource.RouteGroup
-	(*TCPRoute)(nil),                                            // 42: agentgateway.dev.resource.TCPRoute
-	(*Policy)(nil),                                              // 43: agentgateway.dev.resource.Policy
-	(*Backend)(nil),                                             // 44: agentgateway.dev.resource.Backend
-	(*TLSConfig)(nil),                                           // 45: agentgateway.dev.resource.TLSConfig
-	(*Timeout)(nil),                                             // 46: agentgateway.dev.resource.Timeout
-	(*Retry)(nil),                                               // 47: agentgateway.dev.resource.Retry
-	(*BackendAuthPolicy)(nil),                                   // 48: agentgateway.dev.resource.BackendAuthPolicy
-	(*AuthorizationLocation)(nil),                               // 49: agentgateway.dev.resource.AuthorizationLocation
-	(*Passthrough)(nil),                                         // 50: agentgateway.dev.resource.Passthrough
-	(*Key)(nil),                                                 // 51: agentgateway.dev.resource.Key
-	(*Gcp)(nil),                                                 // 52: agentgateway.dev.resource.Gcp
-	(*Aws)(nil),                                                 // 53: agentgateway.dev.resource.Aws
-	(*Azure)(nil),                                               // 54: agentgateway.dev.resource.Azure
-	(*AwsExplicitConfig)(nil),                                   // 55: agentgateway.dev.resource.AwsExplicitConfig
-	(*AwsImplicit)(nil),                                         // 56: agentgateway.dev.resource.AwsImplicit
-	(*AzureExplicitConfig)(nil),                                 // 57: agentgateway.dev.resource.AzureExplicitConfig
-	(*AzureClientSecret)(nil),                                   // 58: agentgateway.dev.resource.AzureClientSecret
-	(*AzureManagedIdentityCredential)(nil),                      // 59: agentgateway.dev.resource.AzureManagedIdentityCredential
-	(*AzureWorkloadIdentityCredential)(nil),                     // 60: agentgateway.dev.resource.AzureWorkloadIdentityCredential
-	(*AzureDeveloperImplicit)(nil),                              // 61: agentgateway.dev.resource.AzureDeveloperImplicit
-	(*AzureImplicit)(nil),                                       // 62: agentgateway.dev.resource.AzureImplicit
-	(*RouteMatch)(nil),                                          // 63: agentgateway.dev.resource.RouteMatch
-	(*PathMatch)(nil),                                           // 64: agentgateway.dev.resource.PathMatch
-	(*QueryMatch)(nil),                                          // 65: agentgateway.dev.resource.QueryMatch
-	(*MethodMatch)(nil),                                         // 66: agentgateway.dev.resource.MethodMatch
-	(*HeaderMatch)(nil),                                         // 67: agentgateway.dev.resource.HeaderMatch
-	(*CORS)(nil),                                                // 68: agentgateway.dev.resource.CORS
-	(*DirectResponse)(nil),                                      // 69: agentgateway.dev.resource.DirectResponse
-	(*HeaderModifier)(nil),                                      // 70: agentgateway.dev.resource.HeaderModifier
-	(*RequestMirrors)(nil),                                      // 71: agentgateway.dev.resource.RequestMirrors
-	(*RequestRedirect)(nil),                                     // 72: agentgateway.dev.resource.RequestRedirect
-	(*UrlRewrite)(nil),                                          // 73: agentgateway.dev.resource.UrlRewrite
-	(*Header)(nil),                                              // 74: agentgateway.dev.resource.Header
-	(*RouteBackend)(nil),                                        // 75: agentgateway.dev.resource.RouteBackend
-	(*PolicyTarget)(nil),                                        // 76: agentgateway.dev.resource.PolicyTarget
-	(*KeepaliveConfig)(nil),                                     // 77: agentgateway.dev.resource.KeepaliveConfig
-	(*FrontendPolicySpec)(nil),                                  // 78: agentgateway.dev.resource.FrontendPolicySpec
-	(*JWTValidationOptions)(nil),                                // 79: agentgateway.dev.resource.JWTValidationOptions
-	(*TrafficPolicySpec)(nil),                                   // 80: agentgateway.dev.resource.TrafficPolicySpec
-	(*BackendPolicySpec)(nil),                                   // 81: agentgateway.dev.resource.BackendPolicySpec
-	(*StaticBackend)(nil),                                       // 82: agentgateway.dev.resource.StaticBackend
-	(*DynamicForwardProxy)(nil),                                 // 83: agentgateway.dev.resource.DynamicForwardProxy
-	(*AwsBackend)(nil),                                          // 84: agentgateway.dev.resource.AwsBackend
-	(*AwsAgentCoreBackend)(nil),                                 // 85: agentgateway.dev.resource.AwsAgentCoreBackend
-	(*AIBackend)(nil),                                           // 86: agentgateway.dev.resource.AIBackend
-	(*MCPBackend)(nil),                                          // 87: agentgateway.dev.resource.MCPBackend
-	(*MCPTarget)(nil),                                           // 88: agentgateway.dev.resource.MCPTarget
-	(*BackendReference)(nil),                                    // 89: agentgateway.dev.resource.BackendReference
-	(*Alpn)(nil),                                                // 90: agentgateway.dev.resource.Alpn
-	(*AuthorizationLocation_Header)(nil),                        // 91: agentgateway.dev.resource.AuthorizationLocation.Header
-	(*AuthorizationLocation_QueryParameter)(nil),                // 92: agentgateway.dev.resource.AuthorizationLocation.QueryParameter
-	(*AuthorizationLocation_Cookie)(nil),                        // 93: agentgateway.dev.resource.AuthorizationLocation.Cookie
-	(*Gcp_AccessToken)(nil),                                     // 94: agentgateway.dev.resource.Gcp.AccessToken
-	(*Gcp_IdToken)(nil),                                         // 95: agentgateway.dev.resource.Gcp.IdToken
-	(*AzureManagedIdentityCredential_UserAssignedIdentity)(nil), // 96: agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
-	(*RequestMirrors_Mirror)(nil),                               // 97: agentgateway.dev.resource.RequestMirrors.Mirror
-	(*PolicyTarget_ServiceTarget)(nil),                          // 98: agentgateway.dev.resource.PolicyTarget.ServiceTarget
-	(*PolicyTarget_BackendTarget)(nil),                          // 99: agentgateway.dev.resource.PolicyTarget.BackendTarget
-	(*PolicyTarget_GatewayTarget)(nil),                          // 100: agentgateway.dev.resource.PolicyTarget.GatewayTarget
-	(*PolicyTarget_RouteTarget)(nil),                            // 101: agentgateway.dev.resource.PolicyTarget.RouteTarget
-	(*FrontendPolicySpec_HTTP)(nil),                             // 102: agentgateway.dev.resource.FrontendPolicySpec.HTTP
-	(*FrontendPolicySpec_TLS)(nil),                              // 103: agentgateway.dev.resource.FrontendPolicySpec.TLS
-	(*FrontendPolicySpec_TCP)(nil),                              // 104: agentgateway.dev.resource.FrontendPolicySpec.TCP
-	(*FrontendPolicySpec_NetworkAuthorization)(nil),             // 105: agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
-	(*FrontendPolicySpec_Logging)(nil),                          // 106: agentgateway.dev.resource.FrontendPolicySpec.Logging
-	(*FrontendPolicySpec_Tracing)(nil),                          // 107: agentgateway.dev.resource.FrontendPolicySpec.Tracing
-	(*FrontendPolicySpec_TracingAttribute)(nil),                 // 108: agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	(*FrontendPolicySpec_ProxyProtocol)(nil),                    // 109: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
-	(*FrontendPolicySpec_Metrics)(nil),                          // 110: agentgateway.dev.resource.FrontendPolicySpec.Metrics
-	(*FrontendPolicySpec_Logging_Field)(nil),                    // 111: agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
-	(*FrontendPolicySpec_Logging_Fields)(nil),                   // 112: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
-	(*FrontendPolicySpec_Logging_OtlpAccessLog)(nil),            // 113: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
-	(*FrontendPolicySpec_Metrics_Field)(nil),                    // 114: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
-	(*FrontendPolicySpec_Metrics_Fields)(nil),                   // 115: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
-	(*TrafficPolicySpec_RemoteRateLimit)(nil),                   // 116: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
-	(*TrafficPolicySpec_LocalRateLimit)(nil),                    // 117: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
-	(*TrafficPolicySpec_ExternalAuth)(nil),                      // 118: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	(*TrafficPolicySpec_RBAC)(nil),                              // 119: agentgateway.dev.resource.TrafficPolicySpec.RBAC
-	(*TrafficPolicySpec_JWTProvider)(nil),                       // 120: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
-	(*TrafficPolicySpec_JWT)(nil),                               // 121: agentgateway.dev.resource.TrafficPolicySpec.JWT
-	(*TrafficPolicySpec_BasicAuthentication)(nil),               // 122: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
-	(*TrafficPolicySpec_APIKey)(nil),                            // 123: agentgateway.dev.resource.TrafficPolicySpec.APIKey
-	(*TrafficPolicySpec_TransformationPolicy)(nil),              // 124: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	(*TrafficPolicySpec_HeaderTransformation)(nil),              // 125: agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	(*TrafficPolicySpec_BodyTransformation)(nil),                // 126: agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
-	(*TrafficPolicySpec_CSRF)(nil),                              // 127: agentgateway.dev.resource.TrafficPolicySpec.CSRF
-	(*TrafficPolicySpec_ExtProc)(nil),                           // 128: agentgateway.dev.resource.TrafficPolicySpec.ExtProc
-	(*TrafficPolicySpec_HostRewrite)(nil),                       // 129: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
-	(*TrafficPolicySpec_RemoteRateLimit_Descriptor)(nil),        // 130: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
-	(*TrafficPolicySpec_RemoteRateLimit_Entry)(nil),             // 131: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
-	(*TrafficPolicySpec_ExternalAuth_BodyOptions)(nil),          // 132: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
-	(*TrafficPolicySpec_ExternalAuth_GRPCProtocol)(nil),         // 133: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
-	(*TrafficPolicySpec_ExternalAuth_HTTPProtocol)(nil),         // 134: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
-	nil,                                   // 135: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
-	nil,                                   // 136: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
-	nil,                                   // 137: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
-	nil,                                   // 138: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
-	(*TrafficPolicySpec_JWT_MCP)(nil),     // 139: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
-	(*TrafficPolicySpec_APIKey_User)(nil), // 140: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
-	(*TrafficPolicySpec_TransformationPolicy_Transform)(nil), // 141: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	nil, // 142: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
-	(*TrafficPolicySpec_ExtProc_NamespacedMetadataContext)(nil), // 143: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
-	nil,                           // 144: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
-	nil,                           // 145: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
-	nil,                           // 146: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
-	nil,                           // 147: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
-	(*BackendPolicySpec_Ai)(nil),  // 148: agentgateway.dev.resource.BackendPolicySpec.Ai
-	(*BackendPolicySpec_A2A)(nil), // 149: agentgateway.dev.resource.BackendPolicySpec.A2a
-	(*BackendPolicySpec_InferenceRouting)(nil),      // 150: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
-	(*BackendPolicySpec_Eviction)(nil),              // 151: agentgateway.dev.resource.BackendPolicySpec.Eviction
-	(*BackendPolicySpec_Health)(nil),                // 152: agentgateway.dev.resource.BackendPolicySpec.Health
-	(*BackendPolicySpec_BackendTLS)(nil),            // 153: agentgateway.dev.resource.BackendPolicySpec.BackendTLS
-	(*BackendPolicySpec_BackendHTTP)(nil),           // 154: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
-	(*BackendPolicySpec_BackendTunnel)(nil),         // 155: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
-	(*BackendPolicySpec_BackendTCP)(nil),            // 156: agentgateway.dev.resource.BackendPolicySpec.BackendTCP
-	(*BackendPolicySpec_McpAuthorization)(nil),      // 157: agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
-	(*BackendPolicySpec_McpAuthentication)(nil),     // 158: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
-	(*BackendPolicySpec_Ai_Message)(nil),            // 159: agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	(*BackendPolicySpec_Ai_PromptEnrichment)(nil),   // 160: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
-	(*BackendPolicySpec_Ai_RegexRule)(nil),          // 161: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
-	(*BackendPolicySpec_Ai_RegexRules)(nil),         // 162: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	(*BackendPolicySpec_Ai_Webhook)(nil),            // 163: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	(*BackendPolicySpec_Ai_Moderation)(nil),         // 164: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
-	(*BackendPolicySpec_Ai_BedrockGuardrails)(nil),  // 165: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	(*BackendPolicySpec_Ai_GoogleModelArmor)(nil),   // 166: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	(*BackendPolicySpec_Ai_AzureContentSafety)(nil), // 167: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	(*BackendPolicySpec_Ai_RequestRejection)(nil),   // 168: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	(*BackendPolicySpec_Ai_ResponseGuard)(nil),      // 169: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
-	(*BackendPolicySpec_Ai_RequestGuard)(nil),       // 170: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
-	(*BackendPolicySpec_Ai_PromptGuard)(nil),        // 171: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
-	(*BackendPolicySpec_Ai_PromptCaching)(nil),      // 172: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
-	nil, // 173: agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
-	nil, // 174: agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
-	nil, // 175: agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	nil, // 176: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
-	nil, // 177: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
-	(*BackendPolicySpec_McpAuthentication_ResourceMetadata)(nil), // 178: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	nil,                                    // 179: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	(*AIBackend_HostOverride)(nil),         // 180: agentgateway.dev.resource.AIBackend.HostOverride
-	(*AIBackend_OpenAI)(nil),               // 181: agentgateway.dev.resource.AIBackend.OpenAI
-	(*AIBackend_Gemini)(nil),               // 182: agentgateway.dev.resource.AIBackend.Gemini
-	(*AIBackend_Vertex)(nil),               // 183: agentgateway.dev.resource.AIBackend.Vertex
-	(*AIBackend_Anthropic)(nil),            // 184: agentgateway.dev.resource.AIBackend.Anthropic
-	(*AIBackend_Bedrock)(nil),              // 185: agentgateway.dev.resource.AIBackend.Bedrock
-	(*AIBackend_AzureOpenAI)(nil),          // 186: agentgateway.dev.resource.AIBackend.AzureOpenAI
-	(*AIBackend_Azure)(nil),                // 187: agentgateway.dev.resource.AIBackend.Azure
-	(*AIBackend_Provider)(nil),             // 188: agentgateway.dev.resource.AIBackend.Provider
-	(*AIBackend_ProviderGroup)(nil),        // 189: agentgateway.dev.resource.AIBackend.ProviderGroup
-	(*BackendReference_Service)(nil),       // 190: agentgateway.dev.resource.BackendReference.Service
-	(*workloadapi.Workload)(nil),           // 191: istio.workload.Workload
-	(*workloadapi.Service)(nil),            // 192: istio.workload.Service
-	(*workloadapi.NamespacedHostname)(nil), // 193: istio.workload.NamespacedHostname
-	(*durationpb.Duration)(nil),            // 194: google.protobuf.Duration
-	(*structpb.Struct)(nil),                // 195: google.protobuf.Struct
-	(*structpb.Value)(nil),                 // 196: google.protobuf.Value
+	(Protocol)(0),                                               // 0: agentgateway.dev.resource.Protocol
+	(Bind_Protocol)(0),                                          // 1: agentgateway.dev.resource.Bind.Protocol
+	(Bind_TunnelProtocol)(0),                                    // 2: agentgateway.dev.resource.Bind.TunnelProtocol
+	(TLSConfig_CertificateSource)(0),                            // 3: agentgateway.dev.resource.TLSConfig.CertificateSource
+	(TLSConfig_TLSVersion)(0),                                   // 4: agentgateway.dev.resource.TLSConfig.TLSVersion
+	(TLSConfig_MTLSMode)(0),                                     // 5: agentgateway.dev.resource.TLSConfig.MTLSMode
+	(TLSConfig_CipherSuite)(0),                                  // 6: agentgateway.dev.resource.TLSConfig.CipherSuite
+	(TLSConfig_KeyExchangeGroup)(0),                             // 7: agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	(FrontendPolicySpec_Logging_OtlpAccessLog_Protocol)(0),      // 8: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
+	(FrontendPolicySpec_Tracing_Protocol)(0),                    // 9: agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
+	(FrontendPolicySpec_ProxyProtocol_Version)(0),               // 10: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
+	(FrontendPolicySpec_ProxyProtocol_Mode)(0),                  // 11: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
+	(TrafficPolicySpec_PolicyPhase)(0),                          // 12: agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
+	(TrafficPolicySpec_RemoteRateLimit_Type)(0),                 // 13: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
+	(TrafficPolicySpec_RemoteRateLimit_FailureMode)(0),          // 14: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
+	(TrafficPolicySpec_LocalRateLimit_Type)(0),                  // 15: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
+	(TrafficPolicySpec_ExternalAuth_FailureMode)(0),             // 16: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
+	(TrafficPolicySpec_JWT_Mode)(0),                             // 17: agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
+	(TrafficPolicySpec_BasicAuthentication_Mode)(0),             // 18: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
+	(TrafficPolicySpec_APIKey_Mode)(0),                          // 19: agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
+	(TrafficPolicySpec_ExtProc_FailureMode)(0),                  // 20: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
+	(TrafficPolicySpec_HostRewrite_Mode)(0),                     // 21: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
+	(BackendPolicySpec_Ai_BuiltinRegexRule)(0),                  // 22: agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
+	(BackendPolicySpec_Ai_ActionKind)(0),                        // 23: agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
+	(BackendPolicySpec_Ai_RouteType)(0),                         // 24: agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
+	(BackendPolicySpec_InferenceRouting_FailureMode)(0),         // 25: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
+	(BackendPolicySpec_BackendTLS_VerificationMode)(0),          // 26: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
+	(BackendPolicySpec_BackendHTTP_HttpVersion)(0),              // 27: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
+	(BackendPolicySpec_McpAuthentication_McpIDP)(0),             // 28: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 29: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
+	(AIBackend_AzureResourceType)(0),                            // 30: agentgateway.dev.resource.AIBackend.AzureResourceType
+	(MCPBackend_StatefulMode)(0),                                // 31: agentgateway.dev.resource.MCPBackend.StatefulMode
+	(MCPBackend_PrefixMode)(0),                                  // 32: agentgateway.dev.resource.MCPBackend.PrefixMode
+	(MCPBackend_FailureMode)(0),                                 // 33: agentgateway.dev.resource.MCPBackend.FailureMode
+	(MCPTarget_Protocol)(0),                                     // 34: agentgateway.dev.resource.MCPTarget.Protocol
+	(*Resource)(nil),                                            // 35: agentgateway.dev.resource.Resource
+	(*Bind)(nil),                                                // 36: agentgateway.dev.resource.Bind
+	(*RouteName)(nil),                                           // 37: agentgateway.dev.resource.RouteName
+	(*ListenerName)(nil),                                        // 38: agentgateway.dev.resource.ListenerName
+	(*ResourceName)(nil),                                        // 39: agentgateway.dev.resource.ResourceName
+	(*TypedResourceName)(nil),                                   // 40: agentgateway.dev.resource.TypedResourceName
+	(*Listener)(nil),                                            // 41: agentgateway.dev.resource.Listener
+	(*Route)(nil),                                               // 42: agentgateway.dev.resource.Route
+	(*RouteGroup)(nil),                                          // 43: agentgateway.dev.resource.RouteGroup
+	(*TCPRoute)(nil),                                            // 44: agentgateway.dev.resource.TCPRoute
+	(*ConditionalPolicies)(nil),                                 // 45: agentgateway.dev.resource.ConditionalPolicies
+	(*ConditionalPolicy)(nil),                                   // 46: agentgateway.dev.resource.ConditionalPolicy
+	(*Policy)(nil),                                              // 47: agentgateway.dev.resource.Policy
+	(*Backend)(nil),                                             // 48: agentgateway.dev.resource.Backend
+	(*TLSConfig)(nil),                                           // 49: agentgateway.dev.resource.TLSConfig
+	(*Timeout)(nil),                                             // 50: agentgateway.dev.resource.Timeout
+	(*Retry)(nil),                                               // 51: agentgateway.dev.resource.Retry
+	(*BackendAuthPolicy)(nil),                                   // 52: agentgateway.dev.resource.BackendAuthPolicy
+	(*AuthorizationLocation)(nil),                               // 53: agentgateway.dev.resource.AuthorizationLocation
+	(*Passthrough)(nil),                                         // 54: agentgateway.dev.resource.Passthrough
+	(*Key)(nil),                                                 // 55: agentgateway.dev.resource.Key
+	(*Gcp)(nil),                                                 // 56: agentgateway.dev.resource.Gcp
+	(*Aws)(nil),                                                 // 57: agentgateway.dev.resource.Aws
+	(*Azure)(nil),                                               // 58: agentgateway.dev.resource.Azure
+	(*AwsExplicitConfig)(nil),                                   // 59: agentgateway.dev.resource.AwsExplicitConfig
+	(*AwsImplicit)(nil),                                         // 60: agentgateway.dev.resource.AwsImplicit
+	(*AzureExplicitConfig)(nil),                                 // 61: agentgateway.dev.resource.AzureExplicitConfig
+	(*AzureClientSecret)(nil),                                   // 62: agentgateway.dev.resource.AzureClientSecret
+	(*AzureManagedIdentityCredential)(nil),                      // 63: agentgateway.dev.resource.AzureManagedIdentityCredential
+	(*AzureWorkloadIdentityCredential)(nil),                     // 64: agentgateway.dev.resource.AzureWorkloadIdentityCredential
+	(*AzureDeveloperImplicit)(nil),                              // 65: agentgateway.dev.resource.AzureDeveloperImplicit
+	(*AzureImplicit)(nil),                                       // 66: agentgateway.dev.resource.AzureImplicit
+	(*RouteMatch)(nil),                                          // 67: agentgateway.dev.resource.RouteMatch
+	(*PathMatch)(nil),                                           // 68: agentgateway.dev.resource.PathMatch
+	(*QueryMatch)(nil),                                          // 69: agentgateway.dev.resource.QueryMatch
+	(*MethodMatch)(nil),                                         // 70: agentgateway.dev.resource.MethodMatch
+	(*HeaderMatch)(nil),                                         // 71: agentgateway.dev.resource.HeaderMatch
+	(*CORS)(nil),                                                // 72: agentgateway.dev.resource.CORS
+	(*DirectResponse)(nil),                                      // 73: agentgateway.dev.resource.DirectResponse
+	(*HeaderModifier)(nil),                                      // 74: agentgateway.dev.resource.HeaderModifier
+	(*RequestMirrors)(nil),                                      // 75: agentgateway.dev.resource.RequestMirrors
+	(*RequestRedirect)(nil),                                     // 76: agentgateway.dev.resource.RequestRedirect
+	(*UrlRewrite)(nil),                                          // 77: agentgateway.dev.resource.UrlRewrite
+	(*Header)(nil),                                              // 78: agentgateway.dev.resource.Header
+	(*RouteBackend)(nil),                                        // 79: agentgateway.dev.resource.RouteBackend
+	(*PolicyTarget)(nil),                                        // 80: agentgateway.dev.resource.PolicyTarget
+	(*KeepaliveConfig)(nil),                                     // 81: agentgateway.dev.resource.KeepaliveConfig
+	(*FrontendPolicySpec)(nil),                                  // 82: agentgateway.dev.resource.FrontendPolicySpec
+	(*JWTValidationOptions)(nil),                                // 83: agentgateway.dev.resource.JWTValidationOptions
+	(*TrafficPolicySpec)(nil),                                   // 84: agentgateway.dev.resource.TrafficPolicySpec
+	(*BackendPolicySpec)(nil),                                   // 85: agentgateway.dev.resource.BackendPolicySpec
+	(*StaticBackend)(nil),                                       // 86: agentgateway.dev.resource.StaticBackend
+	(*DynamicForwardProxy)(nil),                                 // 87: agentgateway.dev.resource.DynamicForwardProxy
+	(*AwsBackend)(nil),                                          // 88: agentgateway.dev.resource.AwsBackend
+	(*AwsAgentCoreBackend)(nil),                                 // 89: agentgateway.dev.resource.AwsAgentCoreBackend
+	(*AIBackend)(nil),                                           // 90: agentgateway.dev.resource.AIBackend
+	(*MCPBackend)(nil),                                          // 91: agentgateway.dev.resource.MCPBackend
+	(*MCPTarget)(nil),                                           // 92: agentgateway.dev.resource.MCPTarget
+	(*BackendReference)(nil),                                    // 93: agentgateway.dev.resource.BackendReference
+	(*Alpn)(nil),                                                // 94: agentgateway.dev.resource.Alpn
+	(*AuthorizationLocation_Header)(nil),                        // 95: agentgateway.dev.resource.AuthorizationLocation.Header
+	(*AuthorizationLocation_QueryParameter)(nil),                // 96: agentgateway.dev.resource.AuthorizationLocation.QueryParameter
+	(*AuthorizationLocation_Cookie)(nil),                        // 97: agentgateway.dev.resource.AuthorizationLocation.Cookie
+	(*Gcp_AccessToken)(nil),                                     // 98: agentgateway.dev.resource.Gcp.AccessToken
+	(*Gcp_IdToken)(nil),                                         // 99: agentgateway.dev.resource.Gcp.IdToken
+	(*AzureManagedIdentityCredential_UserAssignedIdentity)(nil), // 100: agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
+	(*RequestMirrors_Mirror)(nil),                               // 101: agentgateway.dev.resource.RequestMirrors.Mirror
+	(*PolicyTarget_ServiceTarget)(nil),                          // 102: agentgateway.dev.resource.PolicyTarget.ServiceTarget
+	(*PolicyTarget_BackendTarget)(nil),                          // 103: agentgateway.dev.resource.PolicyTarget.BackendTarget
+	(*PolicyTarget_GatewayTarget)(nil),                          // 104: agentgateway.dev.resource.PolicyTarget.GatewayTarget
+	(*PolicyTarget_RouteTarget)(nil),                            // 105: agentgateway.dev.resource.PolicyTarget.RouteTarget
+	(*PolicyTarget_ListenerSetTarget)(nil),                      // 106: agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
+	(*FrontendPolicySpec_HTTP)(nil),                             // 107: agentgateway.dev.resource.FrontendPolicySpec.HTTP
+	(*FrontendPolicySpec_TLS)(nil),                              // 108: agentgateway.dev.resource.FrontendPolicySpec.TLS
+	(*FrontendPolicySpec_TCP)(nil),                              // 109: agentgateway.dev.resource.FrontendPolicySpec.TCP
+	(*FrontendPolicySpec_NetworkAuthorization)(nil),             // 110: agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
+	(*FrontendPolicySpec_Logging)(nil),                          // 111: agentgateway.dev.resource.FrontendPolicySpec.Logging
+	(*FrontendPolicySpec_Tracing)(nil),                          // 112: agentgateway.dev.resource.FrontendPolicySpec.Tracing
+	(*FrontendPolicySpec_TracingAttribute)(nil),                 // 113: agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	(*FrontendPolicySpec_ProxyProtocol)(nil),                    // 114: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
+	(*FrontendPolicySpec_Metrics)(nil),                          // 115: agentgateway.dev.resource.FrontendPolicySpec.Metrics
+	(*FrontendPolicySpec_Logging_Field)(nil),                    // 116: agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
+	(*FrontendPolicySpec_Logging_Fields)(nil),                   // 117: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
+	(*FrontendPolicySpec_Logging_OtlpAccessLog)(nil),            // 118: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
+	(*FrontendPolicySpec_Metrics_Field)(nil),                    // 119: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
+	(*FrontendPolicySpec_Metrics_Fields)(nil),                   // 120: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
+	(*TrafficPolicySpec_RemoteRateLimit)(nil),                   // 121: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
+	(*TrafficPolicySpec_LocalRateLimit)(nil),                    // 122: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
+	(*TrafficPolicySpec_ExternalAuth)(nil),                      // 123: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	(*TrafficPolicySpec_RBAC)(nil),                              // 124: agentgateway.dev.resource.TrafficPolicySpec.RBAC
+	(*TrafficPolicySpec_JWTProvider)(nil),                       // 125: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
+	(*TrafficPolicySpec_JWT)(nil),                               // 126: agentgateway.dev.resource.TrafficPolicySpec.JWT
+	(*TrafficPolicySpec_BasicAuthentication)(nil),               // 127: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
+	(*TrafficPolicySpec_APIKey)(nil),                            // 128: agentgateway.dev.resource.TrafficPolicySpec.APIKey
+	(*TrafficPolicySpec_TransformationPolicy)(nil),              // 129: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	(*TrafficPolicySpec_HeaderTransformation)(nil),              // 130: agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	(*TrafficPolicySpec_BodyTransformation)(nil),                // 131: agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
+	(*TrafficPolicySpec_CSRF)(nil),                              // 132: agentgateway.dev.resource.TrafficPolicySpec.CSRF
+	(*TrafficPolicySpec_ExtProc)(nil),                           // 133: agentgateway.dev.resource.TrafficPolicySpec.ExtProc
+	(*TrafficPolicySpec_HostRewrite)(nil),                       // 134: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
+	(*TrafficPolicySpec_RemoteRateLimit_Descriptor)(nil),        // 135: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
+	(*TrafficPolicySpec_RemoteRateLimit_Entry)(nil),             // 136: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
+	(*TrafficPolicySpec_ExternalAuth_BodyOptions)(nil),          // 137: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
+	(*TrafficPolicySpec_ExternalAuth_GRPCProtocol)(nil),         // 138: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
+	(*TrafficPolicySpec_ExternalAuth_HTTPProtocol)(nil),         // 139: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
+	nil,                                   // 140: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
+	nil,                                   // 141: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
+	nil,                                   // 142: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
+	nil,                                   // 143: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
+	(*TrafficPolicySpec_JWT_MCP)(nil),     // 144: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
+	(*TrafficPolicySpec_APIKey_User)(nil), // 145: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
+	(*TrafficPolicySpec_TransformationPolicy_Transform)(nil), // 146: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	nil, // 147: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
+	(*TrafficPolicySpec_ExtProc_NamespacedMetadataContext)(nil), // 148: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
+	nil,                           // 149: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
+	nil,                           // 150: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
+	nil,                           // 151: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
+	nil,                           // 152: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
+	(*BackendPolicySpec_Ai)(nil),  // 153: agentgateway.dev.resource.BackendPolicySpec.Ai
+	(*BackendPolicySpec_A2A)(nil), // 154: agentgateway.dev.resource.BackendPolicySpec.A2a
+	(*BackendPolicySpec_InferenceRouting)(nil),      // 155: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
+	(*BackendPolicySpec_Eviction)(nil),              // 156: agentgateway.dev.resource.BackendPolicySpec.Eviction
+	(*BackendPolicySpec_Health)(nil),                // 157: agentgateway.dev.resource.BackendPolicySpec.Health
+	(*BackendPolicySpec_BackendTLS)(nil),            // 158: agentgateway.dev.resource.BackendPolicySpec.BackendTLS
+	(*BackendPolicySpec_BackendHTTP)(nil),           // 159: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
+	(*BackendPolicySpec_BackendTunnel)(nil),         // 160: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
+	(*BackendPolicySpec_BackendTCP)(nil),            // 161: agentgateway.dev.resource.BackendPolicySpec.BackendTCP
+	(*BackendPolicySpec_McpAuthorization)(nil),      // 162: agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
+	(*BackendPolicySpec_McpAuthentication)(nil),     // 163: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
+	(*BackendPolicySpec_Ai_Message)(nil),            // 164: agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	(*BackendPolicySpec_Ai_PromptEnrichment)(nil),   // 165: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
+	(*BackendPolicySpec_Ai_RegexRule)(nil),          // 166: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
+	(*BackendPolicySpec_Ai_RegexRules)(nil),         // 167: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	(*BackendPolicySpec_Ai_Webhook)(nil),            // 168: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	(*BackendPolicySpec_Ai_Moderation)(nil),         // 169: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
+	(*BackendPolicySpec_Ai_BedrockGuardrails)(nil),  // 170: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	(*BackendPolicySpec_Ai_GoogleModelArmor)(nil),   // 171: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	(*BackendPolicySpec_Ai_AzureContentSafety)(nil), // 172: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	(*BackendPolicySpec_Ai_RequestRejection)(nil),   // 173: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	(*BackendPolicySpec_Ai_ResponseGuard)(nil),      // 174: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
+	(*BackendPolicySpec_Ai_RequestGuard)(nil),       // 175: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
+	(*BackendPolicySpec_Ai_PromptGuard)(nil),        // 176: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
+	(*BackendPolicySpec_Ai_PromptCaching)(nil),      // 177: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
+	nil, // 178: agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
+	nil, // 179: agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
+	nil, // 180: agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
+	nil, // 181: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
+	nil, // 182: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
+	(*BackendPolicySpec_McpAuthentication_ResourceMetadata)(nil), // 183: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	nil,                                    // 184: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	(*AIBackend_HostOverride)(nil),         // 185: agentgateway.dev.resource.AIBackend.HostOverride
+	(*AIBackend_OpenAI)(nil),               // 186: agentgateway.dev.resource.AIBackend.OpenAI
+	(*AIBackend_Gemini)(nil),               // 187: agentgateway.dev.resource.AIBackend.Gemini
+	(*AIBackend_Vertex)(nil),               // 188: agentgateway.dev.resource.AIBackend.Vertex
+	(*AIBackend_Anthropic)(nil),            // 189: agentgateway.dev.resource.AIBackend.Anthropic
+	(*AIBackend_Bedrock)(nil),              // 190: agentgateway.dev.resource.AIBackend.Bedrock
+	(*AIBackend_AzureOpenAI)(nil),          // 191: agentgateway.dev.resource.AIBackend.AzureOpenAI
+	(*AIBackend_Azure)(nil),                // 192: agentgateway.dev.resource.AIBackend.Azure
+	(*AIBackend_Provider)(nil),             // 193: agentgateway.dev.resource.AIBackend.Provider
+	(*AIBackend_ProviderGroup)(nil),        // 194: agentgateway.dev.resource.AIBackend.ProviderGroup
+	(*BackendReference_Service)(nil),       // 195: agentgateway.dev.resource.BackendReference.Service
+	(*workloadapi.Workload)(nil),           // 196: istio.workload.Workload
+	(*workloadapi.Service)(nil),            // 197: istio.workload.Service
+	(*workloadapi.NamespacedHostname)(nil), // 198: istio.workload.NamespacedHostname
+	(*durationpb.Duration)(nil),            // 199: google.protobuf.Duration
+	(*structpb.Struct)(nil),                // 200: google.protobuf.Struct
+	(*structpb.Value)(nil),                 // 201: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
-	34,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
-	39,  // 1: agentgateway.dev.resource.Resource.listener:type_name -> agentgateway.dev.resource.Listener
-	40,  // 2: agentgateway.dev.resource.Resource.route:type_name -> agentgateway.dev.resource.Route
-	44,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
-	43,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
-	42,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
-	191, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
-	192, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
-	41,  // 8: agentgateway.dev.resource.Resource.route_group:type_name -> agentgateway.dev.resource.RouteGroup
+	36,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
+	41,  // 1: agentgateway.dev.resource.Resource.listener:type_name -> agentgateway.dev.resource.Listener
+	42,  // 2: agentgateway.dev.resource.Resource.route:type_name -> agentgateway.dev.resource.Route
+	48,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
+	47,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
+	44,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
+	196, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
+	197, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
+	43,  // 8: agentgateway.dev.resource.Resource.route_group:type_name -> agentgateway.dev.resource.RouteGroup
 	1,   // 9: agentgateway.dev.resource.Bind.protocol:type_name -> agentgateway.dev.resource.Bind.Protocol
 	2,   // 10: agentgateway.dev.resource.Bind.tunnel_protocol:type_name -> agentgateway.dev.resource.Bind.TunnelProtocol
-	37,  // 11: agentgateway.dev.resource.ListenerName.listener_set:type_name -> agentgateway.dev.resource.ResourceName
-	36,  // 12: agentgateway.dev.resource.Listener.name:type_name -> agentgateway.dev.resource.ListenerName
+	39,  // 11: agentgateway.dev.resource.ListenerName.listener_set:type_name -> agentgateway.dev.resource.ResourceName
+	38,  // 12: agentgateway.dev.resource.Listener.name:type_name -> agentgateway.dev.resource.ListenerName
 	0,   // 13: agentgateway.dev.resource.Listener.protocol:type_name -> agentgateway.dev.resource.Protocol
-	45,  // 14: agentgateway.dev.resource.Listener.tls:type_name -> agentgateway.dev.resource.TLSConfig
-	193, // 15: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
-	35,  // 16: agentgateway.dev.resource.Route.name:type_name -> agentgateway.dev.resource.RouteName
-	63,  // 17: agentgateway.dev.resource.Route.matches:type_name -> agentgateway.dev.resource.RouteMatch
-	75,  // 18: agentgateway.dev.resource.Route.backends:type_name -> agentgateway.dev.resource.RouteBackend
-	80,  // 19: agentgateway.dev.resource.Route.traffic_policies:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	193, // 20: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
-	35,  // 21: agentgateway.dev.resource.TCPRoute.name:type_name -> agentgateway.dev.resource.RouteName
-	75,  // 22: agentgateway.dev.resource.TCPRoute.backends:type_name -> agentgateway.dev.resource.RouteBackend
-	38,  // 23: agentgateway.dev.resource.Policy.name:type_name -> agentgateway.dev.resource.TypedResourceName
-	76,  // 24: agentgateway.dev.resource.Policy.target:type_name -> agentgateway.dev.resource.PolicyTarget
-	80,  // 25: agentgateway.dev.resource.Policy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	81,  // 26: agentgateway.dev.resource.Policy.backend:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	78,  // 27: agentgateway.dev.resource.Policy.frontend:type_name -> agentgateway.dev.resource.FrontendPolicySpec
-	37,  // 28: agentgateway.dev.resource.Backend.name:type_name -> agentgateway.dev.resource.ResourceName
-	82,  // 29: agentgateway.dev.resource.Backend.static:type_name -> agentgateway.dev.resource.StaticBackend
-	86,  // 30: agentgateway.dev.resource.Backend.ai:type_name -> agentgateway.dev.resource.AIBackend
-	87,  // 31: agentgateway.dev.resource.Backend.mcp:type_name -> agentgateway.dev.resource.MCPBackend
-	83,  // 32: agentgateway.dev.resource.Backend.dynamic:type_name -> agentgateway.dev.resource.DynamicForwardProxy
-	84,  // 33: agentgateway.dev.resource.Backend.aws:type_name -> agentgateway.dev.resource.AwsBackend
-	81,  // 34: agentgateway.dev.resource.Backend.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	5,   // 35: agentgateway.dev.resource.TLSConfig.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
-	3,   // 36: agentgateway.dev.resource.TLSConfig.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	3,   // 37: agentgateway.dev.resource.TLSConfig.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	4,   // 38: agentgateway.dev.resource.TLSConfig.mtls_mode:type_name -> agentgateway.dev.resource.TLSConfig.MTLSMode
-	194, // 39: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
-	194, // 40: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
-	194, // 41: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
-	50,  // 42: agentgateway.dev.resource.BackendAuthPolicy.passthrough:type_name -> agentgateway.dev.resource.Passthrough
-	51,  // 43: agentgateway.dev.resource.BackendAuthPolicy.key:type_name -> agentgateway.dev.resource.Key
-	52,  // 44: agentgateway.dev.resource.BackendAuthPolicy.gcp:type_name -> agentgateway.dev.resource.Gcp
-	53,  // 45: agentgateway.dev.resource.BackendAuthPolicy.aws:type_name -> agentgateway.dev.resource.Aws
-	54,  // 46: agentgateway.dev.resource.BackendAuthPolicy.azure:type_name -> agentgateway.dev.resource.Azure
-	91,  // 47: agentgateway.dev.resource.AuthorizationLocation.header:type_name -> agentgateway.dev.resource.AuthorizationLocation.Header
-	92,  // 48: agentgateway.dev.resource.AuthorizationLocation.query_parameter:type_name -> agentgateway.dev.resource.AuthorizationLocation.QueryParameter
-	93,  // 49: agentgateway.dev.resource.AuthorizationLocation.cookie:type_name -> agentgateway.dev.resource.AuthorizationLocation.Cookie
-	49,  // 50: agentgateway.dev.resource.Passthrough.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	49,  // 51: agentgateway.dev.resource.Key.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	94,  // 52: agentgateway.dev.resource.Gcp.access_token:type_name -> agentgateway.dev.resource.Gcp.AccessToken
-	95,  // 53: agentgateway.dev.resource.Gcp.id_token:type_name -> agentgateway.dev.resource.Gcp.IdToken
-	55,  // 54: agentgateway.dev.resource.Aws.explicit_config:type_name -> agentgateway.dev.resource.AwsExplicitConfig
-	56,  // 55: agentgateway.dev.resource.Aws.implicit:type_name -> agentgateway.dev.resource.AwsImplicit
-	57,  // 56: agentgateway.dev.resource.Azure.explicit_config:type_name -> agentgateway.dev.resource.AzureExplicitConfig
-	61,  // 57: agentgateway.dev.resource.Azure.developer_implicit:type_name -> agentgateway.dev.resource.AzureDeveloperImplicit
-	62,  // 58: agentgateway.dev.resource.Azure.implicit:type_name -> agentgateway.dev.resource.AzureImplicit
-	58,  // 59: agentgateway.dev.resource.AzureExplicitConfig.client_secret:type_name -> agentgateway.dev.resource.AzureClientSecret
-	59,  // 60: agentgateway.dev.resource.AzureExplicitConfig.managed_identity_credential:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential
-	60,  // 61: agentgateway.dev.resource.AzureExplicitConfig.workload_identity_credential:type_name -> agentgateway.dev.resource.AzureWorkloadIdentityCredential
-	96,  // 62: agentgateway.dev.resource.AzureManagedIdentityCredential.user_assigned_identity:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
-	64,  // 63: agentgateway.dev.resource.RouteMatch.path:type_name -> agentgateway.dev.resource.PathMatch
-	67,  // 64: agentgateway.dev.resource.RouteMatch.headers:type_name -> agentgateway.dev.resource.HeaderMatch
-	66,  // 65: agentgateway.dev.resource.RouteMatch.method:type_name -> agentgateway.dev.resource.MethodMatch
-	65,  // 66: agentgateway.dev.resource.RouteMatch.query_params:type_name -> agentgateway.dev.resource.QueryMatch
-	194, // 67: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
-	74,  // 68: agentgateway.dev.resource.HeaderModifier.add:type_name -> agentgateway.dev.resource.Header
-	74,  // 69: agentgateway.dev.resource.HeaderModifier.set:type_name -> agentgateway.dev.resource.Header
-	97,  // 70: agentgateway.dev.resource.RequestMirrors.mirrors:type_name -> agentgateway.dev.resource.RequestMirrors.Mirror
-	89,  // 71: agentgateway.dev.resource.RouteBackend.backend:type_name -> agentgateway.dev.resource.BackendReference
-	81,  // 72: agentgateway.dev.resource.RouteBackend.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	100, // 73: agentgateway.dev.resource.PolicyTarget.gateway:type_name -> agentgateway.dev.resource.PolicyTarget.GatewayTarget
-	101, // 74: agentgateway.dev.resource.PolicyTarget.route:type_name -> agentgateway.dev.resource.PolicyTarget.RouteTarget
-	99,  // 75: agentgateway.dev.resource.PolicyTarget.backend:type_name -> agentgateway.dev.resource.PolicyTarget.BackendTarget
-	98,  // 76: agentgateway.dev.resource.PolicyTarget.service:type_name -> agentgateway.dev.resource.PolicyTarget.ServiceTarget
-	194, // 77: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
-	194, // 78: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
-	104, // 79: agentgateway.dev.resource.FrontendPolicySpec.tcp:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TCP
-	103, // 80: agentgateway.dev.resource.FrontendPolicySpec.tls:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TLS
-	102, // 81: agentgateway.dev.resource.FrontendPolicySpec.http:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP
-	106, // 82: agentgateway.dev.resource.FrontendPolicySpec.logging:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging
-	107, // 83: agentgateway.dev.resource.FrontendPolicySpec.tracing:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing
-	105, // 84: agentgateway.dev.resource.FrontendPolicySpec.network_authorization:type_name -> agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
-	109, // 85: agentgateway.dev.resource.FrontendPolicySpec.proxy_protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
-	110, // 86: agentgateway.dev.resource.FrontendPolicySpec.metrics:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics
-	10,  // 87: agentgateway.dev.resource.TrafficPolicySpec.phase:type_name -> agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
-	46,  // 88: agentgateway.dev.resource.TrafficPolicySpec.timeout:type_name -> agentgateway.dev.resource.Timeout
-	47,  // 89: agentgateway.dev.resource.TrafficPolicySpec.retry:type_name -> agentgateway.dev.resource.Retry
-	117, // 90: agentgateway.dev.resource.TrafficPolicySpec.local_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
-	118, // 91: agentgateway.dev.resource.TrafficPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	119, // 92: agentgateway.dev.resource.TrafficPolicySpec.authorization:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RBAC
-	121, // 93: agentgateway.dev.resource.TrafficPolicySpec.jwt:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT
-	124, // 94: agentgateway.dev.resource.TrafficPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	116, // 95: agentgateway.dev.resource.TrafficPolicySpec.remote_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
-	127, // 96: agentgateway.dev.resource.TrafficPolicySpec.csrf:type_name -> agentgateway.dev.resource.TrafficPolicySpec.CSRF
-	128, // 97: agentgateway.dev.resource.TrafficPolicySpec.ext_proc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc
-	70,  // 98: agentgateway.dev.resource.TrafficPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	70,  // 99: agentgateway.dev.resource.TrafficPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	72,  // 100: agentgateway.dev.resource.TrafficPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
-	73,  // 101: agentgateway.dev.resource.TrafficPolicySpec.url_rewrite:type_name -> agentgateway.dev.resource.UrlRewrite
-	71,  // 102: agentgateway.dev.resource.TrafficPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
-	69,  // 103: agentgateway.dev.resource.TrafficPolicySpec.direct_response:type_name -> agentgateway.dev.resource.DirectResponse
-	68,  // 104: agentgateway.dev.resource.TrafficPolicySpec.cors:type_name -> agentgateway.dev.resource.CORS
-	122, // 105: agentgateway.dev.resource.TrafficPolicySpec.basic_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
-	123, // 106: agentgateway.dev.resource.TrafficPolicySpec.api_key_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey
-	129, // 107: agentgateway.dev.resource.TrafficPolicySpec.host_rewrite:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
-	149, // 108: agentgateway.dev.resource.BackendPolicySpec.a2a:type_name -> agentgateway.dev.resource.BackendPolicySpec.A2a
-	150, // 109: agentgateway.dev.resource.BackendPolicySpec.inference_routing:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
-	153, // 110: agentgateway.dev.resource.BackendPolicySpec.backend_tls:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS
-	48,  // 111: agentgateway.dev.resource.BackendPolicySpec.auth:type_name -> agentgateway.dev.resource.BackendAuthPolicy
-	157, // 112: agentgateway.dev.resource.BackendPolicySpec.mcp_authorization:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
-	158, // 113: agentgateway.dev.resource.BackendPolicySpec.mcp_authentication:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
-	148, // 114: agentgateway.dev.resource.BackendPolicySpec.ai:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai
-	70,  // 115: agentgateway.dev.resource.BackendPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	70,  // 116: agentgateway.dev.resource.BackendPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	72,  // 117: agentgateway.dev.resource.BackendPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
-	71,  // 118: agentgateway.dev.resource.BackendPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
-	154, // 119: agentgateway.dev.resource.BackendPolicySpec.backend_http:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
-	156, // 120: agentgateway.dev.resource.BackendPolicySpec.backend_tcp:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTCP
-	124, // 121: agentgateway.dev.resource.BackendPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	152, // 122: agentgateway.dev.resource.BackendPolicySpec.health:type_name -> agentgateway.dev.resource.BackendPolicySpec.Health
-	155, // 123: agentgateway.dev.resource.BackendPolicySpec.backend_tunnel:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
-	85,  // 124: agentgateway.dev.resource.AwsBackend.agent_core:type_name -> agentgateway.dev.resource.AwsAgentCoreBackend
-	189, // 125: agentgateway.dev.resource.AIBackend.provider_groups:type_name -> agentgateway.dev.resource.AIBackend.ProviderGroup
-	88,  // 126: agentgateway.dev.resource.MCPBackend.targets:type_name -> agentgateway.dev.resource.MCPTarget
-	29,  // 127: agentgateway.dev.resource.MCPBackend.stateful_mode:type_name -> agentgateway.dev.resource.MCPBackend.StatefulMode
-	30,  // 128: agentgateway.dev.resource.MCPBackend.prefix_mode:type_name -> agentgateway.dev.resource.MCPBackend.PrefixMode
-	31,  // 129: agentgateway.dev.resource.MCPBackend.failure_mode:type_name -> agentgateway.dev.resource.MCPBackend.FailureMode
-	89,  // 130: agentgateway.dev.resource.MCPTarget.backend:type_name -> agentgateway.dev.resource.BackendReference
-	32,  // 131: agentgateway.dev.resource.MCPTarget.protocol:type_name -> agentgateway.dev.resource.MCPTarget.Protocol
-	190, // 132: agentgateway.dev.resource.BackendReference.service:type_name -> agentgateway.dev.resource.BackendReference.Service
-	89,  // 133: agentgateway.dev.resource.RequestMirrors.Mirror.backend:type_name -> agentgateway.dev.resource.BackendReference
-	194, // 134: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
-	194, // 135: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
-	194, // 136: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
-	194, // 137: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
-	194, // 138: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
-	90,  // 139: agentgateway.dev.resource.FrontendPolicySpec.TLS.alpn:type_name -> agentgateway.dev.resource.Alpn
-	5,   // 140: agentgateway.dev.resource.FrontendPolicySpec.TLS.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
-	3,   // 141: agentgateway.dev.resource.FrontendPolicySpec.TLS.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	3,   // 142: agentgateway.dev.resource.FrontendPolicySpec.TLS.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	77,  // 143: agentgateway.dev.resource.FrontendPolicySpec.TCP.keepalives:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	112, // 144: agentgateway.dev.resource.FrontendPolicySpec.Logging.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
-	113, // 145: agentgateway.dev.resource.FrontendPolicySpec.Logging.otlp_access_log:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
-	89,  // 146: agentgateway.dev.resource.FrontendPolicySpec.Tracing.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
-	108, // 147: agentgateway.dev.resource.FrontendPolicySpec.Tracing.attributes:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	108, // 148: agentgateway.dev.resource.FrontendPolicySpec.Tracing.resources:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	7,   // 149: agentgateway.dev.resource.FrontendPolicySpec.Tracing.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
-	8,   // 150: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.version:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
-	9,   // 151: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.mode:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
-	115, // 152: agentgateway.dev.resource.FrontendPolicySpec.Metrics.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
-	111, // 153: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
-	89,  // 154: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
-	81,  // 155: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	6,   // 156: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
-	114, // 157: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
-	130, // 158: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
-	89,  // 159: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.target:type_name -> agentgateway.dev.resource.BackendReference
-	12,  // 160: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
-	194, // 161: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
-	13,  // 162: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
-	89,  // 163: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.target:type_name -> agentgateway.dev.resource.BackendReference
-	133, // 164: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.grpc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
-	134, // 165: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.http:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
-	14,  // 166: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
-	132, // 167: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.include_request_body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
-	79,  // 168: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
-	15,  // 169: agentgateway.dev.resource.TrafficPolicySpec.JWT.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
-	120, // 170: agentgateway.dev.resource.TrafficPolicySpec.JWT.providers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
-	139, // 171: agentgateway.dev.resource.TrafficPolicySpec.JWT.mcp:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
-	49,  // 172: agentgateway.dev.resource.TrafficPolicySpec.JWT.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	16,  // 173: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
-	49,  // 174: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	140, // 175: agentgateway.dev.resource.TrafficPolicySpec.APIKey.api_keys:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
-	17,  // 176: agentgateway.dev.resource.TrafficPolicySpec.APIKey.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
-	49,  // 177: agentgateway.dev.resource.TrafficPolicySpec.APIKey.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	141, // 178: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.request:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	141, // 179: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.response:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	89,  // 180: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.target:type_name -> agentgateway.dev.resource.BackendReference
-	18,  // 181: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
-	144, // 182: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.request_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
-	145, // 183: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.response_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
-	146, // 184: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.metadata_context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
-	19,  // 185: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
-	131, // 186: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.entries:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
-	11,  // 187: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
-	135, // 188: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
-	136, // 189: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
-	137, // 190: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.add_request_headers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
-	138, // 191: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
-	26,  // 192: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	178, // 193: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	195, // 194: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
-	125, // 195: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.set:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	125, // 196: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.add:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	126, // 197: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
-	142, // 198: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
-	147, // 199: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
-	143, // 200: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
-	171, // 201: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
-	173, // 202: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
-	174, // 203: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
-	175, // 204: agentgateway.dev.resource.BackendPolicySpec.Ai.transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	160, // 205: agentgateway.dev.resource.BackendPolicySpec.Ai.prompts:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
-	176, // 206: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
-	172, // 207: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_caching:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
-	177, // 208: agentgateway.dev.resource.BackendPolicySpec.Ai.routes:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
-	89,  // 209: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
-	23,  // 210: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	194, // 211: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
-	151, // 212: agentgateway.dev.resource.BackendPolicySpec.Health.eviction:type_name -> agentgateway.dev.resource.BackendPolicySpec.Eviction
-	24,  // 213: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.verification:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
-	90,  // 214: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.alpn:type_name -> agentgateway.dev.resource.Alpn
-	25,  // 215: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.version:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
-	194, // 216: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
-	89,  // 217: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel.proxy:type_name -> agentgateway.dev.resource.BackendReference
-	77,  // 218: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.keepalive:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	194, // 219: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
-	26,  // 220: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	178, // 221: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	27,  // 222: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
-	79,  // 223: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
-	49,  // 224: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	159, // 225: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	159, // 226: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	20,  // 227: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
-	21,  // 228: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
-	161, // 229: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
-	89,  // 230: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
-	67,  // 231: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
-	81,  // 232: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	81,  // 233: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	81,  // 234: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	81,  // 235: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	168, // 236: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	162, // 237: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	163, // 238: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	166, // 239: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	165, // 240: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	167, // 241: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	168, // 242: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	162, // 243: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	163, // 244: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	164, // 245: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
-	166, // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	165, // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	167, // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	170, // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
-	169, // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
-	22,  // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
-	179, // 252: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	196, // 253: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	28,  // 254: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
-	180, // 255: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
-	181, // 256: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
-	182, // 257: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
-	183, // 258: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
-	184, // 259: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
-	185, // 260: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
-	186, // 261: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
-	187, // 262: agentgateway.dev.resource.AIBackend.Provider.azure:type_name -> agentgateway.dev.resource.AIBackend.Azure
-	81,  // 263: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	188, // 264: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
-	265, // [265:265] is the sub-list for method output_type
-	265, // [265:265] is the sub-list for method input_type
-	265, // [265:265] is the sub-list for extension type_name
-	265, // [265:265] is the sub-list for extension extendee
-	0,   // [0:265] is the sub-list for field type_name
+	49,  // 14: agentgateway.dev.resource.Listener.tls:type_name -> agentgateway.dev.resource.TLSConfig
+	198, // 15: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
+	37,  // 16: agentgateway.dev.resource.Route.name:type_name -> agentgateway.dev.resource.RouteName
+	67,  // 17: agentgateway.dev.resource.Route.matches:type_name -> agentgateway.dev.resource.RouteMatch
+	79,  // 18: agentgateway.dev.resource.Route.backends:type_name -> agentgateway.dev.resource.RouteBackend
+	84,  // 19: agentgateway.dev.resource.Route.traffic_policies:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	198, // 20: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
+	37,  // 21: agentgateway.dev.resource.TCPRoute.name:type_name -> agentgateway.dev.resource.RouteName
+	79,  // 22: agentgateway.dev.resource.TCPRoute.backends:type_name -> agentgateway.dev.resource.RouteBackend
+	46,  // 23: agentgateway.dev.resource.ConditionalPolicies.policies:type_name -> agentgateway.dev.resource.ConditionalPolicy
+	84,  // 24: agentgateway.dev.resource.ConditionalPolicy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	40,  // 25: agentgateway.dev.resource.Policy.name:type_name -> agentgateway.dev.resource.TypedResourceName
+	80,  // 26: agentgateway.dev.resource.Policy.target:type_name -> agentgateway.dev.resource.PolicyTarget
+	84,  // 27: agentgateway.dev.resource.Policy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	85,  // 28: agentgateway.dev.resource.Policy.backend:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	82,  // 29: agentgateway.dev.resource.Policy.frontend:type_name -> agentgateway.dev.resource.FrontendPolicySpec
+	45,  // 30: agentgateway.dev.resource.Policy.conditional:type_name -> agentgateway.dev.resource.ConditionalPolicies
+	39,  // 31: agentgateway.dev.resource.Backend.name:type_name -> agentgateway.dev.resource.ResourceName
+	86,  // 32: agentgateway.dev.resource.Backend.static:type_name -> agentgateway.dev.resource.StaticBackend
+	90,  // 33: agentgateway.dev.resource.Backend.ai:type_name -> agentgateway.dev.resource.AIBackend
+	91,  // 34: agentgateway.dev.resource.Backend.mcp:type_name -> agentgateway.dev.resource.MCPBackend
+	87,  // 35: agentgateway.dev.resource.Backend.dynamic:type_name -> agentgateway.dev.resource.DynamicForwardProxy
+	88,  // 36: agentgateway.dev.resource.Backend.aws:type_name -> agentgateway.dev.resource.AwsBackend
+	85,  // 37: agentgateway.dev.resource.Backend.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	6,   // 38: agentgateway.dev.resource.TLSConfig.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
+	4,   // 39: agentgateway.dev.resource.TLSConfig.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	4,   // 40: agentgateway.dev.resource.TLSConfig.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	5,   // 41: agentgateway.dev.resource.TLSConfig.mtls_mode:type_name -> agentgateway.dev.resource.TLSConfig.MTLSMode
+	7,   // 42: agentgateway.dev.resource.TLSConfig.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	3,   // 43: agentgateway.dev.resource.TLSConfig.certificate_source:type_name -> agentgateway.dev.resource.TLSConfig.CertificateSource
+	199, // 44: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
+	199, // 45: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
+	199, // 46: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
+	54,  // 47: agentgateway.dev.resource.BackendAuthPolicy.passthrough:type_name -> agentgateway.dev.resource.Passthrough
+	55,  // 48: agentgateway.dev.resource.BackendAuthPolicy.key:type_name -> agentgateway.dev.resource.Key
+	56,  // 49: agentgateway.dev.resource.BackendAuthPolicy.gcp:type_name -> agentgateway.dev.resource.Gcp
+	57,  // 50: agentgateway.dev.resource.BackendAuthPolicy.aws:type_name -> agentgateway.dev.resource.Aws
+	58,  // 51: agentgateway.dev.resource.BackendAuthPolicy.azure:type_name -> agentgateway.dev.resource.Azure
+	95,  // 52: agentgateway.dev.resource.AuthorizationLocation.header:type_name -> agentgateway.dev.resource.AuthorizationLocation.Header
+	96,  // 53: agentgateway.dev.resource.AuthorizationLocation.query_parameter:type_name -> agentgateway.dev.resource.AuthorizationLocation.QueryParameter
+	97,  // 54: agentgateway.dev.resource.AuthorizationLocation.cookie:type_name -> agentgateway.dev.resource.AuthorizationLocation.Cookie
+	53,  // 55: agentgateway.dev.resource.Passthrough.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	53,  // 56: agentgateway.dev.resource.Key.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	98,  // 57: agentgateway.dev.resource.Gcp.access_token:type_name -> agentgateway.dev.resource.Gcp.AccessToken
+	99,  // 58: agentgateway.dev.resource.Gcp.id_token:type_name -> agentgateway.dev.resource.Gcp.IdToken
+	59,  // 59: agentgateway.dev.resource.Aws.explicit_config:type_name -> agentgateway.dev.resource.AwsExplicitConfig
+	60,  // 60: agentgateway.dev.resource.Aws.implicit:type_name -> agentgateway.dev.resource.AwsImplicit
+	61,  // 61: agentgateway.dev.resource.Azure.explicit_config:type_name -> agentgateway.dev.resource.AzureExplicitConfig
+	65,  // 62: agentgateway.dev.resource.Azure.developer_implicit:type_name -> agentgateway.dev.resource.AzureDeveloperImplicit
+	66,  // 63: agentgateway.dev.resource.Azure.implicit:type_name -> agentgateway.dev.resource.AzureImplicit
+	62,  // 64: agentgateway.dev.resource.AzureExplicitConfig.client_secret:type_name -> agentgateway.dev.resource.AzureClientSecret
+	63,  // 65: agentgateway.dev.resource.AzureExplicitConfig.managed_identity_credential:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential
+	64,  // 66: agentgateway.dev.resource.AzureExplicitConfig.workload_identity_credential:type_name -> agentgateway.dev.resource.AzureWorkloadIdentityCredential
+	100, // 67: agentgateway.dev.resource.AzureManagedIdentityCredential.user_assigned_identity:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
+	68,  // 68: agentgateway.dev.resource.RouteMatch.path:type_name -> agentgateway.dev.resource.PathMatch
+	71,  // 69: agentgateway.dev.resource.RouteMatch.headers:type_name -> agentgateway.dev.resource.HeaderMatch
+	70,  // 70: agentgateway.dev.resource.RouteMatch.method:type_name -> agentgateway.dev.resource.MethodMatch
+	69,  // 71: agentgateway.dev.resource.RouteMatch.query_params:type_name -> agentgateway.dev.resource.QueryMatch
+	199, // 72: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
+	78,  // 73: agentgateway.dev.resource.HeaderModifier.add:type_name -> agentgateway.dev.resource.Header
+	78,  // 74: agentgateway.dev.resource.HeaderModifier.set:type_name -> agentgateway.dev.resource.Header
+	101, // 75: agentgateway.dev.resource.RequestMirrors.mirrors:type_name -> agentgateway.dev.resource.RequestMirrors.Mirror
+	93,  // 76: agentgateway.dev.resource.RouteBackend.backend:type_name -> agentgateway.dev.resource.BackendReference
+	85,  // 77: agentgateway.dev.resource.RouteBackend.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	104, // 78: agentgateway.dev.resource.PolicyTarget.gateway:type_name -> agentgateway.dev.resource.PolicyTarget.GatewayTarget
+	105, // 79: agentgateway.dev.resource.PolicyTarget.route:type_name -> agentgateway.dev.resource.PolicyTarget.RouteTarget
+	103, // 80: agentgateway.dev.resource.PolicyTarget.backend:type_name -> agentgateway.dev.resource.PolicyTarget.BackendTarget
+	102, // 81: agentgateway.dev.resource.PolicyTarget.service:type_name -> agentgateway.dev.resource.PolicyTarget.ServiceTarget
+	106, // 82: agentgateway.dev.resource.PolicyTarget.listener_set:type_name -> agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
+	199, // 83: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
+	199, // 84: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
+	109, // 85: agentgateway.dev.resource.FrontendPolicySpec.tcp:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TCP
+	108, // 86: agentgateway.dev.resource.FrontendPolicySpec.tls:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TLS
+	107, // 87: agentgateway.dev.resource.FrontendPolicySpec.http:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP
+	111, // 88: agentgateway.dev.resource.FrontendPolicySpec.logging:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging
+	112, // 89: agentgateway.dev.resource.FrontendPolicySpec.tracing:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing
+	110, // 90: agentgateway.dev.resource.FrontendPolicySpec.network_authorization:type_name -> agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
+	114, // 91: agentgateway.dev.resource.FrontendPolicySpec.proxy_protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
+	115, // 92: agentgateway.dev.resource.FrontendPolicySpec.metrics:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics
+	12,  // 93: agentgateway.dev.resource.TrafficPolicySpec.phase:type_name -> agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
+	50,  // 94: agentgateway.dev.resource.TrafficPolicySpec.timeout:type_name -> agentgateway.dev.resource.Timeout
+	51,  // 95: agentgateway.dev.resource.TrafficPolicySpec.retry:type_name -> agentgateway.dev.resource.Retry
+	122, // 96: agentgateway.dev.resource.TrafficPolicySpec.local_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
+	123, // 97: agentgateway.dev.resource.TrafficPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	124, // 98: agentgateway.dev.resource.TrafficPolicySpec.authorization:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RBAC
+	126, // 99: agentgateway.dev.resource.TrafficPolicySpec.jwt:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT
+	129, // 100: agentgateway.dev.resource.TrafficPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	121, // 101: agentgateway.dev.resource.TrafficPolicySpec.remote_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
+	132, // 102: agentgateway.dev.resource.TrafficPolicySpec.csrf:type_name -> agentgateway.dev.resource.TrafficPolicySpec.CSRF
+	133, // 103: agentgateway.dev.resource.TrafficPolicySpec.ext_proc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc
+	74,  // 104: agentgateway.dev.resource.TrafficPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	74,  // 105: agentgateway.dev.resource.TrafficPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	76,  // 106: agentgateway.dev.resource.TrafficPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
+	77,  // 107: agentgateway.dev.resource.TrafficPolicySpec.url_rewrite:type_name -> agentgateway.dev.resource.UrlRewrite
+	75,  // 108: agentgateway.dev.resource.TrafficPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
+	73,  // 109: agentgateway.dev.resource.TrafficPolicySpec.direct_response:type_name -> agentgateway.dev.resource.DirectResponse
+	72,  // 110: agentgateway.dev.resource.TrafficPolicySpec.cors:type_name -> agentgateway.dev.resource.CORS
+	127, // 111: agentgateway.dev.resource.TrafficPolicySpec.basic_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
+	128, // 112: agentgateway.dev.resource.TrafficPolicySpec.api_key_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey
+	134, // 113: agentgateway.dev.resource.TrafficPolicySpec.host_rewrite:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
+	154, // 114: agentgateway.dev.resource.BackendPolicySpec.a2a:type_name -> agentgateway.dev.resource.BackendPolicySpec.A2a
+	155, // 115: agentgateway.dev.resource.BackendPolicySpec.inference_routing:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
+	158, // 116: agentgateway.dev.resource.BackendPolicySpec.backend_tls:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS
+	52,  // 117: agentgateway.dev.resource.BackendPolicySpec.auth:type_name -> agentgateway.dev.resource.BackendAuthPolicy
+	162, // 118: agentgateway.dev.resource.BackendPolicySpec.mcp_authorization:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
+	163, // 119: agentgateway.dev.resource.BackendPolicySpec.mcp_authentication:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
+	153, // 120: agentgateway.dev.resource.BackendPolicySpec.ai:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai
+	74,  // 121: agentgateway.dev.resource.BackendPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	74,  // 122: agentgateway.dev.resource.BackendPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	76,  // 123: agentgateway.dev.resource.BackendPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
+	75,  // 124: agentgateway.dev.resource.BackendPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
+	159, // 125: agentgateway.dev.resource.BackendPolicySpec.backend_http:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
+	161, // 126: agentgateway.dev.resource.BackendPolicySpec.backend_tcp:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTCP
+	129, // 127: agentgateway.dev.resource.BackendPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	157, // 128: agentgateway.dev.resource.BackendPolicySpec.health:type_name -> agentgateway.dev.resource.BackendPolicySpec.Health
+	160, // 129: agentgateway.dev.resource.BackendPolicySpec.backend_tunnel:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
+	123, // 130: agentgateway.dev.resource.BackendPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	89,  // 131: agentgateway.dev.resource.AwsBackend.agent_core:type_name -> agentgateway.dev.resource.AwsAgentCoreBackend
+	194, // 132: agentgateway.dev.resource.AIBackend.provider_groups:type_name -> agentgateway.dev.resource.AIBackend.ProviderGroup
+	92,  // 133: agentgateway.dev.resource.MCPBackend.targets:type_name -> agentgateway.dev.resource.MCPTarget
+	31,  // 134: agentgateway.dev.resource.MCPBackend.stateful_mode:type_name -> agentgateway.dev.resource.MCPBackend.StatefulMode
+	32,  // 135: agentgateway.dev.resource.MCPBackend.prefix_mode:type_name -> agentgateway.dev.resource.MCPBackend.PrefixMode
+	33,  // 136: agentgateway.dev.resource.MCPBackend.failure_mode:type_name -> agentgateway.dev.resource.MCPBackend.FailureMode
+	93,  // 137: agentgateway.dev.resource.MCPTarget.backend:type_name -> agentgateway.dev.resource.BackendReference
+	34,  // 138: agentgateway.dev.resource.MCPTarget.protocol:type_name -> agentgateway.dev.resource.MCPTarget.Protocol
+	195, // 139: agentgateway.dev.resource.BackendReference.service:type_name -> agentgateway.dev.resource.BackendReference.Service
+	93,  // 140: agentgateway.dev.resource.RequestMirrors.Mirror.backend:type_name -> agentgateway.dev.resource.BackendReference
+	199, // 141: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
+	199, // 142: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
+	199, // 143: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
+	199, // 144: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
+	199, // 145: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
+	94,  // 146: agentgateway.dev.resource.FrontendPolicySpec.TLS.alpn:type_name -> agentgateway.dev.resource.Alpn
+	6,   // 147: agentgateway.dev.resource.FrontendPolicySpec.TLS.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
+	4,   // 148: agentgateway.dev.resource.FrontendPolicySpec.TLS.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	4,   // 149: agentgateway.dev.resource.FrontendPolicySpec.TLS.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	7,   // 150: agentgateway.dev.resource.FrontendPolicySpec.TLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	81,  // 151: agentgateway.dev.resource.FrontendPolicySpec.TCP.keepalives:type_name -> agentgateway.dev.resource.KeepaliveConfig
+	117, // 152: agentgateway.dev.resource.FrontendPolicySpec.Logging.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
+	118, // 153: agentgateway.dev.resource.FrontendPolicySpec.Logging.otlp_access_log:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
+	93,  // 154: agentgateway.dev.resource.FrontendPolicySpec.Tracing.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
+	113, // 155: agentgateway.dev.resource.FrontendPolicySpec.Tracing.attributes:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	113, // 156: agentgateway.dev.resource.FrontendPolicySpec.Tracing.resources:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	9,   // 157: agentgateway.dev.resource.FrontendPolicySpec.Tracing.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
+	10,  // 158: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.version:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
+	11,  // 159: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.mode:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
+	120, // 160: agentgateway.dev.resource.FrontendPolicySpec.Metrics.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
+	116, // 161: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
+	93,  // 162: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
+	85,  // 163: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	8,   // 164: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
+	119, // 165: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
+	135, // 166: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
+	93,  // 167: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.target:type_name -> agentgateway.dev.resource.BackendReference
+	14,  // 168: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
+	199, // 169: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
+	15,  // 170: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
+	93,  // 171: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.target:type_name -> agentgateway.dev.resource.BackendReference
+	138, // 172: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.grpc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
+	139, // 173: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.http:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
+	16,  // 174: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
+	137, // 175: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.include_request_body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
+	83,  // 176: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
+	17,  // 177: agentgateway.dev.resource.TrafficPolicySpec.JWT.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
+	125, // 178: agentgateway.dev.resource.TrafficPolicySpec.JWT.providers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
+	144, // 179: agentgateway.dev.resource.TrafficPolicySpec.JWT.mcp:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
+	53,  // 180: agentgateway.dev.resource.TrafficPolicySpec.JWT.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	18,  // 181: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
+	53,  // 182: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	145, // 183: agentgateway.dev.resource.TrafficPolicySpec.APIKey.api_keys:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
+	19,  // 184: agentgateway.dev.resource.TrafficPolicySpec.APIKey.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
+	53,  // 185: agentgateway.dev.resource.TrafficPolicySpec.APIKey.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	146, // 186: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.request:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	146, // 187: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.response:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	93,  // 188: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.target:type_name -> agentgateway.dev.resource.BackendReference
+	20,  // 189: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
+	149, // 190: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.request_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
+	150, // 191: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.response_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
+	151, // 192: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.metadata_context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
+	21,  // 193: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
+	136, // 194: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.entries:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
+	13,  // 195: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
+	140, // 196: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
+	141, // 197: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
+	142, // 198: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.add_request_headers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
+	143, // 199: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
+	28,  // 200: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	183, // 201: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	200, // 202: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
+	130, // 203: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.set:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	130, // 204: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.add:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	131, // 205: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
+	147, // 206: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
+	152, // 207: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
+	148, // 208: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
+	176, // 209: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
+	178, // 210: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
+	179, // 211: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
+	180, // 212: agentgateway.dev.resource.BackendPolicySpec.Ai.transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
+	165, // 213: agentgateway.dev.resource.BackendPolicySpec.Ai.prompts:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
+	181, // 214: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
+	177, // 215: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_caching:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
+	182, // 216: agentgateway.dev.resource.BackendPolicySpec.Ai.routes:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
+	93,  // 217: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
+	25,  // 218: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
+	199, // 219: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
+	156, // 220: agentgateway.dev.resource.BackendPolicySpec.Health.eviction:type_name -> agentgateway.dev.resource.BackendPolicySpec.Eviction
+	26,  // 221: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.verification:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
+	94,  // 222: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.alpn:type_name -> agentgateway.dev.resource.Alpn
+	7,   // 223: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	27,  // 224: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.version:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
+	199, // 225: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
+	93,  // 226: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel.proxy:type_name -> agentgateway.dev.resource.BackendReference
+	81,  // 227: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.keepalive:type_name -> agentgateway.dev.resource.KeepaliveConfig
+	199, // 228: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
+	28,  // 229: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	183, // 230: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	29,  // 231: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
+	83,  // 232: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
+	53,  // 233: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	164, // 234: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	164, // 235: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	22,  // 236: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
+	23,  // 237: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
+	166, // 238: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
+	93,  // 239: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
+	71,  // 240: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
+	85,  // 241: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	85,  // 242: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	85,  // 243: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	85,  // 244: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	173, // 245: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	167, // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	168, // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	171, // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	170, // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	172, // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	173, // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	167, // 252: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	168, // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	169, // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
+	171, // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	170, // 256: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	172, // 257: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	175, // 258: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
+	174, // 259: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
+	24,  // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
+	184, // 261: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	201, // 262: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
+	30,  // 263: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
+	185, // 264: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
+	186, // 265: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
+	187, // 266: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
+	188, // 267: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
+	189, // 268: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
+	190, // 269: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
+	191, // 270: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
+	192, // 271: agentgateway.dev.resource.AIBackend.Provider.azure:type_name -> agentgateway.dev.resource.AIBackend.Azure
+	85,  // 272: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	193, // 273: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	274, // [274:274] is the sub-list for method output_type
+	274, // [274:274] is the sub-list for method input_type
+	274, // [274:274] is the sub-list for extension type_name
+	274, // [274:274] is the sub-list for extension extendee
+	0,   // [0:274] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }
@@ -13736,81 +14189,86 @@ func file_resource_proto_init() {
 	}
 	file_resource_proto_msgTypes[2].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[7].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[10].OneofWrappers = []any{
+	file_resource_proto_msgTypes[11].OneofWrappers = []any{
+		(*ConditionalPolicy_Traffic)(nil),
+	}
+	file_resource_proto_msgTypes[12].OneofWrappers = []any{
 		(*Policy_Traffic)(nil),
 		(*Policy_Backend)(nil),
 		(*Policy_Frontend)(nil),
+		(*Policy_Conditional)(nil),
 	}
-	file_resource_proto_msgTypes[11].OneofWrappers = []any{
+	file_resource_proto_msgTypes[13].OneofWrappers = []any{
 		(*Backend_Static)(nil),
 		(*Backend_Ai)(nil),
 		(*Backend_Mcp)(nil),
 		(*Backend_Dynamic)(nil),
 		(*Backend_Aws)(nil),
 	}
-	file_resource_proto_msgTypes[12].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[15].OneofWrappers = []any{
+	file_resource_proto_msgTypes[14].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[17].OneofWrappers = []any{
 		(*BackendAuthPolicy_Passthrough)(nil),
 		(*BackendAuthPolicy_Key)(nil),
 		(*BackendAuthPolicy_Gcp)(nil),
 		(*BackendAuthPolicy_Aws)(nil),
 		(*BackendAuthPolicy_Azure)(nil),
 	}
-	file_resource_proto_msgTypes[16].OneofWrappers = []any{
+	file_resource_proto_msgTypes[18].OneofWrappers = []any{
 		(*AuthorizationLocation_Header_)(nil),
 		(*AuthorizationLocation_QueryParameter_)(nil),
 		(*AuthorizationLocation_Cookie_)(nil),
 	}
-	file_resource_proto_msgTypes[19].OneofWrappers = []any{
+	file_resource_proto_msgTypes[21].OneofWrappers = []any{
 		(*Gcp_AccessToken_)(nil),
 		(*Gcp_IdToken_)(nil),
 	}
-	file_resource_proto_msgTypes[20].OneofWrappers = []any{
+	file_resource_proto_msgTypes[22].OneofWrappers = []any{
 		(*Aws_ExplicitConfig)(nil),
 		(*Aws_Implicit)(nil),
 	}
-	file_resource_proto_msgTypes[21].OneofWrappers = []any{
+	file_resource_proto_msgTypes[23].OneofWrappers = []any{
 		(*Azure_ExplicitConfig)(nil),
 		(*Azure_DeveloperImplicit)(nil),
 		(*Azure_Implicit)(nil),
 	}
-	file_resource_proto_msgTypes[22].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[24].OneofWrappers = []any{
+	file_resource_proto_msgTypes[24].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[26].OneofWrappers = []any{
 		(*AzureExplicitConfig_ClientSecret)(nil),
 		(*AzureExplicitConfig_ManagedIdentityCredential)(nil),
 		(*AzureExplicitConfig_WorkloadIdentityCredential)(nil),
 	}
-	file_resource_proto_msgTypes[26].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[31].OneofWrappers = []any{
+	file_resource_proto_msgTypes[28].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[33].OneofWrappers = []any{
 		(*PathMatch_Exact)(nil),
 		(*PathMatch_PathPrefix)(nil),
 		(*PathMatch_Regex)(nil),
 	}
-	file_resource_proto_msgTypes[32].OneofWrappers = []any{
+	file_resource_proto_msgTypes[34].OneofWrappers = []any{
 		(*QueryMatch_Exact)(nil),
 		(*QueryMatch_Regex)(nil),
 	}
-	file_resource_proto_msgTypes[34].OneofWrappers = []any{
+	file_resource_proto_msgTypes[36].OneofWrappers = []any{
 		(*HeaderMatch_Exact)(nil),
 		(*HeaderMatch_Regex)(nil),
 	}
-	file_resource_proto_msgTypes[39].OneofWrappers = []any{
+	file_resource_proto_msgTypes[41].OneofWrappers = []any{
 		(*RequestRedirect_Full)(nil),
 		(*RequestRedirect_Prefix)(nil),
 	}
-	file_resource_proto_msgTypes[40].OneofWrappers = []any{
+	file_resource_proto_msgTypes[42].OneofWrappers = []any{
 		(*UrlRewrite_Full)(nil),
 		(*UrlRewrite_Prefix)(nil),
 	}
-	file_resource_proto_msgTypes[42].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[43].OneofWrappers = []any{
+	file_resource_proto_msgTypes[44].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[45].OneofWrappers = []any{
 		(*PolicyTarget_Gateway)(nil),
 		(*PolicyTarget_Route)(nil),
 		(*PolicyTarget_Backend)(nil),
 		(*PolicyTarget_Service)(nil),
+		(*PolicyTarget_ListenerSet)(nil),
 	}
-	file_resource_proto_msgTypes[44].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[45].OneofWrappers = []any{
+	file_resource_proto_msgTypes[46].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[47].OneofWrappers = []any{
 		(*FrontendPolicySpec_Tcp)(nil),
 		(*FrontendPolicySpec_Tls)(nil),
 		(*FrontendPolicySpec_Http)(nil),
@@ -13820,7 +14278,7 @@ func file_resource_proto_init() {
 		(*FrontendPolicySpec_ProxyProtocol_)(nil),
 		(*FrontendPolicySpec_Metrics_)(nil),
 	}
-	file_resource_proto_msgTypes[47].OneofWrappers = []any{
+	file_resource_proto_msgTypes[49].OneofWrappers = []any{
 		(*TrafficPolicySpec_Timeout)(nil),
 		(*TrafficPolicySpec_Retry)(nil),
 		(*TrafficPolicySpec_LocalRateLimit_)(nil),
@@ -13842,7 +14300,7 @@ func file_resource_proto_init() {
 		(*TrafficPolicySpec_ApiKeyAuth)(nil),
 		(*TrafficPolicySpec_HostRewrite_)(nil),
 	}
-	file_resource_proto_msgTypes[48].OneofWrappers = []any{
+	file_resource_proto_msgTypes[50].OneofWrappers = []any{
 		(*BackendPolicySpec_A2A_)(nil),
 		(*BackendPolicySpec_InferenceRouting_)(nil),
 		(*BackendPolicySpec_BackendTls)(nil),
@@ -13859,58 +14317,60 @@ func file_resource_proto_init() {
 		(*BackendPolicySpec_Transformation)(nil),
 		(*BackendPolicySpec_Health_)(nil),
 		(*BackendPolicySpec_BackendTunnel_)(nil),
+		(*BackendPolicySpec_ExtAuthz)(nil),
 	}
-	file_resource_proto_msgTypes[51].OneofWrappers = []any{
+	file_resource_proto_msgTypes[53].OneofWrappers = []any{
 		(*AwsBackend_AgentCore)(nil),
 	}
-	file_resource_proto_msgTypes[52].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[56].OneofWrappers = []any{
+	file_resource_proto_msgTypes[54].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[58].OneofWrappers = []any{
 		(*BackendReference_Service_)(nil),
 		(*BackendReference_Backend)(nil),
 	}
-	file_resource_proto_msgTypes[58].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[62].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[63].OneofWrappers = []any{
+	file_resource_proto_msgTypes[60].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[64].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[65].OneofWrappers = []any{
 		(*AzureManagedIdentityCredential_UserAssignedIdentity_ClientId)(nil),
 		(*AzureManagedIdentityCredential_UserAssignedIdentity_ObjectId)(nil),
 		(*AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId)(nil),
 	}
-	file_resource_proto_msgTypes[65].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[66].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[67].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[68].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[69].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[70].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[71].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[72].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[73].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[74].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[80].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[85].OneofWrappers = []any{
+	file_resource_proto_msgTypes[76].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[77].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[83].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[88].OneofWrappers = []any{
 		(*TrafficPolicySpec_ExternalAuth_Grpc)(nil),
 		(*TrafficPolicySpec_ExternalAuth_Http)(nil),
 	}
-	file_resource_proto_msgTypes[87].OneofWrappers = []any{
+	file_resource_proto_msgTypes[90].OneofWrappers = []any{
 		(*TrafficPolicySpec_JWTProvider_Inline)(nil),
 	}
-	file_resource_proto_msgTypes[89].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[97].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[101].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[118].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[120].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[128].OneofWrappers = []any{
+	file_resource_proto_msgTypes[92].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[100].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[104].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[121].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[123].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[131].OneofWrappers = []any{
 		(*BackendPolicySpec_Ai_RegexRule_Builtin)(nil),
 		(*BackendPolicySpec_Ai_RegexRule_Regex)(nil),
 	}
-	file_resource_proto_msgTypes[131].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[133].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[134].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[136].OneofWrappers = []any{
+	file_resource_proto_msgTypes[136].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[137].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[139].OneofWrappers = []any{
 		(*BackendPolicySpec_Ai_ResponseGuard_Regex)(nil),
 		(*BackendPolicySpec_Ai_ResponseGuard_Webhook)(nil),
 		(*BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor)(nil),
 		(*BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails)(nil),
 		(*BackendPolicySpec_Ai_ResponseGuard_AzureContentSafety)(nil),
 	}
-	file_resource_proto_msgTypes[137].OneofWrappers = []any{
+	file_resource_proto_msgTypes[140].OneofWrappers = []any{
 		(*BackendPolicySpec_Ai_RequestGuard_Regex)(nil),
 		(*BackendPolicySpec_Ai_RequestGuard_Webhook)(nil),
 		(*BackendPolicySpec_Ai_RequestGuard_OpenaiModeration)(nil),
@@ -13918,15 +14378,15 @@ func file_resource_proto_init() {
 		(*BackendPolicySpec_Ai_RequestGuard_BedrockGuardrails)(nil),
 		(*BackendPolicySpec_Ai_RequestGuard_AzureContentSafety)(nil),
 	}
-	file_resource_proto_msgTypes[139].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[148].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[149].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[150].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[142].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[151].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[152].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[153].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[154].OneofWrappers = []any{}
-	file_resource_proto_msgTypes[155].OneofWrappers = []any{
+	file_resource_proto_msgTypes[155].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[156].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[157].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[158].OneofWrappers = []any{
 		(*AIBackend_Provider_Openai)(nil),
 		(*AIBackend_Provider_Gemini)(nil),
 		(*AIBackend_Provider_Vertex)(nil),
@@ -13940,8 +14400,8 @@ func file_resource_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_resource_proto_rawDesc), len(file_resource_proto_rawDesc)),
-			NumEnums:      33,
-			NumMessages:   158,
+			NumEnums:      35,
+			NumMessages:   161,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -1,0 +1,76 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: labeled-grpc
+  namespace: default
+  labels:
+    app: grpc
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - name: reviews
+          port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetSelectors:
+  - kind: GRPCRoute
+    group: gateway.networking.k8s.io
+    matchLabels:
+      app: grpc
+  traffic:
+    timeouts:
+      request: 5s
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:timeout:default/labeled-grpc
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: GRPCRoute
+          name: labeled-grpc
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
