@@ -4,7 +4,6 @@ package tests_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -34,6 +33,7 @@ func TestControlPlaneTLSPlaintext(t *testing.T) {
 	if !nsEnvPredefined {
 		os.Setenv(testutils.InstallNamespace, installNs)
 	}
+
 	testutils.Cleanup(t, func() {
 		if !nsEnvPredefined {
 			os.Unsetenv(testutils.InstallNamespace)
@@ -43,12 +43,4 @@ func TestControlPlaneTLSPlaintext(t *testing.T) {
 	testInstallation.InstallFromLocalChart(t.Context(), t)
 
 	TLSPlaintextSuiteRunner().Run(t.Context(), t, testInstallation)
-}
-
-func nsManifestPlaintext(ns string) string {
-	return fmt.Sprintf(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: %s
-`, ns)
 }

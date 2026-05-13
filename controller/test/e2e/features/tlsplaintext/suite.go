@@ -9,6 +9,8 @@ import (
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -17,8 +19,6 @@ import (
 	testdefaults "github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var _ e2e.NewSuiteFunc = NewTestingSuite
