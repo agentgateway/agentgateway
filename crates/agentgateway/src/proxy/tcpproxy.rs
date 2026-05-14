@@ -6,7 +6,7 @@ use rand::prelude::IndexedRandom;
 
 use crate::cel::SourceContext;
 use crate::proxy::httpproxy::BackendCall;
-use crate::proxy::{httpproxy, ProxyError, WaypointService};
+use crate::proxy::{ProxyError, WaypointService, httpproxy};
 use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
@@ -850,7 +850,7 @@ mod tests {
 		use prometheus_client::registry::Registry;
 
 		use crate::client::Client;
-		use crate::{client, BackendConfig};
+		use crate::{BackendConfig, client};
 
 		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 		let encoder = config.session_encoder.clone();
