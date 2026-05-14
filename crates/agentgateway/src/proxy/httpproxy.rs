@@ -784,15 +784,17 @@ impl HTTPProxy {
 		}
 
 		// Run EPP once before retry loop — parse ordered destination list
-        let policy_client = self.policy_client();
-        let mut maybe_inference = backend_policies.build_inference(policy_client.clone());
-        let inference_result = maybe_inference.mutate_request(&mut req).await
-            .snapshot_on_err(log, &mut req)?;
-        inference_result
-            .policy_response
-            .apply(response_policies.headers())
+		let policy_client = self.policy_client();
+		let mut maybe_inference = backend_policies.build_inference(policy_client.clone());
+		let inference_result = maybe_inference
+			.mutate_request(&mut req)
+			.await
+			.snapshot_on_err(log, &mut req)?;
+		inference_result
+			.policy_response
+			.apply(response_policies.headers())
 			.map_err(SnapshottedProxyResponse)?;
-        log.inference_pool = inference_result.destinations.first().copied();
+		log.inference_pool = inference_result.destinations.first().copied();
 
 		let (head, body) = req.into_parts();
 		for mirror in route_policies
@@ -853,7 +855,10 @@ impl HTTPProxy {
 				// no retries at all, just send the request as normal
 				let req = Request::from_parts(head, http::Body::new(body));
 				let service_override = ServiceCallOverride {
-					destination: inference_result.destinations.first().copied()
+					destination: inference_result
+						.destinations
+						.first()
+						.copied()
 						.or(backend_policies.override_dest),
 					destination_passthrough: !inference_result.destinations.is_empty()
 						&& matches!(
@@ -904,13 +909,16 @@ impl HTTPProxy {
 			}
 			let req = Request::from_parts(head, http::Body::new(this));
 			let service_override = ServiceCallOverride {
-				destination: inference_result.destinations.get(n as usize).copied()
+				destination: inference_result
+					.destinations
+					.get(n as usize)
+					.copied()
 					.or(backend_policies.override_dest),
 				destination_passthrough: inference_result.destinations.get(n as usize).is_some()
 					&& matches!(
 						inference_result.destination_mode,
 						InferenceRoutingDestinationMode::Passthrough
-						),
+					),
 				inference_failed_open: inference_result.failed_open,
 			};
 			let mut res = self
@@ -1109,7 +1117,7 @@ impl HTTPProxy {
 		route_policies: Arc<store::LLMRequestPolicies>,
 		selected_backend: &RouteBackend,
 		backend_policies: BackendPolicies,
-		service_override: ServiceCallOverride,   
+		service_override: ServiceCallOverride,
 		response_policies: &mut ResponsePolicies,
 		mut req: Request,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -1133,7 +1141,7 @@ impl HTTPProxy {
 			route_policies.clone(),
 			&selected_backend.backend.backend,
 			backend_policies,
-			service_override,          
+			service_override,
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
@@ -1477,7 +1485,7 @@ async fn make_backend_call(
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
 	base_policies: BackendPolicies,
-	service_override: ServiceCallOverride,   
+	service_override: ServiceCallOverride,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
@@ -1525,7 +1533,6 @@ async fn make_backend_call(
 			l.backend_protocol = Some(bp)
 		}
 	});
-
 
 	let backend_call = match backend {
 		Backend::AI(n, ai) => {
@@ -2636,7 +2643,7 @@ impl PolicyClient {
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
 				pols,
-				ServiceCallOverride::default(),  
+				ServiceCallOverride::default(),
 				MustSnapshot::new(&mut req),
 				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM

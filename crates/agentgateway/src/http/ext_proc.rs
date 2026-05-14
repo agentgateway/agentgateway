@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 
-
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyStream;
@@ -172,16 +171,16 @@ impl InferencePoolRouter {
 		let failed_open = ext_proc.did_fail_open();
 		*req = new_req;
 		let destinations = req
-    		.headers()
-    		.get(HeaderName::from_static("x-gateway-destination-endpoint"))
-    		.and_then(|v| v.to_str().ok())
-    		.map(|v| {
-        		v.split(',')
-            		.map(str::trim)
-            		.filter_map(|s| s.parse::<SocketAddr>().ok())
-            		.collect::<Vec<_>>()
-    		})
-    		.unwrap_or_default();
+			.headers()
+			.get(HeaderName::from_static("x-gateway-destination-endpoint"))
+			.and_then(|v| v.to_str().ok())
+			.map(|v| {
+				v.split(',')
+					.map(str::trim)
+					.filter_map(|s| s.parse::<SocketAddr>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default();
 		Ok(InferenceRequestResult {
 			destinations,
 			destination_mode: self.destination_mode,
