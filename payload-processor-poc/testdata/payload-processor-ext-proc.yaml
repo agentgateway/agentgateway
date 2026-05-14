@@ -1,0 +1,103 @@
+# POC: PayloadProcessor (ext proc)
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: tilt
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: dataplane-dev-gwparams
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+
+---
+apiVersion: ainetworking.x-k8s.io/v0alpha0
+kind: PayloadProcessor
+metadata:
+  name: model-header-setter
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai-gateway
+  phase: PreRouting
+  processors:
+  - name: extract-model
+    type: ExtProc
+    failureMode: FailClosed
+    extProc:
+      backendRef:
+        name: ext-proc-bbr
+        port: 4444
+        kind: Service
+---
+# HTTPRoute: routes to gpt-4 backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gpt4-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: gpt-4
+    backendRefs:
+    - name: gpt4-backend
+      port: 8080
+
+---
+# HTTPRoute: routes to claude backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: claude-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: claude
+    backendRefs:
+    - name: claude-backend
+      port: 8080
+
+---
+# HTTPRoute: fallback for unknown models
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: fallback-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - name: default-backend
+      port: 8080

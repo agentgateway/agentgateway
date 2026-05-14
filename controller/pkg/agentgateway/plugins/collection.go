@@ -16,6 +16,7 @@ import (
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
+	"github.com/agentgateway/agentgateway/controller/api/v0alpha0/ainetworking"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
@@ -71,6 +72,9 @@ type AgwCollections struct {
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
 	BackendsByNamespace  krt.Index[string, *agentgateway.AgentgatewayBackend]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
+
+	// ainetworking resources (POC)
+	PayloadProcessors krt.Collection[*ainetworking.PayloadProcessor]
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
@@ -184,6 +188,16 @@ func NewAgwCollections(
 		// agentgateway-specific CRDs
 		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client),
 		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client),
+
+		// ainetworking CRDs (POC)
+		// Use WrapClient+NewDelayedInformer with explicit GVR (not NewInformer)
+		// because PayloadProcessor is not in Istio's kubetypes GVK registry.
+		PayloadProcessors: krt.WrapClient(kclient.NewDelayedInformer[*ainetworking.PayloadProcessor](
+			client,
+			ainetworking.SchemeGroupVersion.WithResource("payloadprocessors"),
+			kubetypes.StandardInformer,
+			kclient.Filter{ObjectFilter: client.ObjectFilter()},
+		), krtOptions.ToOptions("informer/PayloadProcessors/POC")...),
 	}
 
 	if settings.EnableInferExt {

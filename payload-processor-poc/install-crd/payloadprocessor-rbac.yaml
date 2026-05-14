@@ -1,0 +1,23 @@
+# POC: RBAC for PayloadProcessor CRD
+# Grants the agentgateway controller permission to watch PayloadProcessor resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentgateway-payloadprocessor-poc
+rules:
+- apiGroups: ["ainetworking.x-k8s.io"]
+  resources: ["payloadprocessors", "payloadprocessors/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentgateway-payloadprocessor-poc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agentgateway-payloadprocessor-poc
+subjects:
+- kind: ServiceAccount
+  name: agentgateway
+  namespace: default

@@ -182,6 +182,7 @@ func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksL
 		agwplugins.NewA2APlugin(agw),
 		agwplugins.NewBackendTLSPlugin(agw),
 		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup),
+		agwplugins.NewPayloadProcessorPlugin(agw), // POC: PayloadProcessor plugin
 	}
 }
 
