@@ -41,9 +41,10 @@ impl<T> EndpointWithInfo<T> {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Sampler {
 	/// Every endpoint has the default capacity of 1. No need for weighted sampling.
+	#[default]
 	Uniform,
 	/// Weighted sampling by capacity via a cached prefix sum.
 	Weighted(WeightedIndex<u64>),
@@ -51,12 +52,6 @@ pub enum Sampler {
 	/// active endpoint is drained. Distinct from the zero-endpoints case,
 	/// which keeps the default `Uniform` sampler.
 	Drained,
-}
-
-impl Default for Sampler {
-	fn default() -> Self {
-		Sampler::Uniform
-	}
 }
 
 impl Sampler {
