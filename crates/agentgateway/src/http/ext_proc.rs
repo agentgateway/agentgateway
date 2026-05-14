@@ -490,9 +490,7 @@ impl ExtProcInstance {
 		}
 
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
-		// POC: Increased buffer from 1 to 64 to prevent deadlock when body
-		// responses are processed synchronously before the upstream reader starts.
-		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(64);
+		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 
 		let upstream_body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
 		let mut req = http::Request::from_parts(parts, http::Body::new(upstream_body));
@@ -501,24 +499,11 @@ impl ExtProcInstance {
 			.rx_resp_for_request
 			.take()
 			.expect("mutate_request called twice");
-		// POC: Track whether headers phase is done so we can continue processing
-		// body responses with access to `req` for header mutations. This is needed
-		// for body-based routing (BBR) where an ExtProc sets headers based on the
-		// request body — those header mutations must be applied to `req` before
-		// route selection occurs.
-		let mut headers_done = false;
 		loop {
 			let Some(presp) = rx.recv().await else {
 				if !had_body && failure_mode == FailureMode::FailOpen {
 					trace!("fail open triggered");
 					self.skipped = true;
-					return Ok((req, None));
-				}
-				// POC: If headers are already processed, this is a normal end of
-				// the body stream — return successfully instead of erroring.
-				if headers_done {
-					trace!("done receiving request after body processing");
-					req.headers_mut().remove(http::header::CONTENT_LENGTH);
 					return Ok((req, None));
 				}
 				trace!("done receiving request");
@@ -528,16 +513,28 @@ impl ExtProcInstance {
 				trace!("got immediate response in request handler");
 				return Ok((req, Some(resp)));
 			}
-			let (hdr_done, eos) =
+			let (headers_done, eos) =
 				handle_response_for_request_mutation(had_body, Some(&mut req), &mut tx_chunk, presp).await;
-			if hdr_done {
-				headers_done = true;
-			}
-			// POC: Only return once we've seen end-of-stream, ensuring all header
-			// mutations from body responses have been applied to `req`. This
-			// trades streaming concurrency for correctness in the PreRouting phase
-			// where route selection depends on headers set by the ExtProc.
-			if eos || !had_body {
+			if headers_done {
+				if !eos {
+					trace!("spawn body!");
+					// Moving rest of body handling to async
+					tokio::task::spawn(async move {
+						loop {
+							let Some(presp) = rx.recv().await else {
+								trace!("done receiving request");
+								return;
+							};
+							let (_, eos) =
+								handle_response_for_request_mutation(had_body, None, &mut tx_chunk, presp).await;
+							if eos || !had_body {
+								trace!("request EOS!");
+								drop(tx_chunk);
+								return;
+							}
+						}
+					});
+				}
 				// Skip content-length as the EPP sets it to invalid values
 				// https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/943
 				req.headers_mut().remove(http::header::CONTENT_LENGTH);
@@ -790,12 +787,7 @@ async fn handle_response_for_request_mutation(
 		},
 		Some(Response::RequestBody(BodyResponse { response: None })) => {
 			trace!("got empty request body back");
-			// POC: An empty body response from the ext-proc indicates an
-			// intermediate chunk acknowledgement, not end-of-stream. Return
-			// (false, false) so the caller continues waiting for the final
-			// body response which may contain header mutations needed for
-			// body-based routing.
-			return (false, false);
+			return (false, true);
 		},
 		Some(Response::RequestBody(BodyResponse { response: Some(cr) })) => {
 			trace!("got request body back");
@@ -836,13 +828,6 @@ async fn handle_response_for_request_mutation(
 		}
 	} else if !had_body {
 		trace!("got headers back and do not expect body; we are done");
-		return (res, true);
-	} else if !res {
-		// POC: A body response (res=false) with header mutations but no body
-		// mutation means the ext-proc has finished processing the request body
-		// and only wants to mutate headers. Signal EOS so the caller can
-		// proceed with route selection using the updated headers.
-		trace!("body response with header-only mutation; treating as EOS");
 		return (res, true);
 	}
 	trace!("still waiting for response...");
