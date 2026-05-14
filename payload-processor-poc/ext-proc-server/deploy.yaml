@@ -1,0 +1,42 @@
+# POC: ExtProc server that extracts model from body and sets X-Gateway-Model-Name header
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ext-proc-bbr
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ext-proc-bbr
+  template:
+    metadata:
+      labels:
+        app: ext-proc-bbr
+    spec:
+      containers:
+      - name: ext-proc-bbr
+        image: ext-proc-bbr:latest
+        imagePullPolicy: IfNotPresent
+        args: ["--port", "18080"]
+        ports:
+        - containerPort: 18080
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-proc-bbr
+  namespace: default
+spec:
+  ports:
+  - port: 4444
+    targetPort: 18080
+    protocol: TCP
+    appProtocol: kubernetes.io/h2c
+  selector:
+    app: ext-proc-bbr

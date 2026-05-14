@@ -52,7 +52,12 @@ func translatePayloadProcessor(
 	agw *AgwCollections,
 	references ReferenceIndex,
 ) []AgwPolicy {
-	policies, err := translatePayloadProcessorPolicies(pp)
+	ctx := PolicyCtx{
+		Krt:        krtctx,
+		Collections: agw,
+		References: references,
+	}
+	policies, err := translatePayloadProcessorPolicies(ctx, pp)
 	if err != nil {
 		logger.Error("error translating PayloadProcessor (POC)", "name", pp.Name, "namespace", pp.Namespace, "error", err)
 		return nil
@@ -110,7 +115,7 @@ func translatePayloadProcessor(
 }
 
 // translatePayloadProcessorPolicies converts processor entries into api.Policy objects (POC)
-func translatePayloadProcessorPolicies(pp *ainetworking.PayloadProcessor) ([]*api.Policy, error) {
+func translatePayloadProcessorPolicies(ctx PolicyCtx, pp *ainetworking.PayloadProcessor) ([]*api.Policy, error) {
 	var policies []*api.Policy
 	var errs []error
 
@@ -122,9 +127,46 @@ func translatePayloadProcessorPolicies(pp *ainetworking.PayloadProcessor) ([]*ap
 
 	for i, proc := range pp.Spec.Processors {
 		if proc.Type == ainetworking.ProcessorTypeExtProc {
-			// POC: ExtProc not implemented, skip with warning
-			logger.Warn("ExtProc processor type not yet implemented (POC), skipping",
-				"processor", proc.Name, "payloadProcessor", pp.Name)
+			if proc.ExtProc == nil {
+				errs = append(errs, fmt.Errorf("processor %q: ExtProc config required for ExtProc type", proc.Name))
+				continue
+			}
+
+			be, err := buildBackendRef(ctx, proc.ExtProc.BackendRef, pp.Namespace)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("processor %q: failed to build extProc backendRef: %w", proc.Name, err))
+				continue
+			}
+
+			failureMode := api.TrafficPolicySpec_ExtProc_FAIL_CLOSED
+			if proc.FailureMode == ainetworking.FailureModeOpen {
+				failureMode = api.TrafficPolicySpec_ExtProc_FAIL_OPEN
+			}
+
+			policyPhase := mapPayloadProcessorPhase(pp.Spec.Phase)
+
+			policy := &api.Policy{
+				Key:  fmt.Sprintf("%s:%s[%d]%s", basePolicyName, proc.Name, i, extprocPolicySuffix),
+				Name: TypedResourceFromName("PayloadProcessor", policyName),
+				Kind: &api.Policy_Traffic{
+					Traffic: &api.TrafficPolicySpec{
+						Phase: policyPhase,
+						Kind: &api.TrafficPolicySpec_ExtProc_{
+							ExtProc: &api.TrafficPolicySpec_ExtProc{
+								Target:      be,
+								FailureMode: failureMode,
+							},
+						},
+					},
+				},
+			}
+
+			logger.Debug("generated PayloadProcessor ExtProc policy (POC)",
+				"processor", proc.Name,
+				"phase", pp.Spec.Phase,
+				"payloadProcessor", pp.Name)
+
+			policies = append(policies, policy)
 			continue
 		}
 

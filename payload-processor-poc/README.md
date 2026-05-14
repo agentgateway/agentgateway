@@ -29,6 +29,7 @@ Client                    Gateway                          Backends
 
 ## CRD
 
+### InProcess Example
 ```yaml
 apiVersion: ainetworking.x-k8s.io/v0alpha0
 kind: PayloadProcessor
@@ -114,35 +115,65 @@ spec:
 ## Testing
 
 ### Prerequisites
-- A Kubernetes cluster with agentgateway installed. See 
+- A Kubernetes cluster with agentgateway installed.
+```bash
+# Create kind cluster
+ctlptl create cluster kind --name kind-kind --registry=ctlptl-registry
+
+# Build and load images
+VERSION=1.0.0-ci1 CLUSTER_NAME=kind make -C controller kind-build-and-load
+
+# Start tilt for live updates
+tilt up
+```
 - The `PayloadProcessor` CRD registered with RBAC permissions for agentgateway
 ```bash
 kubectl apply -f payload-processor-poc/install-crd/
 ```
 
-### Deploy
+### Deploy In Process POC
 ```bash
 # Deploys simulated (llm-d's simulator) claude, gtp4, and default backends for testing
 kubectl apply -f payload-processor-poc/testdata/simulator-backends.yaml
 
-# Deploys Gateway, PayloadProcessor CR, and HTTPRoute for routing to backends bases on model header
+# Deploys Gateway, PayloadProcessor CR, and HTTPRoute for routing to backends based on model header with
+# in process payload processing
+# Note: This includes a Gateway resource which may not be configured to properly receive real time updates
+# via tilt. To ensure the Gateway is using the real time updated image, use tilt-gw.
 kubectl apply -f payload-processor-poc/testdata/payload-processor-bbr.yaml
+```
+
+### Deply Ext Process POC
+```bash
+# Deploys simulated (llm-d's simulator) claude, gtp4, and default backends for testing
+kubectl apply -f payload-processor-poc/testdata/simulator-backends.yaml
+
+# Deploy external payload processor for testing
+kubectl apply -f payload-processor-poc/ext-proc-server/deploy.yaml
+
+# Gateway, PayloadProcessor CR, and HTTPRoute for routing to backends based on
+# model header with external payload processing
+# Note: This includes a Gateway resource which may not be configured to properly receive real time updates
+# via tilt. To ensure the Gateway is using the real time updated image, use tilt-gw.
+kubectl apply -f payload-processor-poc/testdata/payload-processor-ext-proc.yaml
 ```
 
 ### Verify
 ```bash
+# In process/ext process verification:
+# Note: Commands assuming we are port forwarding the gateway to localhost:8080
 # Should route to gpt4-backend
-curl -X POST http://gateway:8080/v1/chat/completions \
+curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]}'
 
 # Should route to claude-backend
-curl -X POST http://gateway:8080/v1/chat/completions \
+curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "claude", "messages": [{"role": "user", "content": "hello"}]}'
 
 # Should route to default-backend (no model match)
-curl -X POST http://gateway:8080/v1/chat/completions \
+curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "llama", "messages": [{"role": "user", "content": "hello"}]}'
 ```
