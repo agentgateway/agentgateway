@@ -24,6 +24,8 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
+	method: ::http::Method,
+	uri: ::http::Uri,
 	headers: http::HeaderMap,
 	ext: ::http::Extensions,
 }
@@ -32,12 +34,16 @@ impl IncomingRequestContext {
 	#[cfg(test)]
 	pub fn empty() -> Self {
 		Self {
+			method: ::http::Method::GET,
+			uri: ::http::Uri::from_static("/"),
 			headers: http::HeaderMap::new(),
 			ext: ::http::Extensions::new(),
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
+			method: parts.method.clone(),
+			uri: parts.uri.clone(),
 			headers: parts.headers.clone(),
 			ext: parts.extensions.clone(),
 		}
@@ -54,6 +60,15 @@ impl IncomingRequestContext {
 		}
 		req.extensions_mut().extend(self.ext.clone());
 	}
+	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
+	pub fn as_request(&self) -> crate::http::Request {
+		let mut req = ::http::Request::new(crate::http::Body::empty());
+		*req.method_mut() = self.method.clone();
+		*req.uri_mut() = self.uri.clone();
+		*req.headers_mut() = self.headers.clone();
+		*req.extensions_mut() = self.ext.clone();
+		req
+	}
 }
 
 #[derive(Debug, Error)]
@@ -63,6 +78,8 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
+	#[error("extMcp rejected: {}", .0.message)]
+	ExtMcp(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]

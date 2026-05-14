@@ -55,19 +55,26 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 
 #[derive(Debug, Clone)]
 pub struct Relay {
-	upstreams: Arc<upstream::UpstreamGroup>,
+	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
+	pub(crate) ext_mcp: Option<Arc<crate::mcp::extmcp::ExtMcp>>,
+	pub(crate) policy_client: PolicyClient,
 }
 
 pub struct RelayInputs {
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
+	pub ext_mcp: Option<Arc<crate::mcp::extmcp::ExtMcp>>,
 	pub client: PolicyClient,
 }
 
 impl RelayInputs {
 	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
-		Relay::new(self.backend, self.policies, self.client)
+		let r = Relay::new(self.backend, self.policies, self.client)?;
+		Ok(Relay {
+			ext_mcp: self.ext_mcp,
+			..r
+		})
 	}
 }
 
@@ -78,14 +85,18 @@ impl Relay {
 		client: PolicyClient,
 	) -> Result<Self, mcp::Error> {
 		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
+			ext_mcp: None,
+			policy_client: client,
 		})
 	}
 	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
 			policies,
+			ext_mcp: self.ext_mcp.clone(),
+			policy_client: self.policy_client.clone(),
 		}
 	}
 
@@ -165,6 +176,55 @@ impl Relay {
 	}
 	pub fn default_target_name(&self) -> Option<String> {
 		self.upstreams.default_target_name.clone()
+	}
+
+	fn build_extmcp_ctx(
+		&self,
+		r: &JsonRpcRequest<ClientRequest>,
+		ctx: &IncomingRequestContext,
+		backend: &str,
+	) -> Option<ExtMcpCtx> {
+		let ext = self.ext_mcp.as_ref()?;
+		let method = r.request.method().to_string();
+		if !crate::mcp::extmcp::phase::resolve(&method, &ext.methods).runs_response() {
+			// we only need an ExtMcpCtx for response-phase extmcp hooks
+			return None;
+		}
+		Some(ExtMcpCtx {
+			ext: ext.clone(),
+			method,
+			backend: backend.to_string(),
+			client: self.policy_client.clone(),
+			req_ctx: Arc::new(ctx.clone()),
+		})
+	}
+
+	pub(crate) async fn run_extmcp_call_request(
+		&self,
+		ext_ctx: &mut crate::mcp::extmcp::CallRequestCtx<'_>,
+		ctx: &IncomingRequestContext,
+	) -> Result<bool, UpstreamError> {
+		use crate::mcp::extmcp::Outcome;
+		let Some(ext) = self.ext_mcp.as_ref() else {
+			return Ok(false);
+		};
+		let method = ext_ctx.method;
+		match crate::mcp::extmcp::run_call_request(ext, ext_ctx, ctx, &self.policy_client).await {
+			Outcome::Pass => Ok(false),
+			Outcome::Mutated => {
+				tracing::debug!(method, "extMcp: request mutated");
+				Ok(true)
+			},
+			Outcome::Reject(rej) => {
+				tracing::debug!(
+					method,
+					code = rej.code.0,
+					message = %rej.message,
+					"extMcp: request rejected",
+				);
+				Err(UpstreamError::ExtMcp(rej))
+			},
+		}
 	}
 
 	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
@@ -382,9 +442,15 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
+		let extmcp = self.build_extmcp_ctx(&r, &ctx, service_name);
 		let stream = us.generic_stream(r, &ctx).await?;
 
-		messages_to_response(id, stream, mcp_log)
+		match extmcp {
+			Some(extmcp) => {
+				messages_to_response(id.clone(), wrap_with_extmcp(id, stream, extmcp), mcp_log)
+			},
+			None => messages_to_response(id, stream, mcp_log),
+		}
 	}
 	// For some requests, we don't have a sane mapping of incoming requests to a specific
 	// downstream service when multiplexing. Only forward when we have only one backend.
@@ -492,6 +558,9 @@ impl Relay {
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		let mut streams = Vec::new();
+		let method = r.request.method().to_string();
+		let method = method.as_str();
+		let is_list = crate::mcp::extmcp::methods::is_list(method);
 
 		let futs: Vec<_> = self
 			.upstreams
@@ -499,7 +568,23 @@ impl Relay {
 			.map(|(name, con)| {
 				let r = r.clone();
 				let ctx = &ctx;
-				async move { (name, con.generic_stream(r, ctx).await) }
+				async move {
+					if is_list
+						&& let Some(ext) = self.ext_mcp.as_ref()
+						&& let crate::mcp::extmcp::Outcome::Reject(rej) =
+							crate::mcp::extmcp::run_list_request(
+								ext,
+								method,
+								&name,
+								ctx,
+								&self.policy_client,
+							)
+							.await
+					{
+						return (name, Err(UpstreamError::ExtMcp(rej)));
+					}
+					(name, con.generic_stream(r, ctx).await)
+				}
 			})
 			.collect();
 
@@ -507,7 +592,15 @@ impl Relay {
 
 		for (name, result) in fut_results {
 			match result {
-				Ok(s) => streams.push((name, s)),
+				Ok(s) => {
+					// apply extmcp wrappers per-upstream so that they see an unmuxed view
+					// TODO this is consistent with extauth but has a huge latency cost
+					let msg = match self.build_extmcp_ctx(&r, &ctx, &name) {
+						Some(extmcp) => Messages::from_stream(wrap_with_extmcp(id.clone(), s, extmcp)),
+						None => s,
+					};
+					streams.push((name, msg));
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
@@ -641,15 +734,58 @@ pub fn setup_request_log(
 	(_span, log, cel)
 }
 
+#[derive(Clone)]
+pub(crate) struct ExtMcpCtx {
+	pub ext: Arc<crate::mcp::extmcp::ExtMcp>,
+	pub method: String,
+	pub backend: String,
+	pub client: PolicyClient,
+	pub req_ctx: Arc<IncomingRequestContext>,
+}
+
 fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
 ) -> Result<Response, UpstreamError> {
+	Ok(mcp::session::sse_stream_response(
+		into_sse_stream(id, stream, mcp_log),
+		None,
+	))
+}
+
+// wrap response stream with extmcp response-phase hooks (if any)
+fn wrap_with_extmcp(
+	id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	extmcp: ExtMcpCtx,
+) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
 	use futures_util::StreamExt;
-	let request_id = id.clone();
+	stream.then(move |rpc| {
+		let ctx = extmcp.clone();
+		let id = id.clone();
+		async move {
+			match rpc {
+				Ok(mut rpc) => {
+					if let Some(scrubbed) = apply_extmcp_response_intercept(&ctx, &id, &rpc).await {
+						rpc = scrubbed;
+					}
+					Ok(rpc)
+				},
+				Err(e) => Err(e),
+			}
+		}
+	})
+}
+
+fn into_sse_stream(
+	request_id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	mcp_log: Option<AsyncLog<MCPInfo>>,
+) -> impl Stream<Item = ServerSseMessage> + Send + 'static {
+	use futures_util::StreamExt;
 	let mut captured_terminal = false;
-	let stream = stream.map(move |rpc| {
+	stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => {
 				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
@@ -657,17 +793,69 @@ fn messages_to_response(
 				}
 				rpc
 			},
-			Err(e) => {
-				ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), id.clone())
-			},
+			Err(e) => ServerJsonRpcMessage::error(
+				ErrorData::internal_error(e.to_string(), None),
+				request_id.clone(),
+			),
 		};
 		// TODO: is it ok to have no event_id here?
 		ServerSseMessage {
 			event_id: None,
 			message: Arc::new(r),
 		}
-	});
-	Ok(mcp::session::sse_stream_response(stream, None))
+	})
+}
+
+async fn apply_extmcp_response_intercept(
+	ctx: &ExtMcpCtx,
+	request_id: &RequestId,
+	msg: &ServerJsonRpcMessage,
+) -> Option<ServerJsonRpcMessage> {
+	use crate::mcp::extmcp::Outcome;
+	let ServerJsonRpcMessage::Response(resp) = msg else {
+		return None;
+	};
+	if resp.id != *request_id {
+		// only apply to the terminal request for the given response, ignore notifications
+		return None;
+	}
+	let mut json = match serde_json::to_value(&resp.result) {
+		Ok(v) => v,
+		Err(e) => {
+			tracing::warn!(error = %e, "extMcp: failed to serialize result for inspection; passing through");
+			return None;
+		},
+	};
+	match crate::mcp::extmcp::run_response(
+		&ctx.ext,
+		&ctx.method,
+		&ctx.backend,
+		&mut json,
+		&ctx.req_ctx,
+		&ctx.client,
+	)
+	.await
+	{
+		Outcome::Pass => None,
+		Outcome::Mutated => {
+			let new_result: ServerResult = match serde_json::from_value(json) {
+				Ok(v) => v,
+				Err(e) => {
+					// Fail closed: passing through would leak content the operator asked us to scrub.
+					tracing::warn!(error = %e, "extMcp: failed to deserialize mutated result");
+					return Some(ServerJsonRpcMessage::error(
+						ErrorData::internal_error(format!("extMcp produced an invalid response: {e}"), None),
+						request_id.clone(),
+					));
+				},
+			};
+			Some(ServerJsonRpcMessage::response(
+				new_result,
+				request_id.clone(),
+			))
+		},
+		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, request_id.clone())),
+	}
 }
 
 fn capture_terminal_mcp_payload(

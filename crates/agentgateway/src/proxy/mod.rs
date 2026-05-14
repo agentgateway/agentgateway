@@ -305,6 +305,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::ExtMcp(_, _)) => StatusCode::BAD_REQUEST,
 		};
 		let mut rb = ::http::Response::builder().status(code);
 
@@ -380,6 +381,18 @@ impl ProxyError {
 					message: e.to_string().into(),
 					data: None,
 				},
+			})
+			.unwrap_or_default();
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
+		if let ProxyError::MCP(mcp::Error::ExtMcp(req_id, rej)) = self {
+			let msg = serde_json::to_string(&JsonRpcError {
+				jsonrpc: Default::default(),
+				id: req_id.clone(),
+				error: rej.clone(),
 			})
 			.unwrap_or_default();
 			return rb

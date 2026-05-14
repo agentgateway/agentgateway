@@ -2318,6 +2318,8 @@ pub enum TrafficPolicy {
 pub enum BackendTrafficPolicy {
 	McpAuthorization(McpAuthorization),
 	McpAuthentication(McpAuthentication),
+	#[serde(rename = "extMcp")]
+	ExtMcp(Arc<crate::mcp::extmcp::ExtMcp>),
 	A2a(A2aPolicy),
 	#[serde(rename = "http")]
 	HTTP(backend::HTTP),

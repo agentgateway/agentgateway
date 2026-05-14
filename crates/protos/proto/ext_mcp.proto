@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package agentgateway.dev.ext_mcp;
+
+import "google/protobuf/struct.proto";
+
+// ExtMcp is the wire protocol for an MCP-aware external policy server.
+// Modeled on Envoy ext_authz, but at the MCP method layer. One protocol
+// covers both gating and mutation — auth-only servers can ignore the
+// mutation variants.
+service ExtMcp {
+  // Check a single JSON-RPC request before it's dispatched to upstream.
+  rpc CheckRequest(McpRequest) returns (McpRequestResult);
+
+  // Check a single-message JSON-RPC response from upstream. Used for
+  // tools/call without progress notifications, all *list responses, and
+  // resources/read.
+  rpc CheckResponse(McpResponse) returns (McpResponseResult);
+
+  // Check a multi-message JSON-RPC response. Used for tools/call that
+  // emits progress notifications before a final result. One McpResponse
+  // per upstream message in order; the server returns one McpResponseResult
+  // per message. The gateway holds each message until its result arrives,
+  // so notifications are gated individually rather than buffered.
+  rpc CheckResponseStream(stream McpResponse) returns (stream McpResponseResult);
+}
+
+message McpRequest {
+  // Backend name in its native (unmuxed) namespace.
+  string service_name = 1;
+  // JSON-RPC method (e.g. "tools/call", "tools/list").
+  string method = 2;
+  // CEL-evaluated context from gateway config.
+  Metadata metadata_context = 3;
+  // JSON-RPC request body.
+  google.protobuf.Struct mcp_request = 4;
+}
+
+message McpResponse {
+  string service_name = 1;
+  // Method of the originating request.
+  string method = 2;
+  Metadata metadata_context = 3;
+  // One JSON-RPC message from upstream (notification or final response).
+  google.protobuf.Struct mcp_response = 4;
+  MessageKind kind = 6;
+}
+
+enum MessageKind {
+  FINAL = 0;
+  NOTIFICATION = 1;
+}
+
+message McpRequestResult {
+  oneof result {
+    // Proceed unchanged.
+    Pass pass = 1;
+    // Proceed with the rewritten params. Replaces the JSON-RPC `params`
+    // wholesale; must deserialize back into the method's typed shape
+    // (e.g. tools/call -> {"name": ..., "arguments": {...}}). Identifier
+    // fields can be rewritten — the gateway treats extMcp as part of the
+    // auth phase and does not re-run RBAC on the mutated request.
+    google.protobuf.Struct mutated = 2;
+    // Deny — translates to a JSON-RPC error returned to the client.
+    AuthorizationError error = 3;
+  }
+}
+
+message McpResponseResult {
+  oneof result {
+    Pass pass = 1;
+    google.protobuf.Struct mutated = 2;
+    AuthorizationError error = 3;
+  }
+  // Streaming-only: if true, terminate the stream after delivering this
+  // result (use with `error` to abort an in-progress tool call). Ignored
+  // on FINAL messages.
+  bool terminate_stream = 4;
+}
+
+message Pass {}
+
+message AuthorizationError {
+  enum Code {
+    UNKNOWN = 0;
+    PERMISSION_DENIED = 1;
+    RESOURCE_EXHAUSTED = 2;
+    INVALID = 3;
+  }
+  Code code = 1;
+  // Human-readable reason; surfaced in the JSON-RPC error message field.
+  string reason = 2;
+  // Optional explicit JSON-RPC error payload. Overrides the code-derived
+  // default when set.
+  google.protobuf.Struct mcp_error = 3;
+}
+
+// Same shape as envoy.config.core.v3.Metadata.filter_metadata.
+message Metadata {
+  map<string, google.protobuf.Struct> filter_metadata = 1;
+}

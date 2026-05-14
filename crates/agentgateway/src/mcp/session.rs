@@ -283,6 +283,9 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
+			Err(UpstreamError::ExtMcp(rej)) if req_id.is_some() => {
+				Err(mcp::Error::ExtMcp(req_id.unwrap(), rej).into())
+			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
@@ -455,6 +458,27 @@ impl Session {
 
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
+						let mut params_v = serde_json::to_value(&ctr.params).map_err(|e| {
+							UpstreamError::InvalidRequest(format!("serialize tools/call params: {e}"))
+						})?;
+						let mutated = self
+							.relay
+							.run_extmcp_call_request(
+								&mut mcp::extmcp::CallRequestCtx {
+									backend: service_name,
+									method: mcp::extmcp::methods::TOOLS_CALL,
+									params: &mut params_v,
+								},
+								&ctx,
+							)
+							.await?;
+						if mutated {
+							ctr.params = serde_json::from_value(params_v).map_err(|e| {
+								UpstreamError::InvalidRequest(format!(
+									"deserialize mutated tools/call params: {e}"
+								))
+							})?;
+						}
 						self
 							.relay
 							.send_single(r, ctx, service_name, Some(log.clone()))
@@ -465,6 +489,27 @@ impl Session {
 						let (service_name, prompt) =
 							self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
 						gpr.params.name = prompt.to_string();
+						let mut params_v = serde_json::to_value(&gpr.params).map_err(|e| {
+							UpstreamError::InvalidRequest(format!("serialize prompts/get params: {e}"))
+						})?;
+						let mutated = self
+							.relay
+							.run_extmcp_call_request(
+								&mut mcp::extmcp::CallRequestCtx {
+									backend: service_name,
+									method: mcp::extmcp::methods::PROMPTS_GET,
+									params: &mut params_v,
+								},
+								&ctx,
+							)
+							.await?;
+						if mutated {
+							gpr.params = serde_json::from_value(params_v).map_err(|e| {
+								UpstreamError::InvalidRequest(format!(
+									"deserialize mutated prompts/get params: {e}"
+								))
+							})?;
+						}
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
@@ -478,13 +523,35 @@ impl Session {
 								&log,
 								&cel,
 							)?;
+							let mut params_v = serde_json::to_value(&rrr.params).map_err(|e| {
+								UpstreamError::InvalidRequest(format!(
+									"serialize resources/read params: {e}"
+								))
+							})?;
+							let mutated = self
+								.relay
+								.run_extmcp_call_request(
+									&mut mcp::extmcp::CallRequestCtx {
+										backend: &service_name,
+										method: mcp::extmcp::methods::RESOURCES_READ,
+										params: &mut params_v,
+									},
+									&ctx,
+								)
+								.await?;
+							if mutated {
+								rrr.params = serde_json::from_value(params_v).map_err(|e| {
+									UpstreamError::InvalidRequest(format!(
+										"deserialize mutated resources/read params: {e}"
+									))
+								})?;
+							}
 							self
 								.relay
 								.send_single_without_multiplexing(r, ctx, None)
 								.await
 						} else {
 							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
 							Err(UpstreamError::InvalidMethodWithMultiplexing(
 								r.request.method().to_string(),
 							))

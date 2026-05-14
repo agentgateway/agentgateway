@@ -1,4 +1,5 @@
 pub mod extauthmock;
+pub mod extmcpmock;
 pub mod extprocmock;
 mod hyper_tower;
 pub mod oteltracemock;

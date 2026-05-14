@@ -2514,3 +2514,344 @@ async fn mcp_remote_ratelimit_deny() {
 		"Expected 429 rate limit from remote service, got: {err_msg}"
 	);
 }
+
+#[tokio::test]
+async fn mcp_extmcp_pass_through() {
+	use std::collections::HashMap;
+	use std::sync::Arc as StdArc;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use protos::ext_mcp::{McpRequest, McpRequestResult, McpResponse, McpResponseResult};
+	use tonic::Status;
+
+	use crate::mcp::extmcp;
+	use crate::test_helpers::extmcpmock::{ExtMcpMock, pass_request, pass_response};
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	let request_count = StdArc::new(AtomicUsize::new(0));
+	let response_count = StdArc::new(AtomicUsize::new(0));
+
+	struct CountingHandler {
+		requests: StdArc<AtomicUsize>,
+		responses: StdArc<AtomicUsize>,
+	}
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extmcpmock::Handler for CountingHandler {
+		async fn check_request(&mut self, _req: &McpRequest) -> Result<McpRequestResult, Status> {
+			self.requests.fetch_add(1, Ordering::SeqCst);
+			pass_request()
+		}
+		async fn check_response(&mut self, _req: &McpResponse) -> Result<McpResponseResult, Status> {
+			self.responses.fetch_add(1, Ordering::SeqCst);
+			pass_response()
+		}
+	}
+
+	let extmcp_mock = {
+		let requests = request_count.clone();
+		let responses = response_count.clone();
+		ExtMcpMock::new(move || CountingHandler {
+			requests: requests.clone(),
+			responses: responses.clone(),
+		})
+		.spawn()
+		.await
+	};
+
+	let remote = extmcp::Remote {
+		target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+			extmcp_mock.address,
+		))),
+		failure_mode: extmcp::FailureMode::Deny,
+		timeout: Duration::from_secs(5),
+		metadata: HashMap::new(),
+	};
+	let ext = extmcp::ExtMcp {
+		request: vec![extmcp::Driver::Remote(remote.clone())],
+		response: vec![extmcp::Driver::Remote(remote)],
+		methods: HashMap::new(),
+	};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::ExtMcp(Arc::new(ext))],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed when extMcp returns Pass");
+
+	assert!(!result.content.is_empty());
+
+	// tools/call defaults to Phase::Both, so both hooks should have fired at
+	// least once for the call. tools/list during initialization also runs
+	// (response-only by default), so response_count may be higher than 1.
+	assert!(
+		request_count.load(Ordering::SeqCst) >= 1,
+		"expected at least one check_request callout, got {}",
+		request_count.load(Ordering::SeqCst)
+	);
+	assert!(
+		response_count.load(Ordering::SeqCst) >= 1,
+		"expected at least one check_response callout, got {}",
+		response_count.load(Ordering::SeqCst)
+	);
+
+	drop(extmcp_mock);
+}
+
+// Builds a Both-phase extMcp policy targeting the given mock address.
+fn extmcp_policy(addr: std::net::SocketAddr) -> BackendTrafficPolicy {
+	use std::collections::HashMap;
+
+	use crate::mcp::extmcp;
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	let remote = extmcp::Remote {
+		target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
+		failure_mode: extmcp::FailureMode::Deny,
+		timeout: Duration::from_secs(5),
+		metadata: HashMap::new(),
+	};
+	BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
+		request: vec![extmcp::Driver::Remote(remote.clone())],
+		response: vec![extmcp::Driver::Remote(remote)],
+		methods: HashMap::new(),
+	}))
+}
+
+#[tokio::test]
+async fn mcp_extmcp_reject_surfaces_jsonrpc_error() {
+	use protos::ext_mcp::{McpRequest, McpRequestResult, authorization_error::Code};
+	use tonic::Status;
+
+	use crate::test_helpers::extmcpmock::{ExtMcpMock, reject_request};
+
+	struct DenyAll;
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extmcpmock::Handler for DenyAll {
+		async fn check_request(&mut self, _req: &McpRequest) -> Result<McpRequestResult, Status> {
+			reject_request(Code::PermissionDenied, "denied by mock extMcp")
+		}
+	}
+
+	let extmcp_mock = ExtMcpMock::new(|| DenyAll).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) =
+		setup_proxy_policies(&mock, true, false, vec![extmcp_policy(extmcp_mock.address)]).await;
+
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
+		))
+		.await
+		.expect_err("tool call should fail when extMcp rejects");
+
+	let mcp_error = match &err {
+		rmcp::ServiceError::McpError(e) => e,
+		other => panic!("expected McpError, got {other:?}"),
+	};
+	assert_eq!(
+		mcp_error.code.0, -32001,
+		"PermissionDenied should map to -32001, got {}",
+		mcp_error.code.0
+	);
+	assert_eq!(mcp_error.message.as_ref(), "denied by mock extMcp");
+}
+
+#[tokio::test]
+async fn mcp_extmcp_mutated_request_reaches_upstream() {
+	use protos::ext_mcp::{McpRequest, McpRequestResult};
+	use tonic::Status;
+
+	use crate::test_helpers::extmcpmock::{ExtMcpMock, mutated_request_json};
+
+	struct RewriteArgs;
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extmcpmock::Handler for RewriteArgs {
+		async fn check_request(&mut self, req: &McpRequest) -> Result<McpRequestResult, Status> {
+			// Only rewrite tools/call; pass-through everything else (e.g. initialize, list).
+			if req.method != "tools/call" {
+				return crate::test_helpers::extmcpmock::pass_request();
+			}
+			mutated_request_json(serde_json::json!({
+				"name": "echo",
+				"arguments": { "rewritten": true },
+			}))
+		}
+	}
+
+	let extmcp_mock = ExtMcpMock::new(|| RewriteArgs).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) =
+		setup_proxy_policies(&mock, true, false, vec![extmcp_policy(extmcp_mock.address)]).await;
+
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
+		))
+		.await
+		.expect("tool call should succeed");
+
+	// The echo tool serializes whatever arguments it received as text content,
+	// so a successful rewrite means the upstream saw `{"rewritten": true}`.
+	let text = result
+		.content
+		.iter()
+		.find_map(|c| match c.raw {
+			rmcp::model::RawContent::Text(ref t) => Some(t.text.clone()),
+			_ => None,
+		})
+		.expect("echo should return text content");
+	assert!(
+		text.contains("rewritten") && text.contains("true"),
+		"expected upstream to see rewritten args, got: {text}"
+	);
+	assert!(
+		!text.contains("\"hi\""),
+		"original args should have been replaced, got: {text}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
+	use std::collections::HashMap;
+	use std::sync::Mutex as StdMutex;
+
+	use protos::ext_mcp::{McpRequest, McpRequestResult};
+	use tonic::Status;
+
+	use crate::cel::Expression;
+	use crate::mcp::extmcp;
+	use crate::test_helpers::extmcpmock::{ExtMcpMock, pass_request};
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	type Captured = StdMutex<Option<HashMap<String, prost_wkt_types::Struct>>>;
+	let captured: Arc<Captured> = Arc::new(StdMutex::new(None));
+
+	struct Capture {
+		store: Arc<Captured>,
+	}
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extmcpmock::Handler for Capture {
+		async fn check_request(&mut self, req: &McpRequest) -> Result<McpRequestResult, Status> {
+			if req.method == "tools/call"
+				&& let Some(md) = req.metadata_context.as_ref()
+			{
+				*self.store.lock().unwrap() = Some(md.filter_metadata.clone());
+			}
+			pass_request()
+		}
+	}
+
+	let extmcp_mock = {
+		let store = captured.clone();
+		ExtMcpMock::new(move || Capture {
+			store: store.clone(),
+		})
+		.spawn()
+		.await
+	};
+
+	// Build a Remote with a CEL metadata entry. The expression evaluates to a
+	// JSON object so it deserializes into a wire `Struct`.
+	let mut metadata = HashMap::new();
+	metadata.insert(
+		"tenant.io".to_string(),
+		Arc::new(Expression::new_strict(r#"{"path": request.path}"#).unwrap()),
+	);
+	let remote = extmcp::Remote {
+		target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+			extmcp_mock.address,
+		))),
+		failure_mode: extmcp::FailureMode::Deny,
+		timeout: Duration::from_secs(5),
+		metadata,
+	};
+	let policy = BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
+		request: vec![extmcp::Driver::Remote(remote.clone())],
+		response: vec![extmcp::Driver::Remote(remote)],
+		methods: HashMap::new(),
+	}));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
+
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
+		))
+		.await
+		.expect("call should succeed");
+
+	let md = captured
+		.lock()
+		.unwrap()
+		.clone()
+		.expect("mock should have captured metadata on tools/call");
+	let entry = md
+		.get("tenant.io")
+		.expect("metadata key `tenant.io` should be present");
+	let as_json = serde_json::to_value(entry).unwrap();
+	assert_eq!(
+		as_json,
+		serde_json::json!({"path": "/mcp"}),
+		"CEL expression should have evaluated `request.path` to `/mcp`, got {as_json}",
+	);
+}
+
+#[tokio::test]
+async fn mcp_extmcp_filtered_list_via_response_mutation() {
+	use protos::ext_mcp::{McpResponse, McpResponseResult};
+	use tonic::Status;
+
+	use crate::test_helpers::extmcpmock::{ExtMcpMock, mutated_response_json};
+
+	struct FilterTools;
+	#[async_trait::async_trait]
+	impl crate::test_helpers::extmcpmock::Handler for FilterTools {
+		async fn check_response(&mut self, req: &McpResponse) -> Result<McpResponseResult, Status> {
+			if req.method != "tools/list" {
+				return crate::test_helpers::extmcpmock::pass_response();
+			}
+			// Replace the full upstream list with a single allow-listed entry.
+			mutated_response_json(serde_json::json!({
+				"tools": [{
+					"name": "echo",
+					"description": "Repeat what you say",
+					"inputSchema": { "type": "object" },
+				}],
+			}))
+		}
+	}
+
+	let extmcp_mock = ExtMcpMock::new(|| FilterTools).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) =
+		setup_proxy_policies(&mock, true, false, vec![extmcp_policy(extmcp_mock.address)]).await;
+
+	let client = mcp_streamable_client(io).await;
+	let tools = client.list_tools(None).await.expect("list_tools should succeed");
+	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
+	assert_eq!(
+		names,
+		vec!["echo".to_string()],
+		"only `echo` should survive response-phase filtering, got {names:?}"
+	);
+}

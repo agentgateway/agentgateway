@@ -1277,6 +1277,46 @@ message BackendPolicySpec {
     AuthorizationLocation authorization_location = 8;
   }
 
+  // ExtMcp is a backend-phase policy for MCP traffic. Today only the `remote`
+  // slot is defined — a custom gRPC policy server modeled on Envoy ext_authz.
+  message ExtMcp {
+    // Phase controls whether a method's request-side, response-side, or both
+    // are subject to the extMcp pipeline. Defaults per method are baked in
+    // (e.g. *list -> RESPONSE, tools/call -> BOTH); user config in `methods`
+    // is overrides only.
+    enum Phase {
+      // UNSPECIFIED falls back to the per-method default.
+      UNSPECIFIED = 0;
+      OFF = 1;
+      REQUEST = 2;
+      RESPONSE = 3;
+      BOTH = 4;
+    }
+
+    enum FailureMode {
+      DENY = 0;
+      ALLOW = 1;
+    }
+
+    // Configuration for the custom gRPC policy server. TLS, retries, and
+    // load balancing to the policy server come from the backend referenced
+    // by `target` (same pattern as TrafficPolicySpec.ExternalAuth).
+    message Remote {
+      BackendReference target = 1;
+      FailureMode failure_mode = 2;
+      google.protobuf.Duration timeout = 3;
+      // Static or CEL-evaluated context, surfaced to the policy server as
+      // the wire `Metadata.filter_metadata` map. Keyed by metadata namespace.
+      map<string, string> metadata = 5;
+    }
+
+    Remote remote = 1;
+
+    // Per-method phase overrides keyed by JSON-RPC method name
+    // (e.g. "tools/list", "tools/call").
+    map<string, Phase> methods = 2;
+  }
+
   oneof kind {
     A2a a2a = 1;
     InferenceRouting inference_routing = 2;
@@ -1295,6 +1335,7 @@ message BackendPolicySpec {
     Health health = 15;
     BackendTunnel backend_tunnel = 16;
     TrafficPolicySpec.ExternalAuth ext_authz = 17;
+    ExtMcp ext_mcp = 18;
   }
 }
 

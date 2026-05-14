@@ -111,6 +111,7 @@ impl App {
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
 		let authn = backend_policies.mcp_authentication;
+		let ext_mcp = backend_policies.ext_mcp.clone();
 
 		// Store an empty value, we will populate each field async
 		let logy = log.mcp_status.clone();
@@ -143,6 +144,7 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					ext_mcp: ext_mcp.clone(),
 					client: client.clone(),
 				},
 			))
@@ -159,6 +161,7 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					ext_mcp: ext_mcp.clone(),
 					client: client.clone(),
 				},
 			))

@@ -469,6 +469,80 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 	}
 }
 
+fn convert_ext_mcp(
+	em: &proto::agent::backend_policy_spec::ExtMcp,
+	diagnostics: &mut Diagnostics,
+) -> Result<crate::mcp::extmcp::ExtMcp, ProtoError> {
+	use proto::agent::backend_policy_spec::ext_mcp::{
+		FailureMode as ProtoFailureMode, Phase as ProtoPhase, Remote as ProtoRemote,
+	};
+
+	let methods: std::collections::HashMap<String, crate::mcp::extmcp::Phase> = em
+		.methods
+		.iter()
+		.filter_map(|(k, v)| {
+			let phase = match ProtoPhase::try_from(*v).ok()? {
+				ProtoPhase::Unspecified => return None, // fall back to per-method default
+				ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
+				ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
+				ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
+				ProtoPhase::Both => crate::mcp::extmcp::Phase::Both,
+			};
+			Some((k.clone(), phase))
+		})
+		.collect();
+
+	let remote = em
+		.remote
+		.as_ref()
+		.map(|r: &ProtoRemote| -> Result<_, ProtoError> {
+			let failure_mode = match ProtoFailureMode::try_from(r.failure_mode).ok() {
+				Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::Allow,
+				_ => crate::mcp::extmcp::FailureMode::Deny,
+			};
+			let timeout = r
+				.timeout
+				.as_ref()
+				.and_then(|d| std::time::Duration::try_from(*d).ok())
+				.unwrap_or(std::time::Duration::from_secs(1));
+			let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
+			let metadata = r
+				.metadata
+				.iter()
+				.map(|(k, v)| {
+					let ve = permissive_cel_expression_arc(
+						diagnostics,
+						format!("backend.extMcp.remote.metadata.{k}"),
+						v,
+					);
+					Ok::<_, ProtoError>((k.to_owned(), ve))
+				})
+				.collect::<Result<HashMap<_, _>, _>>()?;
+			Ok(crate::mcp::extmcp::Driver::Remote(
+				crate::mcp::extmcp::Remote {
+					target,
+					failure_mode,
+					timeout,
+					metadata,
+				},
+			))
+		})
+		.transpose()?;
+
+	// Remote currently runs on both phases — its per-method phase comes from the
+	// `methods` map.
+	let (request, response) = match remote {
+		Some(d) => (vec![d.clone()], vec![d]),
+		None => (Vec::new(), Vec::new()),
+	};
+
+	Ok(crate::mcp::extmcp::ExtMcp {
+		request,
+		response,
+		methods,
+	})
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -1422,6 +1496,9 @@ fn backend_policy_from_proto(
 		},
 		Some(bps::Kind::ExtAuthz(ea)) => {
 			BackendTrafficPolicy::ExtAuthz(Arc::new(external_auth_from_proto(ea, diagnostics)?))
+		},
+		Some(bps::Kind::ExtMcp(em)) => {
+			BackendTrafficPolicy::ExtMcp(Arc::new(convert_ext_mcp(em, diagnostics)?))
 		},
 		Some(bps::Kind::Transformation(tp)) => {
 			BackendTrafficPolicy::Transformation(Arc::new(transformation_from_proto(tp, diagnostics)?))
