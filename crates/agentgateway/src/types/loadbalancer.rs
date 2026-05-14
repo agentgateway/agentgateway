@@ -44,8 +44,6 @@ impl<T> EndpointWithInfo<T> {
 #[derive(Debug, Clone)]
 pub enum Sampler {
 	/// Every endpoint has the default capacity of 1. No need for weighted sampling.
-	/// Other uniform-cap configurations (e.g. all-5) fall through to Weighted —
-	/// correct, just slightly less efficient than this fast path.
 	Uniform,
 	/// Weighted sampling by capacity via a cached prefix sum.
 	Weighted(WeightedIndex<u64>),
@@ -102,6 +100,52 @@ pub struct EndpointGroup<T> {
 }
 
 impl<T> EndpointGroup<T> {
+	fn from_pools(
+		active: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+		rejected: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+	) -> Self {
+		let sampler = build_sampler(&active);
+		Self {
+			active,
+			rejected,
+			sampler,
+		}
+	}
+
+	/// Promote an endpoint to active, removing any prior rejected entry under the same key.
+	fn add(&mut self, key: EndpointKey, ep: EndpointWithInfo<T>) {
+		self.rejected.swap_remove(&key);
+		let cap = ep.capacity;
+		self.active.insert(key, ep);
+		self.update_sampler(Some(cap));
+	}
+
+	/// Remove an endpoint from both pools.
+	fn remove(&mut self, key: &EndpointKey) {
+		if self.active.swap_remove(key).is_some() || self.rejected.swap_remove(key).is_some() {
+			self.update_sampler(None);
+		}
+	}
+
+	/// Move an endpoint from active -> rejected (eviction). No-op if not active.
+	fn evict(&mut self, key: EndpointKey) {
+		if let Some(ep) = self.active.swap_remove(&key) {
+			self.rejected.insert(key, ep);
+			self.update_sampler(None);
+		}
+	}
+
+	/// Move an endpoint from rejected -> active (uneviction). The closure mutates
+	/// the endpoint info before re-insertion. No-op if not rejected.
+	fn unevict(&mut self, key: EndpointKey, edit: impl FnOnce(&EndpointWithInfo<T>)) {
+		if let Some(ep) = self.rejected.swap_remove(&key) {
+			edit(&ep);
+			let cap = ep.capacity;
+			self.active.insert(key, ep);
+			self.update_sampler(Some(cap));
+		}
+	}
+
 	// rebuilds the sampler, unless the change is guaranteed to preserve the same distribution
 	fn update_sampler(&mut self, added_ep_cap: Option<u32>) {
 		let preserved = match (&self.sampler, added_ep_cap) {
@@ -486,17 +530,12 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let buckets = initial_set
 			.into_iter()
 			.map(|items| {
-				// All EWIs created via `new` get cap=1, so the default Uniform(1)
-				// sampler is already correct — no rebuild needed.
-				let eg = EndpointGroup {
-					active: IndexMap::from_iter(
-						items
-							.into_iter()
-							.map(|(k, v)| (k, EndpointWithInfo::new(v))),
-					),
-					rejected: Default::default(),
-					sampler: Sampler::default(),
-				};
+				let active = IndexMap::from_iter(
+					items
+						.into_iter()
+						.map(|(k, v)| (k, EndpointWithInfo::new(v))),
+				);
+				let eg = EndpointGroup::from_pools(active, IndexMap::new());
 				Arc::new(ArcSwap::new(Arc::new(eg)))
 			})
 			.collect_vec();
@@ -646,11 +685,17 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let _mu = self.action_mutex.lock();
 		let n = self.buckets.len();
 
-		let mut new_groups: Vec<EndpointGroup<T>> = (0..n).map(|_| EndpointGroup::default()).collect();
+		let mut new_active: Vec<IndexMap<EndpointKey, EndpointWithInfo<T>>> =
+			(0..n).map(|_| IndexMap::new()).collect();
+		let mut new_rejected: Vec<IndexMap<EndpointKey, EndpointWithInfo<T>>> =
+			(0..n).map(|_| IndexMap::new()).collect();
 
 		for bucket in &self.buckets {
 			let g = bucket.load_full();
-			for (entries, rejected) in [(&g.active, false), (&g.rejected, true)] {
+			for (entries, into) in [
+				(&g.active, &mut new_active),
+				(&g.rejected, &mut new_rejected),
+			] {
 				for (key, ep) in entries {
 					let Some(b) = ranker(ep.endpoint.as_ref()) else {
 						continue;
@@ -658,21 +703,15 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					if b >= n {
 						continue;
 					}
-					let target = if rejected {
-						&mut new_groups[b].rejected
-					} else {
-						&mut new_groups[b].active
-					};
-					target.insert(key.clone(), ep.clone());
+					into[b].insert(key.clone(), ep.clone());
 				}
 			}
 		}
 
-		for (i, mut group) in new_groups.into_iter().enumerate() {
+		for (i, (active, rejected)) in new_active.into_iter().zip(new_rejected).enumerate() {
 			// Redistributed EWIs may have any capacity, so derive the sampler
 			// from scratch — no trusted prior to incrementally update from.
-			group.sampler = build_sampler(&group.active);
-			self.buckets[i].store(Arc::new(group));
+			self.buckets[i].store(Arc::new(EndpointGroup::from_pools(active, rejected)));
 		}
 	}
 
@@ -692,10 +731,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(slot.load_full());
-				eps.rejected.swap_remove(&key);
-				let cap = ep.capacity;
-				eps.active.insert(key, ep);
-				eps.update_sampler(Some(cap));
+				eps.add(key, ep);
 				slot.store(Arc::new(eps));
 			},
 			EndpointEvent::Delete(key) => {
@@ -703,9 +739,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				if eps.active.swap_remove(&key).is_some() || eps.rejected.swap_remove(&key).is_some() {
-					eps.update_sampler(None);
-				}
+				eps.remove(&key);
 				bucket.store(Arc::new(eps));
 			},
 		}
@@ -729,16 +763,13 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				if let Some(ep) = eps.rejected.swap_remove(&key) {
+				eps.unevict(key, |ep| {
 					ep.info.evicted_until.store(None);
 					if let Some(h) = restore_health {
 						// Health scoring assumes normalized values in [0.0, 1.0].
 						ep.info.health.set(h.clamp(0.0, 1.0));
 					}
-					let cap = ep.capacity;
-					eps.active.insert(key, ep);
-					eps.update_sampler(Some(cap));
-				}
+				});
 				bucket.store(Arc::new(eps));
 			};
 			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
@@ -756,10 +787,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 
 				uneviction_heap.push(UnevictEntry(until, key.clone(), restore_health));
-				if let Some(ep) = eps.active.swap_remove(&key) {
-					eps.rejected.insert(key, ep);
-					eps.update_sampler(None);
-				}
+				eps.evict(key);
 				bucket.store(Arc::new(eps));
 			};
 			loop {
@@ -1310,16 +1338,15 @@ mod tests {
 		active: &[&'static str],
 		rejected: &[&'static str],
 	) -> EndpointGroup<&'static str> {
-		let mut group = EndpointGroup::default();
-		for v in active {
-			group.active.insert((*v).into(), EndpointWithInfo::new(*v));
-		}
-		for v in rejected {
-			group
-				.rejected
-				.insert((*v).into(), EndpointWithInfo::new(*v));
-		}
-		group
+		let active_map = active
+			.iter()
+			.map(|v| ((*v).into(), EndpointWithInfo::new(*v)))
+			.collect();
+		let rejected_map = rejected
+			.iter()
+			.map(|v| ((*v).into(), EndpointWithInfo::new(*v)))
+			.collect();
+		EndpointGroup::from_pools(active_map, rejected_map)
 	}
 
 	fn install(eps: &EndpointSet<&'static str>, idx: usize, g: EndpointGroup<&'static str>) {
@@ -1623,65 +1650,38 @@ mod tests {
 		}
 	}
 
-	/// Test helper: equivalent to the inlined `sampler = build_sampler(&active)`
-	/// used by EndpointSet::new / rebucket — lets tests set up a known starting
-	/// sampler before exercising `update_sampler`.
-	fn rebuild_sampler<T>(group: &mut EndpointGroup<T>) {
-		group.sampler = build_sampler(&group.active);
-	}
-
 	#[test]
 	fn build_sampler_reflects_active_state() {
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
-		group
-			.active
-			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 1));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 
 		// Replace "a" with cap=3 — now mixed, should become Weighted.
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 3));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 3));
 		let Sampler::Weighted(dist) = &group.sampler else {
 			panic!("expected Weighted, got {:?}", group.sampler);
 		};
 		assert_eq!(dist.weights().collect::<Vec<_>>(), vec![3u64, 1]);
 
 		// Drain everything — should become Drained.
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
-		group
-			.active
-			.insert("b".into(), EndpointWithInfo::with_capacity((), 0));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 0));
 		assert!(group.sampler.is_drained());
 	}
 
 	#[test]
 	fn update_sampler_preserves_uniform_when_cap_matches() {
 		// Common XDS case: all endpoints share the default cap=1. Adds and
-		// deletes should leave the sampler instance untouched, not rebuild.
+		// deletes should leave the sampler as Uniform.
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 
-		group
-			.active
-			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
-		group.update_sampler(Some(1));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 1));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 
-		group.active.swap_remove(&Strng::from("b"));
-		group.update_sampler(None);
+		group.remove(&Strng::from("b"));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 	}
 
@@ -1689,32 +1689,20 @@ mod tests {
 	fn update_sampler_rebuilds_on_cap_mismatch() {
 		// Adding a cap=2 endpoint to a Uniform group must transition to Weighted.
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 
-		group
-			.active
-			.insert("b".into(), EndpointWithInfo::with_capacity((), 2));
-		group.update_sampler(Some(2));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 2));
 		assert!(matches!(group.sampler, Sampler::Weighted(_)));
 	}
 
 	#[test]
 	fn update_sampler_drained_stays_drained_on_zero_cap_add() {
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
 		assert!(matches!(group.sampler, Sampler::Drained));
 
-		group
-			.active
-			.insert("b".into(), EndpointWithInfo::with_capacity((), 0));
-		group.update_sampler(Some(0));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 0));
 		assert!(matches!(group.sampler, Sampler::Drained));
 	}
 
@@ -1722,13 +1710,9 @@ mod tests {
 	fn update_sampler_remove_last_uniform_stays_uniform() {
 		// Deleting the last active entry leaves the sampler as Uniform
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
 
-		group.active.swap_remove(&Strng::from("a"));
-		group.update_sampler(None);
+		group.remove(&Strng::from("a"));
 		assert!(matches!(group.sampler, Sampler::Uniform));
 		assert!(!group.sampler.is_drained());
 	}
@@ -1741,14 +1725,10 @@ mod tests {
 		// select_fallback to skip the whole bucket, which would also skip
 		// the rejected pool — the wrong behavior when active is empty.
 		let mut group = EndpointGroup::<()>::default();
-		group
-			.active
-			.insert("a".into(), EndpointWithInfo::with_capacity((), 0));
-		rebuild_sampler(&mut group);
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
 		assert!(matches!(group.sampler, Sampler::Drained));
 
-		group.active.swap_remove(&Strng::from("a"));
-		group.update_sampler(None);
+		group.remove(&Strng::from("a"));
 		assert!(
 			!group.sampler.is_drained(),
 			"sampler stayed drained after removing the last cap=0 endpoint; \
