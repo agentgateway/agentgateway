@@ -43,21 +43,21 @@ impl<T> EndpointWithInfo<T> {
 
 #[derive(Debug, Clone)]
 pub enum Sampler {
-	/// All endpoints have the same nonzero capacity. No need for weighted sampling.
-	/// Stores the common capacity for quick checks that we're still uniform after
-	/// new endpoints are added incrementally.
-	Uniform(u32),
+	/// Every endpoint has the default capacity of 1. No need for weighted sampling.
+	/// Other uniform-cap configurations (e.g. all-5) fall through to Weighted —
+	/// correct, just slightly less efficient than this fast path.
+	Uniform,
 	/// Weighted sampling by capacity via a cached prefix sum.
 	Weighted(WeightedIndex<u64>),
 	/// At least one endpoint is present, but total capacity is zero — every
 	/// active endpoint is drained. Distinct from the zero-endpoints case,
-	/// which keeps the default `Uniform(1)` sampler.
+	/// which keeps the default `Uniform` sampler.
 	Drained,
 }
 
 impl Default for Sampler {
 	fn default() -> Self {
-		Sampler::Uniform(1)
+		Sampler::Uniform
 	}
 }
 
@@ -68,25 +68,24 @@ impl Sampler {
 }
 
 fn build_sampler<T>(active: &IndexMap<EndpointKey, EndpointWithInfo<T>>) -> Sampler {
-	let mut iter = active.values();
-	let Some(first_cap) = iter.next().map(|e| e.capacity) else {
+	if active.is_empty() {
 		return Sampler::default();
-	};
-	let mut all_equal = true;
-	let mut any_nonzero = first_cap != 0;
-	for ewi in iter {
+	}
+	let mut all_ones = true;
+	let mut any_nonzero = false;
+	for ewi in active.values() {
 		if ewi.capacity != 0 {
 			any_nonzero = true;
 		}
-		if ewi.capacity != first_cap {
-			all_equal = false;
+		if ewi.capacity != 1 {
+			all_ones = false;
 		}
 	}
 	if !any_nonzero {
 		return Sampler::Drained;
 	}
-	if all_equal {
-		return Sampler::Uniform(first_cap);
+	if all_ones {
+		return Sampler::Uniform;
 	}
 
 	let dist = WeightedIndex::new(active.values().map(|e| e.capacity as u64))
@@ -108,8 +107,8 @@ impl<T> EndpointGroup<T> {
 		let preserved = match (&self.sampler, added_ep_cap) {
 			// change doesn't modify any capacity, still Uniform
 			// this is the common case for unweighted EndpointGroups
-			(Sampler::Uniform(c), Some(new_c)) if *c == new_c && new_c > 0 => true,
-			(Sampler::Uniform(_), None) => true,
+			(Sampler::Uniform, Some(1)) => true,
+			(Sampler::Uniform, None) => true,
 			(Sampler::Drained, Some(0)) => true,
 			(Sampler::Drained, None) if !self.active.is_empty() => true,
 
@@ -233,7 +232,7 @@ impl EndpointSet<Endpoint> {
 		let (a, b) = match iter.sampler() {
 			Some(Sampler::Drained) => return None,
 			Some(Sampler::Weighted(dist)) => (dist.sample(&mut rng), dist.sample(&mut rng)),
-			Some(Sampler::Uniform(_)) | None => {
+			Some(Sampler::Uniform) | None => {
 				let len = index.len();
 				(rng.random_range(0..len), rng.random_range(0..len))
 			},
@@ -1552,19 +1551,21 @@ mod tests {
 	fn sampler_empty_map_is_uniform() {
 		// Vacuously uniform; the empty-len check in callers prevents sampling.
 		let active = make_active(&[]);
-		assert!(matches!(build_sampler(&active), Sampler::Uniform(_)));
+		assert!(matches!(build_sampler(&active), Sampler::Uniform));
 	}
 
 	#[test]
 	fn sampler_all_default_capacity_is_uniform() {
 		let active = make_active(&[1, 1, 1, 1]);
-		assert!(matches!(build_sampler(&active), Sampler::Uniform(1)));
+		assert!(matches!(build_sampler(&active), Sampler::Uniform));
 	}
 
 	#[test]
-	fn sampler_all_equal_nonzero_is_uniform() {
+	fn sampler_all_equal_nonone_is_weighted() {
+		// Uniform fast path only fires for the default cap=1. All-equal non-1
+		// caps fall through to Weighted — correct, just not optimized.
 		let active = make_active(&[5, 5, 5]);
-		assert!(matches!(build_sampler(&active), Sampler::Uniform(5)));
+		assert!(matches!(build_sampler(&active), Sampler::Weighted(_)));
 	}
 
 	#[test]
@@ -1639,7 +1640,7 @@ mod tests {
 			.active
 			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert!(matches!(group.sampler, Sampler::Uniform(1)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 
 		// Replace "a" with cap=3 — now mixed, should become Weighted.
 		group
@@ -1671,28 +1672,28 @@ mod tests {
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert!(matches!(group.sampler, Sampler::Uniform(1)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 
 		group
 			.active
 			.insert("b".into(), EndpointWithInfo::with_capacity((), 1));
 		group.update_sampler(Some(1));
-		assert!(matches!(group.sampler, Sampler::Uniform(1)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 
 		group.active.swap_remove(&Strng::from("b"));
 		group.update_sampler(None);
-		assert!(matches!(group.sampler, Sampler::Uniform(1)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 	}
 
 	#[test]
 	fn update_sampler_rebuilds_on_cap_mismatch() {
-		// Adding a cap=2 endpoint to a Uniform(1) group must transition to Weighted.
+		// Adding a cap=2 endpoint to a Uniform group must transition to Weighted.
 		let mut group = EndpointGroup::<()>::default();
 		group
 			.active
 			.insert("a".into(), EndpointWithInfo::with_capacity((), 1));
 		rebuild_sampler(&mut group);
-		assert!(matches!(group.sampler, Sampler::Uniform(1)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 
 		group
 			.active
@@ -1728,7 +1729,7 @@ mod tests {
 
 		group.active.swap_remove(&Strng::from("a"));
 		group.update_sampler(None);
-		assert!(matches!(group.sampler, Sampler::Uniform(_)));
+		assert!(matches!(group.sampler, Sampler::Uniform));
 		assert!(!group.sampler.is_drained());
 	}
 
