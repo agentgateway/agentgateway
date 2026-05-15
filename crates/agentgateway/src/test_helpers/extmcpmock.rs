@@ -76,6 +76,39 @@ pub trait Handler {
 	}
 }
 
+type RequestFn = Arc<dyn Fn(&McpRequest) -> Result<McpRequestResult, Status> + Send + Sync>;
+type ResponseFn = Arc<dyn Fn(&McpResponse) -> Result<McpResponseResult, Status> + Send + Sync>;
+
+pub struct ClosureHandler {
+	on_request: RequestFn,
+	on_response: ResponseFn,
+}
+
+#[async_trait]
+impl Handler for ClosureHandler {
+	async fn check_request(&mut self, req: &McpRequest) -> Result<McpRequestResult, Status> {
+		(self.on_request)(req)
+	}
+	async fn check_response(&mut self, req: &McpResponse) -> Result<McpResponseResult, Status> {
+		(self.on_response)(req)
+	}
+}
+
+/// Build an `ExtMcpMock` from two closures, skipping the per-test `struct + impl Handler` boilerplate.
+/// State that varies per call (counters, capture buffers) is captured via `Arc` inside the closure.
+pub fn closure_mock<R, P>(on_request: R, on_response: P) -> ExtMcpMock<ClosureHandler>
+where
+	R: Fn(&McpRequest) -> Result<McpRequestResult, Status> + Send + Sync + 'static,
+	P: Fn(&McpResponse) -> Result<McpResponseResult, Status> + Send + Sync + 'static,
+{
+	let on_request: RequestFn = Arc::new(on_request);
+	let on_response: ResponseFn = Arc::new(on_response);
+	ExtMcpMock::new(move || ClosureHandler {
+		on_request: on_request.clone(),
+		on_response: on_response.clone(),
+	})
+}
+
 /// Mock extMcp gRPC server for tests. Wraps a `Handler` factory; a fresh
 /// handler instance is produced per RPC, so per-call state lives in the
 /// caller's closure (typically an Arc<Mutex<…>>).
