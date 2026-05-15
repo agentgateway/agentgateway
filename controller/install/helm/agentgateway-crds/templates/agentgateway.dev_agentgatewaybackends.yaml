@@ -9705,7 +9705,7 @@ spec:
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte
-                              rule: quantity(string(self)).asInteger() >= 1
+                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
                             - message: value must fit within uint32
                               rule: quantity(string(self)).asInteger() <= 4294967295
                         required:
