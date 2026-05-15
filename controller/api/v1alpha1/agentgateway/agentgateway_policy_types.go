@@ -282,9 +282,8 @@ type SNI = string
 
 // ByteSize is a byte quantity that must fit in a uint32 dataplane field.
 // +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=32
-// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isLessThan(quantity('1'))",message="value must be at least 1 byte"
-// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isGreaterThan(quantity('4294967295'))",message="value must fit within uint32"
 type ByteSize resource.Quantity
 
 func (b ByteSize) Value() int64 {
