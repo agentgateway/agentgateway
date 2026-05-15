@@ -12,17 +12,9 @@ service ExtMcp {
   // Check a single JSON-RPC request before it's dispatched to upstream.
   rpc CheckRequest(McpRequest) returns (McpRequestResult);
 
-  // Check a single-message JSON-RPC response from upstream. Used for
-  // tools/call without progress notifications, all *list responses, and
-  // resources/read.
+  // Check the JSON-RPC response from upstream. Used for tools/call,
+  // prompts/get, all *list responses, and resources/read.
   rpc CheckResponse(McpResponse) returns (McpResponseResult);
-
-  // Check a multi-message JSON-RPC response. Used for tools/call that
-  // emits progress notifications before a final result. One McpResponse
-  // per upstream message in order; the server returns one McpResponseResult
-  // per message. The gateway holds each message until its result arrives,
-  // so notifications are gated individually rather than buffered.
-  rpc CheckResponseStream(stream McpResponse) returns (stream McpResponseResult);
 }
 
 message McpRequest {
@@ -41,14 +33,8 @@ message McpResponse {
   // Method of the originating request.
   string method = 2;
   Metadata metadata_context = 3;
-  // One JSON-RPC message from upstream (notification or final response).
+  // JSON-RPC response body from upstream.
   google.protobuf.Struct mcp_response = 4;
-  MessageKind kind = 6;
-}
-
-enum MessageKind {
-  FINAL = 0;
-  NOTIFICATION = 1;
 }
 
 message McpRequestResult {
@@ -72,10 +58,6 @@ message McpResponseResult {
     google.protobuf.Struct mutated = 2;
     AuthorizationError error = 3;
   }
-  // Streaming-only: if true, terminate the stream after delivering this
-  // result (use with `error` to abort an in-progress tool call). Ignored
-  // on FINAL messages.
-  bool terminate_stream = 4;
 }
 
 message Pass {}

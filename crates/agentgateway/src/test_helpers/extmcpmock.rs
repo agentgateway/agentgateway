@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use prost_wkt_types::Struct;
-use tonic::{Request, Response as TonicResponse, Status, Streaming};
+use tonic::{Request, Response as TonicResponse, Status};
 
 use protos::ext_mcp::{
 	AuthorizationError, McpRequest, McpRequestResult, McpResponse, McpResponseResult, Pass,
@@ -20,7 +20,6 @@ pub fn pass_request() -> Result<McpRequestResult, Status> {
 pub fn pass_response() -> Result<McpResponseResult, Status> {
 	Ok(McpResponseResult {
 		result: Some(mcp_response_result::Result::Pass(Pass {})),
-		terminate_stream: false,
 	})
 }
 
@@ -44,7 +43,6 @@ pub fn reject_response(
 			reason: reason.into(),
 			mcp_error: None,
 		})),
-		terminate_stream: false,
 	})
 }
 
@@ -57,7 +55,6 @@ pub fn mutated_request(body: Struct) -> Result<McpRequestResult, Status> {
 pub fn mutated_response(body: Struct) -> Result<McpResponseResult, Status> {
 	Ok(McpResponseResult {
 		result: Some(mcp_response_result::Result::Mutated(body)),
-		terminate_stream: false,
 	})
 }
 
@@ -131,15 +128,5 @@ where
 		let mut handler = (self.handler.clone())();
 		let response = handler.check_response(request.get_ref()).await?;
 		Ok(TonicResponse::new(response))
-	}
-
-	type CheckResponseStreamStream = futures::stream::Empty<Result<McpResponseResult, Status>>;
-	async fn check_response_stream(
-		&self,
-		_request: Request<Streaming<McpResponse>>,
-	) -> Result<TonicResponse<Self::CheckResponseStreamStream>, Status> {
-		Err(Status::unimplemented(
-			"check_response_stream is not used by the host today",
-		))
 	}
 }

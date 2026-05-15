@@ -227,6 +227,39 @@ impl Relay {
 		}
 	}
 
+	pub(crate) async fn maybe_run_extmcp_call_request<P>(
+		&self,
+		backend: &str,
+		method: &'static str,
+		params: &mut P,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned,
+	{
+		if self.ext_mcp.is_none() {
+			return Ok(());
+		}
+		let mut params_v = serde_json::to_value(&*params)
+			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
+		let mutated = self
+			.run_extmcp_call_request(
+				&mut crate::mcp::extmcp::CallRequestCtx {
+					backend,
+					method,
+					params: &mut params_v,
+				},
+				ctx,
+			)
+			.await?;
+		if mutated {
+			*params = serde_json::from_value(params_v).map_err(|e| {
+				UpstreamError::InvalidRequest(format!("deserialize mutated {method} params: {e}"))
+			})?;
+		}
+		Ok(())
+	}
+
 	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();

@@ -27,8 +27,7 @@ pub fn resolve(method: &str, overrides: &HashMap<String, Phase>) -> Phase {
 	default_phase(method)
 }
 
-// Defaults reflect methods with wired hooks. Subscribe/unsubscribe and completion/complete
-// are Off (design intent: Request) until their hooks land — otherwise the table lies.
+// Defaults reflect methods with wired hooks; everything else falls through to Off.
 pub fn default_phase(method: &str) -> Phase {
 	if is_list(method) {
 		return Phase::Response;
@@ -39,10 +38,6 @@ pub fn default_phase(method: &str) -> Phase {
 		// resources/read stays Request (variable volume, document-heavy servers).
 		TOOLS_CALL | PROMPTS_GET => Phase::Both,
 		RESOURCES_READ => Phase::Request,
-		RESOURCES_SUBSCRIBE | RESOURCES_UNSUBSCRIBE => Phase::Off,
-		COMPLETION_COMPLETE => Phase::Off,
-		INITIALIZE | PING | LOGGING_SET_LEVEL => Phase::Off,
-		m if m.starts_with("notifications/") => Phase::Off,
 		_ => Phase::Off,
 	}
 }
@@ -63,13 +58,9 @@ mod tests {
 		assert_eq!(default_phase("prompts/get"), Phase::Both);
 		// resources/read: Request only by default; operators opt into Both.
 		assert_eq!(default_phase("resources/read"), Phase::Request);
-		// Unwired: design intent is `Request`, but no hook exists yet. Default
-		// to `Off` so the defaults table doesn't advertise behavior we don't
-		// implement.
+		// Everything else falls through to Off.
 		assert_eq!(default_phase("resources/subscribe"), Phase::Off);
-		assert_eq!(default_phase("resources/unsubscribe"), Phase::Off);
 		assert_eq!(default_phase("completion/complete"), Phase::Off);
-		// Handshake / chatter / unknown.
 		assert_eq!(default_phase("initialize"), Phase::Off);
 		assert_eq!(
 			default_phase("notifications/tools/list_changed"),

@@ -74,7 +74,6 @@ pub(crate) async fn check_response(
 		method: method.to_string(),
 		metadata_context,
 		mcp_response,
-		kind: wire::MessageKind::Final as i32,
 	};
 	let mut grpc = build_client(remote, client.clone());
 	let mut tonic_req = tonic::Request::new(req);
