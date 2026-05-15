@@ -230,7 +230,7 @@ impl Relay {
 	pub(crate) async fn maybe_run_extmcp_call_request<P>(
 		&self,
 		backend: &str,
-		method: &'static str,
+		method: &str,
 		params: &mut P,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError>
@@ -247,7 +247,7 @@ impl Relay {
 				&mut crate::mcp::extmcp::CallRequestCtx {
 					backend,
 					method,
-					params: &mut params_v,
+					params: Some(&mut params_v),
 				},
 				ctx,
 			)
@@ -605,10 +605,13 @@ impl Relay {
 					if is_list
 						&& let Some(ext) = self.ext_mcp.as_ref()
 						&& let crate::mcp::extmcp::Outcome::Reject(rej) =
-							crate::mcp::extmcp::run_list_request(
+							crate::mcp::extmcp::run_call_request(
 								ext,
-								method,
-								&name,
+								&mut crate::mcp::extmcp::CallRequestCtx {
+									backend: &name,
+									method,
+									params: None,
+								},
 								ctx,
 								&self.policy_client,
 							)

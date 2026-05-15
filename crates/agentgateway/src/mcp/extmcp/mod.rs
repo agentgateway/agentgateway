@@ -31,9 +31,7 @@ pub mod wire {
 #[serde(rename_all = "camelCase")]
 pub struct ExtMcp {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub request: Vec<Driver>,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub response: Vec<Driver>,
+	pub drivers: Vec<Driver>,
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
 }
@@ -70,10 +68,12 @@ pub enum FailureMode {
 
 /// Opaque single-call request context. The ext server sees the full
 /// JSON-RPC params blob and may replace it wholesale via `Mutated`.
+/// `params` is `None` for methods with no per-request body (e.g. `*/list`);
+/// any `Mutated` outcome there is logged and discarded.
 pub struct CallRequestCtx<'a> {
 	pub backend: &'a str,
-	pub method: &'static str,
-	pub params: &'a mut Value,
+	pub method: &'a str,
+	pub params: Option<&'a mut Value>,
 }
 
 impl Driver {
@@ -85,51 +85,25 @@ impl Driver {
 	) -> Outcome {
 		match self {
 			Driver::Remote(remote) => {
-				match client::check_request(
-					remote,
-					ctx.method,
-					ctx.backend,
-					Some(ctx.params.clone()),
-					req_ctx,
-					client,
-				)
-				.await
+				let body = ctx.params.as_deref().cloned();
+				match client::check_request(remote, ctx.method, ctx.backend, body, req_ctx, client).await
 				{
 					client::RequestOutcome::Pass => Outcome::Pass,
-					client::RequestOutcome::Mutated(v) => {
-						*ctx.params = v;
-						Outcome::Mutated
+					client::RequestOutcome::Mutated(v) => match ctx.params.as_deref_mut() {
+						Some(p) => {
+							*p = v;
+							Outcome::Mutated
+						},
+						None => {
+							tracing::debug!(
+								method = ctx.method,
+								backend = ctx.backend,
+								"extMcp: ignoring mutation on request without body",
+							);
+							Outcome::Pass
+						},
 					},
 					client::RequestOutcome::Reject(e) => Outcome::Reject(e),
-				}
-			},
-		}
-	}
-
-	async fn list_request(
-		&self,
-		method: &str,
-		backend: &str,
-		req_ctx: &IncomingRequestContext,
-		client: &PolicyClient,
-	) -> Outcome {
-		match self {
-			Driver::Remote(remote) => {
-				match client::check_request(remote, method, backend, None, req_ctx, client).await {
-					client::RequestOutcome::Pass => Outcome::Pass,
-					client::RequestOutcome::Reject(e) => Outcome::Reject(e),
-					// Mutation on a list request is a contract violation — list filtering belongs in the response phase.
-					client::RequestOutcome::Mutated(_) => {
-						tracing::warn!(method, backend, "extMcp: unsupported outcome on list request");
-						match remote.failure_mode {
-							FailureMode::Allow => Outcome::Pass,
-							FailureMode::Deny => Outcome::Reject(rmcp::model::ErrorData::new(
-								rmcp::model::ErrorCode(-32603),
-								"extMcp protocol violation: mutation on list request".to_string(),
-								None,
-							)),
-						}
-					},
 				}
 			},
 		}
@@ -151,36 +125,12 @@ impl Driver {
 	}
 }
 
-/// Run the request-phase pipeline for a `*/list` method. The body has no
-/// per-entry data yet (descriptions live in the response), so drivers can
-/// only Pass or Reject — `Mutated` is treated as Pass. Filtering happens in
+/// Run the request-phase pipeline. Drivers fire in `ext.drivers` order;
+/// first `Reject` short-circuits, mutations compose (each driver acts on the
+/// body the previous one left behind). On `Reject`, `ctx` is left in whatever
+/// partially-mutated state earlier drivers produced. When `ctx.params` is
+/// `None` (e.g. `*/list`) mutations are discarded; list filtering belongs in
 /// the response phase.
-pub async fn run_list_request(
-	ext: &ExtMcp,
-	method: &str,
-	backend: &str,
-	req_ctx: &IncomingRequestContext,
-	client: &PolicyClient,
-) -> Outcome {
-	if !phase::resolve(method, &ext.methods).runs_request() {
-		return Outcome::Pass;
-	}
-	for driver in &ext.request {
-		match driver
-			.list_request(method, backend, req_ctx, client)
-			.await
-		{
-			Outcome::Pass | Outcome::Mutated => {},
-			Outcome::Reject(e) => return Outcome::Reject(e),
-		}
-	}
-	Outcome::Pass
-}
-
-/// Run the request-phase pipeline for a single-call method. Drivers fire in
-/// `ext.request` order; first `Reject` short-circuits, mutations compose
-/// (each driver acts on the body the previous one left behind). On `Reject`,
-/// `ctx` is left in whatever partially-mutated state earlier drivers produced.
 pub async fn run_call_request(
 	ext: &ExtMcp,
 	ctx: &mut CallRequestCtx<'_>,
@@ -191,7 +141,7 @@ pub async fn run_call_request(
 		return Outcome::Pass;
 	}
 	let mut composed = Outcome::Pass;
-	for driver in &ext.request {
+	for driver in &ext.drivers {
 		match driver.call_request(ctx, req_ctx, client).await {
 			Outcome::Pass => {},
 			Outcome::Mutated => composed = Outcome::Mutated,
@@ -201,7 +151,7 @@ pub async fn run_call_request(
 	composed
 }
 
-/// Run the response-phase pipeline. Drivers fire in `ext.response` order;
+/// Run the response-phase pipeline. Drivers fire in `ext.drivers` order;
 /// first `Reject` short-circuits, mutations compose left-to-right.
 pub async fn run_response(
 	ext: &ExtMcp,
@@ -215,7 +165,7 @@ pub async fn run_response(
 		return Outcome::Pass;
 	}
 	let mut composed = Outcome::Pass;
-	for driver in &ext.response {
+	for driver in &ext.drivers {
 		match driver
 			.response(method, backend, body, req_ctx, client)
 			.await

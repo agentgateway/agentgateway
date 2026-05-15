@@ -2567,8 +2567,7 @@ async fn mcp_extmcp_pass_through() {
 		metadata: HashMap::new(),
 	};
 	let ext = extmcp::ExtMcp {
-		request: vec![extmcp::Driver::Remote(remote.clone())],
-		response: vec![extmcp::Driver::Remote(remote)],
+		drivers: vec![extmcp::Driver::Remote(remote)],
 		methods: HashMap::new(),
 	};
 
@@ -2627,8 +2626,7 @@ fn extmcp_policy(addr: std::net::SocketAddr) -> BackendTrafficPolicy {
 		metadata: HashMap::new(),
 	};
 	BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
-		request: vec![extmcp::Driver::Remote(remote.clone())],
-		response: vec![extmcp::Driver::Remote(remote)],
+		drivers: vec![extmcp::Driver::Remote(remote)],
 		methods: HashMap::new(),
 	}))
 }
@@ -2784,8 +2782,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 		metadata,
 	};
 	let policy = BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
-		request: vec![extmcp::Driver::Remote(remote.clone())],
-		response: vec![extmcp::Driver::Remote(remote)],
+		drivers: vec![extmcp::Driver::Remote(remote)],
 		methods: HashMap::new(),
 	}));
 

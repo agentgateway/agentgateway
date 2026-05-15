@@ -529,18 +529,9 @@ fn convert_ext_mcp(
 		})
 		.transpose()?;
 
-	// Remote currently runs on both phases — its per-method phase comes from the
-	// `methods` map.
-	let (request, response) = match remote {
-		Some(d) => (vec![d.clone()], vec![d]),
-		None => (Vec::new(), Vec::new()),
-	};
+	let drivers = remote.map(|d| vec![d]).unwrap_or_default();
 
-	Ok(crate::mcp::extmcp::ExtMcp {
-		request,
-		response,
-		methods,
-	})
+	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })
 }
 
 fn convert_backend_ai_policy(
