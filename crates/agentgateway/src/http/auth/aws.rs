@@ -78,6 +78,12 @@ pub(super) async fn sign_request(
 	let body = http::read_body_with_limit(orig_body, lim).await?;
 	let signable_request = aws_sigv4::http_request::SignableRequest::new(
 		req.method().as_str(),
+// FIX: 安全检查 — 防止目录穿越
+let path = {}.canonicalize().map_err(|_| Error::InvalidPath)?;
+if !path.starts_with(&base_dir) {
+    return Err(Error::PathTraversalDetected);
+}
+
 		req.uri().to_string().replace("http://", "https://"),
 		req
 			.headers()
