@@ -3854,9 +3854,9 @@ spec:
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte
-                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                              rule: quantity(string(self)).asInteger() >= 1
                             - message: value must fit within uint32
-                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                              rule: quantity(string(self)).asInteger() <= 4294967295
                         required:
                         - maxSize
                         type: object
@@ -4995,9 +4995,9 @@ spec:
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                          rule: quantity(string(self)).asInteger() >= 1
                         - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                          rule: quantity(string(self)).asInteger() <= 4294967295
                       http2FrameSize:
                         anyOf:
                         - type: integer
@@ -5014,9 +5014,9 @@ spec:
                         - message: http2FrameSize must be at most 1677215 bytes
                           rule: '!quantity(string(self)).isGreaterThan(quantity(''1677215''))'
                         - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                          rule: quantity(string(self)).asInteger() >= 1
                         - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                          rule: quantity(string(self)).asInteger() <= 4294967295
                       http2KeepaliveInterval:
                         type: string
                         x-kubernetes-validations:
@@ -5044,9 +5044,9 @@ spec:
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                          rule: quantity(string(self)).asInteger() >= 1
                         - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                          rule: quantity(string(self)).asInteger() <= 4294967295
                       http2WindowSize:
                         anyOf:
                         - type: integer
@@ -5059,9 +5059,9 @@ spec:
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                          rule: quantity(string(self)).asInteger() >= 1
                         - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                          rule: quantity(string(self)).asInteger() <= 4294967295
                       maxBufferSize:
                         anyOf:
                         - type: integer
@@ -5076,9 +5076,9 @@ spec:
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                          rule: quantity(string(self)).asInteger() >= 1
                         - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                          rule: quantity(string(self)).asInteger() <= 4294967295
                       maxConnectionDuration:
                         description: |-
                           `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
@@ -6564,9 +6564,11 @@ spec:
                                       x-kubernetes-int-or-string: true
                                       x-kubernetes-validations:
                                       - message: value must be at least 1 byte
-                                        rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                                        rule: quantity(string(self)).asInteger() >=
+                                          1
                                       - message: value must fit within uint32
-                                        rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                                        rule: quantity(string(self)).asInteger() <=
+                                          4294967295
                                   required:
                                   - maxSize
                                   type: object
@@ -6687,7 +6689,7 @@ spec:
                           required:
                           - policy
                           type: object
-                        maxItems: 16
+                        maxItems: 12
                         minItems: 1
                         type: array
                         x-kubernetes-validations:
@@ -6721,9 +6723,9 @@ spec:
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte
-                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
+                              rule: quantity(string(self)).asInteger() >= 1
                             - message: value must fit within uint32
-                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                              rule: quantity(string(self)).asInteger() <= 4294967295
                         required:
                         - maxSize
                         type: object
