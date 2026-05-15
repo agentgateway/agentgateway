@@ -163,6 +163,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -6135,6 +6136,7 @@
 |`policies[].policy.mcpAuthentication.provider`|object||
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
+|`policies[].policy.mcpAuthentication.provider.okta`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object||
 |`policies[].policy.mcpAuthentication.jwks`|object||
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
@@ -11230,6 +11232,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -17958,6 +17961,7 @@
 |`mcp.policies.mcpAuthentication.provider`|object||
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
+|`mcp.policies.mcpAuthentication.provider.okta`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object||
 |`mcp.policies.mcpAuthentication.jwks`|object||
 |`mcp.policies.mcpAuthentication.jwks.file`|string||

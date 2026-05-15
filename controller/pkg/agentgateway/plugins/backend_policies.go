@@ -565,6 +565,9 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	if *provider == agentgateway.Auth0 {
 		return api.BackendPolicySpec_McpAuthentication_AUTH0
 	}
+	if *provider == agentgateway.Okta {
+		return api.BackendPolicySpec_McpAuthentication_OKTA
+	}
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 

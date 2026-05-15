@@ -2493,7 +2493,7 @@ impl LocalMcpAuthentication {
 					url.clone()
 				} else {
 					match &self.provider {
-						None | Some(McpIDP::Auth0 { .. }) => {
+						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
 							format!("{}/.well-known/jwks.json", self.issuer).parse()?
 						},
 						Some(McpIDP::Keycloak { .. }) => {
@@ -2537,6 +2537,7 @@ impl LocalMcpAuthentication {
 pub enum McpIDP {
 	Auth0 {},
 	Keycloak {},
+	Okta {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

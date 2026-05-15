@@ -1896,6 +1896,19 @@
             "keycloak"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "okta": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "okta"
+          ],
+          "additionalProperties": false
         }
       ]
     },

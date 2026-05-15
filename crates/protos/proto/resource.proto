@@ -1252,6 +1252,7 @@ message BackendPolicySpec {
       UNSPECIFIED = 0;
       AUTH0 = 1;
       KEYCLOAK = 2;
+      OKTA = 3;
     }
 
     // Validation mode for JWT authentication
