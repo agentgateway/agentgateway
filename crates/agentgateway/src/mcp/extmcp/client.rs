@@ -9,9 +9,10 @@ use tracing::{debug, warn};
 use crate::cel;
 use crate::http::envoy_proto_common::json_to_struct;
 use crate::http::ext_proc::GrpcReferenceChannel;
+use crate::mcp::extmcp::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::extmcp::wire::{
-	self, AuthorizationError, McpRequest, McpResponse, Metadata, ext_mcp_client::ExtMcpClient,
-	mcp_request_result, mcp_response_result,
+	self, AuthorizationError, McpRequest, McpResponse, Metadata, mcp_request_result,
+	mcp_response_result,
 };
 use crate::mcp::extmcp::{FailureMode, Outcome, Remote};
 use crate::mcp::upstream::IncomingRequestContext;
@@ -172,7 +173,10 @@ fn translate_error(e: AuthorizationError) -> ErrorData {
 		C::Invalid => ErrorCode(-32600),
 		C::Unknown => ErrorCode(-32603),
 	};
-	let data = e.mcp_error.as_ref().and_then(|s| serde_json::to_value(s).ok());
+	let data = e
+		.mcp_error
+		.as_ref()
+		.and_then(|s| serde_json::to_value(s).ok());
 	ErrorData::new(code, e.reason, data)
 }
 

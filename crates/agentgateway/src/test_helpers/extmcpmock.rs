@@ -2,14 +2,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use prost_wkt_types::Struct;
-use tonic::{Request, Response as TonicResponse, Status};
-
+use protos::ext_mcp::authorization_error::Code as ErrCode;
+use protos::ext_mcp::ext_mcp_server::{ExtMcp, ExtMcpServer};
 use protos::ext_mcp::{
 	AuthorizationError, McpRequest, McpRequestResult, McpResponse, McpResponseResult, Pass,
-	authorization_error::Code as ErrCode,
-	ext_mcp_server::{ExtMcp, ExtMcpServer},
 	mcp_request_result, mcp_response_result,
 };
+use tonic::{Request, Response as TonicResponse, Status};
 
 pub fn pass_request() -> Result<McpRequestResult, Status> {
 	Ok(McpRequestResult {
@@ -23,7 +22,10 @@ pub fn pass_response() -> Result<McpResponseResult, Status> {
 	})
 }
 
-pub fn reject_request(code: ErrCode, reason: impl Into<String>) -> Result<McpRequestResult, Status> {
+pub fn reject_request(
+	code: ErrCode,
+	reason: impl Into<String>,
+) -> Result<McpRequestResult, Status> {
 	Ok(McpRequestResult {
 		result: Some(mcp_request_result::Result::Error(AuthorizationError {
 			code: code as i32,

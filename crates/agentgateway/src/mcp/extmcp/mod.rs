@@ -86,8 +86,7 @@ impl Driver {
 		match self {
 			Driver::Remote(remote) => {
 				let body = ctx.params.as_deref().cloned();
-				match client::check_request(remote, ctx.method, ctx.backend, body, req_ctx, client).await
-				{
+				match client::check_request(remote, ctx.method, ctx.backend, body, req_ctx, client).await {
 					client::RequestOutcome::Pass => Outcome::Pass,
 					client::RequestOutcome::Mutated(v) => match ctx.params.as_deref_mut() {
 						Some(p) => {

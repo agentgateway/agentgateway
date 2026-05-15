@@ -604,18 +604,17 @@ impl Relay {
 				async move {
 					if is_list
 						&& let Some(ext) = self.ext_mcp.as_ref()
-						&& let crate::mcp::extmcp::Outcome::Reject(rej) =
-							crate::mcp::extmcp::run_call_request(
-								ext,
-								&mut crate::mcp::extmcp::CallRequestCtx {
-									backend: &name,
-									method,
-									params: None,
-								},
-								ctx,
-								&self.policy_client,
-							)
-							.await
+						&& let crate::mcp::extmcp::Outcome::Reject(rej) = crate::mcp::extmcp::run_call_request(
+							ext,
+							&mut crate::mcp::extmcp::CallRequestCtx {
+								backend: &name,
+								method,
+								params: None,
+							},
+							ctx,
+							&self.policy_client,
+						)
+						.await
 					{
 						return (name, Err(UpstreamError::ExtMcp(rej)));
 					}

@@ -12,10 +12,9 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::extmcp;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
-use crate::mcp::{FailureMode, McpAuthorization};
+use crate::mcp::{FailureMode, McpAuthorization, extmcp};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
@@ -2530,7 +2529,12 @@ mod extmcp_test_support {
 	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 
 	pub fn policy(addr: SocketAddr) -> BackendTrafficPolicy {
-		policy_with(addr, extmcp::FailureMode::Deny, HashMap::new(), HashMap::new())
+		policy_with(
+			addr,
+			extmcp::FailureMode::Deny,
+			HashMap::new(),
+			HashMap::new(),
+		)
 	}
 
 	pub fn policy_with(
@@ -2597,9 +2601,14 @@ async fn mcp_extmcp_pass_through() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("tool call should succeed when extMcp returns Pass");
 
@@ -2633,9 +2642,14 @@ async fn mcp_extmcp_reject_surfaces_jsonrpc_error() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let err = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect_err("tool call should fail when extMcp rejects");
 
@@ -2648,7 +2662,9 @@ async fn mcp_extmcp_reject_surfaces_jsonrpc_error() {
 
 #[tokio::test]
 async fn mcp_extmcp_mutated_request_reaches_upstream() {
-	use crate::test_helpers::extmcpmock::{closure_mock, mutated_request_json, pass_request, pass_response};
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
 
 	let extmcp_mock = closure_mock(
 		|req| {
@@ -2675,9 +2691,14 @@ async fn mcp_extmcp_mutated_request_reaches_upstream() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("tool call should succeed");
 
@@ -2730,9 +2751,14 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
 	let client = mcp_streamable_client(io).await;
 	let _ = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("call should succeed");
 
@@ -2746,7 +2772,9 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 
 #[tokio::test]
 async fn mcp_extmcp_filtered_list_via_response_mutation() {
-	use crate::test_helpers::extmcpmock::{closure_mock, mutated_response_json, pass_request, pass_response};
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_response_json, pass_request, pass_response,
+	};
 
 	let extmcp_mock = closure_mock(
 		|_| pass_request(),
@@ -2775,7 +2803,10 @@ async fn mcp_extmcp_filtered_list_via_response_mutation() {
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;
-	let tools = client.list_tools(None).await.expect("list_tools should succeed");
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed");
 	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
 	assert_eq!(names, vec!["echo".to_string()]);
 }
@@ -2803,9 +2834,14 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
 	let client = mcp_streamable_client(io).await;
 	let result = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("tool call should succeed under failure_mode=Allow");
 
@@ -2815,7 +2851,9 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 
 #[tokio::test]
 async fn mcp_extmcp_mutated_prompt_request_reaches_upstream() {
-	use crate::test_helpers::extmcpmock::{closure_mock, mutated_request_json, pass_request, pass_response};
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
 
 	let extmcp_mock = closure_mock(
 		|req| {
@@ -2842,9 +2880,14 @@ async fn mcp_extmcp_mutated_prompt_request_reaches_upstream() {
 	.await;
 	let client = mcp_streamable_client(io).await;
 	let result = client
-		.get_prompt(rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
-			serde_json::json!({"message": "original-message"}).as_object().cloned().unwrap(),
-		))
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({"message": "original-message"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("get_prompt should succeed");
 
@@ -2863,7 +2906,9 @@ async fn mcp_extmcp_mutated_prompt_request_reaches_upstream() {
 
 #[tokio::test]
 async fn mcp_extmcp_mutated_resource_read_reaches_upstream() {
-	use crate::test_helpers::extmcpmock::{closure_mock, mutated_request_json, pass_request, pass_response};
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
 
 	let extmcp_mock = closure_mock(
 		|req| {
@@ -2946,9 +2991,14 @@ async fn mcp_extmcp_methods_override_disables_hooks() {
 	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
 	let client = mcp_streamable_client(io).await;
 	let _ = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-			serde_json::json!({"hi": "world"}).as_object().cloned().unwrap(),
-		))
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
 		.await
 		.expect("tool call should succeed with extMcp hooks disabled");
 
