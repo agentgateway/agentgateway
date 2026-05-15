@@ -139,6 +139,7 @@ pub struct FrontendPolices {
 	pub tcp: Option<frontend::TCP>,
 	pub network_authorization: Option<NetworkAuthorizationSet>,
 	pub proxy: Option<frontend::Proxy>,
+	pub connect: Option<frontend::Connect>,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
@@ -166,6 +167,9 @@ impl FrontendPolices {
 			},
 			FrontendPolicy::Proxy(p) => {
 				self.proxy.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::Connect(p) => {
+				self.connect.get_or_insert_with(|| p.clone());
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
@@ -1171,6 +1175,14 @@ impl Store {
 					have == want
 				}
 			})
+			.cloned()
+	}
+
+	pub fn find_bind_by_port(&self, port: u16) -> Option<Arc<Bind>> {
+		self
+			.binds
+			.values()
+			.find(|b| b.address.port() == port)
 			.cloned()
 	}
 

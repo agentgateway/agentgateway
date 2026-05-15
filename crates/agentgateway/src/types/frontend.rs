@@ -189,6 +189,18 @@ pub struct Proxy {
 	pub mode: ProxyMode,
 }
 
+#[apply(schema_enum!)]
+pub enum ConnectMode {
+	Deny,
+	Route,
+	Tunnel,
+}
+
+#[apply(schema!)]
+pub struct Connect {
+	pub mode: ConnectMode,
+}
+
 #[apply(schema!)]
 pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
 

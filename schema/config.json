@@ -6606,7 +6606,8 @@
         "direct",
         "hboneWaypoint",
         "hboneGateway",
-        "proxy"
+        "proxy",
+        "connect"
       ]
     },
     "LocalFrontendPolicies": {
@@ -6665,6 +6666,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Proxy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "connect": {
+          "description": "Enable or disable downstream HTTP CONNECT handling.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Connect"
             },
             {
               "type": "null"
@@ -6901,6 +6914,26 @@
       "enum": [
         "strict",
         "optional"
+      ]
+    },
+    "Connect": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ConnectMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "ConnectMode": {
+      "type": "string",
+      "enum": [
+        "deny",
+        "route",
+        "tunnel"
       ]
     },
     "LoggingPolicy": {

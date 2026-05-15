@@ -443,6 +443,12 @@ type Frontend struct {
 	// +optional
 	ProxyProtocol *FrontendProxyProtocol `json:"proxyProtocol,omitempty"`
 
+	// connect defines settings for downstream HTTP CONNECT handling.
+	//
+	// If unset, CONNECT requests are rejected with Method Not Allowed.
+	// +optional
+	Connect *FrontendConnect `json:"connect,omitempty"`
+
 	// `accessLog` contains access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
@@ -499,6 +505,26 @@ type FrontendProxyProtocol struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Deny;Route;Tunnel
+type FrontendConnectMode string
+
+const (
+	// Deny rejects downstream CONNECT requests.
+	FrontendConnectModeDeny FrontendConnectMode = "Deny"
+	// Route treats CONNECT as an HTTP request and routes it through the HTTP
+	// matching chain before establishing a raw tunnel to the selected backend.
+	FrontendConnectModeRoute FrontendConnectMode = "Route"
+	// Tunnel terminates CONNECT and sends the upgraded stream through the
+	// addressed gateway bind as a new downstream connection.
+	FrontendConnectModeTunnel FrontendConnectMode = "Tunnel"
+)
+
+type FrontendConnect struct {
+	// mode controls whether downstream CONNECT requests are accepted.
+	// +required
+	Mode FrontendConnectMode `json:"mode"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
@@ -40,7 +40,7 @@ use crate::store::{
 use crate::telemetry::log;
 use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
 use crate::telemetry::trc::TraceParent;
-use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
+use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
@@ -572,7 +572,9 @@ impl HTTPProxy {
 		// We will also record trailer info there.
 		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
 
-		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
+		if let Some(connect) = resp.extensions_mut().remove::<ConnectTunnel>() {
+			handle_connect_tunnel(connect, resp, log)
+		} else if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
 			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
 				return ProxyError::UpgradeFailed(None, None).into_response_with_grpc(is_grpc_request);
 			};
@@ -606,6 +608,11 @@ impl HTTPProxy {
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
+		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
+			req.extensions_mut().remove::<OnUpgrade>()
+		} else {
+			None
+		};
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
 
 		let host = http::get_host(&req)
@@ -614,11 +621,15 @@ impl HTTPProxy {
 		log.host = Some(host.clone());
 		log.method = Some(req.method().clone());
 		log.path = Some(
-			req
-				.uri()
-				.path_and_query()
-				.map(|pq| pq.to_string())
-				.unwrap_or_else(|| req.uri().path().to_string()),
+			if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
+				"/".to_string()
+			} else {
+				req
+					.uri()
+					.path_and_query()
+					.map(|pq| pq.to_string())
+					.unwrap_or_else(|| req.uri().path().to_string())
+			},
 		);
 		log.version = Some(req.version());
 		dtrace::snapshot!(Request, "initial request", &req);
@@ -642,6 +653,20 @@ impl HTTPProxy {
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
 					.await;
+				if req.method() == ::http::Method::CONNECT {
+					let mode = frontend_policies
+						.connect
+						.as_ref()
+						.map(|p| p.mode)
+						.unwrap_or(frontend::ConnectMode::Deny);
+					match mode {
+						frontend::ConnectMode::Deny | frontend::ConnectMode::Tunnel => {
+							return Err(ProxyResponse::Error(ProxyError::MethodNotAllowed))
+								.snapshot_on_err(log, &mut req);
+						},
+						frontend::ConnectMode::Route => {},
+					}
+				}
 				l
 			},
 			Err(e) => {
@@ -768,6 +793,23 @@ impl HTTPProxy {
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
+		}
+
+		if req.method() == ::http::Method::CONNECT {
+			let connect_upgrade = connect_upgrade
+				.ok_or_else(|| ProxyError::ProcessingString("CONNECT missing upgrade".to_string()))
+				.snapshot_on_err(log, &mut req)?;
+			return self
+				.connect_tunnel(
+					log,
+					connect_upgrade,
+					&selected_backend,
+					backend_policies,
+					response_policies,
+					&mut req,
+				)
+				.await
+				.snapshot_on_err(log, &mut req);
 		}
 
 		let (head, body) = req.into_parts();
@@ -904,6 +946,71 @@ impl HTTPProxy {
 			}
 		}
 		unreachable!()
+	}
+
+	async fn connect_tunnel(
+		&self,
+		log: &mut RequestLog,
+		upgrade: OnUpgrade,
+		selected_backend: &RouteBackend,
+		backend_policies: BackendPolicies,
+		response_policies: &mut ResponsePolicies,
+		req: &mut Request,
+	) -> Result<Response, ProxyResponse> {
+		let backend_call = build_connect_backend_call(
+			self.inputs.as_ref(),
+			&selected_backend.backend.backend,
+			backend_policies,
+			log,
+			req,
+		)?;
+		let backend_info = auth::BackendInfo {
+			target: selected_backend.backend.backend.target(),
+			call_target: backend_call.target.clone(),
+			inputs: self.inputs.clone(),
+		};
+		{
+			let mut maybe_log = Some(&mut *log);
+			apply_backend_policies(
+				backend_info,
+				self.policy_client(),
+				&backend_call,
+				req,
+				&mut maybe_log,
+				response_policies,
+			)
+			.await?;
+		}
+		log.endpoint = Some(backend_call.target.clone());
+		set_backend_cel_context(req, Some(&log));
+		log.request_snapshot = snapshot_connect_request(log, req).map(Arc::new);
+
+		// CONNECT establishes a raw byte tunnel after any configured backend transport
+		// has been established. Backend TLS applies to the gateway-to-backend leg.
+		let transport = build_backend_transport(
+			&self.inputs,
+			&backend_call,
+			req
+				.extensions()
+				.get::<WaypointService>()
+				.is_some()
+				.then_some(HboneSourceRole::Waypoint),
+		)
+		.await?;
+		let upstream = self
+			.inputs
+			.upstream
+			.connect_raw(backend_call.target, transport)
+			.await?;
+		let mut resp = ::http::Response::builder()
+			.status(StatusCode::OK)
+			.body(http::Body::empty())
+			.map_err(ProxyError::Http)?;
+		resp.extensions_mut().insert(ConnectTunnel {
+			upgrade,
+			upstream: Arc::new(Mutex::new(Some(upstream))),
+		});
+		Ok(resp)
 	}
 
 	async fn handle_frontend_policies(
@@ -1206,6 +1313,60 @@ async fn handle_upgrade(
 	Ok(resp)
 }
 
+fn handle_connect_tunnel(connect: ConnectTunnel, resp: Response, log: DropOnLog) -> Response {
+	tokio::task::spawn(async move {
+		let Some(mut upstream) = connect
+			.upstream
+			.lock()
+			.expect("CONNECT upstream lock")
+			.take()
+		else {
+			return;
+		};
+		let downstream = match connect.upgrade.await {
+			Ok(u) => u,
+			Err(e) => {
+				error!("CONNECT upgrade error: {e}");
+				return;
+			},
+		};
+		let mut downstream = TokioIo::new(downstream);
+		let _ = agent_core::copy::copy_bidirectional(
+			&mut downstream,
+			&mut upstream,
+			&agent_core::copy::ConnectionResult {},
+		)
+		.await;
+		drop(log);
+	});
+	resp
+}
+
+fn snapshot_connect_request(
+	log: &mut RequestLog,
+	req: &mut Request,
+) -> Option<cel::RequestSnapshot> {
+	let mut snapshot = log.cel.cel_context.maybe_snapshot_request(req, false)?;
+	if snapshot.path.path().is_empty()
+		&& let Some(authority) = snapshot.host.clone()
+	{
+		let scheme = if log.tls_info.is_some() {
+			Scheme::HTTPS
+		} else {
+			Scheme::HTTP
+		};
+		let mut parts = ::http::uri::Parts::default();
+		parts.scheme = Some(scheme.clone());
+		parts.authority = Some(authority);
+		parts.path_and_query = Some(PathAndQuery::from_static("/"));
+		if let Ok(uri) = Uri::from_parts(parts) {
+			snapshot.path = uri;
+			snapshot.scheme = Some(scheme);
+		}
+	}
+	Some(snapshot)
+}
+
 /// Build the `x-istio-source` / `x-forwarded-network` / `baggage` headers added
 /// to outbound HBONE CONNECTs.
 pub(crate) fn build_hbone_headers(
@@ -1368,6 +1529,27 @@ pub async fn build_transport(
 		},
 		(_, _) => app_transport.into(),
 	})
+}
+
+async fn build_backend_transport(
+	inputs: &ProxyInputs,
+	backend_call: &BackendCall,
+	hbone_source: Option<HboneSourceRole>,
+) -> Result<Transport, ProxyError> {
+	build_transport(
+		inputs,
+		backend_call,
+		hbone_source,
+		backend_call.backend_policies.backend_tls.clone(),
+		backend_call.backend_policies.tunnel.as_ref(),
+		backend_call
+			.backend_policies
+			.http
+			.as_ref()
+			.and_then(|h| h.version)
+			.or(backend_call.http_version_override),
+	)
+	.await
 }
 
 fn get_backend_policies(
@@ -2001,20 +2183,7 @@ async fn make_backend_call(
 		&mut req,
 	)
 	.await?;
-	let transport = build_transport(
-		&inputs,
-		&backend_call,
-		hbone_source,
-		backend_call.backend_policies.backend_tls.clone(),
-		backend_call.backend_policies.tunnel.as_ref(),
-		backend_call
-			.backend_policies
-			.http
-			.as_ref()
-			.and_then(|h| h.version)
-			.or(backend_call.http_version_override),
-	)
-	.await?;
+	let transport = build_backend_transport(&inputs, &backend_call, hbone_source).await?;
 	dtrace::snapshot!(Request, "final request", &req);
 	let request_body_limit = crate::http::buffer_limit(&req);
 	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
@@ -2098,6 +2267,58 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 			backend_type: bi.backend_type,
 			protocol: bp,
 		});
+	}
+}
+
+fn connect_authority_target(req: &Request) -> Result<Target, ProxyError> {
+	let authority = req.uri().authority().ok_or(ProxyError::InvalidRequest)?;
+	let port = authority.port_u16().ok_or(ProxyError::InvalidRequest)?;
+	Ok(Target::from((authority.host(), port)))
+}
+
+fn build_connect_backend_call(
+	inputs: &ProxyInputs,
+	backend: &Backend,
+	policies: BackendPolicies,
+	log: &mut RequestLog,
+	req: &Request,
+) -> Result<BackendCall, ProxyError> {
+	match backend {
+		Backend::Service(svc, port) => {
+			let mut maybe_log = Some(log);
+			build_service_call(
+				inputs,
+				policies,
+				&mut maybe_log,
+				ServiceCallOverride::default(),
+				svc,
+				port,
+				req.uri().host(),
+				None,
+			)
+		},
+		Backend::Opaque(_, target) => Ok(BackendCall {
+			target: target.clone(),
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			http_version_override: None,
+			transport_override: None,
+			network_gateway: None,
+			waypoint: None,
+			backend_policies: policies,
+		}),
+		Backend::Dynamic(_, _) => Ok(BackendCall {
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			target: connect_authority_target(req)?,
+			http_version_override: None,
+			transport_override: None,
+			network_gateway: None,
+			waypoint: None,
+			backend_policies: policies,
+		}),
+		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
+		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) => {
+			Err(ProxyError::InvalidBackendType)
+		},
 	}
 }
 
@@ -2880,6 +3101,12 @@ fn connection_header_tokens(headers: &HeaderMap) -> Vec<HeaderName> {
 struct RequestUpgrade {
 	upgrade_type: HeaderValue,
 	upgrade: OnUpgrade,
+}
+
+#[derive(Clone)]
+struct ConnectTunnel {
+	upgrade: OnUpgrade,
+	upstream: Arc<Mutex<Option<Socket>>>,
 }
 
 fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {

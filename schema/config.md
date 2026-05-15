@@ -6002,7 +6002,7 @@
 |`binds[].listeners[].policies.apiKey.location.cookie.name`|string||
 |`binds[].listeners[].policies.apiKey.location.expression`|object||
 |`binds[].listeners[].policies.apiKey.location.expression.expression`|string||
-|`binds[].tunnelProtocol`|enum|Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`.|
+|`binds[].tunnelProtocol`|enum|Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`, `connect`.|
 |`frontendPolicies`|object||
 |`frontendPolicies.http`|object|Settings for handling incoming HTTP requests.|
 |`frontendPolicies.http.maxBufferSize`|integer||
@@ -6034,6 +6034,8 @@
 |`frontendPolicies.proxyProtocol`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
 |`frontendPolicies.proxyProtocol.version`|enum|Possible values: `v1`, `v2`, `all`.|
 |`frontendPolicies.proxyProtocol.mode`|enum|Possible values: `strict`, `optional`.|
+|`frontendPolicies.connect`|object|Enable or disable downstream HTTP CONNECT handling.|
+|`frontendPolicies.connect.mode`|enum|Possible values: `deny`, `route`, `tunnel`.|
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`|string||
 |`frontendPolicies.accessLog.add`|object||

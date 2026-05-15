@@ -969,6 +969,7 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::HboneGateway => TunnelProtocol::HboneGateway,
 				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
+				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
 			},
 		})
 	}
@@ -2494,6 +2495,19 @@ fn frontend_policy_from_proto(
 					_ => frontend::ProxyMode::Strict,
 				};
 			FrontendPolicy::Proxy(frontend::Proxy { version, mode })
+		},
+		Some(fps::Kind::Connect(c)) => {
+			let mode =
+				match crate::types::proto::agent::frontend_policy_spec::connect::Mode::try_from(c.mode) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Route) => {
+						frontend::ConnectMode::Route
+					},
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Tunnel) => {
+						frontend::ConnectMode::Tunnel
+					},
+					_ => frontend::ConnectMode::Deny,
+				};
+			FrontendPolicy::Connect(frontend::Connect { mode })
 		},
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
