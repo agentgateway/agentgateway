@@ -525,9 +525,7 @@ fn convert_ext_mcp(
 	let drivers = remote.map(|d| vec![d]).unwrap_or_default();
 
 	if !drivers.is_empty() && methods.is_empty() {
-		diagnostics.add_warning(
-			"extMcp configured with drivers but no methods; no hooks will run",
-		);
+		diagnostics.add_warning("extMcp configured with drivers but no methods; no hooks will run");
 	}
 
 	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })
