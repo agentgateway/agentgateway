@@ -238,7 +238,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mut session = session_manager.create_stateless_session(relay);
 	let parts = ::http::Request::<()>::builder()
 		.method(http::Method::POST)
-		.uri("http://example.test/mcp")
+		.uri("http://localhost/mcp")
 		.body(())
 		.unwrap()
 		.into_parts()

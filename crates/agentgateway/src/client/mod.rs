@@ -599,9 +599,14 @@ impl Client {
 			.connector
 			.resolve_target(transport.skip_dns_resolution(), &target)
 			.await?;
-		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
+		let auto_host_authority =
+			auto_hostname_authority(&req, &target).map_err(ProxyError::Processing)?;
 		http::modify_req_uri(&mut req, |uri| {
 			let scheme = transport.scheme();
+			if let Some(authority) = auto_host_authority.clone() {
+				uri.authority = Some(authority);
+			}
+
 			// Strip the port from the hostname if its the default already
 			// The hyper client does this for HTTP/1.1 but not for HTTP2
 			if let Some(a) = uri.authority.as_mut()
@@ -612,15 +617,12 @@ impl Client {
 			}
 			uri.scheme = Some(scheme);
 
-			if let Target::Hostname(h, _) = &target
-				&& auto_host
-				&& let Some(a) = uri.authority.as_mut()
-			{
-				*a = Authority::from_str(h)?
-			}
 			Ok(())
 		})
 		.map_err(ProxyError::Processing)?;
+		if req.extensions().get::<filters::AutoHostname>().is_some() {
+			req.headers_mut().remove(::http::header::HOST);
+		}
 		let version = req.version();
 		let transport_name = transport.name();
 		// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
@@ -698,9 +700,30 @@ impl Client {
 	}
 }
 
+fn auto_hostname_authority(
+	req: &http::Request,
+	target: &Target,
+) -> anyhow::Result<Option<Authority>> {
+	if req.extensions().get::<filters::AutoHostname>().is_none() {
+		return Ok(None);
+	}
+	if let Some(h) = req
+		.extensions()
+		.get::<filters::AutoHostname>()
+		.and_then(|auto| auto.target.as_ref())
+	{
+		return Ok(Some(Authority::from_str(h)?));
+	}
+	if let Target::Hostname(h, _) = target {
+		return Ok(Some(Authority::from_str(h)?));
+	}
+	Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::http::filters::AutoHostname;
 	use crate::types::agent::TunnelProtocol;
 
 	#[test]
@@ -728,5 +751,60 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	#[test]
+	fn auto_hostname_uses_explicit_target_for_address_backend() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example/")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AutoHostname {
+			explicit: true,
+			target: Some(strng::literal!("svc.default.svc.cluster.local")),
+		});
+		let target = Target::Address("127.0.0.1:8080".parse().unwrap());
+
+		assert_eq!(
+			auto_hostname_authority(&req, &target)
+				.unwrap()
+				.map(|a| a.to_string()),
+			Some("svc.default.svc.cluster.local".to_string())
+		);
+	}
+
+	#[test]
+	fn auto_hostname_uses_hostname_backend_without_explicit_target() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example/")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AutoHostname {
+			explicit: false,
+			target: None,
+		});
+		let target = Target::Hostname(strng::literal!("backend.example"), 8080);
+
+		assert_eq!(
+			auto_hostname_authority(&req, &target)
+				.unwrap()
+				.map(|a| a.to_string()),
+			Some("backend.example".to_string())
+		);
+	}
+
+	#[test]
+	fn auto_hostname_does_not_rewrite_address_backend_without_explicit_target() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example/")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AutoHostname {
+			explicit: false,
+			target: None,
+		});
+		let target = Target::Address("127.0.0.1:8080".parse().unwrap());
+
+		assert!(auto_hostname_authority(&req, &target).unwrap().is_none());
 	}
 }

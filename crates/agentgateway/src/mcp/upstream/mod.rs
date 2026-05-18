@@ -26,6 +26,7 @@ use crate::*;
 pub struct IncomingRequestContext {
 	headers: http::HeaderMap,
 	ext: ::http::Extensions,
+	authority: Option<::http::uri::Authority>,
 }
 
 impl IncomingRequestContext {
@@ -34,15 +35,33 @@ impl IncomingRequestContext {
 		Self {
 			headers: http::HeaderMap::new(),
 			ext: ::http::Extensions::new(),
+			authority: None,
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
 			headers: parts.headers.clone(),
 			ext: parts.extensions.clone(),
+			authority: parts.uri.authority().cloned(),
 		}
 	}
-	pub fn apply(&self, req: &mut http::Request) {
+	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
+		req.extensions_mut().extend(self.ext.clone());
+		let explicit_auto_hostname = req
+			.extensions()
+			.get::<crate::http::filters::AutoHostname>()
+			.is_some_and(|auto| auto.explicit);
+		if explicit_auto_hostname {
+			let authority = req.uri().authority().map(|a| strng::new(a.as_str()));
+			if let Some(authority) = authority
+				&& let Some(auto) = req
+					.extensions_mut()
+					.get_mut::<crate::http::filters::AutoHostname>()
+				&& auto.target.is_none()
+			{
+				auto.target = Some(authority);
+			}
+		}
 		for (k, v) in &self.headers {
 			// Remove headers we do not want to propagate to the backend
 			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
@@ -52,7 +71,13 @@ impl IncomingRequestContext {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
-		req.extensions_mut().extend(self.ext.clone());
+		let Some(authority) = self.authority.clone() else {
+			return Ok(());
+		};
+		http::modify_req_uri(req, |uri| {
+			uri.authority = Some(authority);
+			Ok(())
+		})
 	}
 }
 
@@ -383,5 +408,34 @@ impl UpstreamGroup {
 		};
 
 		Ok(target)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn incoming_request_context_applies_original_authority() {
+		let parts = ::http::Request::builder()
+			.uri("http://original.example/mcp")
+			.body(())
+			.unwrap()
+			.into_parts()
+			.0;
+		let ctx = IncomingRequestContext::new(&parts);
+		let mut req = ::http::Request::builder()
+			.uri("http://svc.default.svc.cluster.local:80/mcp")
+			.body(crate::http::Body::empty())
+			.unwrap();
+
+		ctx.apply(&mut req).unwrap();
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("original.example")
+		);
+		assert_eq!(req.headers().get(http::header::HOST), None);
+		assert_eq!(req.uri().path(), "/mcp");
 	}
 }

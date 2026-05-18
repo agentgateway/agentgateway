@@ -207,7 +207,10 @@ async fn apply_request_policies(
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
 	if pol.hostname_rewrite.unwrap_or(HostRedirectOverride::Auto) == HostRedirectOverride::Auto {
-		req.extensions_mut().insert(AutoHostname());
+		req.extensions_mut().insert(AutoHostname {
+			explicit: pol.hostname_rewrite == Some(HostRedirectOverride::Auto),
+			target: None,
+		});
 	}
 	pol
 		.url_rewrite
@@ -1561,16 +1564,25 @@ async fn make_backend_call(
 				waypoint: None,
 			}
 		},
-		Backend::Service(svc, port) => build_service_call(
-			&inputs,
-			policies,
-			&mut log,
-			service_override,
-			svc,
-			port,
-			req.uri().host(),
-			hbone_source,
-		)?,
+		Backend::Service(svc, port) => {
+			// If user explicitly set auto hostname, we support it for Service.
+			// Otherwise, the implicit default only applies to AgentgatewayBackend.
+			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
+				&& auto.explicit
+			{
+				auto.target = Some(svc.hostname.clone());
+			}
+			build_service_call(
+				&inputs,
+				policies,
+				&mut log,
+				service_override,
+				svc,
+				port,
+				req.uri().host(),
+				hbone_source,
+			)?
+		},
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
