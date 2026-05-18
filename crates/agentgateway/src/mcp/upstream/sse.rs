@@ -90,6 +90,7 @@ impl ClientCore {
 			.body(body.into())
 			.map_err(ClientError::new)?;
 
+		req.extensions_mut().insert(crate::http::filters::AutoHostname());
 		ctx.apply(&mut req);
 
 		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
@@ -113,6 +114,7 @@ impl ClientCore {
 			.body(http::Body::empty())
 			.map_err(ClientError::new)?;
 
+		req.extensions_mut().insert(crate::http::filters::AutoHostname());
 		ctx.apply(&mut req);
 
 		let resp = self.http_client.call(req).await?;

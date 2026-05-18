@@ -90,6 +90,7 @@ impl Client {
 			.body(body.into())
 			.map_err(ClientError::new)?;
 
+		req.extensions_mut().insert(crate::http::filters::AutoHostname());
 		self.maybe_insert_session_id(&mut req)?;
 
 		ctx.apply(&mut req);
@@ -157,6 +158,7 @@ impl Client {
 			.body(crate::http::Body::empty())
 			.map_err(ClientError::new)?;
 
+		req.extensions_mut().insert(crate::http::filters::AutoHostname());
 		self.maybe_insert_session_id(&mut req)?;
 
 		ctx.apply(&mut req);
@@ -179,6 +181,7 @@ impl Client {
 			.body(crate::http::Body::empty())
 			.map_err(ClientError::new)?;
 
+		req.extensions_mut().insert(crate::http::filters::AutoHostname());
 		self.maybe_insert_session_id(&mut req)?;
 
 		ctx.apply(&mut req);
