@@ -2721,8 +2721,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 	use crate::cel::Expression;
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
 
-	let captured: Arc<StdMutex<Option<HashMap<String, prost_wkt_types::Struct>>>> =
-		Arc::new(StdMutex::new(None));
+	let captured: Arc<StdMutex<Option<prost_wkt_types::Struct>>> = Arc::new(StdMutex::new(None));
 	let extmcp_mock = {
 		let store = captured.clone();
 		closure_mock(
@@ -2730,7 +2729,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 				if req.method == "tools/call"
 					&& let Some(md) = req.metadata_context.as_ref()
 				{
-					*store.lock().unwrap() = Some(md.filter_metadata.clone());
+					*store.lock().unwrap() = Some(md.clone());
 				}
 				pass_request()
 			},
@@ -2768,7 +2767,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 		.expect("call should succeed");
 
 	let md = captured.lock().unwrap().clone().expect("metadata captured");
-	let entry = md.get("tenant.io").expect("tenant.io key present");
+	let entry = md.fields.get("tenant.io").expect("tenant.io key present");
 	assert_eq!(
 		serde_json::to_value(entry).unwrap(),
 		serde_json::json!({"path": "/mcp"}),

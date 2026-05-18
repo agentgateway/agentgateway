@@ -5,15 +5,10 @@ package agentgateway.dev.ext_mcp;
 import "google/protobuf/struct.proto";
 
 // ExtMcp is the wire protocol for an MCP-aware external policy server.
-// Modeled on Envoy ext_authz, but at the MCP method layer. One protocol
-// covers both gating and mutation — auth-only servers can ignore the
-// mutation variants.
+// Modeled on Envoy ext_authz, but at the MCP method layer.
+// Covers both gating and mutation.
 service ExtMcp {
-  // Check a single JSON-RPC request before it's dispatched to upstream.
   rpc CheckRequest(McpRequest) returns (McpRequestResult);
-
-  // Check the JSON-RPC response from upstream. Used for tools/call,
-  // prompts/get, all *list responses, and resources/read.
   rpc CheckResponse(McpResponse) returns (McpResponseResult);
 }
 
@@ -22,37 +17,26 @@ message McpRequest {
   string service_name = 1;
   // JSON-RPC method (e.g. "tools/call", "tools/list").
   string method = 2;
-  // CEL-evaluated context from gateway config.
-  Metadata metadata_context = 3;
-  // JSON-RPC `params` for this method (the envelope's `jsonrpc`, `id`,
-  // and `method` fields are not included). Shape matches the method's
-  // typed params (e.g. tools/call -> {"name": ..., "arguments": {...}}).
+  // CEL-evaluated context from gateway config, one field per config key.
+  google.protobuf.Struct metadata_context = 3;
+  // JSON-RPC `params` for this method.
   google.protobuf.Struct mcp_request = 4;
 }
 
 message McpResponse {
   string service_name = 1;
-  // Method of the originating request.
   string method = 2;
-  Metadata metadata_context = 3;
-  // JSON-RPC `result` payload from upstream (the envelope's `jsonrpc`
-  // and `id` fields are not included). Shape matches the method's typed
-  // result (e.g. tools/list -> {"tools": [...]}). Error responses do not
-  // reach this hook.
+  google.protobuf.Struct metadata_context = 3;
+  // JSON-RPC `result` from upstream. Error responses don't reach this hook.
   google.protobuf.Struct mcp_response = 4;
 }
 
 message McpRequestResult {
   oneof result {
-    // Proceed unchanged.
     Pass pass = 1;
-    // Proceed with the rewritten params. Replaces the JSON-RPC `params`
-    // wholesale; must deserialize back into the method's typed shape
-    // (e.g. tools/call -> {"name": ..., "arguments": {...}}). Identifier
-    // fields can be rewritten — the gateway treats extMcp as part of the
-    // auth phase and does not re-run RBAC on the mutated request.
+    // Replaces JSON-RPC `params` before forwarding to the upstream MCP server.
+    // The gateway does not re-run other RBAC on the mutated request.
     google.protobuf.Struct mutated = 2;
-    // Deny — translates to a JSON-RPC error returned to the client.
     AuthorizationError error = 3;
   }
 }
@@ -75,14 +59,7 @@ message AuthorizationError {
     INVALID = 3;
   }
   Code code = 1;
-  // Human-readable reason; surfaced in the JSON-RPC error message field.
   string reason = 2;
-  // Optional explicit JSON-RPC error payload. Overrides the code-derived
-  // default when set.
+  // Optional explicit JSON-RPC error payload. Overrides the code-derived default.
   google.protobuf.Struct mcp_error = 3;
-}
-
-// Same shape as envoy.config.core.v3.Metadata.filter_metadata.
-message Metadata {
-  map<string, google.protobuf.Struct> filter_metadata = 1;
 }

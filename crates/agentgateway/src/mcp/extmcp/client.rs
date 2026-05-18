@@ -7,12 +7,11 @@ use serde_json::Value;
 use tracing::{debug, warn};
 
 use crate::cel;
-use crate::http::envoy_proto_common::json_to_struct;
+use crate::http::envoy_proto_common::{json_to_prost_value, json_to_struct};
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::mcp::extmcp::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::extmcp::wire::{
-	self, AuthorizationError, McpRequest, McpResponse, Metadata, mcp_request_result,
-	mcp_response_result,
+	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
 };
 use crate::mcp::extmcp::{FailureMode, Outcome, Remote};
 use crate::mcp::upstream::IncomingRequestContext;
@@ -111,32 +110,32 @@ pub(crate) async fn check_response(
 fn build_metadata(
 	cfg: &HashMap<String, Arc<cel::Expression>>,
 	req_ctx: &IncomingRequestContext,
-) -> Option<Metadata> {
+) -> Option<Struct> {
 	if cfg.is_empty() {
 		return None;
 	}
 	let cel_req = req_ctx.as_request();
 	let exec = cel::Executor::new_request(&cel_req);
-	let filter_metadata: HashMap<String, prost_wkt_types::Struct> = cfg
+	let fields = cfg
 		.iter()
-		.filter_map(|(k, expr)| match eval_to_struct(&exec, expr) {
-			Ok(s) => Some((k.clone(), s)),
+		.filter_map(|(k, expr)| match eval_to_value(&exec, expr) {
+			Ok(v) => Some((k.clone(), v)),
 			Err(e) => {
 				warn!(key = %k, error = %e, "extMcp: metadata CEL expression failed; skipping");
 				None
 			},
 		})
 		.collect();
-	Some(Metadata { filter_metadata })
+	Some(Struct { fields })
 }
 
-fn eval_to_struct(
+fn eval_to_value(
 	exec: &cel::Executor<'_>,
 	expr: &cel::Expression,
-) -> anyhow::Result<prost_wkt_types::Struct> {
+) -> anyhow::Result<prost_wkt_types::Value> {
 	let v = exec.eval(expr)?;
 	let js = v.json().map_err(|_| cel::Error::JsonConvert)?;
-	Ok(json_to_struct(js)?)
+	Ok(json_to_prost_value(js)?)
 }
 
 fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcReferenceChannel> {
