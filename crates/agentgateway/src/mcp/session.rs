@@ -12,8 +12,7 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, RootsCapabilities,
-	ServerJsonRpcMessage,
+	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -303,7 +302,7 @@ impl Session {
 			l.session_id = Some(session_id);
 		});
 
-		init_request.params.capabilities.roots = self.get_roots_capabilities();
+		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities);
 		self
 			.relay
 			.send_single(
@@ -363,12 +362,7 @@ impl Session {
 				});
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
-						// However, the clients can tell the server they support roots.
-						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
-						// actually support
-						// This could probably be more easily done without multiplexing but for now neither supports.
-						ir.params.capabilities.roots = self.get_roots_capabilities();
+						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
 
 						let pv = ir.params.protocol_version.clone();
 						let res = self
@@ -607,8 +601,16 @@ impl Session {
 		}
 	}
 
-	fn get_roots_capabilities(&self) -> Option<RootsCapabilities> {
-		None
+	fn strip_unsupported_client_capabilities(
+		&self,
+		capabilities: &mut rmcp::model::ClientCapabilities,
+	) {
+		// Until server-to-client request routing is implemented, do not advertise
+		// capabilities that require the proxy to route upstream requests back to
+		// the downstream client and route the client's JSON-RPC response upstream.
+		capabilities.roots = None;
+		capabilities.sampling = None;
+		capabilities.elicitation = None;
 	}
 }
 
