@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use agent_core::telemetry::ValueBag;
@@ -218,19 +219,15 @@ impl Tracer {
 			_ => "unknown".to_string(),
 		});
 
-		let out_span = request.outgoing_span.as_ref().unwrap();
 		let sb = self
 			.tracer
 			.span_builder(span_name)
 			.with_start_time(start)
-			.with_end_time(end)
 			.with_kind(SpanKind::Server)
-			.with_attributes(attributes)
-			.with_trace_id(out_span.trace_id.into())
-			.with_span_id(out_span.span_id.into());
+			.with_attributes(attributes);
 
 		let mut context = Context::new();
-		if let Some(in_span) = &request.incoming_span {
+		if let Some(in_span) = request.incoming_span.as_ref().or(request.outgoing_span.as_ref()) {
 			let parent = SpanContext::new(
 				in_span.trace_id.into(),
 				in_span.span_id.into(),
@@ -240,7 +237,8 @@ impl Tracer {
 			);
 			context = context.with_remote_span_context(parent);
 		}
-		sb.start_with_context(self.tracer.as_ref(), &context).end()
+		let mut span = sb.start_with_context(self.tracer.as_ref(), &context);
+		span.end_with_timestamp(end);
 	}
 }
 
@@ -253,7 +251,7 @@ struct PolicyGrpcSpanExporter {
 		opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient<
 			crate::http::ext_proc::GrpcReferenceChannel,
 		>,
-	is_shutdown: Arc<bool>,
+	is_shutdown: Arc<AtomicBool>,
 	resource: Resource,
 	runtime: tokio::runtime::Handle,
 }
@@ -282,7 +280,7 @@ impl PolicyGrpcSpanExporter {
 		);
 		Self {
 			tonic_client,
-			is_shutdown: Arc::new(false),
+			is_shutdown: Arc::new(AtomicBool::new(false)),
 			resource: Resource::builder().build(),
 			runtime,
 		}
@@ -301,7 +299,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 		let resource = self.resource.clone();
 		let handle = self.runtime.clone();
 		async move {
-			if *is_shutdown {
+			if is_shutdown.load(Ordering::Relaxed) {
 				return Err(OTelSdkError::AlreadyShutdown);
 			}
 			// Reuse OTLP transform to convert SDK spans to ResourceSpans
@@ -325,8 +323,8 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 		}
 	}
 
-	fn shutdown(&mut self) -> opentelemetry_sdk::error::OTelSdkResult {
-		self.is_shutdown = Arc::new(true);
+	fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+		self.is_shutdown.store(true, Ordering::Relaxed);
 		Ok(())
 	}
 
@@ -709,7 +707,7 @@ mod tests {
 	}
 
 	#[test]
-	fn send_uses_incoming_span_as_parent_and_preserves_manual_ids() {
+	fn send_uses_incoming_span_as_parent() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();
 		request.method = Some(http::Method::GET);
@@ -739,8 +737,7 @@ mod tests {
 		assert_eq!(spans.len(), 1);
 		let span = &spans[0];
 		assert_eq!(span.span_kind, SpanKind::Server);
-		assert_eq!(span.span_context.trace_id(), outgoing.trace_id.into());
-		assert_eq!(span.span_context.span_id(), outgoing.span_id.into());
+		assert_eq!(span.span_context.trace_id(), incoming.trace_id.into());
 		assert_eq!(span.parent_span_id, incoming.span_id.into());
 		assert!(span.parent_span_is_remote);
 		assert!(span.links.iter().next().is_none());

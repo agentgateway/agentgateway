@@ -667,7 +667,7 @@ pub struct RequestLog {
 	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
 	/// Additional spans created during the request (e.g. upstream call spans).
 	/// These are flushed on drop when tracing is enabled.
-	pub trace_spans: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	pub trace_spans: Arc<Mutex<Vec<(SpanBuilder, OtelContext, Option<SystemTime>)>>>,
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
@@ -1107,8 +1107,13 @@ impl Drop for DropOnLog {
 			// Flush any buffered spans created during request processing.
 			// Does best effort, if the lock is poisoned, skip flushing.
 			if let Ok(mut spans) = log.trace_spans.lock() {
-				for (sb, context) in spans.drain(..) {
-					sb.start_with_context(t.tracer.as_ref(), &context).end();
+				for (sb, context, end_time) in spans.drain(..) {
+					let mut span = sb.start_with_context(t.tracer.as_ref(), &context);
+					if let Some(end_time) = end_time {
+						span.end_with_timestamp(end_time);
+					} else {
+						span.end();
+					}
 				}
 			}
 		};
@@ -1278,7 +1283,7 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 		let mut client = self.tonic_client.clone();
 		let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema =
 			(&self.resource).into();
-		let resource_logs = group_logs_by_resource_and_scope(batch, &resource);
+		let resource_logs = group_logs_by_resource_and_scope(&batch, &resource);
 		let handle = self.runtime.clone();
 
 		async move {
@@ -1478,7 +1483,7 @@ impl SpanWriter {
 pub struct SpanWriterInner {
 	parent: trc::TraceParent,
 	tracer: Arc<trc::Tracer>,
-	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext, Option<SystemTime>)>>>,
 }
 
 impl SpanWriterInner {
@@ -1499,36 +1504,28 @@ impl SpanWriterInner {
 		name: impl Into<Cow<'static, str>>,
 		f: impl FnOnce(SpanBuilder) -> SpanBuilder,
 	) {
-		// Create a unique child span ID for this recorded span.
-		let child = self.parent.new_span();
+		let end_time = SystemTime::now();
 		let mut sb = self
 			.tracer
 			.tracer
 			.span_builder(name)
 			.with_kind(SpanKind::Server)
-			.with_trace_id(child.trace_id.into())
-			.with_span_id(child.span_id.into());
+			.with_start_time(end_time);
 
 		sb = f(sb);
-		// Capture end time at write time so it measures the intended operation duration.
-		sb = sb.with_end_time(SystemTime::now());
 
 		// Store for later flush when the request log is finalized.
 		if let Ok(mut spans) = self.inner.lock() {
-			spans.push((sb, self.parent_context()));
+			spans.push((sb, self.parent_context(), Some(end_time)));
 		}
 	}
 
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
-		// Create a unique child span ID for this recorded span.
-		let child = self.parent.new_span();
 		let sb = self
 			.tracer
 			.tracer
 			.span_builder(name)
 			.with_kind(SpanKind::Server)
-			.with_trace_id(child.trace_id.into())
-			.with_span_id(child.span_id.into())
 			.with_start_time(SystemTime::now());
 
 		SpanWriteOnDrop {
@@ -1543,7 +1540,7 @@ impl SpanWriterInner {
 pub struct SpanWriteOnDrop {
 	sb: Option<SpanBuilder>,
 	context: OtelContext,
-	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext, Option<SystemTime>)>>>,
 }
 impl SpanWriteOnDrop {
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
@@ -1554,12 +1551,12 @@ impl SpanWriteOnDrop {
 }
 impl Drop for SpanWriteOnDrop {
 	fn drop(&mut self) {
-		let Some(mut sb) = self.sb.take() else { return };
-		sb = sb.with_end_time(SystemTime::now());
+		let Some(sb) = self.sb.take() else { return };
+		let end_time = SystemTime::now();
 
 		// Store for later flush when the request log is finalized.
 		if let Ok(mut spans) = self.inner.lock() {
-			spans.push((sb, self.context.clone()));
+			spans.push((sb, self.context.clone(), Some(end_time)));
 		}
 	}
 }
