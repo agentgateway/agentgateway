@@ -195,7 +195,7 @@ impl Upstream {
 						StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
 						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
 					};
-					c.set_session_id(sid.map(|s| s.as_str()), None)
+					c.set_session_id(sid.map(|s| s.as_str()), None);
 				}
 				res.try_into().map_err(Into::into)
 			},
