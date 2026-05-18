@@ -24,7 +24,9 @@ message McpRequest {
   string method = 2;
   // CEL-evaluated context from gateway config.
   Metadata metadata_context = 3;
-  // JSON-RPC request body.
+  // JSON-RPC `params` for this method (the envelope's `jsonrpc`, `id`,
+  // and `method` fields are not included). Shape matches the method's
+  // typed params (e.g. tools/call -> {"name": ..., "arguments": {...}}).
   google.protobuf.Struct mcp_request = 4;
 }
 
@@ -33,7 +35,10 @@ message McpResponse {
   // Method of the originating request.
   string method = 2;
   Metadata metadata_context = 3;
-  // JSON-RPC response body from upstream.
+  // JSON-RPC `result` payload from upstream (the envelope's `jsonrpc`
+  // and `id` fields are not included). Shape matches the method's typed
+  // result (e.g. tools/list -> {"tools": [...]}). Error responses do not
+  // reach this hook.
   google.protobuf.Struct mcp_response = 4;
 }
 
