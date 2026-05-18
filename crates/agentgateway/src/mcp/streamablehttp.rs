@@ -141,10 +141,15 @@ impl StreamableHttpService {
 			return session.send(part, message).await;
 		}
 
-		// No session header... we need to create one, if it is an initialize
-		if let ClientJsonRpcMessage::Request(req) = &message
-			&& !matches!(req.request, ClientRequest::InitializeRequest(_))
-		{
+		// No session header... we need to create one, if it is an initialize.
+		// Notifications and responses are subsequent-session messages too.
+		let is_initialize_request = match &message {
+			ClientJsonRpcMessage::Request(req) => {
+				matches!(req.request, ClientRequest::InitializeRequest(_))
+			},
+			_ => false,
+		};
+		if !is_initialize_request {
 			return mcp::Error::MissingSessionHeader.into();
 		}
 		let idle_ttl = inputs.backend.session_idle_ttl;
