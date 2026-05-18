@@ -1280,17 +1280,13 @@ message BackendPolicySpec {
   // ExtMcp is a backend-phase policy for MCP traffic. Today only the `remote`
   // slot is defined — a custom gRPC policy server modeled on Envoy ext_authz.
   message ExtMcp {
-    // Phase controls whether a method's request-side, response-side, or both
-    // are subject to the extMcp pipeline. Defaults per method are baked in
-    // (e.g. *list -> RESPONSE, tools/call -> BOTH); user config in `methods`
-    // is overrides only.
+    // Phase controls whether the request side, response side, or both of a
+    // method are run through the extMcp pipeline.
     enum Phase {
-      // UNSPECIFIED falls back to the per-method default.
-      UNSPECIFIED = 0;
-      OFF = 1;
-      REQUEST = 2;
-      RESPONSE = 3;
-      BOTH = 4;
+      OFF = 0;
+      REQUEST = 1;
+      RESPONSE = 2;
+      BOTH = 3;
     }
 
     enum FailureMode {
@@ -1311,8 +1307,9 @@ message BackendPolicySpec {
 
     Remote remote = 1;
 
-    // Per-method phase overrides keyed by JSON-RPC method name
-    // (e.g. "tools/list", "tools/call").
+    // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that
+    // run through the extMcp pipeline, keyed by method name. Methods not
+    // listed here — including unknown ones — bypass extMcp entirely.
     map<string, Phase> methods = 2;
   }
 

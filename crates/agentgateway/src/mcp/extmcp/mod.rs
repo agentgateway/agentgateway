@@ -31,6 +31,8 @@ pub mod wire {
 pub struct ExtMcp {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub drivers: Vec<Driver>,
+	/// Allowlist: only methods listed here run through the pipeline, at the
+	/// configured phase. Methods absent from the map bypass extMcp entirely.
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
 }

@@ -2527,11 +2527,20 @@ mod extmcp_test_support {
 	use crate::mcp::extmcp;
 	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 
+	// Default test allowlist: every method exercised in this module's tests,
+	// all at Phase::Both. Tests that need narrower coverage build their own.
+	pub fn default_methods() -> HashMap<String, extmcp::Phase> {
+		["tools/call", "tools/list", "prompts/get", "resources/read"]
+			.into_iter()
+			.map(|m| (m.to_string(), extmcp::Phase::Both))
+			.collect()
+	}
+
 	pub fn policy(addr: SocketAddr) -> BackendTrafficPolicy {
 		policy_with(
 			addr,
 			extmcp::FailureMode::Deny,
-			HashMap::new(),
+			default_methods(),
 			HashMap::new(),
 		)
 	}
@@ -2610,8 +2619,6 @@ async fn mcp_extmcp_pass_through() {
 		.await
 		.expect("tool call should succeed when extMcp returns Pass");
 
-	// tools/call defaults to Phase::Both; tools/list during init also runs the
-	// response side. Both counters should be ≥1.
 	assert!(!result.content.is_empty());
 	assert!(req_n.load(Ordering::SeqCst) >= 1);
 	assert!(resp_n.load(Ordering::SeqCst) >= 1);
@@ -2741,7 +2748,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
 		extmcp::FailureMode::Deny,
-		HashMap::new(),
+		extmcp_test_support::default_methods(),
 		metadata,
 	);
 
@@ -2825,7 +2832,7 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
 		extmcp::FailureMode::Allow,
-		HashMap::new(),
+		extmcp_test_support::default_methods(),
 		HashMap::new(),
 	);
 	let mock = mock_streamable_http_server(true).await;
@@ -2948,8 +2955,11 @@ async fn mcp_extmcp_mutated_resource_read_reaches_upstream() {
 	assert!(text.contains("Business Intelligence Memo"));
 }
 
+// Allowlist semantics: tools/call is omitted from `methods`, so neither
+// request nor response side of the call should reach the extMcp driver,
+// even though other methods (tools/list, etc.) are listed.
 #[tokio::test]
-async fn mcp_extmcp_methods_override_disables_hooks() {
+async fn mcp_extmcp_unlisted_method_bypasses_hooks() {
 	use std::collections::HashMap;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -2976,8 +2986,7 @@ async fn mcp_extmcp_methods_override_disables_hooks() {
 		.await
 	};
 
-	// tools/call defaults to Phase::Both; overriding to Off silences both sides.
-	let methods = HashMap::from([("tools/call".to_string(), extmcp::Phase::Off)]);
+	let methods = HashMap::from([("tools/list".to_string(), extmcp::Phase::Both)]);
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
 		extmcp::FailureMode::Deny,
@@ -2998,7 +3007,7 @@ async fn mcp_extmcp_methods_override_disables_hooks() {
 			),
 		)
 		.await
-		.expect("tool call should succeed with extMcp hooks disabled");
+		.expect("tool call should succeed when its method is not in the allowlist");
 
 	assert_eq!(req_n.load(Ordering::SeqCst), 0);
 	assert_eq!(resp_n.load(Ordering::SeqCst), 0);

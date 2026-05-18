@@ -480,15 +480,14 @@ fn convert_ext_mcp(
 	let methods: std::collections::HashMap<String, crate::mcp::extmcp::Phase> = em
 		.methods
 		.iter()
-		.filter_map(|(k, v)| {
-			let phase = match ProtoPhase::try_from(*v).ok()? {
-				ProtoPhase::Unspecified => return None, // fall back to per-method default
+		.map(|(k, v)| {
+			let phase = match ProtoPhase::try_from(*v).unwrap_or(ProtoPhase::Off) {
 				ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
 				ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
 				ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
 				ProtoPhase::Both => crate::mcp::extmcp::Phase::Both,
 			};
-			Some((k.clone(), phase))
+			(k.clone(), phase)
 		})
 		.collect();
 
@@ -524,6 +523,12 @@ fn convert_ext_mcp(
 		.transpose()?;
 
 	let drivers = remote.map(|d| vec![d]).unwrap_or_default();
+
+	if !drivers.is_empty() && methods.is_empty() {
+		diagnostics.add_warning(
+			"extMcp configured with drivers but no methods; no hooks will run",
+		);
+	}
 
 	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })
 }
