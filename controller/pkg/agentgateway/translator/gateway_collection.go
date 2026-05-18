@@ -450,7 +450,7 @@ func ListenerSetBuilder(
 	status := obj.Status.DeepCopy()
 
 	p := ls.ParentRef
-	if NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK) != wellknown.GatewayGVK {
+	if NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.GatewayGVK.GroupKind() {
 		// Cannot report status since we don't know if it is for us
 		return nil, nil
 	}

@@ -138,8 +138,17 @@ type CustomResourceCollectionsConfig struct {
 
 func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	// Build core collections for irs
+	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
+	if s.buildReferenceTypesFunc != nil {
+		referenceTypes = s.buildReferenceTypesFunc(s.agwCollections, referenceTypes)
+	}
 	gatewayClasses := translator.GatewayClassesCollection(s.agwCollections.GatewayClasses, krtopts)
-	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(s.agwCollections.ReferenceGrants, krtopts))
+	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(
+		s.agwCollections.ReferenceGrants,
+		referenceTypes.KnownFromReferences,
+		referenceTypes.KnownToReferences,
+		krtopts,
+	))
 	listenerSetInitialStatus, listenerSets := s.buildListenerSetCollection(gatewayClasses, refGrants, krtopts)
 	if s.customResourceCollections != nil {
 		s.customResourceCollections(CustomResourceCollectionsConfig{
@@ -159,7 +168,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, listenerSets, refGrants, krtopts)
+	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, listenerSets, refGrants, referenceTypes, krtopts)
 
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
@@ -403,6 +412,7 @@ func (s *Syncer) buildAgwResources(
 	gateways krt.Collection[*translator.GatewayListener],
 	listenerSets krt.Collection[translator.ListenerSet],
 	refGrants translator.ReferenceGrants,
+	referenceTypes plugins.ReferenceTypes,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
@@ -477,11 +487,6 @@ func (s *Syncer) buildAgwResources(
 			}
 		}
 		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
-	}
-
-	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
-	if s.buildReferenceTypesFunc != nil {
-		referenceTypes = s.buildReferenceTypesFunc(s.agwCollections, referenceTypes)
 	}
 
 	routeInputs := translator.RouteContextInputs{

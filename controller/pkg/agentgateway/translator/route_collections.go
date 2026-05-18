@@ -119,7 +119,7 @@ func isDelegatedChildHTTPRoute(obj *gwv1.HTTPRoute) bool {
 }
 func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 	allowedParents := slices.MapFilter(obj.Spec.ParentRefs, func(ref gwv1.ParentReference) *types.NamespacedName {
-		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK) != wellknown.HTTPRouteGVK {
+		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
 			return nil
 		}
 		return new(types.NamespacedName{
@@ -136,8 +136,8 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 func extractHTTPRouteGroupRefs(rule gwv1.HTTPRouteRule, routeNamespace string) []routeGroupBindingKey {
 	var res []routeGroupBindingKey
 	for _, backend := range rule.BackendRefs {
-		ref := NormalizeReference(backend.Group, backend.Kind, wellknown.ServiceGVK)
-		if ref != wellknown.HTTPRouteGVK {
+		ref := NormalizeReference(backend.Group, backend.Kind, wellknown.ServiceGVK.GroupKind())
+		if ref != wellknown.HTTPRouteGVK.GroupKind() {
 			continue
 		}
 		namespace := routeNamespace
@@ -340,7 +340,7 @@ func buildDelegatedHTTPRoutes(
 		for _, rule := range obj.Spec.Rules {
 			for _, backend := range rule.BackendRefs {
 				ref, refNs, refName := GetBackendRef(backend)
-				if ref == wellknown.HTTPRouteGVK {
+				if ref == wellknown.HTTPRouteGVK.GroupKind() {
 					continue
 				}
 				backends.Insert(utils.TypedNamespacedName{
@@ -1067,7 +1067,7 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	for _, r := range rules {
 		for _, b := range extract(r) {
 			ref, refNs, refName := GetBackendRef(b)
-			if ref == wellknown.HTTPRouteGVK {
+			if ref == wellknown.HTTPRouteGVK.GroupKind() {
 				continue
 			}
 			be := utils.TypedNamespacedName{
@@ -1095,16 +1095,16 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	return res
 }
 
-func GetBackendRef[I any](spec I) (schema.GroupVersionKind, *gwv1.Namespace, gwv1.ObjectName) {
+func GetBackendRef[I any](spec I) (schema.GroupKind, *gwv1.Namespace, gwv1.ObjectName) {
 	switch t := any(spec).(type) {
 	case gwv1.HTTPBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	case gwv1.GRPCBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	case gwv1.BackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	default:
 		log.Fatalf("unknown GetBackendRef type %T", t)
-		return schema.GroupVersionKind{}, nil, ""
+		return schema.GroupKind{}, nil, ""
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -13,9 +14,9 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
-// Reference stores a reference to a namespaced GVK, as used by ReferencePolicy
+// Reference stores a reference to a namespaced GroupKind, as used by ReferenceGrant.
 type Reference struct {
-	Kind      schema.GroupVersionKind
+	Kind      schema.GroupKind
 	Namespace gwv1b1.Namespace
 }
 
@@ -37,41 +38,34 @@ type ReferenceGrants struct {
 }
 
 // ReferenceGrantsCollection creates a collection of ReferenceGrant objects from a collection of ReferenceGrant objects.
-func ReferenceGrantsCollection(referenceGrants krt.Collection[*gwv1b1.ReferenceGrant], krtopts krtutil.KrtOptions) krt.Collection[ReferenceGrant] {
+func ReferenceGrantsCollection(
+	referenceGrants krt.Collection[*gwv1b1.ReferenceGrant],
+	knownFromReferences sets.Set[schema.GroupKind],
+	knownToReferences sets.Set[schema.GroupKind],
+	krtopts krtutil.KrtOptions,
+) krt.Collection[ReferenceGrant] {
 	return krt.NewManyCollection(referenceGrants, func(ctx krt.HandlerContext, obj *gwv1b1.ReferenceGrant) []ReferenceGrant {
 		rp := obj.Spec
 		results := make([]ReferenceGrant, 0, len(rp.From)*len(rp.To))
 		for _, from := range rp.From {
-			fromKey := Reference{
-				Namespace: from.Namespace,
-			}
-			if string(from.Group) == wellknown.GatewayGVK.Group && string(from.Kind) == wellknown.GatewayKind {
-				fromKey.Kind = wellknown.GatewayGVK
-			} else if string(from.Group) == wellknown.HTTPRouteGVK.Group && string(from.Kind) == wellknown.HTTPRouteKind {
-				fromKey.Kind = wellknown.HTTPRouteGVK
-			} else if string(from.Group) == wellknown.GRPCRouteGVK.Group && string(from.Kind) == wellknown.GRPCRouteKind {
-				fromKey.Kind = wellknown.GRPCRouteGVK
-			} else if string(from.Group) == wellknown.TLSRouteGVK.Group && string(from.Kind) == wellknown.TLSRouteKind {
-				fromKey.Kind = wellknown.TLSRouteGVK
-			} else if string(from.Group) == wellknown.TCPRouteGVK.Group && string(from.Kind) == wellknown.TCPRouteKind {
-				fromKey.Kind = wellknown.TCPRouteGVK
-			} else if string(from.Group) == wellknown.ListenerSetGVK.Group && string(from.Kind) == wellknown.ListenerSetKind {
-				fromKey.Kind = wellknown.ListenerSetGVK
-			} else {
-				// Not supported type. Not an error; may be for another controller
+			fromGK := schema.GroupKind{Group: string(from.Group), Kind: string(from.Kind)}
+			if !knownFromReferences.Contains(fromGK) {
+				// Not supported type. Not an error; may be for another controller.
 				continue
 			}
+			fromKey := Reference{
+				Kind:      fromGK,
+				Namespace: from.Namespace,
+			}
 			for _, to := range rp.To {
-				toKey := Reference{
-					Namespace: gwv1b1.Namespace(obj.Namespace),
-				}
-				if to.Group == "" && string(to.Kind) == wellknown.SecretGVK.Kind {
-					toKey.Kind = wellknown.SecretGVK
-				} else if to.Group == "" && string(to.Kind) == wellknown.ServiceKind {
-					toKey.Kind = wellknown.ServiceGVK
-				} else {
-					// Not supported type. Not an error; may be for another controller
+				toGK := schema.GroupKind{Group: string(to.Group), Kind: string(to.Kind)}
+				if !knownToReferences.Contains(toGK) {
+					// Not supported type. Not an error; may be for another controller.
 					continue
+				}
+				toKey := Reference{
+					Kind:      toGK,
+					Namespace: gwv1b1.Namespace(obj.Namespace),
 				}
 				rg := ReferenceGrant{
 					Source:      config.NamespacedName(obj),
@@ -125,8 +119,8 @@ func (g ReferenceGrant) ResourceName() string {
 
 // SecretAllowed checks if a secret is allowed to be used by a gateway
 func (refs ReferenceGrants) SecretAllowed(ctx krt.HandlerContext, kind schema.GroupVersionKind, secret types.NamespacedName, namespace string) bool {
-	from := Reference{Kind: kind, Namespace: gwv1b1.Namespace(namespace)}
-	to := Reference{Kind: wellknown.SecretGVK, Namespace: gwv1b1.Namespace(secret.Namespace)}
+	from := Reference{Kind: kind.GroupKind(), Namespace: gwv1b1.Namespace(namespace)}
+	to := Reference{Kind: wellknown.SecretGVK.GroupKind(), Namespace: gwv1b1.Namespace(secret.Namespace)}
 	pair := ReferencePair{From: from, To: to}
 	grants := krt.Fetch(ctx, refs.collection, krt.FilterIndex(refs.index, pair))
 	for _, g := range grants {
@@ -144,13 +138,13 @@ func (refs ReferenceGrants) BackendAllowed(
 	backendName gwv1b1.ObjectName,
 	backendNamespace gwv1b1.Namespace,
 	routeNamespace string,
-	refKind schema.GroupVersionKind,
+	refKind schema.GroupKind,
 ) bool {
-	if refKind == wellknown.HTTPRouteGVK {
+	if refKind == wellknown.HTTPRouteGVK.GroupKind() {
 		// ReferenceGrant not required for route delegation
 		return true
 	}
-	from := Reference{Kind: k, Namespace: gwv1b1.Namespace(routeNamespace)}
+	from := Reference{Kind: k.GroupKind(), Namespace: gwv1b1.Namespace(routeNamespace)}
 	to := Reference{Kind: refKind, Namespace: backendNamespace}
 	pair := ReferencePair{From: from, To: to}
 	grants := krt.Fetch(ctx, refs.collection, krt.FilterIndex(refs.index, pair))
