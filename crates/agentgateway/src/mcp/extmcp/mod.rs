@@ -6,7 +6,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::Value;
 
@@ -51,7 +50,6 @@ pub struct Remote {
 	#[serde(skip)]
 	pub target: Arc<SimpleBackendReference>,
 	pub failure_mode: FailureMode,
-	pub timeout: Duration,
 	#[serde(skip_serializing_if = "HashMap::is_empty", skip_deserializing)]
 	pub metadata: HashMap<String, Arc<cel::Expression>>,
 }

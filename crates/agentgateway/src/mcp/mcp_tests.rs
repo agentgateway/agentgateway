@@ -2521,7 +2521,6 @@ mod extmcp_test_support {
 	use std::collections::HashMap;
 	use std::net::SocketAddr;
 	use std::sync::Arc;
-	use std::time::Duration;
 
 	use rmcp::model::{CallToolResult, RawContent};
 
@@ -2546,7 +2545,6 @@ mod extmcp_test_support {
 		let remote = extmcp::Remote {
 			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
 			failure_mode,
-			timeout: Duration::from_secs(5),
 			metadata,
 		};
 		BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {

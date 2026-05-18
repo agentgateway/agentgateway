@@ -41,8 +41,7 @@ pub(crate) async fn check_request(
 		mcp_request,
 	};
 	let mut grpc = build_client(remote, client.clone());
-	let mut tonic_req = tonic::Request::new(req);
-	tonic_req.set_timeout(remote.timeout);
+	let tonic_req = tonic::Request::new(req);
 	let result = match grpc.check_request(tonic_req).await {
 		Ok(resp) => resp.into_inner().result,
 		Err(status) => {
@@ -77,8 +76,7 @@ pub(crate) async fn check_response(
 		mcp_response,
 	};
 	let mut grpc = build_client(remote, client.clone());
-	let mut tonic_req = tonic::Request::new(req);
-	tonic_req.set_timeout(remote.timeout);
+	let tonic_req = tonic::Request::new(req);
 	let result = match grpc.check_response(tonic_req).await {
 		Ok(resp) => resp.into_inner().result,
 		Err(status) => {

@@ -500,11 +500,6 @@ fn convert_ext_mcp(
 				Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::Allow,
 				_ => crate::mcp::extmcp::FailureMode::Deny,
 			};
-			let timeout = r
-				.timeout
-				.as_ref()
-				.and_then(|d| std::time::Duration::try_from(*d).ok())
-				.unwrap_or(std::time::Duration::from_secs(1));
 			let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
 			let metadata = r
 				.metadata
@@ -522,7 +517,6 @@ fn convert_ext_mcp(
 				crate::mcp::extmcp::Remote {
 					target,
 					failure_mode,
-					timeout,
 					metadata,
 				},
 			))

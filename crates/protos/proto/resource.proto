@@ -1304,7 +1304,6 @@ message BackendPolicySpec {
     message Remote {
       BackendReference target = 1;
       FailureMode failure_mode = 2;
-      google.protobuf.Duration timeout = 3;
       // Static or CEL-evaluated context, surfaced to the policy server as
       // the wire `Metadata.filter_metadata` map. Keyed by metadata namespace.
       map<string, string> metadata = 5;
