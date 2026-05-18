@@ -589,10 +589,11 @@ impl Relay {
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
 		let capabilities = if multiplexing {
-			// Resources are now supported with multiplexing using proper URI prefixing
+			// Prompts are supported with multiplexing using proxy-prefixed names.
+			// Resources can be listed, but read/templates/completion do not have reverse routing yet.
 			ServerCapabilities::builder()
 				.enable_tools()
-				.enable_resources()
+				.enable_prompts()
 				.build()
 		} else {
 			ServerCapabilities::builder()
