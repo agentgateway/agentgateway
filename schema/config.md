@@ -143,8 +143,12 @@
 |`binds[].listeners[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].status`|integer||
 |`binds[].listeners[].routes[].policies.directResponse.body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.status`|integer||
 |`binds[].listeners[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`binds[].listeners[].routes[].policies.cors.allowCredentials`|boolean||
@@ -6318,8 +6322,12 @@
 |`policies[].policy.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.directResponse.conditional[].body`|array||
+|`policies[].policy.directResponse.conditional[].bodyExpression`|string||
+|`policies[].policy.directResponse.conditional[].headers`|object||
 |`policies[].policy.directResponse.conditional[].status`|integer||
 |`policies[].policy.directResponse.body`|array||
+|`policies[].policy.directResponse.bodyExpression`|string||
+|`policies[].policy.directResponse.headers`|object||
 |`policies[].policy.directResponse.status`|integer||
 |`policies[].policy.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`policies[].policy.cors.allowCredentials`|boolean||
@@ -11576,8 +11584,12 @@
 |`routeGroups[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].body`|array||
+|`routeGroups[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.conditional[].headers`|object||
 |`routeGroups[].routes[].policies.directResponse.conditional[].status`|integer||
 |`routeGroups[].routes[].policies.directResponse.body`|array||
+|`routeGroups[].routes[].policies.directResponse.bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.headers`|object||
 |`routeGroups[].routes[].policies.directResponse.status`|integer||
 |`routeGroups[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`routeGroups[].routes[].policies.cors.allowCredentials`|boolean||
@@ -18579,8 +18591,12 @@
 |`mcp.policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.directResponse.conditional[].body`|array||
+|`mcp.policies.directResponse.conditional[].bodyExpression`|string||
+|`mcp.policies.directResponse.conditional[].headers`|object||
 |`mcp.policies.directResponse.conditional[].status`|integer||
 |`mcp.policies.directResponse.body`|array||
+|`mcp.policies.directResponse.bodyExpression`|string||
+|`mcp.policies.directResponse.headers`|object||
 |`mcp.policies.directResponse.status`|integer||
 |`mcp.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`mcp.policies.cors.allowCredentials`|boolean||

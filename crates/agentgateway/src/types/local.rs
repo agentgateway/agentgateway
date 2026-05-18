@@ -2140,6 +2140,8 @@ json(request.body).model
 			})),
 			TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
 				body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+				body_expression: None,
+				headers: Vec::new(),
 				status: ::http::StatusCode::OK,
 			})),
 		],

@@ -564,6 +564,39 @@ spec:
         - condition: '"x-test" in request.headers'
           policy: {}
 ---
+_err: 'body and bodyExpression may not both be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-directresponse-body-and-expression
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      status: 403
+      body: denied
+      bodyExpression: "'denied'"
+---
+_err: 'directResponse.headers[0].name in body should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-directresponse-pseudo-header
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      status: 403
+      headers:
+        - name: :status
+          value: "'418'"
+---
 _err: 'failureMode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

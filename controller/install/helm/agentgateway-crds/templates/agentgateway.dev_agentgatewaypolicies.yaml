@@ -6434,6 +6434,14 @@ spec:
                         maxLength: 4096
                         minLength: 1
                         type: string
+                      bodyExpression:
+                        description: |-
+                          BodyExpression is a CEL expression that produces the HTTP response body.
+                          Strings and bytes are written directly; other values are serialized as JSON.
+                          If this field is omitted, no expression body is included in the response.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                       conditional:
                         description: |-
                           `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level directResponse fields.
@@ -6459,6 +6467,42 @@ spec:
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
+                                bodyExpression:
+                                  description: |-
+                                    BodyExpression is a CEL expression that produces the HTTP response body.
+                                    Strings and bytes are written directly; other values are serialized as JSON.
+                                    If this field is omitted, no expression body is included in the response.
+                                  maxLength: 16384
+                                  minLength: 1
+                                  type: string
+                                headers:
+                                  description: Headers defines response headers to
+                                    set on the direct response.
+                                  items:
+                                    properties:
+                                      name:
+                                        description: The name of the header to set.
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: |-
+                                          `value` is the CEL expression to apply to generate the output value for
+                                          the header.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
                                 status:
                                   description: StatusCode defines the HTTP status
                                     code to return for this route.
@@ -6470,6 +6514,8 @@ spec:
                               x-kubernetes-validations:
                               - message: status is required
                                 rule: has(self.status)
+                              - message: body and bodyExpression may not both be set
+                                rule: '!(has(self.body) && has(self.bodyExpression))'
                           required:
                           - policy
                           type: object
@@ -6480,6 +6526,34 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      headers:
+                        description: Headers defines response headers to set on the
+                          direct response.
+                        items:
+                          properties:
+                            name:
+                              description: The name of the header to set.
+                              maxLength: 256
+                              minLength: 1
+                              pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                              type: string
+                            value:
+                              description: |-
+                                `value` is the CEL expression to apply to generate the output value for
+                                the header.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - value
+                          type: object
+                        maxItems: 16
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
                       status:
                         description: StatusCode defines the HTTP status code to return
                           for this route.
@@ -6489,8 +6563,10 @@ spec:
                         type: integer
                     type: object
                     x-kubernetes-validations:
+                    - message: body and bodyExpression may not both be set
+                      rule: '!(has(self.body) && has(self.bodyExpression))'
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.body),has(self.status)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.body),has(self.bodyExpression),has(self.headers),has(self.status)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'status: Required value'
                       rule: 'has(self.conditional) ? true : has(self.status)'

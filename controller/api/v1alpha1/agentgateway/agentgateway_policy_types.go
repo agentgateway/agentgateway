@@ -778,6 +778,8 @@ type Traffic struct {
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.body) && has(self.bodyExpression))",message="body and bodyExpression may not both be set"
 type DirectResponse struct {
 	// StatusCode defines the HTTP status code to return for this route.
 	//
@@ -793,6 +795,22 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
+
+	// BodyExpression is a CEL expression that produces the HTTP response body.
+	// Strings and bytes are written directly; other values are serialized as JSON.
+	// If this field is omitted, no expression body is included in the response.
+	//
+	// +optional
+	BodyExpression *shared.CELExpression `json:"bodyExpression,omitempty"`
+
+	// Headers defines response headers to set on the direct response.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Headers []DirectResponseHeader `json:"headers,omitempty"`
 }
 
 type DirectResponseConditional struct {
@@ -1597,6 +1615,24 @@ type Transform struct {
 // +kubebuilder:validation:XValidation:rule="!self.startsWith(':') || self in [':authority', ':method', ':path', ':scheme', ':status']",message="pseudo-headers must be one of :authority, :method, :path, :scheme, or :status"
 // +k8s:deepcopy-gen=false
 type HeaderName string
+
+// An HTTP header name. Unlike HeaderName, this does not allow pseudo-headers.
+//
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=256
+// +kubebuilder:validation:Pattern=`^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$`
+// +k8s:deepcopy-gen=false
+type HTTPHeaderName string
+
+type DirectResponseHeader struct {
+	// The name of the header to set.
+	// +required
+	Name HTTPHeaderName `json:"name"`
+	// `value` is the CEL expression to apply to generate the output value for
+	// the header.
+	// +required
+	Value shared.CELExpression `json:"value"`
+}
 
 type HeaderTransformation struct {
 	// The name of the header to add.

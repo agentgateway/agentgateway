@@ -569,20 +569,40 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 	if directResponse.StatusCode == nil {
 		return nil, fmt.Errorf("failed to build directResponse: status is required")
 	}
+	var errs []error
+	if directResponse.Body != nil && directResponse.BodyExpression != nil {
+		errs = append(errs, fmt.Errorf("directResponse body and bodyExpression may not both be set"))
+	}
+	dr := &api.DirectResponse{
+		Status: uint32(*directResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
 	tp := &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_DirectResponse{
-			DirectResponse: &api.DirectResponse{
-				Status: uint32(*directResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
-			},
+			DirectResponse: dr,
 		},
 	}
 
 	// Add body if specified
 	if directResponse.Body != nil {
-		tp.GetDirectResponse().Body = []byte(*directResponse.Body)
+		dr.Body = []byte(*directResponse.Body)
+	}
+	if directResponse.BodyExpression != nil {
+		if !isCEL(*directResponse.BodyExpression) {
+			errs = append(errs, fmt.Errorf("directResponse bodyExpression is not a valid CEL expression: %s", *directResponse.BodyExpression))
+		}
+		dr.BodyExpression = string(*directResponse.BodyExpression)
+	}
+	for _, header := range directResponse.Headers {
+		if !isCEL(header.Value) {
+			errs = append(errs, fmt.Errorf("directResponse header %q is not a valid CEL expression: %s", header.Name, header.Value))
+		}
+		dr.Headers = append(dr.Headers, &api.ExpressionHeader{
+			Name:       string(header.Name),
+			Expression: string(header.Value),
+		})
 	}
 
-	return &api.Policy_Traffic{Traffic: tp}, nil
+	return &api.Policy_Traffic{Traffic: tp}, errors.Join(errs...)
 }
 
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {

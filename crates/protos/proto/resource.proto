@@ -445,6 +445,13 @@ message CORS {
 message DirectResponse {
   uint32 status = 1;
   bytes body = 2;
+  string body_expression = 3;
+  repeated ExpressionHeader headers = 4;
+}
+
+message ExpressionHeader {
+  string name = 1;
+  string expression = 2;
 }
 
 message HeaderModifier {

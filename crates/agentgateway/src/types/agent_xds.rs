@@ -1997,6 +1997,27 @@ fn traffic_policy_from_proto(
 		Some(tps::Kind::DirectResponse(dr)) => {
 			TrafficPolicy::DirectResponse(RequestPolicy::single(http::filters::DirectResponse {
 				body: bytes::Bytes::copy_from_slice(&dr.body),
+				body_expression: (!dr.body_expression.is_empty()).then(|| {
+					Arc::new(permissive_cel_expression(
+						diagnostics,
+						"direct response body",
+						dr.body_expression.clone(),
+					))
+				}),
+				headers: dr
+					.headers
+					.iter()
+					.map(|h| {
+						Ok((
+							HeaderName::try_from(h.name.as_str())?,
+							Arc::new(permissive_cel_expression(
+								diagnostics,
+								format!("direct response header {}", h.name),
+								h.expression.clone(),
+							)),
+						))
+					})
+					.collect::<Result<_, ProtoError>>()?,
 				status: StatusCode::from_u16(dr.status as u16)?,
 			}))
 		},

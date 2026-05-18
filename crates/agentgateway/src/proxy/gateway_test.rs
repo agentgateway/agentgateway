@@ -1342,6 +1342,54 @@ async fn direct_response() {
 }
 
 #[tokio::test]
+async fn direct_response_expression() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"directResponse": {
+					"bodyExpression": "'hello ' + request.path",
+					"headers": {
+						"x-direct": "'direct-' + request.headers['x-test']",
+					},
+					"status": 422,
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/p",
+		&[("x-test", "value")],
+	)
+	.await;
+	assert_eq!(res.status(), 422);
+	assert_eq!(res.hdr("x-direct"), "direct-value");
+	assert_eq!(read_body!(res).as_bytes(), b"hello /p");
+}
+
+#[tokio::test]
+async fn direct_response_expression_can_read_request_body() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route(json!({
+			"policies": {
+				"directResponse": {
+					"bodyExpression": "request.body",
+					"status": 200,
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request_body(io.clone(), Method::POST, "http://lo/p", b"echo me").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(read_body!(res).as_bytes(), b"echo me");
+}
+
+#[tokio::test]
 async fn conditional_direct_response() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind

@@ -1704,6 +1704,22 @@
         "body": {
           "$ref": "#/$defs/Bytes"
         },
+        "bodyExpression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "status": {
           "type": "integer",
           "format": "uint16",
@@ -1712,7 +1728,6 @@
         }
       },
       "required": [
-        "body",
         "status"
       ]
     },
@@ -1737,6 +1752,22 @@
         "body": {
           "$ref": "#/$defs/Bytes"
         },
+        "bodyExpression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "status": {
           "type": "integer",
           "format": "uint16",
@@ -1746,7 +1777,6 @@
       },
       "additionalProperties": false,
       "required": [
-        "body",
         "status"
       ]
     },
