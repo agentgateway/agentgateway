@@ -10,6 +10,12 @@ use crate::llm::types::{bedrock, messages, responses};
 #[path = "bedrock_tests.rs"]
 mod tests;
 
+fn error_message(bytes: &[u8]) -> String {
+	serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
+		.map(|res| res.message)
+		.unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
+}
+
 pub mod from_embeddings {
 	use crate::json;
 	use crate::llm::bedrock::Provider;
@@ -149,13 +155,12 @@ pub mod from_embeddings {
 
 	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
 		// Bedrock usually returns the same error format for all models
-		let res = serde_json::from_slice::<types::bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
 			error: crate::llm::types::completions::typed::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
+				message,
 				param: None,
 				code: None,
 				event_id: None,
@@ -630,13 +635,12 @@ pub mod from_completions {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = completions::ChatCompletionErrorResponse {
 			event_id: None,
 			error: completions::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
+				message,
 				param: None,
 				code: None,
 				event_id: None,
@@ -1324,13 +1328,12 @@ pub mod from_messages {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = types::messages::typed::MessagesErrorResponse {
 			r#type: "".to_owned(),
 			error: types::messages::typed::MessagesError {
 				r#type: "invalid_request_error".to_string(),
-				message: res.message,
+				message,
 			},
 		};
 		Ok(Bytes::from(
@@ -2145,13 +2148,12 @@ pub mod from_responses {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
 			error: crate::llm::types::completions::typed::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
+				message,
 				param: None,
 				code: None,
 				event_id: None,

@@ -1854,6 +1854,7 @@ async fn make_backend_call(
 				None,
 			)
 		};
+	apply_auto_hostname(&mut req, &backend_call.target)?;
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(
 		backend_call.backend_policies.backend_auth.as_ref(),
@@ -1906,6 +1907,9 @@ async fn make_backend_call(
 		),
 	});
 	let mut resp = resp?;
+	if let Some(log) = log.as_ref() {
+		dtrace::snapshot!(Response, "raw response", log, &resp);
+	}
 	a2a::apply_to_response(
 		backend_call.backend_policies.a2a.as_ref(),
 		a2a_type,
@@ -2237,9 +2241,56 @@ mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
 
-	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
+	use super::{
+		apply_auto_hostname, hop_by_hop_headers, resolved_workload_target_hostname,
+		select_service_target_port,
+	};
 	use crate::http;
+	use crate::http::filters::AutoHostname;
+	use crate::types::agent::Target;
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+
+	#[test]
+	fn apply_auto_hostname_rewrites_authority_when_enabled() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example.com/")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AutoHostname {
+			explicit: false,
+			target: None,
+		});
+
+		apply_auto_hostname(
+			&mut req,
+			&Target::Hostname("backend.example.com".into(), 80),
+		)
+		.expect("auto hostname rewrite should succeed");
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("backend.example.com")
+		);
+	}
+
+	#[test]
+	fn apply_auto_hostname_preserves_authority_when_disabled() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example.com/")
+			.body(http::Body::empty())
+			.unwrap();
+
+		apply_auto_hostname(
+			&mut req,
+			&Target::Hostname("backend.example.com".into(), 80),
+		)
+		.expect("disabled auto hostname rewrite should succeed");
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("original.example.com")
+		);
+	}
 
 	#[test]
 	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
@@ -2544,6 +2595,27 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	}
 	debug!("request after normalization: {req:?}");
 	Ok(())
+}
+
+fn apply_auto_hostname(req: &mut Request, target: &Target) -> Result<(), ProxyError> {
+	let Some(auto) = req.extensions().get::<filters::AutoHostname>() else {
+		return Ok(());
+	};
+	let ext_host = auto.target.as_ref().cloned();
+	let backend_host = if let Target::Hostname(h, _) = target {
+		Some(h)
+	} else {
+		None
+	};
+	let Some(host) = ext_host.as_ref().or(backend_host) else {
+		return Ok(());
+	};
+
+	http::modify_req_uri(req, |uri| {
+		uri.authority = Some(Authority::from_str(host)?);
+		Ok(())
+	})
+	.map_err(ProxyError::Processing)
 }
 
 pub struct BackendCall {

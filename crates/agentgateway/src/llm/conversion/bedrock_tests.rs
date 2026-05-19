@@ -1352,6 +1352,24 @@ fn test_embeddings_error_translation() {
 	assert_eq!(error_resp["error"]["message"], "Model not found");
 }
 
+#[test]
+fn test_completions_error_translation_wraps_non_json_body() {
+	let error_body = Bytes::from_static(
+		b"<html><body><center>The plain HTTP request was sent to HTTPS port</center></body></html>",
+	);
+
+	let translated = from_completions::translate_error(&error_body).unwrap();
+	let error_resp: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(error_resp["error"]["type"], "invalid_request_error");
+	assert!(
+		error_resp["error"]["message"]
+			.as_str()
+			.unwrap()
+			.contains("plain HTTP request")
+	);
+}
+
 fn make_message(role: types::bedrock::Role, text: &str) -> types::bedrock::Message {
 	types::bedrock::Message {
 		role,
