@@ -1149,6 +1149,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
 							)));
 						},
+						Some(provider::Provider::Custom(_)) => {
+							// TODO: replace this guard when custom provider runtime conversion is wired up.
+							return Err(ProtoError::Generic(format!(
+								"AI backend provider at index {provider_idx} uses custom provider; custom providers are not supported by the dataplane yet"
+							)));
+						},
 						None => {
 							return Err(ProtoError::Generic(format!(
 								"AI backend provider at index {provider_idx} is required"

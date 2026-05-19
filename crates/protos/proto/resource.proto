@@ -1411,12 +1411,24 @@ message AIBackend {
     OPEN_AI = 0;
     FOUNDRY = 1;
   }
+  enum ProviderFormat {
+    COMPLETIONS = 0;
+    MESSAGES = 1;
+    RESPONSES = 2;
+    EMBEDDINGS = 3;
+    ANTHROPIC_TOKEN_COUNT = 4;
+    REALTIME = 5;
+  }
+  message Custom {
+    repeated ProviderFormat supported_formats = 1;
+  }
 
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
     optional string path_prefix = 12;
+    BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;
@@ -1425,6 +1437,7 @@ message AIBackend {
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
+      Custom custom = 15;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }
