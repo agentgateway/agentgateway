@@ -16829,6 +16829,7 @@
 |`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`.|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
+|`llm.models[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -16845,16 +16846,68 @@
 |`llm.models[].responseHeaders.add`|object||
 |`llm.models[].responseHeaders.set`|object||
 |`llm.models[].responseHeaders.remove`|[]string||
-|`llm.models[].backendTLS`|object|backendTLS configures TLS when connecting to the LLM provider.|
-|`llm.models[].backendTLS.cert`|string||
-|`llm.models[].backendTLS.key`|string||
-|`llm.models[].backendTLS.root`|string||
-|`llm.models[].backendTLS.hostname`|string||
-|`llm.models[].backendTLS.insecure`|boolean||
-|`llm.models[].backendTLS.insecureHost`|boolean||
-|`llm.models[].backendTLS.alpn`|[]string||
-|`llm.models[].backendTLS.subjectAltNames`|[]string||
-|`llm.models[].backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.models[].tls`|object|tls configures TLS when connecting to the LLM provider.|
+|`llm.models[].tls.cert`|string||
+|`llm.models[].tls.key`|string||
+|`llm.models[].tls.root`|string||
+|`llm.models[].tls.hostname`|string||
+|`llm.models[].tls.insecure`|boolean||
+|`llm.models[].tls.insecureHost`|boolean||
+|`llm.models[].tls.alpn`|[]string||
+|`llm.models[].tls.subjectAltNames`|[]string||
+|`llm.models[].tls.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.models[].auth`|object|auth configures authentication when connecting to the LLM provider.|
+|`llm.models[].auth.passthrough`|object||
+|`llm.models[].auth.passthrough.location`|object||
+|`llm.models[].auth.passthrough.location.header`|object||
+|`llm.models[].auth.passthrough.location.header.name`|string||
+|`llm.models[].auth.passthrough.location.header.prefix`|string||
+|`llm.models[].auth.passthrough.location.queryParameter`|object||
+|`llm.models[].auth.passthrough.location.queryParameter.name`|string||
+|`llm.models[].auth.passthrough.location.cookie`|object||
+|`llm.models[].auth.passthrough.location.cookie.name`|string||
+|`llm.models[].auth.passthrough.location.expression`|object||
+|`llm.models[].auth.passthrough.location.expression.expression`|string||
+|`llm.models[].auth.key`|object||
+|`llm.models[].auth.key.value`|object||
+|`llm.models[].auth.key.value.file`|string||
+|`llm.models[].auth.key.location`|object||
+|`llm.models[].auth.key.location.header`|object||
+|`llm.models[].auth.key.location.header.name`|string||
+|`llm.models[].auth.key.location.header.prefix`|string||
+|`llm.models[].auth.key.location.queryParameter`|object||
+|`llm.models[].auth.key.location.queryParameter.name`|string||
+|`llm.models[].auth.key.location.cookie`|object||
+|`llm.models[].auth.key.location.cookie.name`|string||
+|`llm.models[].auth.key.location.expression`|object||
+|`llm.models[].auth.key.location.expression.expression`|string||
+|`llm.models[].auth.gcp`|object||
+|`llm.models[].auth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.models[].auth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].auth.gcp.credential.file`|string||
+|`llm.models[].auth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].auth.gcp.credential.file`|string||
+|`llm.models[].auth.aws`|object||
+|`llm.models[].auth.aws.accessKeyId`|string||
+|`llm.models[].auth.aws.secretAccessKey`|string||
+|`llm.models[].auth.aws.region`|string||
+|`llm.models[].auth.aws.sessionToken`|string||
+|`llm.models[].auth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.models[].auth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.models[].auth.azure.explicitConfig.clientSecret`|object||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity`|object||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.models[].auth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.models[].auth.azure.developerImplicit`|object||
+|`llm.models[].auth.azure.implicit`|object||
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
 |`llm.models[].health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
