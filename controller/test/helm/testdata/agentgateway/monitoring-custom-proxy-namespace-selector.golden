@@ -354,7 +354,9 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
           resources:
-            {}
+            requests:
+              cpu: 100m
+              memory: 128Mi
 ---
 # Source: agentgateway/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1

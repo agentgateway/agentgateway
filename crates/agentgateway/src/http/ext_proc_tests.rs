@@ -647,7 +647,7 @@ impl Handler for BBRExtProc {
 					body_mutation: Some(BodyMutation {
 						mutation: Some(body_mutation::Mutation::StreamedResponse(
 							proto::StreamedBodyResponse {
-								body: self.req_body.clone(),
+								body: self.req_body.clone().into(),
 								end_of_stream: true,
 							},
 						)),
@@ -672,7 +672,7 @@ impl Handler for BBRExtProc {
 						body_mutation: Some(BodyMutation {
 							mutation: Some(body_mutation::Mutation::StreamedResponse(
 								proto::StreamedBodyResponse {
-									body: self.res_body.clone(),
+									body: self.res_body.clone().into(),
 									end_of_stream: true,
 								},
 							)),

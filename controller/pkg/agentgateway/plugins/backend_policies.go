@@ -73,6 +73,30 @@ func translateAuthorizationLocation(loc *agentgateway.AuthorizationLocation) *ap
 	return nil
 }
 
+func translateAuthorizationExtractionLocation(loc *agentgateway.AuthorizationExtractionLocation) *api.AuthorizationLocation {
+	if loc == nil {
+		return nil
+	}
+	if translated := translateAuthorizationLocation(&loc.AuthorizationLocation); translated != nil {
+		return translated
+	}
+	if loc.Expression != nil {
+		return &api.AuthorizationLocation{
+			Kind: &api.AuthorizationLocation_Expression{
+				Expression: string(*loc.Expression),
+			},
+		}
+	}
+	return nil
+}
+
+func validateExtractionAuthorizationLocation(loc *agentgateway.AuthorizationExtractionLocation, context string) error {
+	if loc == nil || loc.Expression == nil || isCEL(*loc.Expression) {
+		return nil
+	}
+	return fmt.Errorf("%s expression is not a valid CEL expression: %s", context, *loc.Expression)
+}
+
 func TranslateInlineBackendPolicy(
 	ctx PolicyCtx,
 	namespace string,
@@ -711,7 +735,6 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 
 	var translatedAuth *api.BackendAuthPolicy
 	var kindErrs []error
-
 	if auth.InlineKey != nil && *auth.InlineKey != "" {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Key{

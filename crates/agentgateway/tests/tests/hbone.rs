@@ -474,11 +474,9 @@ binds:
 	Ok(())
 }
 
-/// Verifies that outbound double-HBONE CONNECTs carry `x-forwarded-network`
-/// and `baggage` (inner only). The bind uses the default `Direct` tunnel
-/// protocol, so `x-istio-source` is absent; the waypoint role mapping
-/// (`HboneWaypoint → "waypoint"`) is covered by the unit tests in
-/// `client::tests`.
+/// Verifies that outbound double-HBONE CONNECTs carry `x-istio-source: gateway`,
+/// `x-forwarded-network`, and `baggage` (inner only). The waypoint role mapping
+/// (`HboneWaypoint → "waypoint"`) is covered by the unit tests in `client::tests`.
 #[tokio::test]
 async fn test_hbone_carries_istio_headers() -> anyhow::Result<()> {
 	agent_core::telemetry::testing::setup_test_logging();
@@ -561,9 +559,10 @@ binds:
 		.await
 		.expect("timeout waiting for outer CONNECT headers")
 		.expect("gateway closed without forwarding headers");
-	assert!(
-		outer.get("x-istio-source").is_none(),
-		"outer: Direct bind should not set x-istio-source",
+	assert_eq!(
+		outer.get("x-istio-source").map(|v| v.to_str().unwrap()),
+		Some("gateway"),
+		"outer: expected x-istio-source: gateway",
 	);
 	assert_eq!(
 		outer
@@ -577,14 +576,15 @@ binds:
 		"outer: baggage must only appear on the inner CONNECT",
 	);
 
-	// --- inner CONNECT (to waypoint / workload): no x-istio-source, has x-forwarded-network + baggage ---
+	// --- inner CONNECT (to waypoint / workload): x-istio-source: gateway, x-forwarded-network + baggage ---
 	let inner = tokio::time::timeout(std::time::Duration::from_secs(5), waypoint_rx.recv())
 		.await
 		.expect("timeout waiting for inner CONNECT headers")
 		.expect("waypoint closed without forwarding headers");
-	assert!(
-		inner.get("x-istio-source").is_none(),
-		"inner: Direct bind should not set x-istio-source",
+	assert_eq!(
+		inner.get("x-istio-source").map(|v| v.to_str().unwrap()),
+		Some("gateway"),
+		"inner: expected x-istio-source: gateway",
 	);
 	assert_eq!(
 		inner

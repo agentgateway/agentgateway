@@ -30,7 +30,6 @@ spec:
           $managedChecksums
           (deepCopy ($gateway.gatewayAnnotations | default dict))
           $promAnnotations
-          (include "kgateway.gateway.gatewayNameAnnotation" . | fromYaml)
        ) | nindent 8 }}
       labels:
         {{- toYaml (merge

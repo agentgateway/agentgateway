@@ -121,19 +121,42 @@ impl LocalClient {
 		let mut watcher =
 			notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res| {
 				futures::executor::block_on(async {
-					tx.send(res).await.unwrap();
+					let _ = tx.send(res).await;
 				})
 			})
 			.map_err(|e| anyhow::anyhow!("Failed to create file watcher: {}", e))?;
 
-		// Watch the config file
 		let abspath = absolute(path)?;
 		let parent = abspath.parent().ok_or(anyhow::anyhow!(
 			"Failed to get the parent of the config file"
 		))?;
-		watcher
-			.watch(parent, RecursiveMode::NonRecursive)
-			.map_err(|e| anyhow::anyhow!("Failed to watch config file: {}", e))?;
+		// Watch both the file and its parent. A normal editor or Kubernetes-style update may replace
+		// the directory entry, which only the parent sees. A Docker single-file bind mount can behave
+		// more like an independent mount point, where the useful change event comes from the file itself.
+		let mut watched = Vec::new();
+		let mut watch_errors = Vec::new();
+		for watch_path in [abspath.as_path(), parent] {
+			if watched.iter().any(|p: &PathBuf| p == watch_path) {
+				continue;
+			}
+			match watcher.watch(watch_path, RecursiveMode::NonRecursive) {
+				Ok(()) => watched.push(watch_path.to_path_buf()),
+				Err(e) => {
+					watch_errors.push(format!("{}: {}", watch_path.display(), e));
+					warn!(
+						"Failed to watch config path {}: {}",
+						watch_path.display(),
+						e
+					);
+				},
+			}
+		}
+		if watched.is_empty() {
+			return Err(anyhow::anyhow!(
+				"Failed to watch config file: {}",
+				watch_errors.join(", ")
+			));
+		}
 
 		info!("Watching config file: {}", path.display());
 
@@ -148,11 +171,13 @@ impl LocalClient {
 				let current_config_path = lc.resolve_symlink(&abspath).await.ok();
 
 				// Only process if we have actual content changes
-				if events.iter().any(|e| {
-					matches!(
-						e.kind,
-						EventKind::Modify(_) | EventKind::Create(_) if e.paths.last().is_some_and(|p| p == &abspath)
-						|| (current_config_path.is_some() && current_config_path != real_config_path))
+				if events.iter().any(|event| {
+					should_reload_config(
+						event,
+						&abspath,
+						current_config_path.as_deref(),
+						real_config_path.as_deref(),
+					)
 				}) {
 					real_config_path = current_config_path.clone();
 					debug!("Config file changed, reloading...");
@@ -220,6 +245,25 @@ impl LocalClient {
 			discovery: next_discovery,
 		})
 	}
+}
+
+fn should_reload_config(
+	event: &notify::Event,
+	abspath: &Path,
+	current_config_path: Option<&Path>,
+	previous_config_path: Option<&Path>,
+) -> bool {
+	let target_changed = current_config_path.is_some() && current_config_path != previous_config_path;
+	if target_changed {
+		return true;
+	}
+	if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+		return false;
+	}
+	event
+		.paths
+		.iter()
+		.any(|path| path == abspath || current_config_path.is_some_and(|current| path == current))
 }
 
 #[derive(Clone, Debug, Default)]
@@ -338,6 +382,7 @@ async fn watch_self_workload(
 #[cfg(test)]
 mod tests {
 	use agent_core::readiness::Ready;
+	use notify::event::{CreateKind, ModifyKind};
 
 	use super::*;
 	use crate::store::{DiscoveryPreviousState, LocalWorkload, Stores};
@@ -420,5 +465,55 @@ mod tests {
 			.await
 			.expect("task should clear once matching workload is inserted");
 		assert!(stores.discovery.read().self_workload.get().is_some());
+	}
+
+	#[test]
+	fn config_reload_matches_any_reported_config_path() {
+		let abspath = Path::new("/config.yaml");
+		let event = notify::Event::new(EventKind::Modify(ModifyKind::Data(
+			notify::event::DataChange::Any,
+		)))
+		.add_path(PathBuf::from("/tmp"))
+		.add_path(abspath.to_path_buf());
+
+		assert!(should_reload_config(
+			&event,
+			abspath,
+			Some(abspath),
+			Some(abspath)
+		));
+	}
+
+	#[test]
+	fn config_reload_matches_resolved_symlink_target() {
+		let abspath = Path::new("/config.yaml");
+		let target = Path::new("/var/lib/config/current.yaml");
+		let event = notify::Event::new(EventKind::Modify(ModifyKind::Data(
+			notify::event::DataChange::Any,
+		)))
+		.add_path(target.to_path_buf());
+
+		assert!(should_reload_config(
+			&event,
+			abspath,
+			Some(target),
+			Some(target)
+		));
+	}
+
+	#[test]
+	fn config_reload_matches_symlink_target_change_even_without_path_match() {
+		let abspath = Path::new("/config.yaml");
+		let old_target = Path::new("/var/lib/config/old.yaml");
+		let new_target = Path::new("/var/lib/config/new.yaml");
+		let event =
+			notify::Event::new(EventKind::Create(CreateKind::Any)).add_path(PathBuf::from("/tmp"));
+
+		assert!(should_reload_config(
+			&event,
+			abspath,
+			Some(new_target),
+			Some(old_target),
+		));
 	}
 }

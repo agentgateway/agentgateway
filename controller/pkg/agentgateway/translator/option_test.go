@@ -38,7 +38,7 @@ func getConfig(t *testing.T) GatewayCollectionConfig {
 		ControllerName: "random-name",
 		Gateways:       krt.NewStaticCollection[*gwv1.Gateway](nil, nil, opts.ToOptions("Gateways")...),
 		ListenerSets:   krt.NewStaticCollection[ListenerSet](nil, nil, opts.ToOptions("ListenerSets")...),
-		GatewayClasses: krt.NewStaticCollection[GatewayClass](nil, nil, opts.ToOptions("GatewayClasses")...),
+		GatewayClasses: krt.NewStaticCollection[GatewayClass](nil, nil, opts.ToOptions("translator/GatewayClasses")...),
 		Namespaces:     krt.NewStaticCollection[*corev1.Namespace](nil, nil, opts.ToOptions("Namespaces")...),
 		Grants: ReferenceGrants{
 			collection: krt.NewStaticCollection[ReferenceGrant](nil, nil, opts.ToOptions("Grants")...),

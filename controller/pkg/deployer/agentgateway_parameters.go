@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/util/smallset"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
@@ -27,6 +28,11 @@ import (
 )
 
 const sessionKeyEnvVar = "SESSION_KEY"
+
+var defaultResourceRequests = corev1.ResourceList{
+	corev1.ResourceCPU:    resource.MustParse("100m"),
+	corev1.ResourceMemory: resource.MustParse("128Mi"),
+}
 
 // AgentgatewayParametersApplier applies AgentgatewayParameters configurations and overlays.
 type AgentgatewayParametersApplier struct {
@@ -374,6 +380,11 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 			Tls: &HelmXdsTls{
 				Enabled: func() *bool { b := g.inputs.ControlPlane.XdsTLS; return &b }(),
 				CaCert:  &g.inputs.ControlPlane.XdsTlsCaCert,
+			},
+		},
+		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+			Resources: &corev1.ResourceRequirements{
+				Requests: defaultResourceRequests.DeepCopy(),
 			},
 		},
 	}

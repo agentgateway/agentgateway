@@ -173,8 +173,8 @@ impl TCPProxy {
 
 		let hbone_source = connection
 			.ext::<WaypointService>()
-			.is_some()
-			.then_some(crate::client::HboneSourceRole::Waypoint);
+			.map(|_| crate::client::HboneSourceRole::Waypoint)
+			.or(Some(crate::client::HboneSourceRole::Gateway));
 		let backend_call = Self::build_backend_call(
 			&mut Some(log),
 			sni,

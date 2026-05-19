@@ -853,7 +853,7 @@ impl Handler {
 			.body(body.into())
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
-		ctx.apply(&mut request);
+		ctx.apply(&mut request)?;
 
 		// First header set wins including headers set by ctx.apply or the gateway
 		for (key, value) in &header_params {

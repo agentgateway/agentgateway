@@ -28,7 +28,7 @@ func NewA2APlugin(agw *AgwCollections) AgwPlugin {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					policyCol := krt.NewManyCollection(agw.Services, func(krtctx krt.HandlerContext, svc *corev1.Service) []AgwPolicy {
 						return translatePoliciesForService(krtctx, svc, kubeutils.GetClusterDomainName(), input.References)
-					})
+					}, agw.KrtOpts.ToOptions("policies/A2AService")...)
 					return nil, policyCol
 				},
 			},

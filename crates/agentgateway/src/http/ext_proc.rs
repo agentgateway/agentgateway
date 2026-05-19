@@ -556,7 +556,7 @@ impl ExtProcInstance {
 				let frame = frame.into_data().expect("already checked");
 				trace!("sending body chunk...",);
 				body_fn(HttpBody {
-					body: frame.into(),
+					body: frame,
 					end_of_stream: false,
 				})
 			} else if frame.is_trailers() {
@@ -813,8 +813,7 @@ async fn handle_response_for_request_mutation(
 		match b {
 			Mutation::StreamedResponse(bb) => {
 				let eos = bb.end_of_stream;
-				let by = bytes::Bytes::from(bb.body);
-				let _ = body_tx.send(Ok(Frame::data(by.clone()))).await;
+				let _ = body_tx.send(Ok(Frame::data(bb.body))).await;
 
 				trace!(eos, "got stream request body");
 				return (res, eos);
@@ -888,8 +887,7 @@ async fn handle_response_for_response_mutation(
 		match b {
 			Mutation::StreamedResponse(bb) => {
 				let eos = bb.end_of_stream;
-				let by = bytes::Bytes::from(bb.body);
-				let _ = body_tx.send(Ok(Frame::data(by.clone()))).await;
+				let _ = body_tx.send(Ok(Frame::data(bb.body))).await;
 				trace!(%eos, "got body chunk");
 				return (res, eos);
 			},

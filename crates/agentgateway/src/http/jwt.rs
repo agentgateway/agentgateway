@@ -446,6 +446,10 @@ impl<'de> Deserialize<'de> for Claims {
 }
 
 impl Jwt {
+	pub fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		self.location.expression().into_iter()
+	}
+
 	pub async fn apply(
 		&self,
 		log: Option<&mut RequestLog>,

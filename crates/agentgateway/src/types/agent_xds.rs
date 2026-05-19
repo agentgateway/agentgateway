@@ -1642,6 +1642,8 @@ fn traffic_policy_from_proto(
 				providers,
 				mode,
 				authorization_location(
+					diagnostics,
+					"jwtAuthentication.authorizationLocation.expression",
 					jwt.authorization_location.as_ref(),
 					http::auth::AuthorizationLocation::bearer_header(),
 				)?,
@@ -1936,6 +1938,8 @@ fn traffic_policy_from_proto(
 					ba.realm.clone(),
 					mode,
 					authorization_location(
+						diagnostics,
+						"basicAuthentication.authorizationLocation.expression",
 						ba.authorization_location.as_ref(),
 						http::auth::AuthorizationLocation::basic_header(),
 					)?,
@@ -1967,6 +1971,8 @@ fn traffic_policy_from_proto(
 					keys,
 					mode,
 					authorization_location(
+						diagnostics,
+						"apiKeyAuthentication.authorizationLocation.expression",
 						ba.authorization_location.as_ref(),
 						http::auth::AuthorizationLocation::bearer_header(),
 					)?,
@@ -2105,6 +2111,8 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 }
 
 fn authorization_location(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
 	location: Option<&proto::agent::AuthorizationLocation>,
 	default: http::auth::AuthorizationLocation,
 ) -> Result<http::auth::AuthorizationLocation, ProtoError> {
@@ -2124,6 +2132,9 @@ fn authorization_location(
 		}),
 		Some(Kind::Cookie(cookie)) => Ok(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
+		}),
+		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression {
+			expression: permissive_cel_expression_arc(diagnostics, context, expression),
 		}),
 		None => Ok(default),
 	}
@@ -2153,6 +2164,9 @@ fn optional_authorization_location(
 		Some(Kind::Cookie(cookie)) => Ok(Some(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
 		})),
+		Some(Kind::Expression(_)) => Err(ProtoError::Generic(
+			"expression auth location is only supported for credential extraction".to_string(),
+		)),
 		None => Ok(None),
 	}
 }

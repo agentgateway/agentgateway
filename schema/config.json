@@ -2021,6 +2021,28 @@
             "cookie"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "CEL expression that evaluates to the credential string.\nOnly supported for credential extraction.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          "required": [
+            "expression"
+          ],
+          "additionalProperties": false
         }
       ]
     },

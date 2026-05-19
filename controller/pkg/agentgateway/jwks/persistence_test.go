@@ -102,7 +102,7 @@ func TestPersistedEntriesLoadPrefersNewestKeysetAcrossDuplicates(t *testing.T) {
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsPreferNewestConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)
@@ -150,7 +150,7 @@ func TestLoadPersistedKeysetsPrefersCanonicalEntryWhenFetchedAtTies(t *testing.T
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsCanonicalTieConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)
@@ -196,7 +196,7 @@ func TestLoadPersistedKeysetsUsesDeterministicNameTieBreakForNonCanonicalDuplica
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{laterByName, olderByName}),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{laterByName, olderByName}, krt.WithName("jwks/PersistedKeysetsNameTieConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)

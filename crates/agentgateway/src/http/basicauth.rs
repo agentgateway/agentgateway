@@ -164,6 +164,10 @@ impl crate::store::RequestPolicyTrait for BasicAuthentication {
 		}
 		Ok(crate::http::PolicyResponse::default())
 	}
+
+	fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		self.authorization_location.expression().into_iter()
+	}
 }
 
 impl std::fmt::Debug for BasicAuthentication {

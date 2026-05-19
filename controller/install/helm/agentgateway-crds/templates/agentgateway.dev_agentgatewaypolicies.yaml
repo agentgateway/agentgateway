@@ -3850,13 +3850,14 @@ spec:
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
                             maxLength: 32
-                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
-                            - message: value must be at least 1 byte
-                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                            - message: value must fit within uint32
-                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -4991,13 +4992,13 @@ spec:
                           `http2ConnectionWindowSize` indicates the initial window size for
                           connection-level flow control for received data.
                         maxLength: 32
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
-                        - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                        - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2FrameSize:
                         anyOf:
                         - type: integer
@@ -5006,17 +5007,17 @@ spec:
                           `http2FrameSize` sets the maximum frame size to use.
                           If unset, this defaults to `16kb`.
                         maxLength: 32
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: http2FrameSize must be at least 16384 bytes
                           rule: '!quantity(string(self)).isLessThan(quantity(''16384''))'
                         - message: http2FrameSize must be at most 1677215 bytes
                           rule: '!quantity(string(self)).isGreaterThan(quantity(''1677215''))'
-                        - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                        - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2KeepaliveInterval:
                         type: string
                         x-kubernetes-validations:
@@ -5040,13 +5041,13 @@ spec:
                           request headers.
                           If unset, this defaults to `16Ki`.
                         maxLength: 32
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
-                        - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                        - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2WindowSize:
                         anyOf:
                         - type: integer
@@ -5055,13 +5056,13 @@ spec:
                           `http2WindowSize` indicates the initial window size for stream-level flow
                           control for received data.
                         maxLength: 32
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
-                        - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                        - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       maxBufferSize:
                         anyOf:
                         - type: integer
@@ -5072,13 +5073,13 @@ spec:
                           Bodies will only be buffered for policies which require buffering.
                           If unset, this defaults to `2mb`.
                         maxLength: 32
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
-                        - message: value must be at least 1 byte
-                          rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                        - message: value must fit within uint32
-                          rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       maxConnectionDuration:
                         description: |-
                           `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
@@ -5686,6 +5687,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -5724,6 +5731,10 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
                         - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
@@ -5864,6 +5875,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -5902,6 +5919,10 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
                         - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
@@ -6560,13 +6581,14 @@ spec:
                                         and sent to the authorization server. If the body size is larger than
                                         `maxSize`, then the request will be rejected with a response.
                                       maxLength: 32
-                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      minLength: 1
+                                      pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                                       x-kubernetes-int-or-string: true
                                       x-kubernetes-validations:
-                                      - message: value must be at least 1 byte
-                                        rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                                      - message: value must fit within uint32
-                                        rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                                      - message: value must be at least 1 byte and
+                                          fit within uint32
+                                        rule: (self >= 1 && self <= 4294967295) ||
+                                          self.size() > 0
                                   required:
                                   - maxSize
                                   type: object
@@ -6717,13 +6739,14 @@ spec:
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
                             maxLength: 32
-                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
-                            - message: value must be at least 1 byte
-                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                            - message: value must fit within uint32
-                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -7365,6 +7388,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -7403,6 +7432,10 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
+                        - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
                         - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()

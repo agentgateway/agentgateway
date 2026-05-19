@@ -15,7 +15,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -676,6 +675,7 @@ func TestBuildStaticIr(t *testing.T) {
 		name        string
 		backend     *agentgateway.AgentgatewayBackend
 		expectError bool
+		inputs      []any
 		validate    func(backend *api.Backend) bool
 	}{
 		{
@@ -717,11 +717,34 @@ func TestBuildStaticIr(t *testing.T) {
 					backend.GetStatic().UnixPath == "/shared/agent/agent.sock"
 			},
 		},
+		{
+			name: "Valid A2A host backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "a2a-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Host: "a2a.example.com", Port: 9090,
+					},
+				},
+			},
+			validate: func(backend *api.Backend) bool {
+				return backend != nil &&
+					backend.Key == "test-ns/a2a-backend" &&
+					backend.GetStatic().Host == "a2a.example.com" &&
+					backend.GetStatic().Port == 9090 &&
+					len(backend.InlinePolicies) == 1 &&
+					backend.InlinePolicies[0].GetA2A() != nil
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := agentgatewaybackend.BuildAgwBackend(plugins.PolicyCtx{}, tt.backend)
+			ctx := testutils.BuildMockPolicyContext(t, tt.inputs)
+			result, err := agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
 
 			if tt.expectError {
 				if err == nil {

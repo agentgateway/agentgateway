@@ -286,6 +286,7 @@ message AuthorizationLocation {
     Header header = 1;
     QueryParameter query_parameter = 2;
     Cookie cookie = 3;
+    string expression = 4; // CEL expression
   }
 }
 

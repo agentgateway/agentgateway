@@ -8,7 +8,9 @@ use std::time::{Duration, SystemTime};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
-use agent_core::telemetry::{OptionExt, OtelLogSink, ValueBag, debug, display};
+use agent_core::telemetry::{
+	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
+};
 use agent_core::{Timestamp, strng};
 use bytes::Buf;
 use crossbeam::atomic::AtomicCell;
@@ -597,6 +599,8 @@ impl RequestLog {
 			cel,
 			metrics,
 			start,
+			connection_id: current_connection_id(),
+			request_id: current_request_id(),
 			tcp_info,
 			tls_info: None,
 			tracer: None,
@@ -658,6 +662,8 @@ pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
 	pub start: Timestamp,
+	pub connection_id: Option<u64>,
+	pub request_id: Option<u64>,
 	pub tcp_info: TCPConnectionInfo,
 
 	// Set only for TLS traffic
@@ -911,7 +917,19 @@ impl Drop for DropOnLog {
 			}
 		});
 
+		let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 		let mut kv = vec![
+			(
+				"connection.id",
+				emit_ids
+					.then_some(log.connection_id)
+					.flatten()
+					.map(Into::into),
+			),
+			(
+				"request.id",
+				emit_ids.then_some(log.request_id).flatten().map(Into::into),
+			),
 			("gateway", route_identifier.gateway.as_deref().map(display)),
 			(
 				"listener",

@@ -354,7 +354,9 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
           resources:
-            {}
+            requests:
+              cpu: 100m
+              memory: 128Mi
           volumeMounts:
             - mountPath: /var/lib/agentgateway/plugins
               name: plugin-cache

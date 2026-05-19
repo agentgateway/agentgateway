@@ -2429,6 +2429,10 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 			.map_err(crate::proxy::ProxyResponse::from)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
+
+	fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		self.jwt.expressions()
+	}
 }
 
 #[derive(Debug, Clone, Serialize)]

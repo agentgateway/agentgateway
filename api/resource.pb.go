@@ -3438,6 +3438,7 @@ type AuthorizationLocation struct {
 	//	*AuthorizationLocation_Header_
 	//	*AuthorizationLocation_QueryParameter_
 	//	*AuthorizationLocation_Cookie_
+	//	*AuthorizationLocation_Expression
 	Kind          isAuthorizationLocation_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3507,6 +3508,15 @@ func (x *AuthorizationLocation) GetCookie() *AuthorizationLocation_Cookie {
 	return nil
 }
 
+func (x *AuthorizationLocation) GetExpression() string {
+	if x != nil {
+		if x, ok := x.Kind.(*AuthorizationLocation_Expression); ok {
+			return x.Expression
+		}
+	}
+	return ""
+}
+
 type isAuthorizationLocation_Kind interface {
 	isAuthorizationLocation_Kind()
 }
@@ -3523,11 +3533,17 @@ type AuthorizationLocation_Cookie_ struct {
 	Cookie *AuthorizationLocation_Cookie `protobuf:"bytes,3,opt,name=cookie,proto3,oneof"`
 }
 
+type AuthorizationLocation_Expression struct {
+	Expression string `protobuf:"bytes,4,opt,name=expression,proto3,oneof"` // CEL expression
+}
+
 func (*AuthorizationLocation_Header_) isAuthorizationLocation_Kind() {}
 
 func (*AuthorizationLocation_QueryParameter_) isAuthorizationLocation_Kind() {}
 
 func (*AuthorizationLocation_Cookie_) isAuthorizationLocation_Kind() {}
+
+func (*AuthorizationLocation_Expression) isAuthorizationLocation_Kind() {}
 
 type Passthrough struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
@@ -12811,11 +12827,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x03gcp\x18\x03 \x01(\v2\x1e.agentgateway.dev.resource.GcpH\x00R\x03gcp\x122\n" +
 	"\x03aws\x18\x04 \x01(\v2\x1e.agentgateway.dev.resource.AwsH\x00R\x03aws\x128\n" +
 	"\x05azure\x18\x05 \x01(\v2 .agentgateway.dev.resource.AzureH\x00R\x05azureB\x06\n" +
-	"\x04kind\"\xbb\x03\n" +
+	"\x04kind\"\xdd\x03\n" +
 	"\x15AuthorizationLocation\x12Q\n" +
 	"\x06header\x18\x01 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.HeaderH\x00R\x06header\x12j\n" +
 	"\x0fquery_parameter\x18\x02 \x01(\v2?.agentgateway.dev.resource.AuthorizationLocation.QueryParameterH\x00R\x0equeryParameter\x12Q\n" +
-	"\x06cookie\x18\x03 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.CookieH\x00R\x06cookie\x1aD\n" +
+	"\x06cookie\x18\x03 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.CookieH\x00R\x06cookie\x12 \n" +
+	"\n" +
+	"expression\x18\x04 \x01(\tH\x00R\n" +
+	"expression\x1aD\n" +
 	"\x06Header\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\x06prefix\x18\x02 \x01(\tH\x00R\x06prefix\x88\x01\x01B\t\n" +
@@ -14217,6 +14236,7 @@ func file_resource_proto_init() {
 		(*AuthorizationLocation_Header_)(nil),
 		(*AuthorizationLocation_QueryParameter_)(nil),
 		(*AuthorizationLocation_Cookie_)(nil),
+		(*AuthorizationLocation_Expression)(nil),
 	}
 	file_resource_proto_msgTypes[21].OneofWrappers = []any{
 		(*Gcp_AccessToken_)(nil),

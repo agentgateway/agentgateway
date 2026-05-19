@@ -74,7 +74,7 @@ impl AIBackend {
 		let best = [a, b]
 			.into_iter()
 			.map(|idx| {
-				let (_, EndpointWithInfo { endpoint, info }) =
+				let (_, EndpointWithInfo { endpoint, info, .. }) =
 					index.get_index(idx).expect("index already checked");
 				(endpoint.clone(), info)
 			})

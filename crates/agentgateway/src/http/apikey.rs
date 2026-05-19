@@ -168,6 +168,10 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 		}
 		Ok(crate::http::PolicyResponse::default())
 	}
+
+	fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		self.location.expression().into_iter()
+	}
 }
 
 #[apply(schema_de!)]

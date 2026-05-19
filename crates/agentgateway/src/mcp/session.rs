@@ -490,13 +490,57 @@ impl Session {
 							))
 						}
 					},
+					ClientRequest::SubscribeRequest(sr) => {
+						if let Some(service_name) = self.relay.default_target_name() {
+							let uri = sr.params.uri.clone();
+							self.authorize_resource_request(
+								&service_name,
+								&uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							self
+								.relay
+								.send_single_without_multiplexing(r, ctx, None)
+								.await
+						} else {
+							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+							// Find a mapping of URL
+							Err(UpstreamError::InvalidMethodWithMultiplexing(
+								r.request.method().to_string(),
+							))
+						}
+					},
+					ClientRequest::UnsubscribeRequest(ur) => {
+						if let Some(service_name) = self.relay.default_target_name() {
+							let uri = ur.params.uri.clone();
+							self.authorize_resource_request(
+								&service_name,
+								&uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							self
+								.relay
+								.send_single_without_multiplexing(r, ctx, None)
+								.await
+						} else {
+							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
+							// Find a mapping of URL
+							Err(UpstreamError::InvalidMethodWithMultiplexing(
+								r.request.method().to_string(),
+							))
+						}
+					},
 
 					ClientRequest::ListTasksRequest(_)
 					| ClientRequest::GetTaskInfoRequest(_)
 					| ClientRequest::GetTaskResultRequest(_)
 					| ClientRequest::CancelTaskRequest(_)
-					| ClientRequest::SubscribeRequest(_)
-					| ClientRequest::UnsubscribeRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))

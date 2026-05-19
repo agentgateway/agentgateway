@@ -720,6 +720,24 @@ pub fn classify_content_type(h: &HeaderMap) -> WellKnownContentTypes {
 	WellKnownContentTypes::Unknown
 }
 
+pub fn is_grpc_request<B>(req: &::http::Request<B>) -> bool {
+	!req.uri().path().is_empty() && is_grpc_content_type(req.headers())
+}
+
+pub fn is_grpc_content_type(headers: &HeaderMap) -> bool {
+	let Some(content_type) = headers.get(header::CONTENT_TYPE) else {
+		return false;
+	};
+	let Ok(content_type) = content_type.to_str() else {
+		return false;
+	};
+	let content_type = content_type.split(';').next().unwrap_or_default().trim();
+	content_type.eq_ignore_ascii_case("application/grpc")
+		|| content_type
+			.get(..17)
+			.is_some_and(|prefix| prefix.eq_ignore_ascii_case("application/grpc+"))
+}
+
 pub fn get_path_and_query(req: &Uri) -> &str {
 	req
 		.path_and_query()
@@ -1004,5 +1022,35 @@ mod tests {
 		modify_query_parameters(&mut uri, std::iter::empty::<(&str, &str)>(), ["remove"]).unwrap();
 
 		assert_eq!(uri.to_string(), "https://example.com/resource");
+	}
+
+	#[test]
+	fn detects_grpc_request_content_types() {
+		for content_type in [
+			"application/grpc",
+			"application/grpc+proto",
+			"application/grpc; charset=utf-8",
+		] {
+			let req = ::http::Request::builder()
+				.uri("/svc.Method/Call")
+				.header(header::CONTENT_TYPE, content_type)
+				.body(Body::empty())
+				.unwrap();
+
+			assert!(is_grpc_request(&req), "{content_type}");
+		}
+	}
+
+	#[test]
+	fn rejects_non_grpc_request_content_types() {
+		for content_type in ["application/json", "application/grpc-web"] {
+			let req = ::http::Request::builder()
+				.uri("/svc.Method/Call")
+				.header(header::CONTENT_TYPE, content_type)
+				.body(Body::empty())
+				.unwrap();
+
+			assert!(!is_grpc_request(&req), "{content_type}");
+		}
 	}
 }

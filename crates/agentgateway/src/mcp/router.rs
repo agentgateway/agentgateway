@@ -126,6 +126,10 @@ impl App {
 		// MCP context is added later. The context is inserted after
 		// authentication so it can include verified claims
 
+		// Take a request snapshot before authentication can mutate or partially consume the
+		// request. If authentication lets the request continue, the normal snapshot below
+		// replaces this with the post-authentication request state.
+		Self::snapshot_request_without_clearing_extensions(&mut req, log);
 		if let Some(auth) = authn.as_ref()
 			&& let Some(resp) = auth::enforce_authentication(&mut req, auth, &client).await?
 		{
@@ -164,6 +168,17 @@ impl App {
 			))
 			.await
 		}
+	}
+
+	fn snapshot_request_without_clearing_extensions(
+		req: &mut MustSnapshot<'_>,
+		log: &mut RequestLog,
+	) {
+		log.request_snapshot = log
+			.cel
+			.cel_context
+			.maybe_snapshot_request(req, false)
+			.map(Arc::new);
 	}
 }
 

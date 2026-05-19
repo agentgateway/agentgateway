@@ -55,6 +55,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
             - active:
                 openai:
@@ -74,6 +75,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
                 overrides:
                   endpoint:
                     name: overrides
@@ -97,6 +99,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
 route_groups: []
 workloads: []

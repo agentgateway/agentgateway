@@ -38,7 +38,7 @@ impl HTTP {
 				let tls = req.extensions().get::<TLSConnectionInfo>();
 				if tls.is_some() {
 					// Do not trust the downstream, use HTTP/1.1
-					if is_grpc(req) {
+					if http::is_grpc_content_type(req.headers()) {
 						Some(::http::Version::HTTP_2)
 					} else {
 						Some(::http::Version::HTTP_11)
@@ -59,13 +59,6 @@ impl HTTP {
 			_ => {},
 		};
 	}
-}
-
-fn is_grpc(req: &http::Request) -> bool {
-	req
-		.headers()
-		.get(http::header::CONTENT_TYPE)
-		.is_some_and(|value| value.as_bytes().starts_with("application/grpc".as_bytes()))
 }
 
 #[apply(schema!)]

@@ -238,7 +238,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mut session = session_manager.create_stateless_session(relay);
 	let parts = ::http::Request::<()>::builder()
 		.method(http::Method::POST)
-		.uri("http://example.test/mcp")
+		.uri("http://localhost/mcp")
 		.body(())
 		.unwrap()
 		.into_parts()
@@ -506,6 +506,24 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	}
 }
 
+#[tokio::test]
+async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = mcp_streamable_client(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new("memo://insights"))
+		.await
+		.unwrap();
+	client
+		.unsubscribe(rmcp::model::UnsubscribeRequestParams::new(
+			"memo://insights",
+		))
+		.await
+		.unwrap();
+}
+
 /// Test that a deny policy targeting a specific tool filters only that tool from list_tools,
 /// while leaving all other tools accessible.
 #[tokio::test]
@@ -664,6 +682,74 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		tools2.contains(&"increment".to_string()),
 		"agent-two should still see 'increment' but tools were: {:?}",
 		tools2
+	);
+}
+
+#[tokio::test]
+async fn mcp_authentication_early_response_transformation_has_request_context() {
+	let mock = mock_streamable_http_server(true).await;
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: "https://issuer.example.com".to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![],
+			crate::http::jwt::Mode::Strict,
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+		)),
+		mode: crate::types::agent::McpAuthenticationMode::Strict,
+	};
+
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+
+	t.attach_route_policy(serde_json::json!({
+		"transformations": {
+			"response": {
+				"set": {
+					"x-request-id-from-cel": "request.headers[\"x-regression-id\"]",
+					"x-request-path-from-cel": "request.path"
+				}
+			}
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let resp = reqwest::Client::new()
+		.get(format!(
+			"http://{io}/.well-known/oauth-protected-resource/mcp"
+		))
+		.header("x-regression-id", "mcp-authn-snapshot")
+		.send()
+		.await
+		.expect("metadata request should complete");
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp
+			.headers()
+			.get("x-request-id-from-cel")
+			.and_then(|v| v.to_str().ok()),
+		Some("mcp-authn-snapshot")
+	);
+	assert_eq!(
+		resp
+			.headers()
+			.get("x-request-path-from-cel")
+			.and_then(|v| v.to_str().ok()),
+		Some("/.well-known/oauth-protected-resource/mcp")
 	);
 }
 
@@ -1325,6 +1411,7 @@ mod mockserver {
 				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
+					.enable_resources_subscribe()
 					.enable_tools()
 					.build(),
 			)
@@ -1365,6 +1452,38 @@ mod mockserver {
 						memo, uri,
 					)]))
 				},
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({
+							"uri": uri
+					})),
+				)),
+			}
+		}
+
+		async fn subscribe(
+			&self,
+			SubscribeRequestParams { uri, .. }: SubscribeRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<(), McpError> {
+			match uri.as_str() {
+				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({
+							"uri": uri
+					})),
+				)),
+			}
+		}
+
+		async fn unsubscribe(
+			&self,
+			UnsubscribeRequestParams { uri, .. }: UnsubscribeRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<(), McpError> {
+			match uri.as_str() {
+				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
 					Some(json!({

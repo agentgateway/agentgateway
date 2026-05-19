@@ -6,6 +6,37 @@ use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
+#[test]
+fn test_authorization_location_expression_extracts_from_cel() {
+	let req = ::http::Request::builder()
+		.uri("http://example.com/")
+		.header("x-token", "from-cel")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(
+			crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+		),
+	};
+
+	assert_eq!(location.extract(&req).as_deref(), Some("from-cel"));
+}
+
+#[test]
+fn test_authorization_location_expression_cannot_insert() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(crate::cel::Expression::new_strict(r#""token""#).unwrap()),
+	};
+
+	let err = location.insert(&mut req, "token").unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("only supported for credential extraction")
+	);
+}
+
 #[tokio::test]
 async fn test_backend_auth_passthrough_happy_path() {
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");

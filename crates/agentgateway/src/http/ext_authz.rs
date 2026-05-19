@@ -299,11 +299,11 @@ impl ExtAuthz {
 				Ok(buffered) => {
 					let bytes = buffered.body;
 					if body_opts.pack_as_bytes {
-						(String::new(), bytes.to_vec(), buffered.original_size)
+						(String::new(), bytes, buffered.original_size)
 					} else {
 						(
 							String::from_utf8_lossy(bytes.as_ref()).into_owned(),
-							Vec::new(),
+							bytes::Bytes::new(),
 							buffered.original_size,
 						)
 					}
@@ -316,7 +316,7 @@ impl ExtAuthz {
 				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
-			(String::new(), Vec::new(), 0)
+			(String::new(), bytes::Bytes::new(), 0)
 		};
 
 		let request_time = SystemTime::now() - connection_start_time.elapsed();

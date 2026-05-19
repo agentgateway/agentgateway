@@ -27,7 +27,7 @@ func CollectPolicyReferences(agwPlugins plugins.AgwPlugin, references plugins.Re
 			}
 		}
 	}
-	return krt.JoinCollection(allReferences, krtopts.ToOptions("PolicyReferences")...)
+	return krt.JoinCollection(allReferences, krtopts.ToOptions("references/PolicyReferences")...)
 }
 
 // BuildPolicies builds all policies using the provided (fully-populated) reference index.
@@ -41,11 +41,11 @@ func BuildPolicies(agwPlugins plugins.AgwPlugin, references plugins.ReferenceInd
 			policyStatusMap[gvk] = status
 		}
 	}
-	joinPolicies := krt.JoinCollection(allPolicies, krtopts.ToOptions("JoinPolicies")...)
+	joinPolicies := krt.JoinCollection(allPolicies, krtopts.ToOptions("policies/All")...)
 
 	allPoliciesCol := krt.NewCollection(joinPolicies, func(ctx krt.HandlerContext, i plugins.AgwPolicy) *ir.AgwResource {
 		return new(translator.ToResourceForGateway(*i.Gateway, i))
-	}, krtopts.ToOptions("AllPolicies")...)
+	}, krtopts.ToOptions("resources/Policies")...)
 
 	return allPoliciesCol, policyStatusMap
 }

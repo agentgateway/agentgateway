@@ -371,11 +371,7 @@ func castUint32[T ~int32](ka *T) *uint32 {
 }
 
 func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
-	return new(requiredQuantityUint32(*ka))
-}
-
-func requiredQuantityUint32(ka agentgateway.ByteSize) uint32 {
-	return uint32(ka.Value()) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	return ka.ClampedValue()
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

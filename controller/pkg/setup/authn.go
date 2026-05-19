@@ -20,7 +20,7 @@ const (
 	bearerTokenPrefix = "Bearer "
 )
 
-var xdsTokenAudiences = []string{"agentgateway", "kgateway"}
+var xdsTokenAudiences = []string{"agentgateway"}
 
 // KubeJWTAuthenticator authenticates K8s JWTs.
 type KubeJWTAuthenticator struct {
