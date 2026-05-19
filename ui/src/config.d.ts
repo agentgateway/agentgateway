@@ -173,6 +173,11 @@ export type AuthorizationLocation =
       cookie: {
         name: string;
       };
+    }
+  | {
+      expression: {
+        expression: Expression;
+      };
     };
 export type FileOrInline =
   | {
@@ -382,6 +387,11 @@ export type LocalJwtConfig =
             cookie: {
               name: string;
             };
+          }
+        | {
+            expression: {
+              expression: Expression;
+            };
           };
       providers: ProviderConfig[];
     }
@@ -402,6 +412,11 @@ export type LocalJwtConfig =
         | {
             cookie: {
               name: string;
+            };
+          }
+        | {
+            expression: {
+              expression: Expression;
             };
           };
       issuer: string;
@@ -1462,6 +1477,11 @@ export interface LocalMcpAuthentication {
         cookie: {
           name: string;
         };
+      }
+    | {
+        expression: {
+          expression: Expression;
+        };
       };
   jwtValidationOptions?: JWTValidationOptions;
 }
@@ -1921,6 +1941,11 @@ export interface LocalBasicAuth {
         cookie: {
           name: string;
         };
+      }
+    | {
+        expression: {
+          expression: Expression;
+        };
       };
 }
 export interface LocalAPIKeys {
@@ -1947,6 +1972,11 @@ export interface LocalAPIKeys {
     | {
         cookie: {
           name: string;
+        };
+      }
+    | {
+        expression: {
+          expression: Expression;
         };
       };
 }

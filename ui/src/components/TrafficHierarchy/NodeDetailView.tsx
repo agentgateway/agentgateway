@@ -3,7 +3,7 @@ import styled from "@emotion/styled";
 import Form from "@rjsf/antd";
 import { Breadcrumb, Button, Popconfirm, Space, Spin } from "antd";
 import { Edit2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConfig, type LocalRouteBackend } from "../../api";
@@ -35,20 +35,8 @@ import type {
   RouteNode,
   useTrafficHierarchy,
 } from "./hooks/useTrafficHierarchy";
-import { getDefaultPolicyValue, getPolicyLabel } from "./policyTypes";
+import { getPolicyLabel } from "./policyTypes";
 import type { UrlParams } from "./types";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Extract a human-readable message from any thrown value (Error, ApiError, etc.) */
-function getErrorMessage(e: unknown, fallback: string): string {
-  if (e && typeof e === "object" && "message" in e && typeof (e as any).message === "string") {
-    return (e as any).message;
-  }
-  return fallback;
-}
 
 // ---------------------------------------------------------------------------
 // Form templates configuration

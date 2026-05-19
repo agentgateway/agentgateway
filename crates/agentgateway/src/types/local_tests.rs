@@ -290,7 +290,9 @@ binds:
   - routes:
     - backends:
       - service:
-          name: default/my-model
+          name: 
+            namespace: default
+            hostname: my-model
           port: 8000
         policies:
           inferenceRouting:
@@ -545,7 +547,9 @@ binds:
   - routes:
     - backends:
       - service:
-          name: default/my-model
+          name: 
+            namespace: default
+            hostname: my-model
           port: 8000
         policies:
           inferenceRouting:
