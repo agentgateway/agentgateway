@@ -211,8 +211,9 @@ type NamedLLMProvider struct {
 }
 
 // LLMProvider specifies the target large language model provider that the backend should route requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock;custom
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
+// +kubebuilder:validation:XValidation:rule="has(self.custom) ? has(self.custom.backendRef) != has(self.host) : true",message="custom providers must specify exactly one of backendRef or host and port"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
 type LLMProvider struct {
@@ -245,8 +246,13 @@ type LLMProvider struct {
 	// +optional
 	Bedrock *BedrockConfig `json:"bedrock,omitempty"`
 
+	// Custom provider
+	// +optional
+	Custom *CustomProvider `json:"custom,omitempty"`
+
 	// Host specifies the hostname to send the requests to.
-	// If not specified, the default hostname for the provider is used.
+	// For custom providers without backendRef, host and port specify the target.
+	// For managed providers, host and port override the provider default.
 	// +optional
 	Host ShortString `json:"host,omitempty"`
 
@@ -269,6 +275,47 @@ type LLMProvider struct {
 	// +optional
 	PathPrefix LongString `json:"pathPrefix,omitempty"`
 }
+
+// CustomProvider configures a provider with explicit API format support and an explicit target.
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.backendRef.namespace)",message="custom provider backendRef must be namespace-local"
+// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || (((!has(self.backendRef.group) || self.backendRef.group == \"\") && (!has(self.backendRef.kind) || self.backendRef.kind == 'Service')) || (has(self.backendRef.group) && self.backendRef.group == 'inference.networking.k8s.io' && has(self.backendRef.kind) && self.backendRef.kind == 'InferencePool'))",message="custom provider backendRef may target only Service or InferencePool"
+type CustomProvider struct {
+	// BackendRef references the Kubernetes backend that serves this provider.
+	// backendRef may target only a namespace-local Service or InferencePool.
+	// If unset, host and port must be set on the parent provider.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// SupportedFormats declares the provider-native API formats this provider supports.
+	// +kubebuilder:validation:MinItems=1
+	// +listType=set
+	// +required
+	SupportedFormats []ProviderFormat `json:"supportedFormats"`
+}
+
+// ProviderFormat specifies a provider-native LLM API format.
+// +kubebuilder:validation:Enum=Completions;Messages;Responses;Embeddings;AnthropicTokenCount;Realtime
+type ProviderFormat string
+
+const (
+	// ProviderFormatCompletions is the OpenAI-compatible chat completions API.
+	ProviderFormatCompletions ProviderFormat = "Completions"
+
+	// ProviderFormatMessages is the Anthropic-compatible messages API.
+	ProviderFormatMessages ProviderFormat = "Messages"
+
+	// ProviderFormatResponses is the OpenAI responses API.
+	ProviderFormatResponses ProviderFormat = "Responses"
+
+	// ProviderFormatEmbeddings is the OpenAI-compatible embeddings API.
+	ProviderFormatEmbeddings ProviderFormat = "Embeddings"
+
+	// ProviderFormatAnthropicTokenCount is the Anthropic token-count API.
+	ProviderFormatAnthropicTokenCount ProviderFormat = "AnthropicTokenCount" //nolint:gosec // G101: False positive - this is an API format name, not credentials
+
+	// ProviderFormatRealtime is the OpenAI-compatible realtime API.
+	ProviderFormatRealtime ProviderFormat = "Realtime"
+)
 
 // OpenAIConfig settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
 type OpenAIConfig struct {

@@ -236,6 +236,113 @@ spec:
                                     pattern: ^[a-z0-9-]+$
                                     type: string
                                 type: object
+                              custom:
+                                description: Custom provider
+                                properties:
+                                  backendRef:
+                                    description: |-
+                                      BackendRef references the Kubernetes backend that serves this provider.
+                                      backendRef may target only a namespace-local Service or InferencePool.
+                                      If unset, host and port must be set on the parent provider.
+                                    properties:
+                                      group:
+                                        default: ""
+                                        description: |-
+                                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                          When unspecified or empty string, core API group is inferred.
+                                        maxLength: 253
+                                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                        type: string
+                                      kind:
+                                        default: Service
+                                        description: |-
+                                          Kind is the Kubernetes resource kind of the referent. For example
+                                          "Service".
+
+                                          Defaults to "Service" when not specified.
+
+                                          ExternalName services can refer to CNAME DNS records that may live
+                                          outside of the cluster and as such are difficult to reason about in
+                                          terms of conformance. They also may not be safe to forward to (see
+                                          CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                          support ExternalName Services.
+
+                                          Support: Core (Services with a type other than ExternalName)
+
+                                          Support: Implementation-specific (Services with type ExternalName)
+                                        maxLength: 63
+                                        minLength: 1
+                                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                        type: string
+                                      name:
+                                        description: Name is the name of the referent.
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                      namespace:
+                                        description: |-
+                                          Namespace is the namespace of the backend. When unspecified, the local
+                                          namespace is inferred.
+
+                                          Note that when a namespace different than the local namespace is specified,
+                                          a ReferenceGrant object is required in the referent namespace to allow that
+                                          namespace's owner to accept the reference. See the ReferenceGrant
+                                          documentation for details.
+
+                                          Support: Core
+                                        maxLength: 63
+                                        minLength: 1
+                                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                        type: string
+                                      port:
+                                        description: |-
+                                          Port specifies the destination port number to use for this resource.
+                                          Port is required when the referent is a Kubernetes Service. In this
+                                          case, the port number is the service port number, not the target port.
+                                          For other resources, destination port might be derived from the referent
+                                          resource or this field.
+                                        format: int32
+                                        maximum: 65535
+                                        minimum: 1
+                                        type: integer
+                                    required:
+                                    - name
+                                    type: object
+                                    x-kubernetes-validations:
+                                    - message: Must have port for Service reference
+                                      rule: '(size(self.group) == 0 && self.kind ==
+                                        ''Service'') ? has(self.port) : true'
+                                  supportedFormats:
+                                    description: SupportedFormats declares the provider-native
+                                      API formats this provider supports.
+                                    items:
+                                      description: ProviderFormat specifies a provider-native
+                                        LLM API format.
+                                      enum:
+                                      - Completions
+                                      - Messages
+                                      - Responses
+                                      - Embeddings
+                                      - AnthropicTokenCount
+                                      - Realtime
+                                      type: string
+                                    minItems: 1
+                                    type: array
+                                    x-kubernetes-list-type: set
+                                required:
+                                - supportedFormats
+                                type: object
+                                x-kubernetes-validations:
+                                - message: custom provider backendRef must be namespace-local
+                                  rule: '!has(self.backendRef) || !has(self.backendRef.namespace)'
+                                - message: custom provider backendRef may target only
+                                    Service or InferencePool
+                                  rule: '!has(self.backendRef) || (((!has(self.backendRef.group)
+                                    || self.backendRef.group == "") && (!has(self.backendRef.kind)
+                                    || self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
+                                    && self.backendRef.group == ''inference.networking.k8s.io''
+                                    && has(self.backendRef.kind) && self.backendRef.kind
+                                    == ''InferencePool''))'
                               gemini:
                                 description: Gemini provider
                                 properties:
@@ -250,7 +357,8 @@ spec:
                               host:
                                 description: |-
                                   Host specifies the hostname to send the requests to.
-                                  If not specified, the default hostname for the provider is used.
+                                  For custom providers without backendRef, host and port specify the target.
+                                  For managed providers, host and port override the provider default.
                                 maxLength: 256
                                 minLength: 1
                                 type: string
@@ -4966,13 +5074,18 @@ spec:
                             - message: both host and port must be set together
                               rule: 'has(self.host) || has(self.port) ? has(self.host)
                                 && has(self.port) : true'
+                            - message: custom providers must specify exactly one of
+                                backendRef or host and port
+                              rule: 'has(self.custom) ? has(self.custom.backendRef)
+                                != has(self.host) : true'
                             - message: path and pathPrefix are mutually exclusive
                               rule: '!(has(self.path) && has(self.pathPrefix))'
                             - message: pathPrefix requires host to be set
                               rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
-                                azure anthropic gemini vertexai bedrock] must be set
-                              rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                                azure anthropic gemini vertexai bedrock custom] must
+                                be set
+                              rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
                                 == 1'
                           maxItems: 16
                           minItems: 1
@@ -5130,6 +5243,113 @@ spec:
                             pattern: ^[a-z0-9-]+$
                             type: string
                         type: object
+                      custom:
+                        description: Custom provider
+                        properties:
+                          backendRef:
+                            description: |-
+                              BackendRef references the Kubernetes backend that serves this provider.
+                              backendRef may target only a namespace-local Service or InferencePool.
+                              If unset, host and port must be set on the parent provider.
+                            properties:
+                              group:
+                                default: ""
+                                description: |-
+                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                  When unspecified or empty string, core API group is inferred.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              kind:
+                                default: Service
+                                description: |-
+                                  Kind is the Kubernetes resource kind of the referent. For example
+                                  "Service".
+
+                                  Defaults to "Service" when not specified.
+
+                                  ExternalName services can refer to CNAME DNS records that may live
+                                  outside of the cluster and as such are difficult to reason about in
+                                  terms of conformance. They also may not be safe to forward to (see
+                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                  support ExternalName Services.
+
+                                  Support: Core (Services with a type other than ExternalName)
+
+                                  Support: Implementation-specific (Services with type ExternalName)
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the backend. When unspecified, the local
+                                  namespace is inferred.
+
+                                  Note that when a namespace different than the local namespace is specified,
+                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                  documentation for details.
+
+                                  Support: Core
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                type: string
+                              port:
+                                description: |-
+                                  Port specifies the destination port number to use for this resource.
+                                  Port is required when the referent is a Kubernetes Service. In this
+                                  case, the port number is the service port number, not the target port.
+                                  For other resources, destination port might be derived from the referent
+                                  resource or this field.
+                                format: int32
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-validations:
+                            - message: Must have port for Service reference
+                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                ? has(self.port) : true'
+                          supportedFormats:
+                            description: SupportedFormats declares the provider-native
+                              API formats this provider supports.
+                            items:
+                              description: ProviderFormat specifies a provider-native
+                                LLM API format.
+                              enum:
+                              - Completions
+                              - Messages
+                              - Responses
+                              - Embeddings
+                              - AnthropicTokenCount
+                              - Realtime
+                              type: string
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: set
+                        required:
+                        - supportedFormats
+                        type: object
+                        x-kubernetes-validations:
+                        - message: custom provider backendRef must be namespace-local
+                          rule: '!has(self.backendRef) || !has(self.backendRef.namespace)'
+                        - message: custom provider backendRef may target only Service
+                            or InferencePool
+                          rule: '!has(self.backendRef) || (((!has(self.backendRef.group)
+                            || self.backendRef.group == "") && (!has(self.backendRef.kind)
+                            || self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
+                            && self.backendRef.group == ''inference.networking.k8s.io''
+                            && has(self.backendRef.kind) && self.backendRef.kind ==
+                            ''InferencePool''))'
                       gemini:
                         description: Gemini provider
                         properties:
@@ -5144,7 +5364,8 @@ spec:
                       host:
                         description: |-
                           Host specifies the hostname to send the requests to.
-                          If not specified, the default hostname for the provider is used.
+                          For custom providers without backendRef, host and port specify the target.
+                          For managed providers, host and port override the provider default.
                         maxLength: 256
                         minLength: 1
                         type: string
@@ -5215,13 +5436,17 @@ spec:
                     - message: both host and port must be set together
                       rule: 'has(self.host) || has(self.port) ? has(self.host) &&
                         has(self.port) : true'
+                    - message: custom providers must specify exactly one of backendRef
+                        or host and port
+                      rule: 'has(self.custom) ? has(self.custom.backendRef) != has(self.host)
+                        : true'
                     - message: path and pathPrefix are mutually exclusive
                       rule: '!(has(self.path) && has(self.pathPrefix))'
                     - message: pathPrefix requires host to be set
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
                     - message: exactly one of the fields in [openai azureopenai azure
-                        anthropic gemini vertexai bedrock] must be set
-                      rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock)].filter(x,x==true).size()
+                        anthropic gemini vertexai bedrock custom] must be set
+                      rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
                         == 1'
                 type: object
                 x-kubernetes-validations:
