@@ -145,8 +145,8 @@ spec:
                                     description: The type of Azure endpoint. Determines
                                       the host suffix.
                                     enum:
-                                    - OpenAI
                                     - Foundry
+                                    - OpenAI
                                     type: string
                                 required:
                                 - resourceName
@@ -933,9 +933,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -1539,9 +1539,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -2141,9 +2141,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -2336,11 +2336,11 @@ spec:
                                                           For example, if you specify `CreditCard`, any credit card numbers
                                                           in the request or response are matched.
                                                         enum:
-                                                        - Ssn
-                                                        - CreditCard
-                                                        - PhoneNumber
-                                                        - Email
                                                         - CaSin
+                                                        - CreditCard
+                                                        - Email
+                                                        - PhoneNumber
+                                                        - Ssn
                                                         type: string
                                                       type: array
                                                     matches:
@@ -2969,9 +2969,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -3575,9 +3575,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -3786,11 +3786,11 @@ spec:
                                                           For example, if you specify `CreditCard`, any credit card numbers
                                                           in the request or response are matched.
                                                         enum:
-                                                        - Ssn
-                                                        - CreditCard
-                                                        - PhoneNumber
-                                                        - Email
                                                         - CaSin
+                                                        - CreditCard
+                                                        - Email
+                                                        - PhoneNumber
+                                                        - Ssn
                                                         type: string
                                                       type: array
                                                     matches:
@@ -4003,15 +4003,15 @@ spec:
                                             RouteType specifies how the AI gateway should process incoming requests
                                             based on the URL path and the API format expected.
                                           enum:
+                                          - AnthropicTokenCount
                                           - Completions
+                                          - Detect
+                                          - Embeddings
                                           - Messages
                                           - Models
                                           - Passthrough
-                                          - Detect
-                                          - Responses
-                                          - AnthropicTokenCount
-                                          - Embeddings
                                           - Realtime
+                                          - Responses
                                           type: string
                                         description: |-
                                           `routes` defines how to identify the type of traffic to handle.
@@ -4495,9 +4495,9 @@ spec:
                                           For example: `X25519_MLKEM768,X25519`.
                                         items:
                                           enum:
-                                          - X25519
                                           - P-256
                                           - P-384
+                                          - X25519
                                           - X25519_MLKEM768
                                           type: string
                                         type: array
@@ -5036,8 +5036,8 @@ spec:
                             description: The type of Azure endpoint. Determines the
                               host suffix.
                             enum:
-                            - OpenAI
                             - Foundry
+                            - OpenAI
                             type: string
                         required:
                         - resourceName
@@ -5260,8 +5260,8 @@ spec:
                       continues serving from healthy ones. `FailClosed` (default) fails the
                       entire session if any target fails.
                     enum:
-                    - FailOpen
                     - FailClosed
+                    - FailOpen
                     type: string
                   sessionRouting:
                     description: |-
@@ -5802,9 +5802,9 @@ spec:
                                         For example: `X25519_MLKEM768,X25519`.
                                       items:
                                         enum:
-                                        - X25519
                                         - P-256
                                         - P-384
+                                        - X25519
                                         - X25519_MLKEM768
                                         type: string
                                       type: array
@@ -5966,8 +5966,8 @@ spec:
                                 Protocol is the protocol to use for the connection to the MCP
                                 target.
                               enum:
-                              - StreamableHTTP
                               - SSE
+                              - StreamableHTTP
                               type: string
                           required:
                           - port
@@ -6590,9 +6590,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -7151,9 +7151,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -7709,9 +7709,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -7892,11 +7892,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -8484,9 +8484,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -9045,9 +9045,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -9243,11 +9243,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -9453,15 +9453,15 @@ spec:
                             RouteType specifies how the AI gateway should process incoming requests
                             based on the URL path and the API format expected.
                           enum:
+                          - AnthropicTokenCount
                           - Completions
+                          - Detect
+                          - Embeddings
                           - Messages
                           - Models
                           - Passthrough
-                          - Detect
-                          - Responses
-                          - AnthropicTokenCount
-                          - Embeddings
                           - Realtime
+                          - Responses
                           type: string
                         description: |-
                           `routes` defines how to identify the type of traffic to handle.
@@ -9806,8 +9806,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -10172,9 +10172,9 @@ spec:
                             default: Strict
                             description: '`mode` is the validation mode for JWT authentication.'
                             enum:
-                            - Strict
                             - Optional
                             - Permissive
+                            - Strict
                             type: string
                           provider:
                             description: '`provider` specifies the identity provider
@@ -10367,9 +10367,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array

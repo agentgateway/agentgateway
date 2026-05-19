@@ -665,9 +665,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -1226,9 +1226,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -1784,9 +1784,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -1967,11 +1967,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -2559,9 +2559,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -3120,9 +3120,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -3318,11 +3318,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -3528,15 +3528,15 @@ spec:
                             RouteType specifies how the AI gateway should process incoming requests
                             based on the URL path and the API format expected.
                           enum:
+                          - AnthropicTokenCount
                           - Completions
+                          - Detect
+                          - Embeddings
                           - Messages
                           - Models
                           - Passthrough
-                          - Detect
-                          - Responses
-                          - AnthropicTokenCount
-                          - Embeddings
                           - Realtime
+                          - Responses
                           type: string
                         description: |-
                           `routes` defines how to identify the type of traffic to handle.
@@ -3881,8 +3881,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -4247,9 +4247,9 @@ spec:
                             default: Strict
                             description: '`mode` is the validation mode for JWT authentication.'
                             enum:
-                            - Strict
                             - Optional
                             - Permissive
+                            - Strict
                             type: string
                           provider:
                             description: '`provider` specifies the identity provider
@@ -4442,9 +4442,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array
@@ -4996,8 +4996,8 @@ spec:
                             description: '`protocol` specifies the OTLP protocol variant
                               to use.'
                             enum:
-                            - HTTP
                             - GRPC
+                            - HTTP
                             type: string
                         required:
                         - backendRef
@@ -5262,8 +5262,8 @@ spec:
 
                           If unset, this defaults to `Strict`.
                         enum:
-                        - Strict
                         - Optional
+                        - Strict
                         type: string
                       version:
                         default: V2
@@ -5272,9 +5272,9 @@ spec:
 
                           If unset, this defaults to `V2`.
                         enum:
+                        - All
                         - V1
                         - V2
-                        - All
                         type: string
                     type: object
                   tcp:
@@ -5341,14 +5341,14 @@ spec:
                           Use this in the TLS options field of a TLS listener.
                         items:
                           enum:
-                          - TLS13_AES_256_GCM_SHA384
                           - TLS13_AES_128_GCM_SHA256
+                          - TLS13_AES_256_GCM_SHA384
                           - TLS13_CHACHA20_POLY1305_SHA256
-                          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+                          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-                          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+                          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
                           type: string
                         type: array
@@ -5368,9 +5368,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array
@@ -5538,8 +5538,8 @@ spec:
                         description: '`protocol` specifies the OTLP protocol variant
                           to use.'
                         enum:
-                        - HTTP
                         - GRPC
+                        - HTTP
                         type: string
                       randomSampling:
                         description: |-
@@ -5791,9 +5791,9 @@ spec:
                         default: Strict
                         description: '`mode` is the validation mode for API key authentication.'
                         enum:
-                        - Strict
                         - Optional
                         - Permissive
+                        - Strict
                         type: string
                       secretRef:
                         description: "`secretRef` references a Kubernetes `Secret`
@@ -5981,8 +5981,8 @@ spec:
                         description: '`mode` is the validation mode for basic auth
                           authentication.'
                         enum:
-                        - Strict
                         - Optional
+                        - Strict
                         type: string
                       realm:
                         description: |-
@@ -6613,8 +6613,8 @@ spec:
                                     unavailable or returns an error. "FailOpen" allows the request to continue.
                                     "FailClosed" (default) denies the request.
                                   enum:
-                                  - FailOpen
                                   - FailClosed
+                                  - FailOpen
                                   type: string
                                 forwardBody:
                                   description: |-
@@ -6771,8 +6771,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -7514,9 +7514,9 @@ spec:
                         default: Strict
                         description: '`mode` is the validation mode for JWT authentication.'
                         enum:
-                        - Strict
                         - Optional
                         - Permissive
+                        - Strict
                         type: string
                       providers:
                         items:
@@ -7689,8 +7689,8 @@ spec:
 
                       If unset, this defaults to `PostRouting`.
                     enum:
-                    - PreRouting
                     - PostRouting
+                    - PreRouting
                     type: string
                   rateLimit:
                     description: |-
@@ -7870,8 +7870,8 @@ spec:
                                         unavailable or returns an error. `FailOpen` allows the request to continue.
                                         `FailClosed` (default) denies the request.
                                       enum:
-                                      - FailOpen
                                       - FailClosed
+                                      - FailOpen
                                       type: string
                                   required:
                                   - backendRef
@@ -7914,9 +7914,9 @@ spec:
                                         description: '`unit` specifies the unit of
                                           time that requests are limited on.'
                                         enum:
-                                        - Seconds
-                                        - Minutes
                                         - Hours
+                                        - Minutes
+                                        - Seconds
                                         type: string
                                     required:
                                     - unit
@@ -8101,8 +8101,8 @@ spec:
                               unavailable or returns an error. `FailOpen` allows the request to continue.
                               `FailClosed` (default) denies the request.
                             enum:
-                            - FailOpen
                             - FailClosed
+                            - FailOpen
                             type: string
                         required:
                         - backendRef
@@ -8144,9 +8144,9 @@ spec:
                               description: '`unit` specifies the unit of time that
                                 requests are limited on.'
                               enum:
-                              - Seconds
-                              - Minutes
                               - Hours
+                              - Minutes
+                              - Seconds
                               type: string
                           required:
                           - unit

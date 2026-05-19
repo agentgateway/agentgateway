@@ -80,7 +80,7 @@ type OverrideXValidation struct {
 	OptionalOldSelf   *bool  `marker:"optionalOldSelf,optional"`
 }
 
-func (m AtLeastOneFieldSet) ApplyToSchema(schema *apiextensionsv1.JSONSchemaProps) error {
+func (m AtLeastOneFieldSet) ApplyToSchema(_ *crdmarkers.SchemaContext, schema *apiextensionsv1.JSONSchemaProps) error {
 	allFields := sortedPropertyNames(schema)
 	if len(m.Fields) > 0 {
 		allFields = dedupeAndSort(append(allFields, m.Fields...))
@@ -388,7 +388,7 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 	if err := (crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalRule),
 		Message: "conditional cannot be set with any other field",
-	}).ApplyToSchema(schema); err != nil {
+	}).ApplyToSchema(nil, schema); err != nil {
 		return err
 	}
 
@@ -412,7 +412,7 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("has(self.%s) ? true : %s", conditionalField, requiredRule),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker AtLeastOneFieldSet) error {
@@ -432,7 +432,7 @@ func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields 
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s >= 1", fieldsToOneOfCelRuleStr(fields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker IfThenOnlyFields) error {
@@ -471,7 +471,7 @@ func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s ? %s == 0 : true", marker.If, fieldsToOneOfCelRuleStr(disallowedFields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyOverrideXValidation(schema *apiextensionsv1.JSONSchemaProps, override OverrideXValidation) error {
