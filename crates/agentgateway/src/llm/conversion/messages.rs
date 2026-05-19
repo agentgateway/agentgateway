@@ -9,6 +9,35 @@ use crate::llm::types::messages::typed as messages;
 use crate::llm::{AIError, AmendOnDrop};
 use crate::parse;
 
+fn anthropic_error_type(status: ::http::StatusCode) -> &'static str {
+	match status {
+		::http::StatusCode::BAD_REQUEST => "invalid_request_error",
+		::http::StatusCode::UNAUTHORIZED | ::http::StatusCode::FORBIDDEN => "authentication_error",
+		::http::StatusCode::NOT_FOUND => "not_found_error",
+		::http::StatusCode::TOO_MANY_REQUESTS => "rate_limit_error",
+		_ => "api_error",
+	}
+}
+
+pub fn translate_anthropic_error(
+	bytes: &Bytes,
+	status: ::http::StatusCode,
+) -> Result<Bytes, AIError> {
+	if serde_json::from_slice::<messages::MessagesErrorResponse>(bytes).is_ok() {
+		return Ok(bytes.clone());
+	}
+	let m = messages::MessagesErrorResponse {
+		r#type: "error".to_string(),
+		error: messages::MessagesError {
+			r#type: anthropic_error_type(status).to_string(),
+			message: String::from_utf8_lossy(bytes).into_owned(),
+		},
+	};
+	Ok(Bytes::from(
+		serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
+	))
+}
+
 /// Translate a Google error response into an Anthropic Messages error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 	let res = super::completions::parse_google_error(bytes)?;
@@ -494,13 +523,14 @@ pub mod from_completions {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<messages::MessagesErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let res = serde_json::from_slice::<messages::MessagesErrorResponse>(bytes).ok();
 		let m = completions::ChatCompletionErrorResponse {
 			event_id: None,
 			error: completions::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.error.message,
+				message: res
+					.map(|res| res.error.message)
+					.unwrap_or_else(|| String::from_utf8_lossy(bytes).into_owned()),
 				param: None,
 				code: None,
 				event_id: None,

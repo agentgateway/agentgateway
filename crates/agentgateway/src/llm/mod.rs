@@ -1444,8 +1444,7 @@ impl AIProvider {
 				}
 			},
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
-				// Passthrough; nothing needed
-				Ok(bytes.clone())
+				conversion::messages::translate_anthropic_error(bytes, status)
 			},
 			(_, InputFormat::Detect) => {
 				// Passthrough; nothing needed
