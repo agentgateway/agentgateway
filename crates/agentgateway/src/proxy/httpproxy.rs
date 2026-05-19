@@ -1847,6 +1847,11 @@ async fn make_backend_call(
 		&mut req,
 	)
 	.await?;
+	// The ingress path strips hop-by-hop headers before policy execution, but
+	// request policies, ext_authz/ext_proc mutations, backend auth, and LLM setup
+	// can all mutate headers after that. Scrub once more immediately before the
+	// upstream call so policy-added Connection-nominated headers do not leak.
+	remove_hop_by_hop_headers(&mut req);
 	let transport = build_transport(
 		&inputs,
 		&backend_call,
@@ -2224,7 +2229,10 @@ mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
 
-	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
+	use super::{
+		hop_by_hop_headers, normalize_uri, remove_hop_by_hop_headers,
+		resolved_workload_target_hostname, select_service_target_port,
+	};
 	use crate::http;
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 
@@ -2383,6 +2391,66 @@ mod tests {
 		);
 		assert!(!req.headers().contains_key("x-original-url"));
 	}
+
+	#[test]
+	fn hop_by_hop_headers_requires_exact_te_trailers_token() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("te", "notrailers")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		assert!(hop_by_hop_headers(&mut req).is_none());
+		assert!(!req.headers().contains_key("te"));
+	}
+
+	#[test]
+	fn remove_hop_by_hop_headers_strips_late_connection_headers() {
+		let mut req = ::http::Request::builder()
+			.uri("http://app/")
+			.header("connection", "x-added")
+			.header("x-added", "policy-value")
+			.header("transfer-encoding", "chunked")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		remove_hop_by_hop_headers(&mut req);
+		assert!(!req.headers().contains_key("connection"));
+		assert!(!req.headers().contains_key("x-added"));
+		assert!(!req.headers().contains_key("transfer-encoding"));
+	}
+
+	#[test]
+	fn normalize_uri_preserves_http1_host_authority_case() {
+		let mut req = ::http::Request::builder()
+			.version(::http::Version::HTTP_11)
+			.uri("/path")
+			.header("host", "API.EXAMPLE.COM:8080")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		normalize_uri(None, &mut req).expect("request should normalize");
+
+		assert_eq!(
+			req.uri().authority().unwrap().as_str(),
+			"API.EXAMPLE.COM:8080"
+		);
+		assert!(!req.headers().contains_key("host"));
+	}
+
+	#[test]
+	fn normalize_uri_rejects_absolute_form_host_mismatch() {
+		let mut req = ::http::Request::builder()
+			.version(::http::Version::HTTP_11)
+			.uri("http://evil.example/path")
+			.header("host", "allowed.example")
+			.body(http::Body::empty())
+			.expect("request should build");
+
+		let err = normalize_uri(None, &mut req).expect_err("mismatched host should fail");
+
+		assert!(err.to_string().contains("does not match"));
+	}
 }
 
 pub fn maybe_set_grpc_status(status: &AsyncLog<u8>, headers: &HeaderMap) {
@@ -2443,24 +2511,8 @@ struct RequestUpgrade {
 }
 
 fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
-	let trailers = req
-		.headers()
-		.get(header::TE)
-		.and_then(|h| h.to_str().ok())
-		.map(|s| s.contains("trailers"))
-		.unwrap_or(false);
-	let connection_headers = connection_header_tokens(req.headers());
 	let upgrade_type = get_upgrade_type(req.headers());
-	for h in connection_headers {
-		req.headers_mut().remove(h);
-	}
-	for h in HOP_HEADERS.iter() {
-		req.headers_mut().remove(h);
-	}
-	// If the incoming request supports trailers, the downstream one will as well
-	if trailers {
-		req.headers_mut().typed_insert(headers::Te::trailers());
-	}
+	remove_hop_by_hop_headers(req);
 	// After stripping all the hop-by-hop connection headers above, add back any
 	// necessary for protocol upgrades, such as for websockets.
 	if let Some(upgrade_type) = upgrade_type.clone() {
@@ -2480,6 +2532,34 @@ fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
 	} else {
 		None
 	}
+}
+
+fn remove_hop_by_hop_headers(req: &mut Request) -> bool {
+	let trailers = req
+		.headers()
+		.get(header::TE)
+		.and_then(|h| h.to_str().ok())
+		.map(header_contains_token_trailers)
+		.unwrap_or(false);
+	let connection_headers = connection_header_tokens(req.headers());
+	for h in connection_headers {
+		req.headers_mut().remove(h);
+	}
+	for h in HOP_HEADERS.iter() {
+		req.headers_mut().remove(h);
+	}
+	// If the incoming request supports trailers, the downstream one will as well.
+	if trailers {
+		req.headers_mut().typed_insert(headers::Te::trailers());
+	}
+	trailers
+}
+
+fn header_contains_token_trailers(value: &str) -> bool {
+	value
+		.split(',')
+		.map(str::trim)
+		.any(|token| token.eq_ignore_ascii_case("trailers"))
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
@@ -2506,26 +2586,39 @@ fn sensitive_headers(req: &mut Request) {
 // the rest of the code doesn't need to worry about it
 fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
-	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version()
-		&& req.uri().authority().is_none()
-	{
+	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version() {
 		let mut parts = std::mem::take(req.uri_mut()).into_parts();
-		// TODO: handle absolute HTTP/1.1 form
+		// TODO(https://github.com/hyperium/http/pull/811) actually make this shared.
 		let host = req
 			.headers_mut()
 			.remove(http::header::HOST)
-			// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
-			.and_then(|h| Authority::try_from(h.as_bytes()).ok())
-			.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
+			.and_then(|h| Authority::try_from(h.as_bytes()).ok());
 
-		parts.authority = Some(host);
-		if parts.path_and_query.is_some() {
-			// TODO: or always do this?
-			if tls.is_some() {
-				parts.scheme = Some(Scheme::HTTPS);
-			} else {
-				parts.scheme = Some(Scheme::HTTP);
-			}
+		// TODO: fully handle absolute HTTP/1.1 form. For now we reject a Host
+		// header that disagrees with the absolute-form authority, but we still
+		// need a clearer contract for scheme and path normalization.
+		match (parts.authority.take(), host) {
+			(None, Some(host)) => {
+				parts.authority = Some(host);
+				if parts.path_and_query.is_some() {
+					// TODO: or always do this?
+					if tls.is_some() {
+						parts.scheme = Some(Scheme::HTTPS);
+					} else {
+						parts.scheme = Some(Scheme::HTTP);
+					}
+				}
+			},
+			(Some(authority), Some(host)) => {
+				if !authority.as_str().eq_ignore_ascii_case(host.as_str()) {
+					return Err(anyhow::anyhow!(
+						"absolute-form authority does not match host header"
+					));
+				}
+				parts.authority = Some(authority);
+			},
+			(Some(authority), None) => parts.authority = Some(authority),
+			(None, None) => return Err(anyhow::anyhow!("no authority or host")),
 		}
 		*req.uri_mut() = Uri::from_parts(parts)?
 	}
