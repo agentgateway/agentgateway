@@ -232,35 +232,6 @@ func (s *testingSuite) mcpCurlOptions(headers map[string]string, body string) []
 	return MCPCurlOptions("", headers, body)
 }
 
-// helper to run a request to a given path and return response and body text.
-func (s *testingSuite) execCurl(path string, headers map[string]string, body string) (*http.Response, string, error) {
-	opts := append(common.GatewayAddressOptions(common.BaseGateway.ResolvedAddress()),
-		curl.WithPath(path),
-		curl.WithMethod(http.MethodPost),
-	)
-	for k, v := range headers {
-		opts = append(opts, curl.WithHeader(k, v))
-	}
-	if body != "" {
-		opts = append(opts, curl.WithBody(body))
-	}
-
-	resp, err := curl.ExecuteRequest(opts...)
-	if err != nil {
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, readErr := io.ReadAll(resp.Body)
-	if readErr != nil && !isTimeoutError(readErr) {
-		return nil, "", readErr
-	}
-
-	bodyText := string(bodyBytes)
-	s.T().Logf("mcp response status=%d content-type=%q body=%s", resp.StatusCode, resp.Header.Get("Content-Type"), bodyText)
-	return resp, bodyText, nil
-}
-
 // ExecCurlMCP runs a POST to /mcp and returns the response and body text.
 func ExecCurlMCP(t *testing.T, host string, headers map[string]string, body string) (*http.Response, string, error) {
 	opts := append(

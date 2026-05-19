@@ -1301,7 +1301,8 @@ message BackendPolicySpec {
       BackendReference target = 1;
       FailureMode failure_mode = 2;
       // Static or CEL-evaluated context, surfaced to the policy server as
-      // the wire `Metadata.filter_metadata` map. Keyed by metadata namespace.
+      // fields of the `metadata_context` google.protobuf.Struct, keyed by
+      // config key.
       map<string, string> metadata = 5;
     }
 

@@ -1385,8 +1385,8 @@ type ExtMcpRemote struct {
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
 	// `metadata` is static or CEL-evaluated context surfaced to the policy
-	// server as the wire `Metadata.filter_metadata` map, keyed by namespace.
-	// Values are CEL expressions.
+	// server as fields of the `metadata_context` google.protobuf.Struct,
+	// keyed by config key. Values are CEL expressions.
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
 	Metadata map[string]shared.CELExpression `json:"metadata,omitempty"`
