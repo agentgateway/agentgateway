@@ -1389,7 +1389,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any||
-|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.apiKey.location.header`|object||
 |`binds[].listeners[].routes[].policies.apiKey.location.header.name`|string||
@@ -5983,7 +5983,7 @@
 |`binds[].listeners[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any||
-|`binds[].listeners[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`binds[].listeners[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.apiKey.location.header`|object||
 |`binds[].listeners[].policies.apiKey.location.header.name`|string||
@@ -7572,7 +7572,7 @@
 |`policies[].policy.apiKey.keys`|[]object|List of API keys|
 |`policies[].policy.apiKey.keys[].key`|string||
 |`policies[].policy.apiKey.keys[].metadata`|any||
-|`policies[].policy.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`policies[].policy.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.apiKey.location.header`|object||
 |`policies[].policy.apiKey.location.header.name`|string||
@@ -12845,7 +12845,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|List of API keys|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string||
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any||
-|`routeGroups[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`routeGroups[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.apiKey.location.header`|object||
 |`routeGroups[].routes[].policies.apiKey.location.header.name`|string||
@@ -18255,7 +18255,7 @@
 |`llm.policies.apiKey.keys`|[]object|List of API keys|
 |`llm.policies.apiKey.keys[].key`|string||
 |`llm.policies.apiKey.keys[].metadata`|any||
-|`llm.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`llm.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.apiKey.location.header`|object||
 |`llm.policies.apiKey.location.header.name`|string||
@@ -19811,7 +19811,7 @@
 |`mcp.policies.apiKey.keys`|[]object|List of API keys|
 |`mcp.policies.apiKey.keys[].key`|string||
 |`mcp.policies.apiKey.keys[].metadata`|any||
-|`mcp.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
+|`mcp.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.apiKey.location.header`|object||
 |`mcp.policies.apiKey.location.header.name`|string||

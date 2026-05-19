@@ -36,6 +36,9 @@ pub enum Mode {
 	/// Warning: this allows requests without credentials!
 	#[default]
 	Optional,
+	/// Requests are never rejected for missing or invalid API keys.
+	/// Warning: this allows requests without a valid API key!
+	Permissive,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -122,7 +125,7 @@ impl APIKeyAuthentication {
 			pol_result!(
 				dtrace::Info,
 				Skip,
-				"request has no API key and auth mode is optional"
+				"request has no API key and auth mode is not strict"
 			);
 			return Ok(None);
 		};
@@ -140,6 +143,13 @@ impl APIKeyAuthentication {
 				metadata: meta.clone(),
 			};
 			Ok(Some(claims))
+		} else if self.mode == Mode::Permissive {
+			pol_result!(
+				dtrace::Warn,
+				Skip,
+				"API key verification failed, continue due to permissive mode"
+			);
+			Ok(None)
 		} else {
 			pol_result!(
 				dtrace::Error,

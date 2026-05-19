@@ -4141,6 +4141,11 @@
           "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
           "type": "string",
           "const": "optional"
+        },
+        {
+          "description": "Requests are never rejected for missing or invalid API keys.\nWarning: this allows requests without a valid API key!",
+          "type": "string",
+          "const": "permissive"
         }
       ]
     },

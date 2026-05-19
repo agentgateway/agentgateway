@@ -1051,7 +1051,7 @@ type BasicAuthentication struct {
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +kubebuilder:validation:Enum=Strict;Optional;Permissive
 type APIKeyAuthenticationMode string
 
 const (
@@ -1061,6 +1061,9 @@ const (
 	// If an API Key exists, validate it.
 	// Warning: this allows requests without an API Key!
 	APIKeyAuthenticationModeOptional APIKeyAuthenticationMode = "Optional"
+	// Requests are never rejected for missing or invalid API keys.
+	// Warning: this allows requests without a valid API key!
+	APIKeyAuthenticationModePermissive APIKeyAuthenticationMode = "Permissive"
 )
 
 // +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector

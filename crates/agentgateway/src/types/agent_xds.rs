@@ -1952,6 +1952,7 @@ fn traffic_policy_from_proto(
 			{
 				tps::api_key::Mode::Strict => http::apikey::Mode::Strict,
 				tps::api_key::Mode::Optional => http::apikey::Mode::Optional,
+				tps::api_key::Mode::Permissive => http::apikey::Mode::Permissive,
 			};
 			let keys = ba
 				.api_keys

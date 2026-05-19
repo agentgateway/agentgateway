@@ -996,6 +996,8 @@ const (
 	TrafficPolicySpec_APIKey_STRICT TrafficPolicySpec_APIKey_Mode = 0
 	// If credentials exist, validate them (default)
 	TrafficPolicySpec_APIKey_OPTIONAL TrafficPolicySpec_APIKey_Mode = 1
+	// Requests are never rejected for missing or invalid API keys
+	TrafficPolicySpec_APIKey_PERMISSIVE TrafficPolicySpec_APIKey_Mode = 2
 )
 
 // Enum value maps for TrafficPolicySpec_APIKey_Mode.
@@ -1003,10 +1005,12 @@ var (
 	TrafficPolicySpec_APIKey_Mode_name = map[int32]string{
 		0: "STRICT",
 		1: "OPTIONAL",
+		2: "PERMISSIVE",
 	}
 	TrafficPolicySpec_APIKey_Mode_value = map[string]int32{
-		"STRICT":   0,
-		"OPTIONAL": 1,
+		"STRICT":     0,
+		"OPTIONAL":   1,
+		"PERMISSIVE": 2,
 	}
 )
 
@@ -13122,7 +13126,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xe3A\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xf3A\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -13256,18 +13260,20 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +
 	"\bOPTIONAL\x10\x01B\b\n" +
-	"\x06_realm\x1a\x85\x03\n" +
+	"\x06_realm\x1a\x95\x03\n" +
 	"\x06APIKey\x12S\n" +
 	"\bapi_keys\x18\x01 \x03(\v28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.UserR\aapiKeys\x12L\n" +
 	"\x04mode\x18\x02 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.ModeR\x04mode\x12g\n" +
 	"\x16authorization_location\x18\x03 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1aM\n" +
 	"\x04User\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\" \n" +
+	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"0\n" +
 	"\x04Mode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +
-	"\bOPTIONAL\x10\x01\x1a\xbf\x05\n" +
+	"\bOPTIONAL\x10\x01\x12\x0e\n" +
+	"\n" +
+	"PERMISSIVE\x10\x02\x1a\xbf\x05\n" +
 	"\x14TransformationPolicy\x12e\n" +
 	"\arequest\x18\x01 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\arequest\x12g\n" +
 	"\bresponse\x18\x02 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\bresponse\x1a\xd6\x03\n" +

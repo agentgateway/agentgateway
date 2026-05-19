@@ -5745,6 +5745,7 @@ spec:
                         enum:
                         - Strict
                         - Optional
+                        - Permissive
                         type: string
                       secretRef:
                         description: "`secretRef` references a Kubernetes `Secret`

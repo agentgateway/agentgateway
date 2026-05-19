@@ -867,6 +867,8 @@ message TrafficPolicySpec {
       STRICT = 0;
       // If credentials exist, validate them (default)
       OPTIONAL = 1;
+      // Requests are never rejected for missing or invalid API keys
+      PERMISSIVE = 2;
     }
 
     message User {

@@ -734,6 +734,8 @@ func processAPIKeyAuthenticationPolicy(
 		p.Mode = api.TrafficPolicySpec_APIKey_OPTIONAL
 	case agentgateway.APIKeyAuthenticationModeStrict:
 		p.Mode = api.TrafficPolicySpec_APIKey_STRICT
+	case agentgateway.APIKeyAuthenticationModePermissive:
+		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
 	}
 
 	var secrets []*corev1.Secret
