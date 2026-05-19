@@ -189,14 +189,17 @@ func translatePoliciesForBackendTLS(
 			if mtlsClientRef.Namespace != nil {
 				// TODO Implement this later
 				logger.Warn("ignoring Gateway.spec.tls.backend; cross namespace not permitted")
+				invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef cross namespace reference is not permitted")
 				skip = true
 			}
 			if mtlsClientRef.Kind != nil && *mtlsClientRef.Kind != wellknown.SecretKind {
 				logger.Warn("ignoring Gateway.spec.tls.backend; only Secret is allowed")
+				invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef must refer to a Secret")
 				skip = true
 			}
 			if mtlsClientRef.Group != nil && string(*mtlsClientRef.Group) != wellknown.SecretGVK.Group {
 				logger.Warn("ignoring Gateway.spec.tls.backend; only core is allowed")
+				invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef must use the core API group")
 				skip = true
 			}
 			if !skip {
@@ -207,14 +210,20 @@ func translatePoliciesForBackendTLS(
 				scrt := ptr.Flatten(krt.FetchOne(krtctx, secrets, krt.FilterObjectName(nn)))
 				if scrt == nil {
 					logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
+					invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef Secret not found")
 				} else {
 					if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
-						logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
+						logger.Warn("ignoring Gateway.spec.tls.backend; secret invalid")
+						invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef Secret invalid: "+err.Error())
 					} else {
 						res.Cert = scrt.Data[corev1.TLSCertKey]
 						res.Key = scrt.Data[corev1.TLSPrivateKeyKey]
 					}
 				}
+			}
+			if res.Cert == nil || res.Key == nil {
+				res.Cert = dummyClientCert
+				res.Key = dummyClientCert
 			}
 		}
 
@@ -281,6 +290,14 @@ func targetEqual(a, b gwv1.LocalPolicyTargetReferenceWithSectionName) bool {
 
 // a sentinel value to send to agentgateway to signal that it should reject TLS connects due to invalid config
 var dummyCaCert = []byte("invalid")
+var dummyClientCert = []byte("invalid")
+
+func invalidBackendClientCertificate(conds map[string]*Condition, message string) {
+	conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
+		Reason:  string(gwv1.PolicyReasonInvalid),
+		Message: message,
+	}
+}
 
 func getBackendTLSCACert(
 	krtctx krt.HandlerContext,
