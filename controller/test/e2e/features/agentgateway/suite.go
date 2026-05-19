@@ -17,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 type testingSuite struct {
@@ -157,7 +158,8 @@ func (s *testingSuite) TestAgentgatewayPolicyQuantityApply() {
 			err := s.TestInstallation.Actions.Kubectl().Apply(s.Ctx, []byte(manifest))
 			if tt.wantApply {
 				s.Require().NoError(err)
-				s.T().Cleanup(func() {
+
+				testutils.Cleanup(s.T(), func() {
 					_ = s.TestInstallation.Actions.Kubectl().Delete(s.Ctx, []byte(manifest))
 				})
 				return

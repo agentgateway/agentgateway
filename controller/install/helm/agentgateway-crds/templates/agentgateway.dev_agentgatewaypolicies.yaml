@@ -3842,6 +3842,9 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
@@ -3849,7 +3852,6 @@ spec:
                             maxLength: 32
                             minLength: 1
                             pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                            type: string
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte and fit within
@@ -4983,26 +4985,30 @@ spec:
                         minimum: 1
                         type: integer
                       http2ConnectionWindowSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2ConnectionWindowSize` indicates the initial window size for
                           connection-level flow control for received data.
                         maxLength: 32
                         minLength: 1
                         pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                        type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
                       http2FrameSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2FrameSize` sets the maximum frame size to use.
                           If unset, this defaults to `16kb`.
                         maxLength: 32
                         minLength: 1
                         pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                        type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: http2FrameSize must be at least 16384 bytes
@@ -5027,6 +5033,9 @@ spec:
                         - message: http2KeepaliveTimeout must be at least 1 second
                           rule: duration(self) >= duration('1s')
                       http2MaxHeaderSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2MaxHeaderSize` sets the maximum aggregate size of decoded HTTP/2
                           request headers.
@@ -5034,26 +5043,30 @@ spec:
                         maxLength: 32
                         minLength: 1
                         pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                        type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
                       http2WindowSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2WindowSize` indicates the initial window size for stream-level flow
                           control for received data.
                         maxLength: 32
                         minLength: 1
                         pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                        type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
                       maxBufferSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `maxBufferSize` defines the maximum HTTP body size that will be buffered
                           into memory.
@@ -5062,7 +5075,6 @@ spec:
                         maxLength: 32
                         minLength: 1
                         pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                        type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
                         - message: value must be at least 1 byte and fit within uint32
@@ -6561,6 +6573,9 @@ spec:
                                     If enabled, the request body will be buffered.
                                   properties:
                                     maxSize:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
                                       description: |-
                                         `maxSize` specifies, in bytes, the largest body that will be buffered
                                         and sent to the authorization server. If the body size is larger than
@@ -6568,7 +6583,6 @@ spec:
                                       maxLength: 32
                                       minLength: 1
                                       pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                                      type: string
                                       x-kubernetes-int-or-string: true
                                       x-kubernetes-validations:
                                       - message: value must be at least 1 byte and
@@ -6717,6 +6731,9 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
@@ -6724,7 +6741,6 @@ spec:
                             maxLength: 32
                             minLength: 1
                             pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                            type: string
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte and fit within

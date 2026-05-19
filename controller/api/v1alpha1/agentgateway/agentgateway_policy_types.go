@@ -283,7 +283,6 @@ type LongString = string
 type SNI = string
 
 // ByteSize is a byte quantity that must fit in a uint32 dataplane field.
-// +kubebuilder:validation:Type=string
 // +kubebuilder:validation:XIntOrString
 // +kubebuilder:validation:MaxLength=32
 // +kubebuilder:validation:MinLength=1

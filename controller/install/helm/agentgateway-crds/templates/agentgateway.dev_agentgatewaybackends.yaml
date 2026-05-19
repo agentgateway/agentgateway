@@ -9693,6 +9693,9 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
@@ -9700,7 +9703,6 @@ spec:
                             maxLength: 32
                             minLength: 1
                             pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
-                            type: string
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
                             - message: value must be at least 1 byte and fit within
