@@ -35,6 +35,7 @@ const (
 	backendHttpPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
+	extMcpPolicySuffix            = ":mcp-extmcp"
 	healthPolicySuffix            = ":health"
 )
 
@@ -148,6 +149,10 @@ func translateBackendPolicyToAgw(
 		if backend.MCP.Authentication != nil {
 			appendPolicy("backendMCPAuthentication")(translateBackendMCPAuthentication(ctx, policy))
 		}
+
+		if backend.MCP.ExtMcp != nil {
+			appendPolicy("backendExtMcp")(translateBackendExtMcp(ctx, policy))
+		}
 	}
 
 	if s := backend.AI; s != nil {
@@ -178,6 +183,70 @@ func translateBackendExtAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPol
 			},
 		},
 	}, err
+}
+
+func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+	var errs []error
+	em := policy.Spec.Backend.MCP.ExtMcp
+
+	var remote *api.BackendPolicySpec_ExtMcp_Remote
+	if em.Remote != nil {
+		var be *api.BackendReference
+		if em.Remote.BackendRef == nil {
+			errs = append(errs, fmt.Errorf("failed to build extMcp: backendRef is required"))
+		} else {
+			var err error
+			be, err = buildBackendRef(ctx, *em.Remote.BackendRef, policy.Namespace)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
+			}
+		}
+		metadata := castCELMap(em.Remote.Metadata, func(key string, expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extMcp metadata %q is not a valid CEL expression: %s", key, expr))
+		})
+		remote = &api.BackendPolicySpec_ExtMcp_Remote{
+			Target:      be,
+			FailureMode: extMcpFailureMode(em.Remote.FailureMode),
+			Metadata:    metadata,
+		}
+	}
+
+	methods := make(map[string]api.BackendPolicySpec_ExtMcp_Phase, len(em.Methods))
+	for name, p := range em.Methods {
+		methods[name] = mcpMethodPhase(p)
+	}
+
+	spec := &api.BackendPolicySpec_ExtMcp{Remote: remote, Methods: methods}
+
+	return &api.Policy{
+		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + extMcpPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, config.NamespacedName(policy)),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_ExtMcp_{ExtMcp: spec},
+			},
+		},
+	}, errors.Join(errs...)
+}
+
+func extMcpFailureMode(m agentgateway.FailureMode) api.BackendPolicySpec_ExtMcp_FailureMode {
+	if m == agentgateway.FailOpen {
+		return api.BackendPolicySpec_ExtMcp_ALLOW
+	}
+	return api.BackendPolicySpec_ExtMcp_DENY
+}
+
+func mcpMethodPhase(p agentgateway.MCPMethodPhase) api.BackendPolicySpec_ExtMcp_Phase {
+	switch p {
+	case agentgateway.MCPMethodPhaseRequest:
+		return api.BackendPolicySpec_ExtMcp_REQUEST
+	case agentgateway.MCPMethodPhaseResponse:
+		return api.BackendPolicySpec_ExtMcp_RESPONSE
+	case agentgateway.MCPMethodPhaseBoth:
+		return api.BackendPolicySpec_ExtMcp_BOTH
+	default:
+		return api.BackendPolicySpec_ExtMcp_OFF
+	}
 }
 
 func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {

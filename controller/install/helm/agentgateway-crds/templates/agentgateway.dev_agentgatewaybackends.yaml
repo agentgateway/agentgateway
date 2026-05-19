@@ -10124,11 +10124,134 @@ spec:
                         required:
                         - policy
                         type: object
+                      extMcp:
+                        description: '`extMcp` routes selected JSON-RPC methods through
+                          a remote policy server.'
+                        properties:
+                          methods:
+                            additionalProperties:
+                              description: MCPMethodPhase controls when an MCP method
+                                is run through the extMcp pipeline.
+                              enum:
+                              - "Off"
+                              - Request
+                              - Response
+                              - Both
+                              type: string
+                            description: |-
+                              `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
+                              `tools/list`) routed through the policy server. Methods not listed
+                              here, including unknown ones, bypass extMcp entirely.
+                            maxProperties: 64
+                            minProperties: 1
+                            type: object
+                          remote:
+                            description: '`remote` configures the gRPC policy server.'
+                            properties:
+                              backendRef:
+                                description: |-
+                                  `backendRef` references the remote ExtMcp policy server.
+                                  Supported types: `Service` and `Backend`.
+                                  Required; translator rejects an absent ref.
+                                properties:
+                                  group:
+                                    default: ""
+                                    description: |-
+                                      Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                      When unspecified or empty string, core API group is inferred.
+                                    maxLength: 253
+                                    pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                    type: string
+                                  kind:
+                                    default: Service
+                                    description: |-
+                                      Kind is the Kubernetes resource kind of the referent. For example
+                                      "Service".
+
+                                      Defaults to "Service" when not specified.
+
+                                      ExternalName services can refer to CNAME DNS records that may live
+                                      outside of the cluster and as such are difficult to reason about in
+                                      terms of conformance. They also may not be safe to forward to (see
+                                      CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                      support ExternalName Services.
+
+                                      Support: Core (Services with a type other than ExternalName)
+
+                                      Support: Implementation-specific (Services with type ExternalName)
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                    type: string
+                                  name:
+                                    description: Name is the name of the referent.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  namespace:
+                                    description: |-
+                                      Namespace is the namespace of the backend. When unspecified, the local
+                                      namespace is inferred.
+
+                                      Note that when a namespace different than the local namespace is specified,
+                                      a ReferenceGrant object is required in the referent namespace to allow that
+                                      namespace's owner to accept the reference. See the ReferenceGrant
+                                      documentation for details.
+
+                                      Support: Core
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                    type: string
+                                  port:
+                                    description: |-
+                                      Port specifies the destination port number to use for this resource.
+                                      Port is required when the referent is a Kubernetes Service. In this
+                                      case, the port number is the service port number, not the target port.
+                                      For other resources, destination port might be derived from the referent
+                                      resource or this field.
+                                    format: int32
+                                    maximum: 65535
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                - name
+                                type: object
+                                x-kubernetes-validations:
+                                - message: Must have port for Service reference
+                                  rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                    ? has(self.port) : true'
+                              failureMode:
+                                description: |-
+                                  `failureMode` controls behavior when the policy server is unreachable
+                                  or returns an error. `FailOpen` allows the request; `FailClosed`
+                                  (default) denies it.
+                                enum:
+                                - FailOpen
+                                - FailClosed
+                                type: string
+                              metadata:
+                                additionalProperties:
+                                  description: CELExpression represents a Common Expression
+                                    Language (CEL) expression.
+                                  maxLength: 16384
+                                  minLength: 1
+                                  type: string
+                                description: |-
+                                  `metadata` is static or CEL-evaluated context surfaced to the policy
+                                  server as the wire `Metadata.filter_metadata` map, keyed by namespace.
+                                  Values are CEL expressions.
+                                maxProperties: 64
+                                type: object
+                            type: object
+                        required:
+                        - methods
+                        type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [authentication authorization]
-                        must be set
-                      rule: '[has(self.authentication),has(self.authorization)].filter(x,x==true).size()
+                    - message: at least one of the fields in [authentication authorization
+                        extMcp] must be set
+                      rule: '[has(self.authentication),has(self.authorization),has(self.extMcp)].filter(x,x==true).size()
                         >= 1'
                   tcp:
                     description: tcp defines settings for managing TCP connections

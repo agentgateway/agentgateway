@@ -1338,6 +1338,58 @@ type BackendMCP struct {
 	//
 	// +optional
 	Authentication *MCPAuthentication `json:"authentication,omitempty"`
+
+	// `extMcp` routes selected JSON-RPC methods through a remote policy server.
+	// +optional
+	ExtMcp *ExtMcp `json:"extMcp,omitempty"`
+}
+
+// MCPMethodPhase controls when an MCP method is run through the extMcp pipeline.
+// +kubebuilder:validation:Enum=Off;Request;Response;Both
+type MCPMethodPhase string
+
+const (
+	MCPMethodPhaseOff      MCPMethodPhase = "Off"
+	MCPMethodPhaseRequest  MCPMethodPhase = "Request"
+	MCPMethodPhaseResponse MCPMethodPhase = "Response"
+	MCPMethodPhaseBoth     MCPMethodPhase = "Both"
+)
+
+// ExtMcp is the MCP-layer analog of Envoy ext_authz: a remote gRPC server
+// invoked per JSON-RPC method.
+type ExtMcp struct {
+	// `remote` configures the gRPC policy server.
+	// +optional
+	Remote *ExtMcpRemote `json:"remote,omitempty"`
+
+	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
+	// `tools/list`) routed through the policy server. Methods not listed
+	// here, including unknown ones, bypass extMcp entirely.
+	// +required
+	// +kubebuilder:validation:MinProperties=1
+	// +kubebuilder:validation:MaxProperties=64
+	Methods map[string]MCPMethodPhase `json:"methods"`
+}
+
+type ExtMcpRemote struct {
+	// `backendRef` references the remote ExtMcp policy server.
+	// Supported types: `Service` and `Backend`.
+	// Required; translator rejects an absent ref.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// `failureMode` controls behavior when the policy server is unreachable
+	// or returns an error. `FailOpen` allows the request; `FailClosed`
+	// (default) denies it.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// `metadata` is static or CEL-evaluated context surfaced to the policy
+	// server as the wire `Metadata.filter_metadata` map, keyed by namespace.
+	// Values are CEL expressions.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	Metadata map[string]shared.CELExpression `json:"metadata,omitempty"`
 }
 
 type MCPAuthentication struct {

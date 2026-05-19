@@ -1,0 +1,88 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extmcp-failopen
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      extMcp:
+        remote:
+          backendRef:
+            name: extmcp-srv
+            port: 4317
+          failureMode: FailOpen
+        methods:
+          tools/call: "Off"
+          tools/list: Response
+          prompts/list: Request
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extmcp-srv
+  namespace: default
+spec:
+  ports:
+    - port: 4317
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        extMcp:
+          methods:
+            prompts/list: REQUEST
+            tools/call: "OFF"
+            tools/list: RESPONSE
+          remote:
+            failureMode: ALLOW
+            target:
+              port: 4317
+              service:
+                hostname: extmcp-srv.default.svc.cluster.local
+                namespace: default
+      key: backend/default/extmcp-failopen:mcp-extmcp:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: extmcp-failopen
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: extmcp-failopen
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

@@ -1,0 +1,65 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extmcp-no-backend-ref
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      extMcp:
+        remote:
+          failureMode: FailClosed
+          metadata:
+            tenant: 'jwt.sub'
+        methods:
+          tools/call: Both
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        extMcp:
+          methods:
+            tools/call: BOTH
+          remote:
+            metadata:
+              tenant: jwt.sub
+      key: backend/default/extmcp-no-backend-ref:mcp-extmcp:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: extmcp-no-backend-ref
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: extmcp-no-backend-ref
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'failed to build extMcp: backendRef is required'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

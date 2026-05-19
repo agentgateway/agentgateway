@@ -1,0 +1,81 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extmcp-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      extMcp:
+        remote:
+          backendRef:
+            name: extmcp-srv
+            port: 4317
+          metadata:
+            tenant: 'foolen_{{jwt.sub}}'
+        methods:
+          tools/call: Both
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extmcp-srv
+  namespace: default
+spec:
+  ports:
+    - port: 4317
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        extMcp:
+          methods:
+            tools/call: BOTH
+          remote:
+            metadata:
+              tenant: foolen_{{jwt.sub}}
+            target:
+              port: 4317
+              service:
+                hostname: extmcp-srv.default.svc.cluster.local
+                namespace: default
+      key: backend/default/extmcp-invalid-cel:mcp-extmcp:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: extmcp-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: extmcp-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'extMcp metadata "tenant" is not a valid CEL expression: foolen_{{jwt.sub}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

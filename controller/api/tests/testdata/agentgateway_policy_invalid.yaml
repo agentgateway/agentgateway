@@ -698,6 +698,26 @@ spec:
         - field: a
           value: b
 ---
+_err: 'backend.mcp may not be used with a Service target'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-extmcp-on-service
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: f1
+  backend:
+    mcp:
+      extMcp:
+        remote:
+          backendRef:
+            name: extmcp-srv
+            port: 4317
+        methods:
+          tools/call: Both
+---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
