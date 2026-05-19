@@ -39,12 +39,9 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(
 		s.Ctx,
-		sharedGatewayObjectMeta.Name,
-		sharedGatewayObjectMeta.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		&gwv1.Gateway{ObjectMeta: sharedGatewayObjectMeta},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,
@@ -85,12 +82,9 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(
 		s.Ctx,
-		sharedGatewayObjectMeta.Name,
-		sharedGatewayObjectMeta.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		&gwv1.Gateway{ObjectMeta: sharedGatewayObjectMeta},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,

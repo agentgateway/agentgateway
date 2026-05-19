@@ -27,6 +27,8 @@ type Provider struct {
 
 	clusterContext *cluster.Context
 	installContext *install.Context
+
+	acceptanceHandlers []AcceptanceHandler
 }
 
 // NewProvider returns a Provider that will provide Assertions that can be executed against an

@@ -31,7 +31,9 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 // TestRBACHeaderAuthorization tests header based rbac
 func (s *testingSuite) TestRBACHeaderAuthorization() {
 	// Verify HTTPRoute is accepted before running the test
-	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(s.Ctx, "httpbin-route", namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(s.Ctx, &gwv1.HTTPRoute{
+		ObjectMeta: metav1.ObjectMeta{Name: "httpbin-route", Namespace: namespace},
+	})
 
 	// TODO(npolshak): re-enable once sectionName is supported for TrafficPolicy in agentgateway once https://github.com/agentgateway/agentgateway/pull/323 is pulled in
 	// missing header, no rbac on route, should succeed
