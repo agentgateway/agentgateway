@@ -1,0 +1,15 @@
+ai:
+  providerGroups:
+  - providers:
+    - custom:
+        supportedFormats:
+        - COMPLETIONS
+        - RESPONSES
+      hostOverride:
+        host: llm.example.com
+        port: 443
+      name: backend
+key: test-ns/custom-host-backend
+name:
+  name: custom-host-backend
+  namespace: test-ns

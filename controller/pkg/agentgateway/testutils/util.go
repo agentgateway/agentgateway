@@ -206,6 +206,7 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
 		Collections: collections,
+		References:  plugins.BuildReferenceIndex(nil, nil, plugins.DefaultReferenceTypes(collections)),
 		Resolver:    resolver,
 		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
 	}
