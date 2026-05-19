@@ -219,8 +219,7 @@ impl ExtAuthz {
 			.headers()
 			.get_all(name)
 			.iter()
-			.filter_map(|v| v.to_str().ok())
-			.map(|s| s.to_string())
+			.map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned())
 			.collect();
 
 		if !values.is_empty() {

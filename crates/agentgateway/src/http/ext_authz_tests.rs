@@ -470,6 +470,26 @@ fn test_include_request_headers_empty_includes_all() {
 }
 
 #[test]
+fn test_get_header_values_sanitizes_non_utf8_values() {
+	use ::http::{HeaderName, HeaderValue, Request};
+
+	let mut req = Request::builder().body(http::Body::empty()).unwrap();
+	req.headers_mut().append(
+		"x-raw",
+		HeaderValue::from_bytes(b"ok-\xff").expect("obs-text should be accepted"),
+	);
+	req
+		.headers_mut()
+		.append("x-raw", HeaderValue::from_static("second"));
+
+	let ext_authz = ExtAuthz::default();
+	let mut headers = std::collections::HashMap::new();
+	ext_authz.get_header_values(&req, &HeaderName::from_static("x-raw"), &mut headers);
+
+	assert_eq!(headers.get("x-raw").unwrap(), "ok-\u{fffd}, second");
+}
+
+#[test]
 fn test_host_header_protection() {
 	// Test that host header cannot be added through upstream headers
 	let header_options = vec![
