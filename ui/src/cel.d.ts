@@ -126,7 +126,7 @@ export interface ExecutorSerde {
    */
   llm?: {
     /**
-     * Whether the LLM response is streamed.
+     * Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
      */
     streaming: boolean;
     /**

@@ -76,6 +76,8 @@ export type SimpleLocalBackend =
        */
       backend: string;
     };
+export type LocalExplicitOrConditional = LocalConditionalPolicies | DirectResponse;
+export type Expression = string;
 export type Bytes = number[] | string;
 export type McpIDP =
   | {
@@ -132,48 +134,18 @@ export type RegexRule =
       pattern: string;
     };
 export type Builtin = "ssn" | "creditCard" | "phoneNumber" | "email" | "caSin";
+export type KeyExchangeGroup = "X25519" | "P-256" | "P-384" | "X25519_MLKEM768";
 export type BackendAuth =
+  | "copilot"
   | {
       passthrough: {
-        location?:
-          | {
-              header: {
-                name: string;
-                prefix?: string | null;
-              };
-            }
-          | {
-              queryParameter: {
-                name: string;
-              };
-            }
-          | {
-              cookie: {
-                name: string;
-              };
-            };
+        location?: AuthorizationLocation | null;
       };
     }
   | {
       key: {
         value: FileOrInline;
-        location?:
-          | {
-              header: {
-                name: string;
-                prefix?: string | null;
-              };
-            }
-          | {
-              queryParameter: {
-                name: string;
-              };
-            }
-          | {
-              cookie: {
-                name: string;
-              };
-            };
+        location?: AuthorizationLocation | null;
       };
     }
   | {
@@ -184,6 +156,23 @@ export type BackendAuth =
     }
   | {
       azure: AzureAuth;
+    };
+export type AuthorizationLocation =
+  | {
+      header: {
+        name: string;
+        prefix?: string | null;
+      };
+    }
+  | {
+      queryParameter: {
+        name: string;
+      };
+    }
+  | {
+      cookie: {
+        name: string;
+      };
     };
 export type FileOrInline =
   | {
@@ -198,9 +187,17 @@ export type GcpAuth =
        * Audience for the token. If not set, the destination host will be used.
        */
       audience?: string | null;
+      /**
+       * ADC-compatible Google credential JSON. If not set, ambient credentials are used.
+       */
+      credential?: FileOrInline | null;
     }
   | {
       type?: AccessToken | null;
+      /**
+       * ADC-compatible Google credential JSON. If not set, ambient credentials are used.
+       */
+      credential?: FileOrInline | null;
     };
 export type IdToken = "idToken";
 export type AccessToken = "accessToken";
@@ -275,7 +272,6 @@ export type ResponseGuard1 =
       azureContentSafety: AzureContentSafety;
       [k: string]: unknown;
     };
-export type Expression = string;
 export type RouteType =
   | "completions"
   | "messages"
@@ -286,6 +282,50 @@ export type RouteType =
   | "embeddings"
   | "realtime"
   | "anthropicTokenCount";
+export type LocalRateLimitPolicy = LocalConditionalPolicies2 | RateLimitSpec[];
+export type LocalExplicitOrConditional2 = LocalConditionalPolicies3 | RemoteRateLimit;
+export type LocalConditionalPolicy3 = {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  domain: string;
+  /**
+   * Policies to connect to the backend
+   */
+  policies?: SimpleLocalBackendPolicies | null;
+  descriptors: DescriptorSet;
+  /**
+   * Behavior when the remote rate limit service is unavailable or returns an error.
+   * Defaults to failClosed, denying requests with a 500 status on service failure.
+   */
+  failureMode?: "failClosed" | "failOpen";
+  [k: string]: unknown;
+} & LocalConditionalPolicy31;
+export type DescriptorSet = DescriptorEntry[];
+export type LocalConditionalPolicy31 =
+  | "invalid"
+  | {
+      service: {
+        name: NamespacedHostname;
+        port: number;
+      };
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Hostname or IP address
+       */
+      host: string;
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Explicit backend reference. Backend must be defined in the top level backends list
+       */
+      backend: string;
+      [k: string]: unknown;
+    };
 export type RemoteRateLimit = {
   domain: string;
   /**
@@ -300,7 +340,6 @@ export type RemoteRateLimit = {
   failureMode?: "failClosed" | "failOpen";
   [k: string]: unknown;
 } & RemoteRateLimit1;
-export type DescriptorSet = DescriptorEntry[];
 export type RemoteRateLimit1 =
   | "invalid"
   | {
@@ -372,6 +411,108 @@ export type LocalJwtConfig =
     };
 export type TokenEndpointAuth = "clientSecretBasic" | "clientSecretPost";
 export type APIKey = string;
+export type LocalExplicitOrConditional3 = LocalConditionalPolicies4 | ExtAuthz;
+export type LocalConditionalPolicy4 = {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  /**
+   * Policies to connect to the backend
+   */
+  policies?: SimpleLocalBackendPolicies | null;
+  /**
+   * The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+   */
+  protocol?:
+    | {
+        grpc: {
+          /**
+           * Additional context to send to the authorization service.
+           * This maps to the `context_extensions` field of the request, and only allows static values.
+           */
+          context?: {
+            [k: string]: string;
+          } | null;
+          /**
+           * Additional metadata to send to the authorization service.
+           * This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
+           * If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+           */
+          metadata?: {
+            [k: string]: Expression;
+          } | null;
+        };
+      }
+    | {
+        http: {
+          path?: Expression | null;
+          /**
+           * When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
+           * the provided expression rather than directly returning the error.
+           */
+          redirect?: Expression | null;
+          /**
+           * Specific headers from the authorization response will be copied into the request to the backend.
+           */
+          includeResponseHeaders?: string[];
+          /**
+           * Specific headers to add in the authorization request (empty = all headers), based on the expression
+           */
+          addRequestHeaders?: {
+            [k: string]: Expression;
+          };
+          /**
+           * Metadata to include under the `extauthz` variable, based on the authorization response.
+           */
+          metadata?: {
+            [k: string]: Expression;
+          };
+        };
+      };
+  /**
+   * Behavior when the authorization service is unavailable or returns an error
+   */
+  failureMode?:
+    | ("allow" | "deny")
+    | {
+        denyWithStatus: number;
+      };
+  /**
+   * Specific headers to include in the authorization request.
+   * If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
+   */
+  includeRequestHeaders?: HeaderOrPseudo[];
+  /**
+   * Options for including the request body in the authorization request
+   */
+  includeRequestBody?: BodyOptions | null;
+  [k: string]: unknown;
+} & LocalConditionalPolicy41;
+export type HeaderOrPseudo = string;
+export type LocalConditionalPolicy41 =
+  | "invalid"
+  | {
+      service: {
+        name: NamespacedHostname;
+        port: number;
+      };
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Hostname or IP address
+       */
+      host: string;
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Explicit backend reference. Backend must be defined in the top level backends list
+       */
+      backend: string;
+      [k: string]: unknown;
+    };
 export type ExtAuthz = {
   /**
    * Policies to connect to the backend
@@ -445,8 +586,67 @@ export type ExtAuthz = {
   includeRequestBody?: BodyOptions | null;
   [k: string]: unknown;
 } & ExtAuthz1;
-export type HeaderOrPseudo = string;
 export type ExtAuthz1 =
+  | "invalid"
+  | {
+      service: {
+        name: NamespacedHostname;
+        port: number;
+      };
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Hostname or IP address
+       */
+      host: string;
+      [k: string]: unknown;
+    }
+  | {
+      /**
+       * Explicit backend reference. Backend must be defined in the top level backends list
+       */
+      backend: string;
+      [k: string]: unknown;
+    };
+export type LocalExplicitOrConditional4 = LocalConditionalPolicies5 | ExtProc;
+export type LocalConditionalPolicy5 = {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  /**
+   * Policies to connect to the backend
+   */
+  policies?: SimpleLocalBackendPolicies | null;
+  /**
+   * Behavior when the ext_proc service is unavailable or returns an error
+   */
+  failureMode?: "failClosed" | "failOpen";
+  /**
+   * Additional metadata to send to the external processing service.
+   * Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.
+   */
+  metadataContext?: {
+    [k: string]: {
+      [k: string]: Expression;
+    };
+  } | null;
+  /**
+   * Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
+   */
+  requestAttributes?: {
+    [k: string]: Expression;
+  } | null;
+  /**
+   * Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
+   */
+  responseAttributes?: {
+    [k: string]: Expression;
+  } | null;
+  [k: string]: unknown;
+} & LocalConditionalPolicy51;
+export type LocalConditionalPolicy51 =
   | "invalid"
   | {
       service: {
@@ -524,6 +724,7 @@ export type ExtProc1 =
       backend: string;
       [k: string]: unknown;
     };
+export type LocalExplicitOrConditional5 = LocalConditionalPolicies6 | LocalTransformationConfig;
 export type LocalRouteBackend = {
   weight?: number;
   policies?: LocalBackendPolicies | null;
@@ -641,6 +842,9 @@ export type AIProvider =
     }
   | {
       azure: Provider6;
+    }
+  | {
+      copilot: Provider7;
     };
 export type LocalAwsBackend = {
   agentCore: LocalAgentCoreBackend;
@@ -766,6 +970,9 @@ export type PolicyTarget =
     }
   | {
       backend: BackendTarget;
+    }
+  | {
+      listenerSet: ListenerSetTarget;
     };
 export type BackendTarget =
   | "invalid"
@@ -1023,6 +1230,10 @@ export interface LocalTLSServerConfig {
    * Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).
    */
   maxTLSVersion?: TLSVersion | null;
+  /**
+   * Key exchange groups allowed for negotiating TLS.
+   */
+  keyExchangeGroups?: string[] | null;
 }
 export interface LocalRoute {
   name?: string | null;
@@ -1084,7 +1295,7 @@ export interface FilterOrPolicy {
   /**
    * Directly respond to the request with a static response.
    */
-  directResponse?: DirectResponse | null;
+  directResponse?: LocalExplicitOrConditional | null;
   /**
    * Handle CORS preflight requests and append configured CORS headers to applicable requests.
    */
@@ -1124,11 +1335,11 @@ export interface FilterOrPolicy {
   /**
    * Rate limit incoming requests. State is kept local.
    */
-  localRateLimit?: RateLimitSpec[];
+  localRateLimit?: LocalRateLimitPolicy | null;
   /**
    * Rate limit incoming requests. State is managed by a remote server.
    */
-  remoteRateLimit?: RemoteRateLimit | null;
+  remoteRateLimit?: LocalExplicitOrConditional2 | null;
   /**
    * Authenticate incoming JWT requests.
    */
@@ -1148,15 +1359,15 @@ export interface FilterOrPolicy {
   /**
    * Authenticate incoming requests by calling an external authorization server.
    */
-  extAuthz?: ExtAuthz | null;
+  extAuthz?: LocalExplicitOrConditional3 | null;
   /**
    * Extend agentgateway with an external processor
    */
-  extProc?: ExtProc | null;
+  extProc?: LocalExplicitOrConditional4 | null;
   /**
    * Modify requests and responses
    */
-  transformations?: LocalTransformationConfig | null;
+  transformations?: LocalExplicitOrConditional5 | null;
   /**
    * Handle CSRF protection by validating request origins against configured allowed origins.
    */
@@ -1196,6 +1407,21 @@ export interface RequestMirror {
 export interface NamespacedHostname {
   namespace: string;
   hostname: string;
+  [k: string]: unknown;
+}
+export interface LocalConditionalPolicies {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy[];
+}
+export interface LocalConditionalPolicy {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  body: Bytes;
+  status: number;
   [k: string]: unknown;
 }
 export interface DirectResponse {
@@ -1370,6 +1596,10 @@ export interface LocalBackendTLS {
   insecureHost?: boolean;
   alpn?: string[] | null;
   subjectAltNames?: string[] | null;
+  /**
+   * Key exchange groups allowed for negotiating TLS.
+   */
+  keyExchangeGroups?: KeyExchangeGroup[] | null;
 }
 export interface HTTP {
   version?: string | null;
@@ -1540,18 +1770,50 @@ export interface PromptCachingConfig {
   minTokens?: number | null;
   cacheMessageOffset?: number;
 }
+export interface LocalConditionalPolicies2 {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy2[];
+}
+export interface LocalConditionalPolicy2 {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  maxTokens?: number;
+  tokensPerFill?: number;
+  fillInterval: string;
+  type?: "requests" | "tokens";
+  [k: string]: unknown;
+}
 export interface RateLimitSpec {
   maxTokens?: number;
   tokensPerFill?: number;
   fillInterval: string;
   type?: "requests" | "tokens";
 }
+export interface LocalConditionalPolicies3 {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy3[];
+}
 export interface DescriptorEntry {
   entries: KV[];
   type?: "requests" | "tokens";
   /**
+   * cost determines the optional expression to determine the cost of the request.
+   * If unset, type `requests` defaults to `1`, and type `tokens` defaults to `llm.totalTokens`.
+   * If the expression fails to evaluate, the descriptor is skipped.
+   * Costs for type `requests` are evaluated during request processing. Costs for type `tokens`
+   * are evaluated upon request completion.
+   */
+  cost?: Expression | null;
+  /**
    * limitOverride determines the optional expression to determine the limit of the request.
    * This tells the remote server what limit to apply to the request.
+   * Note: this does not specify the *cost* of the request, which is done by the `cost` field.
    * The expression must evaluate to a map with `unit` and `requestsPerUnit` keys. For example:
    * `{"unit":"second","requestsPerUnit":100}`.
    * Valid units: second, minute, hour, day, month, year
@@ -1692,6 +1954,12 @@ export interface LocalAPIKey {
   key: APIKey;
   metadata?: unknown;
 }
+export interface LocalConditionalPolicies4 {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy4[];
+}
 export interface BodyOptions {
   /**
    * Maximum size of request body to buffer (default: 8192)
@@ -1705,6 +1973,27 @@ export interface BodyOptions {
    * If true, pack body as raw bytes in gRPC
    */
   packAsBytes?: boolean;
+}
+export interface LocalConditionalPolicies5 {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy5[];
+}
+export interface LocalConditionalPolicies6 {
+  /**
+   * conditional policy entries. An entry without a condition must be the final fallback.
+   */
+  conditional: LocalConditionalPolicy6[];
+}
+export interface LocalConditionalPolicy6 {
+  /**
+   * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
+   */
+  condition?: Expression | null;
+  request?: LocalTransform | null;
+  response?: LocalTransform | null;
+  [k: string]: unknown;
 }
 export interface Csrf {
   additionalOrigins?: string[];
@@ -1759,6 +2048,10 @@ export interface LocalBackendPolicies {
    * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
    */
   health?: LocalHealthPolicy | null;
+  /**
+   * Authenticate incoming requests by calling an external authorization server after this backend is selected.
+   */
+  extAuthz?: ExtAuthz | null;
   /**
    * Authorization policies for MCP access.
    */
@@ -1908,6 +2201,9 @@ export interface Provider6 {
    */
   projectName?: string | null;
 }
+export interface Provider7 {
+  model?: string | null;
+}
 export interface LocalAIProviders {
   providers: LocalNamedAIProvider[];
 }
@@ -1951,15 +2247,15 @@ export interface LocalGatewayPolicy {
   /**
    * Authenticate incoming requests by calling an external authorization server.
    */
-  extAuthz?: ExtAuthz | null;
+  extAuthz?: LocalExplicitOrConditional3 | null;
   /**
    * Extend agentgateway with an external processor
    */
-  extProc?: ExtProc | null;
+  extProc?: LocalExplicitOrConditional4 | null;
   /**
    * Modify requests and responses
    */
-  transformations?: LocalTransformationConfig | null;
+  transformations?: LocalExplicitOrConditional5 | null;
   /**
    * Authenticate incoming requests using Basic Authentication with htpasswd.
    */
@@ -2008,6 +2304,7 @@ export interface HTTP2 {
   http2WindowSize?: number | null;
   http2ConnectionWindowSize?: number | null;
   http2FrameSize?: number | null;
+  http2MaxHeaderSize?: number | null;
   http2KeepaliveInterval?: string | null;
   http2KeepaliveTimeout?: string | null;
   /**
@@ -2023,6 +2320,10 @@ export interface TLS {
   minVersion?: TLSVersion | null;
   maxVersion?: TLSVersion | null;
   cipherSuites?: string[] | null;
+  /**
+   * Key exchange groups allowed for negotiating TLS.
+   */
+  keyExchangeGroups?: string[] | null;
 }
 export interface TCP2 {
   keepalives: KeepaliveConfig1;
@@ -2081,6 +2382,11 @@ export interface RouteName {
   ruleName?: string | null;
   kind?: string | null;
 }
+export interface ListenerSetTarget {
+  name: string;
+  namespace: string;
+  section?: string | null;
+}
 export interface LocalRouteGroup {
   name: string;
   routes: LocalRoute[];
@@ -2108,7 +2414,7 @@ export interface LocalLLMModels {
   /**
    * provider of the LLM we are connecting too
    */
-  provider: "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azure";
+  provider: "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azure" | "copilot";
   /**
    * defaults allows setting default values for the request. If these are not present in the request body, they will be set.
    * To override even when set, use `overrides`.
@@ -2222,15 +2528,15 @@ export interface LocalLLMPolicy {
   /**
    * Authenticate incoming requests by calling an external authorization server.
    */
-  extAuthz?: ExtAuthz | null;
+  extAuthz?: LocalExplicitOrConditional3 | null;
   /**
    * Extend agentgateway with an external processor
    */
-  extProc?: ExtProc | null;
+  extProc?: LocalExplicitOrConditional4 | null;
   /**
    * Modify requests and responses
    */
-  transformations?: LocalTransformationConfig | null;
+  transformations?: LocalExplicitOrConditional5 | null;
   /**
    * Authenticate incoming requests using Basic Authentication with htpasswd.
    */
@@ -2243,6 +2549,14 @@ export interface LocalLLMPolicy {
    * Authorization policies for HTTP access.
    */
   authorization?: RuleSet | null;
+  /**
+   * Rate limit incoming requests. State is kept local.
+   */
+  localRateLimit?: RateLimitSpec[];
+  /**
+   * Rate limit incoming requests. State is managed by a remote server.
+   */
+  remoteRateLimit?: RemoteRateLimit | null;
 }
 export interface LocalSimpleMcpConfig {
   port?: number | null;
