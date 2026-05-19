@@ -84,7 +84,8 @@ jobs:
           node-version: 24
       - run: corepack enable
       - name: Install UI dependencies
-        run: yarn install --immutabl
+        working-directory: ui
+        run: yarn install --immutable
       - name: Generation
         run: make generate-schema check-clean-repo
       - name: Lint
