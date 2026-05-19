@@ -674,8 +674,7 @@ func ProcessParentReferences[T any](
 				if dr := denied[gwNN]; dr != nil {
 					reason = gwv1.RouteConditionReason(dr.Reason)
 					msg = dr.Message
-				}
-				if crossNS.Contains(gwNN) {
+				} else if crossNS.Contains(gwNN) {
 					reason = gwv1.RouteReasonNotAllowedByListeners
 					msg = "Parent listener not usable or not permitted"
 				} else if parent.OriginalReference.SectionName != nil || parent.OriginalReference.Port != nil {
