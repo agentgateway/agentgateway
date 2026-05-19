@@ -87,9 +87,6 @@ impl CacheEntry {
 					(expiry, false)
 				},
 				Err(e) => {
-					let cb = CircularBuffer::new(Default::default());
-					// We got a result, its just empty
-					self.entries.store(Some(Arc::new(cb)));
 					// if we got an error, retain the last state
 					debug!("resolution failed: {e:?}");
 
