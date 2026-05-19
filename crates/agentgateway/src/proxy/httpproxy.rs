@@ -1604,13 +1604,12 @@ async fn make_backend_call(
 			req.extensions_mut().insert(llm::bedrock::AwsRegion {
 				region: config.region().to_string(),
 			});
-			req.extensions_mut().insert(llm::bedrock::AwsServiceName {
-				name: config.service_name(),
-			});
 
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {})),
+				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
+					service_name: Some(config.service_name().to_string()),
+				})),
 				..Default::default()
 			};
 			BackendCall {

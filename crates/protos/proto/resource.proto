@@ -325,6 +325,9 @@ message Aws {
     AwsExplicitConfig explicit_config = 1;
     AwsImplicit implicit = 2;
   }
+  // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+  // If unset, typed AWS backends may provide this automatically.
+  string service_name = 3;
 }
 
 // Azure-specific backend authentication.
@@ -346,7 +349,6 @@ message AwsExplicitConfig {
   string region = 3;
   // Optional session token for temporary credentials
   optional string session_token = 4;
-  // TODO: make service configurable
 }
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)

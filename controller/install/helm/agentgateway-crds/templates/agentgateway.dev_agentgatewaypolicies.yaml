@@ -321,6 +321,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -874,6 +882,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -1424,6 +1440,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -2191,6 +2215,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -2744,6 +2776,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -3570,6 +3610,14 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          serviceName:
+                            description: |-
+                              `serviceName` is the AWS SigV4 signing service name (for example,
+                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                              backends may provide this automatically.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                         required:
                         - secretRef
                         type: object

@@ -2822,6 +2822,13 @@
                 "string",
                 "null"
               ]
+            },
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "additionalProperties": false,
@@ -2833,6 +2840,15 @@
         {
           "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
           "type": "object",
+          "properties": {
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
           "additionalProperties": false
         }
       ]

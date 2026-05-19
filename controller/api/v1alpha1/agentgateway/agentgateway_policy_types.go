@@ -1235,6 +1235,13 @@ type AwsAuth struct {
 	// optionally `sessionToken`.
 	// +required
 	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+
+	// `serviceName` is the AWS SigV4 signing service name (for example,
+	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+	// backends may provide this automatically.
+	//
+	// +optional
+	ServiceName *ShortString `json:"serviceName,omitempty"`
 }
 
 type AzureAuth struct {

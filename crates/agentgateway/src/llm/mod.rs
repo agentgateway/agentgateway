@@ -336,7 +336,7 @@ impl AIProvider {
 			AIProvider::Bedrock(p) => {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {})),
+					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit { service_name: None })),
 					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)

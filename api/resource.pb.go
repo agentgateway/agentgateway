@@ -3742,7 +3742,10 @@ type Aws struct {
 	//
 	//	*Aws_ExplicitConfig
 	//	*Aws_Implicit
-	Kind          isAws_Kind `protobuf_oneof:"kind"`
+	Kind isAws_Kind `protobuf_oneof:"kind"`
+	// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+	// If unset, typed AWS backends may provide this automatically.
+	ServiceName   string `protobuf:"bytes,3,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3800,6 +3803,13 @@ func (x *Aws) GetImplicit() *AwsImplicit {
 		}
 	}
 	return nil
+}
+
+func (x *Aws) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
 }
 
 type isAws_Kind interface {
@@ -3927,7 +3937,7 @@ type AwsExplicitConfig struct {
 	// AWS Region (e.g., "us-west-2", "us-east-1"). Optional for AWS backends.
 	Region string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	// Optional session token for temporary credentials
-	SessionToken  *string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3,oneof" json:"session_token,omitempty"` // TODO: make service configurable
+	SessionToken  *string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3,oneof" json:"session_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12861,10 +12871,11 @@ const file_resource_proto_rawDesc = "" +
 	"\t_audienceB\f\n" +
 	"\n" +
 	"token_typeB\r\n" +
-	"\v_credential\"\xac\x01\n" +
+	"\v_credential\"\xcf\x01\n" +
 	"\x03Aws\x12W\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2,.agentgateway.dev.resource.AwsExplicitConfigH\x00R\x0eexplicitConfig\x12D\n" +
-	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicitB\x06\n" +
+	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicit\x12!\n" +
+	"\fservice_name\x18\x03 \x01(\tR\vserviceNameB\x06\n" +
 	"\x04kind\"\x96\x02\n" +
 	"\x05Azure\x12Y\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2..agentgateway.dev.resource.AzureExplicitConfigH\x00R\x0eexplicitConfig\x12b\n" +

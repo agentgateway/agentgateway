@@ -119,7 +119,7 @@ impl BedrockGuardrails {
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
 		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
-			AwsAuth::Implicit {},
+			AwsAuth::Implicit { service_name: None },
 		)));
 		pols
 	}

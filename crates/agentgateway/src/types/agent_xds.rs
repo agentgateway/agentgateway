@@ -737,6 +737,11 @@ fn backend_auth_from_proto(
 			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
+			let service_name = if a.service_name.is_empty() {
+				None
+			} else {
+				Some(a.service_name.clone())
+			};
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
 					access_key_id: config.access_key_id.into(),
@@ -747,8 +752,9 @@ fn backend_auth_from_proto(
 						Some(config.region.clone())
 					},
 					session_token: config.session_token.map(|token| token.into()),
+					service_name,
 				},
-				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {},
+				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit { service_name },
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Aws(aws_auth)
