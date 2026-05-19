@@ -789,7 +789,6 @@ fn messages_to_response(
 	))
 }
 
-// wrap response stream with extmcp response-phase hooks (if any)
 fn wrap_with_extmcp(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,

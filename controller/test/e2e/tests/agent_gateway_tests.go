@@ -13,6 +13,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/csrf"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/delegation"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extauth"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extmcp"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/locality"
@@ -39,6 +40,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("CSRF", csrf.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Delegation", delegation.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extauth", extauth.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("ExtMcp", extmcp.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extproc", extproc.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("LocalRateLimit", local_rate_limit.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("GlobalRateLimit", global_rate_limit.NewTestingSuite)

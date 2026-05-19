@@ -1,7 +1,3 @@
-// Wire-name constants sourced from rmcp so match arms stay coupled to the
-// crate-of-truth instead of free-floating string literals. Plain `&str`
-// re-exports (not the ZSTs) so they're usable directly in match patterns.
-
 use rmcp::model::{
 	CallToolRequestMethod, ConstString, GetPromptRequestMethod, ListPromptsRequestMethod,
 	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,

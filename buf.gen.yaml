@@ -3,6 +3,9 @@ plugins:
 - name: go
   out: api
   opt: paths=source_relative
+- name: go-grpc
+  out: api
+  opt: paths=source_relative
 - name: golang-jsonshim
   out: api
   opt: paths=source_relative

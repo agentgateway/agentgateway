@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -50,27 +51,38 @@ func buildNotifyInitializedRequest() string {
 	return `{"jsonrpc":"2.0","method":"notifications/initialized"}`
 }
 
-// mcpHeaders returns a base set of headers for MCP requests.
-// Accept includes both JSON and SSE to support initializing responses and streaming.
-// Extra headers can be provided to include auth headers, etc.
-func mcpHeaders(extraHeaders map[string]string) map[string]string {
-	baseHeaders := map[string]string{
+// MCPHeaders returns the standard MCP request headers. If host is non-empty
+// it is set as a Host header (caller is expected to also pass it via
+// curl.WithHostHeader for the curl invocation).
+func MCPHeaders(host, protoVersion string, extraHeaders map[string]string) map[string]string {
+	h := map[string]string{
 		"Content-Type":         "application/json",
 		"Accept":               "application/json, text/event-stream",
-		"MCP-Protocol-Version": mcpProto,
+		"MCP-Protocol-Version": protoVersion,
 	}
-	maps.Copy(baseHeaders, extraHeaders)
-	return baseHeaders
+	if host != "" {
+		h["Host"] = host
+	}
+	maps.Copy(h, extraHeaders)
+	return h
 }
 
-// withSessionID returns a copy of headers including mcp-session-id.
-func withSessionID(headers map[string]string, sessionID string) map[string]string {
+// WithSessionID returns a copy of headers including mcp-session-id.
+func WithSessionID(headers map[string]string, sessionID string) map[string]string {
 	cp := make(map[string]string, len(headers)+1)
 	maps.Copy(cp, headers)
 	if sessionID != "" {
 		cp["mcp-session-id"] = sessionID
 	}
 	return cp
+}
+
+func mcpHeaders(extraHeaders map[string]string) map[string]string {
+	return MCPHeaders("", mcpProto, extraHeaders)
+}
+
+func withSessionID(headers map[string]string, sessionID string) map[string]string {
+	return WithSessionID(headers, sessionID)
 }
 
 // withRouteHeaders merges route-specific headers (like user-type) into a copy.
@@ -185,22 +197,39 @@ func (s *testingSuite) notifyInitialized(sessionID string, extraHeaders map[stri
 	time.Sleep(warmupTime)
 }
 
-func (s *testingSuite) sendMCP(match *testmatchers.HttpResponse, headers map[string]string, body string) {
-	common.BaseGateway.Send(s.T(), match, s.mcpCurlOptions(headers, body)...)
-}
-
-func (s *testingSuite) mcpCurlOptions(headers map[string]string, body string) []curl.Option {
+// MCPCurlOptions builds curl options for a POST to /mcp. If host is non-empty,
+// curl.WithHostHeader(host) is added and any "Host" entry in headers is skipped.
+func MCPCurlOptions(host string, headers map[string]string, body string) []curl.Option {
 	opts := []curl.Option{
 		curl.WithPath("/mcp"),
 		curl.WithMethod(http.MethodPost),
 	}
+	if host != "" {
+		opts = append(opts, curl.WithHostHeader(host))
+	}
 	for k, v := range headers {
+		if host != "" && strings.EqualFold(k, "Host") {
+			continue
+		}
 		opts = append(opts, curl.WithHeader(k, v))
 	}
 	if body != "" {
 		opts = append(opts, curl.WithBody(body))
 	}
 	return opts
+}
+
+// SendMCP sends a POST to /mcp via the BaseGateway and asserts the match.
+func SendMCP(t *testing.T, match *testmatchers.HttpResponse, host string, headers map[string]string, body string) {
+	common.BaseGateway.Send(t, match, MCPCurlOptions(host, headers, body)...)
+}
+
+func (s *testingSuite) sendMCP(match *testmatchers.HttpResponse, headers map[string]string, body string) {
+	SendMCP(s.T(), match, "", headers, body)
+}
+
+func (s *testingSuite) mcpCurlOptions(headers map[string]string, body string) []curl.Option {
+	return MCPCurlOptions("", headers, body)
 }
 
 // helper to run a request to a given path and return response and body text.
@@ -232,9 +261,29 @@ func (s *testingSuite) execCurl(path string, headers map[string]string, body str
 	return resp, bodyText, nil
 }
 
-// helper to run a POST to /mcp with optional headers and body
+// ExecCurlMCP runs a POST to /mcp and returns the response and body text.
+func ExecCurlMCP(t *testing.T, host string, headers map[string]string, body string) (*http.Response, string, error) {
+	opts := append(
+		common.GatewayAddressOptions(common.BaseGateway.ResolvedAddress()),
+		MCPCurlOptions(host, headers, body)...,
+	)
+	resp, err := curl.ExecuteRequest(opts...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	bs, readErr := io.ReadAll(resp.Body)
+	if readErr != nil && !isTimeoutError(readErr) {
+		return nil, "", readErr
+	}
+	text := string(bs)
+	t.Logf("mcp response status=%d content-type=%q body=%s", resp.StatusCode, resp.Header.Get("Content-Type"), text)
+	return resp, text, nil
+}
+
 func (s *testingSuite) execCurlMCP(headers map[string]string, body string) (*http.Response, string, error) {
-	return s.execCurl("/mcp", headers, body)
+	return ExecCurlMCP(s.T(), "", headers, body)
 }
 
 func isTimeoutError(err error) bool {

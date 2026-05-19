@@ -30,6 +30,7 @@ func main() {
 	start("dummy-idp", startDummyIDP)
 	start("extproc", startExtProcServer)
 	start("ext-authz", startExtAuthzServer)
+	start("ext-mcp", startExtMcpServer)
 	start("mcp-website-fetcher", startMCPWebsiteServer)
 	start("mcp-admin-server", startMCPAdminServer)
 	start("test-a2a-server", startA2AServer)

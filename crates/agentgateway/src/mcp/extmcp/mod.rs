@@ -43,9 +43,7 @@ pub enum Driver {
 	Remote(Remote),
 }
 
-// Configuration for a remote MCP-aware policy server, modeled on Envoy's
-// ext_authz. TLS, retries, and load balancing to the policy server come
-// from the backend referenced by `target`.
+// TLS, retries, and load balancing come from the backend referenced by `target`.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Remote {
@@ -56,8 +54,7 @@ pub struct Remote {
 	pub metadata: HashMap<String, Arc<cel::Expression>>,
 }
 
-// when we have an error executing a driver, or a driver gives a response that
-// we can't handle, this determines whether we fail-open or fail-closed.
+// Behavior when a driver errors or returns an unhandleable response.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum FailureMode {
@@ -66,8 +63,6 @@ pub enum FailureMode {
 	Deny,
 }
 
-/// Opaque single-call request context. The ext server sees the full
-/// JSON-RPC params blob and may replace it wholesale via `Mutated`.
 /// `params` is `None` for methods with no per-request body (e.g. `*/list`);
 /// any `Mutated` outcome there is logged and discarded.
 pub struct CallRequestCtx<'a> {
@@ -124,12 +119,9 @@ impl Driver {
 	}
 }
 
-/// Run the request-phase pipeline. Drivers fire in `ext.drivers` order;
-/// first `Reject` short-circuits, mutations compose (each driver acts on the
-/// body the previous one left behind). On `Reject`, `ctx` is left in whatever
-/// partially-mutated state earlier drivers produced. When `ctx.params` is
-/// `None` (e.g. `*/list`) mutations are discarded; list filtering belongs in
-/// the response phase.
+/// Drivers fire in order; first `Reject` short-circuits leaving `ctx` in whatever
+/// partially-mutated state earlier drivers produced. When `ctx.params` is `None`
+/// (e.g. `*/list`) mutations are discarded — list filtering belongs in the response phase.
 pub async fn run_call_request(
 	ext: &ExtMcp,
 	ctx: &mut CallRequestCtx<'_>,
@@ -150,8 +142,7 @@ pub async fn run_call_request(
 	composed
 }
 
-/// Run the response-phase pipeline. Drivers fire in `ext.drivers` order;
-/// first `Reject` short-circuits, mutations compose left-to-right.
+/// Drivers fire in order; first `Reject` short-circuits.
 pub async fn run_response(
 	ext: &ExtMcp,
 	method: &str,
