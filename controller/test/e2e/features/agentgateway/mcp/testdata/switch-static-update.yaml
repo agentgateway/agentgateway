@@ -1,0 +1,13 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend
+  namespace: default
+spec:
+  mcp:
+    targets:
+    - name: switch-target
+      static:
+        host: 127.0.0.1
+        port: 9
+        protocol: StreamableHTTP

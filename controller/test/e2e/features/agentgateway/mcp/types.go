@@ -78,10 +78,12 @@ var (
 	gatewayNamespace = "agentgateway-base"
 
 	// manifests
-	staticSetupManifest      = filepath.Join(fsutils.MustGetThisDir(), "testdata", "static.yaml")
-	dynamicSetupManifest     = filepath.Join(fsutils.MustGetThisDir(), "testdata", "dynamic.yaml")
-	authnPolicyManifest      = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-authn-auth0.yaml")
-	routeAuthnPolicyManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-route-authn-auth0.yaml")
+	staticSetupManifest        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "static.yaml")
+	dynamicSetupManifest       = filepath.Join(fsutils.MustGetThisDir(), "testdata", "dynamic.yaml")
+	switchSetupManifest        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "switch.yaml")
+	switchStaticUpdateManifest = filepath.Join(fsutils.MustGetThisDir(), "testdata", "switch-static-update.yaml")
+	authnPolicyManifest        = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-authn-auth0.yaml")
+	routeAuthnPolicyManifest   = filepath.Join(fsutils.MustGetThisDir(), "testdata", "remote-route-authn-auth0.yaml")
 
 	// Base test setup - common resources
 	setup = base.TestCase{
@@ -96,6 +98,11 @@ var (
 	// Static test setup (resources needed for non-dynamic tests)
 	staticSetup = base.TestCase{
 		Manifests: []string{staticSetupManifest},
+	}
+
+	// Switch test setup (selector-based backend that is updated to static at runtime)
+	switchSetup = base.TestCase{
+		Manifests: []string{switchSetupManifest},
 	}
 
 	// MCP authn keycloak test setup (resources needed for non-dynamic tests)

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
@@ -23,8 +24,9 @@ func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.
 	return &testingSuite{
 		BaseTestingSuite: base.NewBaseTestingSuite(ctx, testInst, setup, map[string]*base.TestCase{
 			// Static tests
-			"TestMCPWorkflow": &staticSetup,
-			"TestSSEEndpoint": &staticSetup,
+			"TestMCPWorkflow":           &staticSetup,
+			"TestSSEEndpoint":           &staticSetup,
+			"TestMCPSeamlessSwitchover": &switchSetup,
 			// Dynamic tests
 			"TestDynamicMCPAdminRouting":     &dynamicSetup,
 			"TestDynamicMCPUserRouting":      &dynamicSetup,
@@ -173,6 +175,35 @@ func (s *testingSuite) TestSSEEndpoint() {
 	}, headers, initBody)
 
 	_ = s.initializeSession(initBody, headers, "sse")
+}
+
+func (s *testingSuite) TestMCPSeamlessSwitchover() {
+	s.waitStaticReady()
+
+	initRequest := buildInitializeRequest("switch-client", 1)
+	headers := mcpHeaders(nil)
+
+	resp, body, err := s.execCurlMCP(headers, initRequest)
+	s.Require().NoError(err, "baseline initialize request failed")
+	s.Require().Equal(http.StatusOK, resp.StatusCode, "baseline initialize should return 200, got %d: %s", resp.StatusCode, body)
+	resp.Body.Close()
+	s.ApplyManifests(&base.TestCase{Manifests: []string{switchStaticUpdateManifest}})
+
+	host := strings.TrimSpace(s.GetKubectlOutput(
+		"get", "agentgatewaybackend", "mcp-backend",
+		"-n", "default",
+		"-o", "jsonpath={.spec.mcp.targets[0].static.host}",
+	))
+	s.Require().Equal("127.0.0.1", host, "expected static host to be applied to backend spec")
+
+	s.Require().Eventually(func() bool {
+		resp, _, err := s.execCurlMCP(headers, initRequest)
+		resp.Body.Close()
+		if err != nil {
+			return false
+		}
+		return resp.StatusCode != http.StatusOK
+	}, 90*time.Second, 2*time.Second, "expected selector changed to static backend update to take effect without restart")
 }
 
 func (s *testingSuite) TestDynamicMCPAdminRouting() {
