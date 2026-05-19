@@ -1079,7 +1079,7 @@ func buildExtAuthSpec(
 		}
 	}
 	if b := extAuth.ForwardBody; b != nil {
-		maxRequestBytes := uint32(0)
+		maxRequestBytes := uint32(8192)
 		if v := b.MaxSize.ClampedValue(); v != nil {
 			maxRequestBytes = *v
 		}

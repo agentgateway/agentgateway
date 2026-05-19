@@ -5005,6 +5005,10 @@ spec:
                         type: string
                         x-kubernetes-int-or-string: true
                         x-kubernetes-validations:
+                        - message: http2FrameSize must be at least 16384 bytes
+                          rule: '!quantity(string(self)).isLessThan(quantity(''16384''))'
+                        - message: http2FrameSize must be at most 1677215 bytes
+                          rule: '!quantity(string(self)).isGreaterThan(quantity(''1677215''))'
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0

@@ -2,6 +2,7 @@ package agentgateway
 
 import (
 	"iter"
+	"log/slog"
 	"math"
 
 	corev1 "k8s.io/api/core/v1"
@@ -319,6 +320,7 @@ func (b *ByteSize) UnmarshalJSON(data []byte) error {
 	if err := q.UnmarshalJSON(data); err != nil {
 		// Invalid byte sizes must not block informer decoding. CEL cannot validate
 		// this safely until the quantity cost bug is fixed, so treat it as unset.
+		slog.Warn("failed to unmarshal quantity, ignoring", "value", string(data), "error", err)
 		b.Value = nil
 		return nil
 	}
@@ -526,6 +528,8 @@ type FrontendHTTP struct {
 	HTTP2ConnectionWindowSize *ByteSize `json:"http2ConnectionWindowSize,omitempty"`
 	// `http2FrameSize` sets the maximum frame size to use.
 	// If unset, this defaults to `16kb`.
+	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isLessThan(quantity('16384'))",message="http2FrameSize must be at least 16384 bytes"
+	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isGreaterThan(quantity('1677215'))",message="http2FrameSize must be at most 1677215 bytes"
 	// +optional
 	HTTP2FrameSize *ByteSize `json:"http2FrameSize,omitempty"`
 	// `http2MaxHeaderSize` sets the maximum aggregate size of decoded HTTP/2
