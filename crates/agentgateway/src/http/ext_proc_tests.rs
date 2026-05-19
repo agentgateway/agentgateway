@@ -291,7 +291,6 @@ pub async fn setup_ext_proc_mock_with_meta<T: Handler + Send + Sync + 'static>(
 }
 
 const STANDALONE_SERVICE_NAME: &str = "model-service.default.svc.cluster.local";
-const STANDALONE_SERVICE_REF: &str = "default/model-service.default.svc.cluster.local";
 const STANDALONE_SERVICE_PORT: u16 = 8000;
 
 #[derive(Clone)]
