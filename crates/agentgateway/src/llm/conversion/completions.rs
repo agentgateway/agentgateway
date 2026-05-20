@@ -653,7 +653,9 @@ pub mod from_messages {
 				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
 				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
 				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Xhigh,
+				Some(messages::ThinkingEffort::Xhigh | messages::ThinkingEffort::Max) => {
+					completions::ReasoningEffort::Xhigh
+				},
 				// Anthropic adaptive thinking defaults to high effort when omitted.
 				None => completions::ReasoningEffort::High,
 			})
