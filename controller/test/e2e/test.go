@@ -26,7 +26,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/portforward"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 	testruntime "github.com/agentgateway/agentgateway/controller/test/e2e/testutils/runtime"
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
@@ -35,25 +34,27 @@ import (
 // CreateSharedTestInstallation constructs an installation for package-level
 // fixtures. Call Finalize after the shared installation is no longer needed.
 func CreateSharedTestInstallation(
-	t *testing.T,
-	installContext *install.Context,
+	installNamespace string,
+	valuesManifestFile string,
 ) *TestInstallation {
 	runtimeContext := testruntime.NewContext()
 	clusterContext := cluster.MustKindContext(runtimeContext.ClusterName)
 
-	if err := install.ValidateInstallContext(installContext); err != nil {
-		// We error loudly if the context is misconfigured
-		panic(err)
-	}
-
-	return createTestInstallationForCluster(runtimeContext, clusterContext, installContext)
+	return createTestInstallationForCluster(runtimeContext, clusterContext, installNamespace, valuesManifestFile)
 }
 
 func createTestInstallationForCluster(
 	runtimeContext testruntime.Context,
 	clusterContext *cluster.Context,
-	installContext *install.Context,
+	installNamespace string,
+	valuesManifestFile string,
 ) *TestInstallation {
+	if installNamespace == "" {
+		panic("install namespace must not be empty")
+	}
+	if valuesManifestFile == "" {
+		panic("values manifest file must not be empty")
+	}
 	return &TestInstallation{
 		// RuntimeContext contains the set of properties that are defined at runtime by whoever is invoking tests
 		RuntimeContext: runtimeContext,
@@ -61,8 +62,8 @@ func createTestInstallationForCluster(
 		// ClusterContext contains the metadata about the Kubernetes Cluster that is used for this TestCluster
 		ClusterContext: clusterContext,
 
-		// Maintain a reference to the Metadata used for this installation
-		Metadata: installContext,
+		InstallNamespace:   installNamespace,
+		ValuesManifestFile: valuesManifestFile,
 
 		Helm: helmutils.NewClient(),
 
@@ -70,7 +71,7 @@ func createTestInstallationForCluster(
 		// of tests against this installation will be stored
 		// By creating a unique location, per TestInstallation and per Cluster.Name we guarantee isolation
 		// between TestInstallation outputs per CI run
-		GeneratedFiles: MustGeneratedFiles(installContext.InstallNamespace, clusterContext.Name),
+		GeneratedFiles: MustGeneratedFiles(installNamespace, clusterContext.Name),
 	}
 }
 
@@ -85,8 +86,9 @@ type TestInstallation struct {
 	// ClusterContext contains the metadata about the Kubernetes Cluster that is used for this TestCluster
 	ClusterContext *cluster.Context
 
-	// Metadata contains the properties used to install agentgateway
-	Metadata *install.Context
+	InstallNamespace   string
+	ValuesManifestFile string
+	ExtraHelmArgs      []string
 
 	Helm *helmutils.Client
 
@@ -95,7 +97,7 @@ type TestInstallation struct {
 }
 
 func (i *TestInstallation) String() string {
-	return i.Metadata.InstallNamespace
+	return i.InstallNamespace
 }
 
 func (i *TestInstallation) Finalize() {
@@ -134,7 +136,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
-		if i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
+		if i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.InstallNamespace) {
 			return
 		}
 	}
@@ -147,7 +149,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 		helmutils.InstallOpts{
 			CreateNamespace: true,
 			ReleaseName:     helmutils.AgentgatewayCRDChartName,
-			Namespace:       i.Metadata.InstallNamespace,
+			Namespace:       i.InstallNamespace,
 			Chart:           crdChartPath,
 		})
 	istioassert.NoError(t, err)
@@ -161,7 +163,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 
 	// Check if we should skip installation if the release already exists (PERSIST_INSTALL or FAIL_FAST_AND_PERSIST mode)
 	if testutils.ShouldPersistInstall() || testutils.ShouldFailFastAndPersist() {
-		if i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
+		if i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.InstallNamespace) {
 			return
 		}
 	}
@@ -169,7 +171,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	// Use absolute chart paths so tests work regardless of current working directory.
 	coreChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
 
-	extraArgs := i.Metadata.ExtraHelmArgs
+	extraArgs := i.ExtraHelmArgs
 	// If VERSION is set, override the chart's AppVersion so locally-built images are used
 	// instead of trying to pull the chart's default appVersion from the remote registry.
 	if tag, ok := os.LookupEnv(testutils.Version); ok && tag != "" {
@@ -180,10 +182,10 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	err := i.Helm.WithReceiver(os.Stdout).Upgrade(
 		ctx,
 		helmutils.InstallOpts{
-			Namespace:       i.Metadata.InstallNamespace,
+			Namespace:       i.InstallNamespace,
 			CreateNamespace: true,
 			ValuesFiles: []string{
-				i.Metadata.ValuesManifestFile,
+				i.ValuesManifestFile,
 				ManifestPath("agent-gateway-integration.yaml"),
 			},
 			ReleaseName: helmutils.AgentgatewayChartName,
@@ -191,7 +193,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 			ExtraArgs:   extraArgs,
 		})
 	istioassert.NoError(t, err)
-	assertions.EventuallyGatewayInstallSucceeded(t, ctx, i.ClusterContext, i.Metadata)
+	assertions.EventuallyGatewayInstallSucceeded(t, ctx, i.ClusterContext, i.InstallNamespace)
 }
 
 func (i *TestInstallation) Uninstall(ctx context.Context, t *testing.T) {
@@ -206,7 +208,7 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 	}
 
 	// Check if the release exists before attempting to uninstall
-	if !i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.Metadata.InstallNamespace) {
+	if !i.releaseExists(ctx, helmutils.AgentgatewayChartName, i.InstallNamespace) {
 		// Release doesn't exist, nothing to uninstall
 		return
 	}
@@ -215,13 +217,13 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 	err := i.Helm.Uninstall(
 		ctx,
 		helmutils.UninstallOpts{
-			Namespace:   i.Metadata.InstallNamespace,
+			Namespace:   i.InstallNamespace,
 			ReleaseName: helmutils.AgentgatewayChartName,
 			ExtraArgs:   []string{"--wait"}, // Default timeout is 5m
 		},
 	)
 	istioassert.NoError(t, err)
-	assertions.EventuallyGatewayUninstallSucceeded(t, ctx, i.ClusterContext, i.Metadata)
+	assertions.EventuallyGatewayUninstallSucceeded(t, ctx, i.ClusterContext, i.InstallNamespace)
 }
 
 // UninstallAgentgatewayCRDs uninstalls the agentgateway CRD chart
@@ -231,7 +233,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 	}
 
 	// Check if the release exists before attempting to uninstall
-	if !i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.Metadata.InstallNamespace) {
+	if !i.releaseExists(ctx, helmutils.AgentgatewayCRDChartName, i.InstallNamespace) {
 		// Release doesn't exist, nothing to uninstall
 		return
 	}
@@ -240,7 +242,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 	err := i.Helm.Uninstall(
 		ctx,
 		helmutils.UninstallOpts{
-			Namespace:   i.Metadata.InstallNamespace,
+			Namespace:   i.InstallNamespace,
 			ReleaseName: helmutils.AgentgatewayCRDChartName,
 			ExtraArgs:   []string{"--wait"}, // Default timeout is 5m
 		},

@@ -14,7 +14,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
@@ -60,7 +59,6 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 		Name:        clusterName,
 		KubeContext: kubeCtx,
 		RestConfig:  restCfg,
-		Cli:         kubectl.NewCli().WithKubeContext(kubeCtx).WithReceiver(os.Stdout),
 		Client:      clt,
 		IstioClient: istio,
 		Clientset:   clientset,

@@ -16,7 +16,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/retry"
@@ -168,15 +167,15 @@ func EventuallyGatewayAddress(t test.Failer, ctx context.Context, clusterContext
 	return addr
 }
 
-func EventuallyGatewayInstallSucceeded(t test.Failer, ctx context.Context, clusterContext *cluster.Context, installContext *install.Context) {
+func EventuallyGatewayInstallSucceeded(t test.Failer, ctx context.Context, clusterContext *cluster.Context, installNamespace string) {
 	t.Helper()
-	eventuallyPodsRunning(t, ctx, clusterContext, installContext.InstallNamespace, metav1.ListOptions{LabelSelector: agentgatewayLabelSelector})
+	eventuallyPodsRunning(t, ctx, clusterContext, installNamespace, metav1.ListOptions{LabelSelector: agentgatewayLabelSelector})
 }
 
-func EventuallyGatewayUninstallSucceeded(t test.Failer, ctx context.Context, clusterContext *cluster.Context, installContext *install.Context) {
+func EventuallyGatewayUninstallSucceeded(t test.Failer, ctx context.Context, clusterContext *cluster.Context, installNamespace string) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
-		pods, err := clusterContext.Clientset.CoreV1().Pods(installContext.InstallNamespace).List(ctx, metav1.ListOptions{LabelSelector: agentgatewayLabelSelector})
+		pods, err := clusterContext.Clientset.CoreV1().Pods(installNamespace).List(ctx, metav1.ListOptions{LabelSelector: agentgatewayLabelSelector})
 		if err != nil {
 			return fmt.Errorf("failed to list pods: %w", err)
 		}

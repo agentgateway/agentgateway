@@ -15,7 +15,10 @@ import (
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -52,9 +55,7 @@ func setupLocality(t base.Test) []weSpec {
 	assertions.EventuallyHTTPRouteCondition(t, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 
 	t.Cleanup(func() {
-		_ = t.TestInstallation.ClusterContext.Cli.RunCommand(
-			t.Ctx, "-n", localityNamespace, "delete", "workloadentry", "--all", "--ignore-not-found=true",
-		)
+		_ = t.TestInstallation.ClusterContext.Client.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
 	})
 	return workloadEntries
 }
@@ -126,10 +127,22 @@ func applyWorkloadEntries(t base.Test, entries []weSpec) {
 }
 
 func deleteWorkloadEntry(t base.Test, name string) {
-	err := t.TestInstallation.ClusterContext.Cli.RunCommand(
-		t.Ctx, "-n", localityNamespace, "delete", "workloadentry", name, "--ignore-not-found=true",
-	)
+	we := workloadEntry()
+	we.SetName(name)
+	we.SetNamespace(localityNamespace)
+	err := t.TestInstallation.ClusterContext.Client.Delete(t.Ctx, we)
+	err = client.IgnoreNotFound(err)
 	assert.NoError(t, err)
+}
+
+func workloadEntry() *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "networking.istio.io",
+		Version: "v1",
+		Kind:    "WorkloadEntry",
+	})
+	return obj
 }
 
 func workloadEntriesYAML(entries []weSpec) string {

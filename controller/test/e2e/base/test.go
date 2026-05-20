@@ -20,7 +20,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
@@ -69,10 +68,6 @@ func (s Test) E2EContext() context.Context {
 
 func (s Test) E2EClusterContext() *cluster.Context {
 	return s.TestInstallation.ClusterContext
-}
-
-func (s Test) E2EInstallContext() *install.Context {
-	return s.TestInstallation.Metadata
 }
 
 func (s *Test) Run(name string, f func(t Test)) bool {

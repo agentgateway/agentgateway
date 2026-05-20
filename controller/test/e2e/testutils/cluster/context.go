@@ -7,8 +7,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 )
 
 // Context contains the metadata about a Kubernetes cluster
@@ -23,9 +21,6 @@ type Context struct {
 
 	// RestConfig holds the common attributes that can be passed to a Kubernetes client on initialization
 	RestConfig *rest.Config
-
-	// A CLI for interacting with Kubernetes cluster
-	Cli *kubectl.Cli
 
 	// A client to perform CRUD operations on the Kubernetes Cluster
 	Client client.Client

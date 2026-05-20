@@ -13,7 +13,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	e2e "github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
@@ -77,11 +76,8 @@ func setup(t *testing.T) {
 
 	done = base.TraceStep(t, "created test installation")
 	agwInstallation = e2e.CreateSharedTestInstallation(
-		t,
-		&install.Context{
-			InstallNamespace:   installNs,
-			ValuesManifestFile: e2e.BaseValuesManifestPath,
-		},
+		installNs,
+		e2e.BaseValuesManifestPath,
 	)
 	done()
 
