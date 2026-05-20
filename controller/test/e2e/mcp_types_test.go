@@ -61,7 +61,7 @@ var (
 )
 
 var (
-	// Gateway defaults used by this feature suite
+	// Gateway defaults used by these tests.
 	gatewayName      = "gateway"
 	gatewayNamespace = "agentgateway-base"
 

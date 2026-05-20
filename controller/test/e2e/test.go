@@ -6,11 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/avast/retry-go/v4"
 	"istio.io/istio/pkg/slices"
 	istioassert "istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -20,7 +23,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/helmutils"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/actions"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/portforward"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
@@ -28,23 +31,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
-
-// CreateTestInstallation is the simplest way to construct a TestInstallation in agentgateway.
-// It is syntactic sugar on top of CreateTestInstallationForCluster
-func CreateTestInstallation(
-	t *testing.T,
-	installContext *install.Context,
-) *TestInstallation {
-	runtimeContext := testruntime.NewContext()
-	clusterContext := cluster.MustKindContext(runtimeContext.ClusterName)
-
-	if err := install.ValidateInstallContext(installContext); err != nil {
-		// We error loudly if the context is misconfigured
-		panic(err)
-	}
-
-	return CreateTestInstallationForCluster(t, runtimeContext, clusterContext, installContext)
-}
 
 // CreateSharedTestInstallation constructs an installation for package-level
 // fixtures. Call Finalize after the shared installation is no longer needed.
@@ -60,44 +46,15 @@ func CreateSharedTestInstallation(
 		panic(err)
 	}
 
-	return CreateSharedTestInstallationForCluster(t, runtimeContext, clusterContext, installContext)
-}
-
-// CreateTestInstallationForCluster is the standard way to construct a TestInstallation
-// It accepts context objects from 3 relevant sources:
-//
-//	runtime - These are properties that are supplied at runtime and will impact how tests are executed
-//	cluster - These are properties that are used to connect to the Kubernetes cluster
-//	install - These are properties that are relevant to how the agentgateway installation will be configured
-func CreateTestInstallationForCluster(
-	t *testing.T,
-	runtimeContext testruntime.Context,
-	clusterContext *cluster.Context,
-	installContext *install.Context,
-) *TestInstallation {
-	return createTestInstallationForCluster(t, runtimeContext, clusterContext, installContext, true)
-}
-
-// CreateSharedTestInstallationForCluster constructs a TestInstallation without
-// binding its generated-file cleanup to a single test. Call Finalize after the
-// shared installation is no longer needed.
-func CreateSharedTestInstallationForCluster(
-	t *testing.T,
-	runtimeContext testruntime.Context,
-	clusterContext *cluster.Context,
-	installContext *install.Context,
-) *TestInstallation {
-	return createTestInstallationForCluster(t, runtimeContext, clusterContext, installContext, false)
+	return createTestInstallationForCluster(runtimeContext, clusterContext, installContext)
 }
 
 func createTestInstallationForCluster(
-	t *testing.T,
 	runtimeContext testruntime.Context,
 	clusterContext *cluster.Context,
 	installContext *install.Context,
-	registerCleanup bool,
 ) *TestInstallation {
-	installation := &TestInstallation{
+	return &TestInstallation{
 		// RuntimeContext contains the set of properties that are defined at runtime by whoever is invoking tests
 		RuntimeContext: runtimeContext,
 
@@ -107,10 +64,7 @@ func createTestInstallationForCluster(
 		// Maintain a reference to the Metadata used for this installation
 		Metadata: installContext,
 
-		// Create an actions provider, and point it to the running installation
-		Actions: actions.NewActionsProvider().
-			WithClusterContext(clusterContext).
-			WithInstallContext(installContext),
+		Helm: helmutils.NewClient(),
 
 		// GeneratedFiles contains the unique location where files generated during the execution
 		// of tests against this installation will be stored
@@ -118,12 +72,6 @@ func createTestInstallationForCluster(
 		// between TestInstallation outputs per CI run
 		GeneratedFiles: MustGeneratedFiles(installContext.InstallNamespace, clusterContext.Name),
 	}
-	if registerCleanup {
-		testutils.Cleanup(t, func() {
-			installation.Finalize()
-		})
-	}
-	return installation
 }
 
 // TestInstallation is the structure around a set of tests that validate behavior for an installation
@@ -140,14 +88,10 @@ type TestInstallation struct {
 	// Metadata contains the properties used to install agentgateway
 	Metadata *install.Context
 
-	// Actions is the entity that creates actions that can be executed by the Operator
-	Actions *actions.Provider
+	Helm *helmutils.Client
 
 	// GeneratedFiles is the collection of directories and files that this test installation _may_ create
 	GeneratedFiles GeneratedFiles
-
-	// IstioctlBinary is the path to the istioctl binary that can be used to interact with Istio
-	IstioctlBinary string
 }
 
 func (i *TestInstallation) String() string {
@@ -160,8 +104,23 @@ func (i *TestInstallation) Finalize() {
 	}
 }
 
-// InstallFromLocalChart installs the controller and CRD chart based on the `ChartType` of the underlying
-// TestInstallation.
+func (i *TestInstallation) StartPortForward(ctx context.Context, options ...portforward.Option) (portforward.PortForwarder, error) {
+	options = append([]portforward.Option{
+		portforward.WithWriters(io.Discard, io.Discard),
+		portforward.WithKubeContext(i.ClusterContext.KubeContext),
+	}, options...)
+
+	forwarder := portforward.NewCliPortForwarder(options...)
+	err := forwarder.Start(
+		ctx,
+		retry.LastErrorOnly(true),
+		retry.Delay(250*time.Millisecond),
+		retry.DelayType(retry.FixedDelay),
+		retry.Attempts(60),
+	)
+	return forwarder, err
+}
+
 func (i *TestInstallation) InstallFromLocalChart(ctx context.Context, t *testing.T) {
 	i.InstallAgentgatewayCRDsFromLocalChart(ctx, t)
 	i.InstallAgentgatewayCoreFromLocalChart(ctx, t)
@@ -183,7 +142,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 	// Use absolute chart paths so tests work regardless of current working directory.
 	crdChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway-crds")
 	// install the CRD chart first
-	err := i.Actions.Helm().WithReceiver(os.Stdout).Upgrade(
+	err := i.Helm.WithReceiver(os.Stdout).Upgrade(
 		ctx,
 		helmutils.InstallOpts{
 			CreateNamespace: true,
@@ -218,13 +177,12 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	}
 
 	// and then install the main chart
-	err := i.Actions.Helm().WithReceiver(os.Stdout).Upgrade(
+	err := i.Helm.WithReceiver(os.Stdout).Upgrade(
 		ctx,
 		helmutils.InstallOpts{
 			Namespace:       i.Metadata.InstallNamespace,
 			CreateNamespace: true,
 			ValuesFiles: []string{
-				i.Metadata.ProfileValuesManifestFile,
 				i.Metadata.ValuesManifestFile,
 				ManifestPath("agent-gateway-integration.yaml"),
 			},
@@ -254,7 +212,7 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 	}
 
 	// uninstall the main chart first
-	err := i.Actions.Helm().Uninstall(
+	err := i.Helm.Uninstall(
 		ctx,
 		helmutils.UninstallOpts{
 			Namespace:   i.Metadata.InstallNamespace,
@@ -279,7 +237,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 	}
 
 	// uninstall the CRD chart
-	err := i.Actions.Helm().Uninstall(
+	err := i.Helm.Uninstall(
 		ctx,
 		helmutils.UninstallOpts{
 			Namespace:   i.Metadata.InstallNamespace,
@@ -293,11 +251,6 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 // PreFailHandler is the function that is invoked if a test in the given TestInstallation fails
 func (i *TestInstallation) PreFailHandler(ctx context.Context, t *testing.T) {
 	i.preFailHandler(ctx, t, filepath.Join(i.GeneratedFiles.FailureDir, t.Name()))
-}
-
-// PerTestPreFailHandler is the function that is invoked if a test in the given TestInstallation fails
-func (i *TestInstallation) PerTestPreFailHandler(ctx context.Context, t *testing.T, testName string) {
-	i.preFailHandler(ctx, t, filepath.Join(i.GeneratedFiles.FailureDir, testName))
 }
 
 // preFailHandler is the function that is invoked if a test in the given TestInstallation fails

@@ -31,7 +31,7 @@ Re-balancing of tests is intentionally a very easy action, though it shouldn't n
 
 
 ## Adding a new test
-When adding a new test suite:
+When adding a new top-level e2e test:
 1. Check the most recently merged PR's action for Kubernetes tests
 2. Determine the cluster with the lowest runtime
-3. Add your test suite to that cluster's definition in our [GitHub action matrix](/.github/workflows/pr-kubernetes-tests.yaml)
+3. Add your test regex to that cluster's definition in our [GitHub action matrix](/.github/workflows/pr-kubernetes-tests.yaml)

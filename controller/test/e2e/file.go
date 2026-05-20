@@ -9,15 +9,7 @@ import (
 )
 
 var (
-	// EmptyValuesManifestPath returns the path to a manifest with no values
-	// We prefer to have our tests be explicit and require defining a values file. However, some tests
-	// rely entirely on the values provided by the "profile". In those cases, the test supplies this reference
-	EmptyValuesManifestPath = ManifestPath("empty-values.yaml")
-
-	// ControlPlaneTLSPlaintextManifestPath returns the path to a manifest with plaintext mode for xDS communication
-	ControlPlaneTLSPlaintextManifestPath = ManifestPath("controlplane-plaintext-helm.yaml")
-	// ControlPlaneTLSManifestPath returns the path to a manifest with TLS enabled for xDS communication
-	ControlPlaneTLSManifestPath = ManifestPath("controlplane-tls-helm.yaml")
+	BaseValuesManifestPath = ManifestPath("agent-gateway-integration.yaml")
 )
 
 // ManifestPath returns the absolute path to a manifest file.

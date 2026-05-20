@@ -79,10 +79,8 @@ func setup(t *testing.T) {
 	agwInstallation = e2e.CreateSharedTestInstallation(
 		t,
 		&install.Context{
-			InstallNamespace:          installNs,
-			ChartType:                 "agentgateway",
-			ProfileValuesManifestFile: e2e.EmptyValuesManifestPath,
-			ValuesManifestFile:        e2e.ManifestPath("agent-gateway-integration.yaml"),
+			InstallNamespace:   installNs,
+			ValuesManifestFile: e2e.BaseValuesManifestPath,
 		},
 	)
 	done()
