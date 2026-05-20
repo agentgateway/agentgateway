@@ -31,3 +31,12 @@ tsconfig.test.tsbuildinfo
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
