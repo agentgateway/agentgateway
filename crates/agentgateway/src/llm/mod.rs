@@ -21,7 +21,7 @@ pub use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
-use crate::types::agent::{BackendTrafficPolicy, Target};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 
@@ -29,6 +29,7 @@ pub mod anthropic;
 pub mod azure;
 pub mod bedrock;
 pub mod copilot;
+pub mod custom;
 pub mod gemini;
 pub mod openai;
 pub mod vertex;
@@ -91,6 +92,8 @@ impl AIBackend {
 pub struct NamedAIProvider {
 	pub name: Strng,
 	pub provider: AIProvider,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub provider_backend: Option<SimpleBackendReference>,
 	pub host_override: Option<Target>,
 	pub path_override: Option<Strng>,
 	pub path_prefix: Option<Strng>,
@@ -136,6 +139,7 @@ pub enum AIProvider {
 	Bedrock(bedrock::Provider),
 	Azure(azure::Provider),
 	Copilot(copilot::Provider),
+	Custom(custom::Provider),
 }
 
 #[apply(schema!)]
@@ -296,6 +300,7 @@ impl AIProvider {
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
 			AIProvider::Azure(_p) => azure::Provider::NAME,
 			AIProvider::Copilot(_p) => copilot::Provider::NAME,
+			AIProvider::Custom(_p) => custom::Provider::NAME,
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -307,6 +312,7 @@ impl AIProvider {
 			AIProvider::Bedrock(p) => p.model.clone(),
 			AIProvider::Azure(p) => p.model.clone(),
 			AIProvider::Copilot(p) => p.model.clone(),
+			AIProvider::Custom(_) => None,
 		}
 	}
 	pub fn default_connector(&self) -> (Target, BackendPolicies) {
@@ -351,6 +357,9 @@ impl AIProvider {
 					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
+			},
+			AIProvider::Custom(_) => {
+				unreachable!("custom providers require an explicit host override or provider backend")
 			},
 		}
 	}
@@ -501,6 +510,7 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
+			AIProvider::Custom(_) => Ok(()),
 		}
 	}
 
@@ -519,6 +529,7 @@ impl AIProvider {
 				Authority::from_str(&provider.get_host(request_model))?
 			},
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
+			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
 				// Store the region in request extensions so AWS signing can use it.
 				return http::modify_req(req, |req| {
@@ -718,6 +729,7 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => false,
 			AIProvider::Bedrock(p) => !p.is_anthropic_model(req.model.as_deref()),
 			AIProvider::Vertex(p) => !p.is_anthropic_model(req.model.as_deref()),
+			AIProvider::Custom(p) => !p.supports(InputFormat::CountTokens),
 			_ => true,
 		};
 		if use_local {
@@ -809,6 +821,14 @@ impl AIProvider {
 			(_, InputFormat::Detect) => {
 				// All providers support detect; this is a passthrough!
 			},
+			(AIProvider::Custom(p), format) => {
+				if !p.supports(format) {
+					return Err(AIError::UnsupportedConversion(strng::format!(
+						"{format:?} from provider {}",
+						self.provider()
+					)));
+				}
+			},
 			(_, InputFormat::Completions) => {
 				// All providers support completions input
 			},
@@ -897,6 +917,7 @@ impl AIProvider {
 		let new_request = if original_format == InputFormat::CountTokens {
 			match self {
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
+				AIProvider::Custom(_) => req.to_anthropic()?,
 				AIProvider::Bedrock(_) => req.to_bedrock_token_count(&parts.headers)?,
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
@@ -910,6 +931,18 @@ impl AIProvider {
 			}
 		} else {
 			match self {
+				AIProvider::Custom(_) => match original_format {
+					InputFormat::Completions
+					| InputFormat::Responses
+					| InputFormat::Embeddings
+					| InputFormat::Detect => req.to_openai()?,
+					InputFormat::Messages => req.to_anthropic()?,
+					InputFormat::CountTokens | InputFormat::Realtime => {
+						return Err(AIError::UnsupportedConversion(strng::literal!(
+							"this request format does not use this codepath"
+						)));
+					},
+				},
 				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_) => req.to_openai()?,
 				AIProvider::Vertex(p) => {
 					if p.is_anthropic_model(Some(request_model)) {
@@ -993,6 +1026,9 @@ impl AIProvider {
 		if req.input_format == InputFormat::CountTokens {
 			let (bytes, count) = match self {
 				AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
+					types::count_tokens::Response::translate_response(bytes)?
+				},
+				AIProvider::Custom(p) if p.supports(InputFormat::CountTokens) => {
 					types::count_tokens::Response::translate_response(bytes)?
 				},
 				_ => {
@@ -1143,7 +1179,8 @@ impl AIProvider {
 				AIProvider::OpenAI(_)
 				| AIProvider::Copilot(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_),
+				| AIProvider::Azure(_)
+				| AIProvider::Custom(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::completions::Response>(bytes)
@@ -1151,7 +1188,10 @@ impl AIProvider {
 			)),
 			// Responses with OpenAI/Azure: just passthrough
 			(
-				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Custom(_),
 				InputFormat::Responses,
 			) => Ok(Box::new(
 				serde_json::from_slice::<types::responses::Response>(bytes)
@@ -1169,7 +1209,7 @@ impl AIProvider {
 				}
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
+			(AIProvider::Anthropic(_) | AIProvider::Custom(_), InputFormat::Messages) => Ok(Box::new(
 				serde_json::from_slice::<types::messages::Response>(bytes)
 					.map_err(logged_response_parsing(bytes))?,
 			)),
@@ -1271,7 +1311,8 @@ impl AIProvider {
 				AIProvider::OpenAI(_)
 				| AIProvider::Copilot(_)
 				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_),
+				| AIProvider::Azure(_)
+				| AIProvider::Custom(_),
 				InputFormat::Completions,
 			) => conversion::completions::passthrough_stream(logger, include_completion_in_log, resp),
 			// Vertex completions: passthrough for OpenAI-compatible models, translate for Anthropic models
@@ -1287,7 +1328,8 @@ impl AIProvider {
 				AIProvider::OpenAI(_)
 				| AIProvider::Copilot(_)
 				| AIProvider::Azure(_)
-				| AIProvider::Vertex(_),
+				| AIProvider::Vertex(_)
+				| AIProvider::Custom(_),
 				InputFormat::Responses,
 			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger)),
 			(AIProvider::Gemini(_), InputFormat::Responses) => {
@@ -1301,7 +1343,7 @@ impl AIProvider {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => {
+			(AIProvider::Anthropic(_) | AIProvider::Custom(_), InputFormat::Messages) => {
 				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
 			},
 			// OpenAI/Gemini/Azure messages: translate from chat completions
@@ -1386,7 +1428,10 @@ impl AIProvider {
 	) -> Result<Bytes, AIError> {
 		match (self, req.input_format) {
 			(
-				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Custom(_),
 				InputFormat::Completions | InputFormat::Responses | InputFormat::Embeddings,
 			) => {
 				// Passthrough; nothing needed
@@ -1429,6 +1474,10 @@ impl AIProvider {
 			},
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
 				conversion::messages::translate_anthropic_error(bytes, status)
+			},
+			(AIProvider::Custom(_), InputFormat::Messages) => {
+				// Passthrough; nothing needed
+				Ok(bytes.clone())
 			},
 			(_, InputFormat::Detect) => {
 				// Passthrough; nothing needed

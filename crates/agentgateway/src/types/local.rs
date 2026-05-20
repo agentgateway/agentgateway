@@ -906,6 +906,7 @@ impl LocalAIBackend {
 					NamedAIProvider {
 						name: p.name,
 						provider: p.provider,
+						provider_backend: None,
 						host_override: p.host_override,
 						path_override: p.path_override,
 						path_prefix: p.path_prefix,
@@ -2204,6 +2205,7 @@ json(request.body).model
 		let named_provider = NamedAIProvider {
 			name: model_name.clone(),
 			provider,
+			provider_backend: None,
 			host_override: p.host_override,
 			path_override: p.path_override,
 			path_prefix: p.path_prefix,

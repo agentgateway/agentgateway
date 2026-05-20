@@ -1533,33 +1533,68 @@ async fn make_backend_call(
 				.read_binds()
 				.sub_backend_policies(sub_backend_name, Some(&provider.inline_policies));
 
-			let (target, provider_defaults) = match &provider.host_override {
-				Some(target) => (
-					target.clone(),
-					BackendPolicies {
-						// Attach LLM provider, but don't use default setup
-						llm_provider: Some(provider.clone()),
-						..Default::default()
-					},
-				),
-				None => {
-					let (tgt, mut pol) = provider.provider.default_connector();
-					pol.llm_provider = Some(provider.clone());
-					(tgt, pol)
-				},
+			let provider_defaults = BackendPolicies {
+				llm_provider: Some(provider.clone()),
+				..Default::default()
 			};
-			// Defaults for the provider < Backend level policies < Sub Backend
-			let effective_policies = provider_defaults
-				.merge(policies)
-				.merge(sub_backend_policies);
-			BackendCall {
-				target,
-				backend_policies: effective_policies,
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
+			if let Some(provider_backend) = &provider.provider_backend {
+				let provider_backend =
+					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
+				let provider_backend_policies = inputs.stores.read_binds().sub_backend_policies(
+					provider_backend.backend.target(),
+					Some(&provider_backend.inline_policies),
+				);
+				let effective_policies = provider_defaults
+					.merge(policies)
+					.merge(sub_backend_policies)
+					.merge(provider_backend_policies);
+
+				match &provider_backend.backend {
+					SimpleBackend::Service(svc, port) => build_service_call(
+						&inputs,
+						effective_policies,
+						&mut log,
+						service_override,
+						svc,
+						port,
+						req.uri().host(),
+						hbone_source,
+					)?,
+					SimpleBackend::Opaque(_, target) => BackendCall {
+						target: target.clone(),
+						backend_policies: effective_policies,
+						http_version_override: None,
+						transport_override: None,
+						hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+						network_gateway: None,
+						waypoint: None,
+					},
+					SimpleBackend::Aws(_, _) | SimpleBackend::Invalid => {
+						return Err(ProxyError::InvalidBackendType.into());
+					},
+				}
+			} else {
+				let (target, provider_defaults) = match &provider.host_override {
+					Some(target) => (target.clone(), provider_defaults),
+					None => {
+						let (tgt, mut pol) = provider.provider.default_connector();
+						pol.llm_provider = Some(provider.clone());
+						(tgt, pol)
+					},
+				};
+				// Defaults for the provider < Backend level policies < Sub Backend
+				let effective_policies = provider_defaults
+					.merge(policies)
+					.merge(sub_backend_policies);
+				BackendCall {
+					target,
+					backend_policies: effective_policies,
+					http_version_override: None,
+					transport_override: None,
+					hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+					network_gateway: None,
+					waypoint: None,
+				}
 			}
 		},
 		Backend::Service(svc, port) => {

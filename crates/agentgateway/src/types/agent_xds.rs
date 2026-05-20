@@ -531,6 +531,25 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 	}
 }
 
+fn convert_provider_format(
+	proto_format: i32,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderFormat, ProtoError> {
+	use proto::agent::ai_backend::ProviderFormat as ProtoFormat;
+
+	match ProtoFormat::try_from(proto_format) {
+		Ok(ProtoFormat::Completions) => Ok(llm::custom::ProviderFormat::Completions),
+		Ok(ProtoFormat::Messages) => Ok(llm::custom::ProviderFormat::Messages),
+		Ok(ProtoFormat::Responses) => Ok(llm::custom::ProviderFormat::Responses),
+		Ok(ProtoFormat::Embeddings) => Ok(llm::custom::ProviderFormat::Embeddings),
+		Ok(ProtoFormat::AnthropicTokenCount) => Ok(llm::custom::ProviderFormat::AnthropicTokenCount),
+		Ok(ProtoFormat::Realtime) => Ok(llm::custom::ProviderFormat::Realtime),
+		Err(_) => Err(ProtoError::Generic(format!(
+			"AI backend custom provider at index {provider_idx} has unknown supported format value {proto_format}"
+		))),
+	}
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -1149,11 +1168,18 @@ pub(crate) fn backend_with_policies_from_proto(
 								"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
 							)));
 						},
-						Some(provider::Provider::Custom(_)) => {
-							// TODO: replace this guard when custom provider runtime conversion is wired up.
-							return Err(ProtoError::Generic(format!(
-								"AI backend provider at index {provider_idx} uses custom provider; custom providers are not supported by the dataplane yet"
-							)));
+						Some(provider::Provider::Custom(custom)) => {
+							if custom.supported_formats.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"AI backend custom provider at index {provider_idx} must specify at least one supported format"
+								)));
+							}
+							let supported_formats = custom
+								.supported_formats
+								.iter()
+								.map(|format| convert_provider_format(*format, provider_idx))
+								.collect::<Result<Vec<_>, _>>()?;
+							AIProvider::Custom(llm::custom::Provider { supported_formats })
 						},
 						None => {
 							return Err(ProtoError::Generic(format!(
@@ -1172,6 +1198,10 @@ pub(crate) fn backend_with_policies_from_proto(
 						name: provider_name.clone(),
 						provider,
 						tokenize: false,
+						provider_backend: provider_config
+							.provider_backend
+							.as_ref()
+							.map(|backend| resolve_simple_reference(Some(backend))),
 						host_override: provider_config
 							.r#host_override
 							.as_ref()
@@ -3705,6 +3735,7 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "".to_string(),
@@ -3748,6 +3779,7 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "us-central1".to_string(),
@@ -3770,6 +3802,80 @@ mod tests {
 			panic!("Expected AIProvider::Vertex");
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_custom_provider_state_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::provider::Provider;
+		use proto::agent::ai_backend::{Custom, ProviderFormat};
+		use proto::agent::backend_reference;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/custom-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "custom-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "custom".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						provider_backend: Some(proto::agent::BackendReference {
+							port: 8000,
+							kind: Some(backend_reference::Kind::Service(
+								backend_reference::Service {
+									namespace: "test-ns".to_string(),
+									hostname: "llm-pool.test-ns.inference.cluster.local".to_string(),
+								},
+							)),
+						}),
+						provider: Some(Provider::Custom(Custom {
+							supported_formats: vec![
+								ProviderFormat::Completions as i32,
+								ProviderFormat::Messages as i32,
+							],
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Custom(custom) = &provider.provider else {
+			panic!("Expected AIProvider::Custom");
+		};
+		assert_eq!(custom.supported_formats.len(), 2);
+		assert!(
+			custom
+				.supported_formats
+				.contains(&llm::custom::ProviderFormat::Completions)
+		);
+		assert!(
+			custom
+				.supported_formats
+				.contains(&llm::custom::ProviderFormat::Messages)
+		);
+		let Some(SimpleBackendReference::Service { name, port }) = provider.provider_backend.as_ref()
+		else {
+			panic!("Expected custom provider backend reference to resolve to a Service");
+		};
+		assert_eq!(name.namespace.as_str(), "test-ns");
+		assert_eq!(
+			name.hostname.as_str(),
+			"llm-pool.test-ns.inference.cluster.local"
+		);
+		assert_eq!(*port, 8000);
 		Ok(())
 	}
 
