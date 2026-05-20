@@ -1,10 +1,16 @@
 package trace
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestNormalizeTraceRequestStateBodies(t *testing.T) {
@@ -50,6 +56,27 @@ func TestNormalizeTraceRequestStateBodies(t *testing.T) {
 				t.Fatalf("got %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunRawFromTraceFile(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"INFO","message":{"type":"event","message":"hello"}}`
+	filename := filepath.Join(t.TempDir(), "trace.jsonl")
+	if err := os.WriteFile(filename, []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err := run(cmd, &traceFlags{traceFile: filename, raw: true}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != line+"\n" {
+		t.Fatalf("got %q, want %q", got, line+"\n")
 	}
 }
 

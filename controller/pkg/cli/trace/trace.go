@@ -115,6 +115,26 @@ type traceModel struct {
 }
 
 func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs []string) error {
+	if flags.traceFile != "" {
+		body, err := openTraceFile(flags.traceFile)
+		if err != nil {
+			return fmt.Errorf("failed to read trace file %s: %w", flags.traceFile, err)
+		}
+		defer body.Close()
+
+		target := &traceTarget{
+			ResourceName: flags.traceFile,
+			Local:        true,
+		}
+		if flags.traceFile == "-" {
+			target.ResourceName = "stdin"
+		}
+		if flags.raw {
+			return runRaw(cmd, target, body, nil, 0)
+		}
+		return runTUI(cmd, target, body, nil, 0)
+	}
+
 	var (
 		target *traceTarget
 		err    error
@@ -228,6 +248,13 @@ func openTraceStream(ctx context.Context, adminAddress string) (*http.Response, 
 		return nil, fmt.Errorf("trace stream returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 	return resp, nil
+}
+
+func openTraceFile(filename string) (io.ReadCloser, error) {
+	if filename == "-" {
+		return io.NopCloser(os.Stdin), nil
+	}
+	return os.Open(filename)
 }
 
 func runRaw(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, requestArgs []string, requestPort int) error {
@@ -465,18 +492,20 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 	scanner.Buffer(make([]byte, 0, 64*1024), maxScannerTokenSize)
 
 	var dataLines []string
+	emit := func(raw string) error {
+		var envelope traceEnvelope
+		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
+			return fmt.Errorf("failed to decode trace event: %w", err)
+		}
+		return onEvent(raw, envelope)
+	}
 	flush := func() error {
 		if len(dataLines) == 0 {
 			return nil
 		}
 		raw := strings.Join(dataLines, "\n")
 		dataLines = nil
-
-		var envelope traceEnvelope
-		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
-			return fmt.Errorf("failed to decode trace event: %w", err)
-		}
-		return onEvent(raw, envelope)
+		return emit(raw)
 	}
 
 	for scanner.Scan() {
@@ -489,6 +518,15 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 		}
 		if after, ok := strings.CutPrefix(line, "data: "); ok {
 			dataLines = append(dataLines, after)
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "{") {
+			if err := flush(); err != nil {
+				return err
+			}
+			if err := emit(strings.TrimSpace(line)); err != nil {
+				return err
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
