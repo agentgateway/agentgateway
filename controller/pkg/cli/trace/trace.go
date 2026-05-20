@@ -38,6 +38,7 @@ const (
 
 var (
 	yamlKeyPattern = regexp.MustCompile(`^(\s*(?:-\s+)??)([^:\n]+):(.*)$`)
+	jsonKeyPattern = regexp.MustCompile(`^(\s*)"((?:\\.|[^"\\])*)":(.*)$`)
 	numberPattern  = regexp.MustCompile(`^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$`)
 )
 
@@ -93,12 +94,20 @@ const (
 	detailEvent    detailMode = "raw event"
 )
 
+type detailFormat string
+
+const (
+	detailFormatYAML detailFormat = "yaml"
+	detailFormatJSON detailFormat = "json"
+)
+
 type traceModel struct {
 	app           *tview.Application
 	table         *tview.Table
 	details       *tview.TextView
 	status        *tview.TextView
 	mode          detailMode
+	format        detailFormat
 	detailsActive bool
 	statusMessage string
 	rows          []traceRow
@@ -737,21 +746,21 @@ func compactJSON(value any) string {
 	return string(raw)
 }
 
-func diffSnapshots(previous, current json.RawMessage) string {
+func diffSnapshots(previous, current json.RawMessage, format detailFormat) string {
 	if len(current) == 0 {
 		return "No snapshot available yet."
 	}
-	currentYAML := snapshotYAML(current)
+	currentText := snapshotText(current, format)
 	if len(previous) == 0 {
-		return highlightYAML(currentYAML)
+		return highlightText(currentText, format)
 	}
-	previousYAML := snapshotYAML(previous)
-	if previousYAML == currentYAML {
-		return highlightYAML(currentYAML)
+	previousText := snapshotText(previous, format)
+	if previousText == currentText {
+		return highlightText(currentText, format)
 	}
 
-	previousLines := difflib.SplitLines(previousYAML + "\n")
-	currentLines := difflib.SplitLines(currentYAML + "\n")
+	previousLines := difflib.SplitLines(previousText + "\n")
+	currentLines := difflib.SplitLines(currentText + "\n")
 	matcher := difflib.NewMatcher(previousLines, currentLines)
 
 	var rendered []string
@@ -759,22 +768,22 @@ func diffSnapshots(previous, current json.RawMessage) string {
 		switch op.Tag {
 		case 'e':
 			for _, line := range previousLines[op.I1:op.I2] {
-				rendered = append(rendered, renderDiffLine("", line))
+				rendered = append(rendered, renderDiffLine("", line, format))
 			}
 		case 'd':
 			for _, line := range previousLines[op.I1:op.I2] {
-				rendered = append(rendered, renderDiffLine("-", line))
+				rendered = append(rendered, renderDiffLine("-", line, format))
 			}
 		case 'i':
 			for _, line := range currentLines[op.J1:op.J2] {
-				rendered = append(rendered, renderDiffLine("+", line))
+				rendered = append(rendered, renderDiffLine("+", line, format))
 			}
 		case 'r':
 			for _, line := range previousLines[op.I1:op.I2] {
-				rendered = append(rendered, renderDiffLine("-", line))
+				rendered = append(rendered, renderDiffLine("-", line, format))
 			}
 			for _, line := range currentLines[op.J1:op.J2] {
-				rendered = append(rendered, renderDiffLine("+", line))
+				rendered = append(rendered, renderDiffLine("+", line, format))
 			}
 		default:
 			return fmt.Sprintf("Failed to build diff: unexpected opcode %q", string(op.Tag))
@@ -782,6 +791,15 @@ func diffSnapshots(previous, current json.RawMessage) string {
 	}
 
 	return strings.Join(trimTrailingEmptyLines(rendered), "\n")
+}
+
+func snapshotText(raw json.RawMessage, format detailFormat) string {
+	switch format {
+	case detailFormatJSON:
+		return snapshotJSON(raw)
+	default:
+		return snapshotYAML(raw)
+	}
 }
 
 func snapshotYAML(raw json.RawMessage) string {
@@ -809,6 +827,76 @@ func snapshotYAML(raw json.RawMessage) string {
 		return string(raw)
 	}
 	return strings.TrimSpace(string(rendered))
+}
+
+func snapshotJSON(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return string(raw)
+	}
+
+	if topLevelMap, ok := value.(map[string]any); ok {
+		for key, entry := range topLevelMap {
+			if entry == nil {
+				delete(topLevelMap, key)
+			}
+		}
+		value = topLevelMap
+	}
+	normalizeTraceRequestStateBodies(value)
+
+	rendered, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return string(raw)
+	}
+	return string(rendered)
+}
+
+func highlightText(text string, format detailFormat) string {
+	switch format {
+	case detailFormatJSON:
+		return highlightJSON(text)
+	default:
+		return highlightYAML(text)
+	}
+}
+
+func highlightJSON(text string) string {
+	if text == "" {
+		return ""
+	}
+
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = highlightJSONLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func highlightJSONLine(line string) string {
+	if line == "" {
+		return ""
+	}
+
+	match := jsonKeyPattern.FindStringSubmatch(line)
+	if match == nil {
+		return colorizeJSONScalar(line)
+	}
+
+	prefix := tview.Escape(match[1])
+	key := "[teal]\"" + tview.Escape(match[2]) + "\"[-]"
+	rest := match[3]
+	if rest == "" {
+		return prefix + key + ":"
+	}
+
+	leadingWhitespace := rest[:len(rest)-len(strings.TrimLeft(rest, " "))]
+	trimmed := strings.TrimLeft(rest, " ")
+	return prefix + key + ":" + tview.Escape(leadingWhitespace) + colorizeJSONScalar(trimmed)
 }
 
 func highlightYAML(text string) string {
@@ -861,10 +949,27 @@ func colorizeScalar(value string) string {
 	return "[" + color + "]" + tview.Escape(value) + "[-]"
 }
 
-func renderDiffLine(prefix, line string) string {
+func colorizeJSONScalar(value string) string {
+	color := "white"
+	trimmed := strings.TrimSpace(value)
+	scalar := strings.TrimSuffix(trimmed, ",")
+	switch {
+	case scalar == "null":
+		color = "gray"
+	case scalar == "true" || scalar == "false":
+		color = "yellow"
+	case numberPattern.MatchString(scalar):
+		color = "yellow"
+	case strings.HasPrefix(scalar, "\""):
+		color = "green"
+	}
+	return "[" + color + "]" + tview.Escape(value) + "[-]"
+}
+
+func renderDiffLine(prefix, line string, format detailFormat) string {
 	line = strings.TrimSuffix(line, "\n")
 	if prefix == "" {
-		return highlightYAMLLine(line)
+		return highlightLine(line, format)
 	}
 
 	color := "green"
@@ -874,7 +979,16 @@ func renderDiffLine(prefix, line string) string {
 	if line == "" {
 		return "[" + color + "]" + prefix + "[-]"
 	}
-	return "[" + color + "]" + prefix + " [-]" + highlightYAMLLine(line)
+	return "[" + color + "]" + prefix + " [-]" + highlightLine(line, format)
+}
+
+func highlightLine(line string, format detailFormat) string {
+	switch format {
+	case detailFormatJSON:
+		return highlightJSONLine(line)
+	default:
+		return highlightYAMLLine(line)
+	}
 }
 
 func trimTrailingEmptyLines(lines []string) []string {
@@ -900,6 +1014,33 @@ func eventYAML(raw string) string {
 		return raw
 	}
 	return strings.TrimSpace(string(rendered))
+}
+
+func eventJSON(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	var value any
+	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+		return raw
+	}
+	normalizeTraceEventRequestStateBodies(value)
+
+	rendered, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return raw
+	}
+	return string(rendered)
+}
+
+func eventText(raw string, format detailFormat) string {
+	switch format {
+	case detailFormatJSON:
+		return eventJSON(raw)
+	default:
+		return eventYAML(raw)
+	}
 }
 
 func normalizeTraceEventRequestStateBodies(value any) {
@@ -1001,6 +1142,7 @@ func newTraceModel(app *tview.Application, target *traceTarget) *traceModel {
 		details:       details,
 		status:        status,
 		mode:          detailEvent,
+		format:        detailFormatYAML,
 		statusMessage: "waiting for trace data",
 		headerRows:    1,
 	}
@@ -1089,6 +1231,7 @@ func (m *traceModel) renderStatus() {
 		activePane = "details"
 	}
 	legend := fmt.Sprintf("tab: switch pane (%s)   arrows: scroll selected pane   e/s/d: detail mode   q: quit", activePane)
+	legend = fmt.Sprintf("%s   f: format (%s)", legend, m.format)
 	m.status.SetText(m.statusMessage + "\n" + legend)
 }
 
@@ -1118,6 +1261,16 @@ func (m *traceModel) handleInput(event *tcell.EventKey) *tcell.EventKey {
 	case 'e':
 		m.mode = detailEvent
 		selectedRow, _ := m.table.GetSelection()
+		m.renderDetails(selectedRow)
+		return nil
+	case 'f':
+		if m.format == detailFormatYAML {
+			m.format = detailFormatJSON
+		} else {
+			m.format = detailFormatYAML
+		}
+		selectedRow, _ := m.table.GetSelection()
+		m.renderStatus()
 		m.renderDetails(selectedRow)
 		return nil
 	}
@@ -1151,6 +1304,7 @@ func (m *traceModel) updateDetailsTitle(row *traceRow) {
 	if duration := traceRowDuration(row); duration != "" {
 		suffix = " " + duration
 	}
+	suffix += " " + strings.ToUpper(string(m.format))
 
 	switch m.mode {
 	case detailSnapshot:
@@ -1180,11 +1334,11 @@ func (m *traceModel) renderDetails(tableRow int) {
 	m.updateDetailsTitle(&row)
 	switch m.mode {
 	case detailDiff:
-		m.details.SetText(diffSnapshots(row.PreviousSnapshot, row.CurrentSnapshot))
+		m.details.SetText(diffSnapshots(row.PreviousSnapshot, row.CurrentSnapshot, m.format))
 		m.details.ScrollToBeginning()
 		return
 	case detailEvent:
-		m.details.SetText(highlightYAML(eventYAML(row.RawJSON)))
+		m.details.SetText(highlightText(eventText(row.RawJSON, m.format), m.format))
 		m.details.ScrollToBeginning()
 		return
 	default:
@@ -1193,7 +1347,7 @@ func (m *traceModel) renderDetails(tableRow int) {
 			m.details.ScrollToBeginning()
 			return
 		}
-		m.details.SetText(highlightYAML(snapshotYAML(row.CurrentSnapshot)))
+		m.details.SetText(highlightText(snapshotText(row.CurrentSnapshot, m.format), m.format))
 		m.details.ScrollToBeginning()
 	}
 }
