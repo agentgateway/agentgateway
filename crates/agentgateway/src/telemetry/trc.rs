@@ -79,7 +79,7 @@ impl SpanProcessor for SharedSpanProcessor {
 
 pub fn new_trace_processor(
 	resource: &Resource,
-	exporter: impl SpanExporter + Send + 'static,
+	exporter: impl SpanExporter + 'static,
 ) -> SharedSpanProcessor {
 	let mut processor = BatchSpanProcessor::builder(exporter).build();
 	processor.set_resource(resource);

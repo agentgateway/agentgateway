@@ -647,6 +647,9 @@ impl RequestLog {
 		// Early return if there is no tracer enabled at all
 		self.tracer.as_ref()?;
 		let tp = self.outgoing_span.clone()?;
+		if !tp.is_sampled() {
+			return None;
+		}
 
 		Some(SpanWriterInner {
 			parent: tp,
@@ -1122,7 +1125,9 @@ impl Drop for DropOnLog {
 			t.send(&log, &end_time, &cel_exec, kv.as_slice());
 			// Flush any buffered spans created during request processing.
 			// Does best effort, if the lock is poisoned, skip flushing.
-			if let Ok(mut spans) = log.trace_spans.lock() {
+			if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
+				&& let Ok(mut spans) = log.trace_spans.lock()
+			{
 				for buffered_span in spans.drain(..) {
 					t.processor.emit(buffered_span.into_span_data());
 				}
@@ -1679,5 +1684,26 @@ mod tests {
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
 		assert!(child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_noops_for_unsampled_outgoing_span() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 0;
+		request.outgoing_span = Some(outgoing);
+
+		{
+			let mut span = request.span_writer().start("buffered child span");
+			span.rename_span("renamed child span");
+		}
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		assert!(exporter.finished_spans().is_empty());
 	}
 }
