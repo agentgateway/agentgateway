@@ -1531,3 +1531,145 @@ fn completions_response_missing_message_and_usage_fields() {
 	assert_eq!(usage.completion_tokens, 0);
 	assert_eq!(usage.total_tokens, 12);
 }
+
+#[tokio::test]
+async fn messages_passthrough_stream_captures_completion() {
+	let input_path = fixture_path("response/anthropic/stream_basic.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	// Consume the body to drive the stream to completion
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for messages streaming");
+	assert_eq!(
+		completion.join(""),
+		"Hi there! How are you doing today? Is there anything I can help you with?"
+	);
+}
+
+#[tokio::test]
+async fn messages_passthrough_stream_skips_completion_when_disabled() {
+	let input_path = fixture_path("response/anthropic/stream_basic.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_captures_completion() {
+	let input_path = fixture_path("response/responses/stream.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			native_format: Some(custom::ProviderFormat::Responses),
+			request_model: "gpt-4.1-mini".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for responses streaming");
+	assert_eq!(completion.join(""), "Hello");
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_skips_completion_when_disabled() {
+	let input_path = fixture_path("response/responses/stream.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			native_format: Some(custom::ProviderFormat::Responses),
+			request_model: "gpt-4.1-mini".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
+}

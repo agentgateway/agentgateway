@@ -746,12 +746,28 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 	}
 }
 
-pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
+pub fn passthrough_stream(
+	b: Body,
+	buffer_limit: usize,
+	log: AmendOnDrop,
+	include_completion_in_log: bool,
+) -> Body {
 	let mut saw_token = false;
+	let mut completion = include_completion_in_log.then(String::new);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
-		let Some(Ok(f)) = f else { return };
+		let Some(Ok(f)) = f else {
+			// Stream ended ([DONE]): flush completion if not already set via MessageDelta
+			if f.is_none() {
+				log.non_atomic_mutate(|r| {
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
+					}
+				});
+			}
+			return;
+		};
 
 		// Extract info we need
 		match f {
@@ -766,12 +782,17 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},
-			messages::MessagesStreamEvent::ContentBlockDelta { .. } => {
+			messages::MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
 				if !saw_token {
 					saw_token = true;
 					log.non_atomic_mutate(|r| {
 						r.response.first_token = Some(Instant::now());
 					});
+				}
+				if let Some(c) = completion.as_mut()
+					&& let messages::ContentBlockDelta::TextDelta { text } = &delta
+				{
+					c.push_str(text);
 				}
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
@@ -789,6 +810,9 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 						&& let Some(o) = r.response.output_tokens
 					{
 						r.response.total_tokens = Some(inp + o)
+					}
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
 					}
 				});
 			},

@@ -1449,13 +1449,17 @@ impl AIProvider {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Completions)) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
-				resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(
 				AIProvider::Custom(_),
@@ -1492,21 +1496,23 @@ impl AIProvider {
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
 				_,
-			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger)),
+			) => resp.map(|b| {
+				conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Gemini(_), InputFormat::Responses, _) => {
 				resp.map(|b| conversion::openai_compat::to_responses::translate_stream(b, buffer, logger))
 			},
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
-			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Vertex(_), InputFormat::Messages, _) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages, _) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
