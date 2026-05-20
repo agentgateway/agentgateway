@@ -66,7 +66,7 @@ pub mod from_completions {
 	use crate::llm::types::completions::typed as completions;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
 	use crate::llm::types::messages::typed as messages;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	fn user_content_to_messages(
@@ -411,7 +411,7 @@ pub mod from_completions {
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<messages::MessagesResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp);
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;

@@ -5,7 +5,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::http::Response;
-use crate::llm::{AmendOnDrop, types};
+use crate::llm::{AmendOnDrop, logged_response_parsing, types};
 use crate::{llm, parse};
 
 /// Parse a Google error response, handling both single object and array-wrapped formats.
@@ -16,7 +16,7 @@ pub(crate) fn parse_google_error(
 ) -> Result<types::completions::typed::GoogleErrorResponse, llm::AIError> {
 	serde_json::from_slice::<types::completions::typed::GoogleErrorResponse>(bytes).or_else(|_| {
 		serde_json::from_slice::<Vec<types::completions::typed::GoogleErrorResponse>>(bytes)
-			.map_err(llm::AIError::ResponseParsing)?
+			.map_err(logged_response_parsing(bytes))?
 			.into_iter()
 			.next()
 			.ok_or_else(|| {
@@ -41,7 +41,7 @@ pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
 ) -> Result<types::completions::typed::ChatCompletionErrorResponse, llm::AIError> {
 	serde_json::from_slice::<types::completions::typed::ChatCompletionErrorResponse>(bytes)
-		.map_err(llm::AIError::ResponseParsing)
+		.map_err(logged_response_parsing(bytes))
 }
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
@@ -134,7 +134,7 @@ pub mod from_messages {
 
 	use crate::json;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::parse::sse::SseJsonEvent;
 
 	/// translate an Anthropic messages to an OpenAI completions request
@@ -145,8 +145,8 @@ pub mod from_messages {
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp =
-			serde_json::from_slice::<completions::Response>(bytes).map_err(AIError::ResponseParsing)?;
+		let resp = serde_json::from_slice::<completions::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(anthropic))
 	}

@@ -20,7 +20,7 @@ pub mod from_embeddings {
 	use crate::json;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, types};
+	use crate::llm::{AIError, logged_response_parsing, types};
 
 	pub fn translate(
 		req: &types::embeddings::Request,
@@ -86,7 +86,7 @@ pub mod from_embeddings {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		if model.contains("cohere") {
 			let resp: types::bedrock::CohereEmbeddingResponse =
-				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
 			// Cohere doesn't include token counts in the JSON body;
 			// Bedrock surfaces them via response headers instead.
@@ -120,7 +120,7 @@ pub mod from_embeddings {
 			Ok(Box::new(openai_resp))
 		} else {
 			let mut resp: types::bedrock::AmazonTitanV2EmbeddingResponse =
-				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 			let typed_resp = types::embeddings::typed::Response {
 				object: "list".to_string(),
 				data: vec![types::embeddings::typed::Embedding {
@@ -189,7 +189,7 @@ pub mod from_completions {
 	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	fn text_blocks_from_user_content(
@@ -618,7 +618,7 @@ pub mod from_completions {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp, model)?;
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
@@ -892,7 +892,7 @@ pub mod from_messages {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
@@ -1311,7 +1311,7 @@ pub mod from_messages {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp, model)?;
 		let passthrough =
 			json::convert::<_, types::messages::Response>(&openai).map_err(AIError::ResponseParsing)?;
@@ -1608,7 +1608,7 @@ pub mod from_responses {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	/// translate an OpenAI responses request to a Bedrock converse request
@@ -2131,7 +2131,7 @@ pub mod from_responses {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let typed = adapter.to_responses_typed();
 		let mut passthrough =
