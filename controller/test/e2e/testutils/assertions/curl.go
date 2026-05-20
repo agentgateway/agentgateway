@@ -21,7 +21,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
-	e2edefaults "github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
@@ -30,6 +29,12 @@ import (
 const (
 	GatewayProxyName = "gateway-proxy"
 )
+
+var CurlPodExecOpt = kubectl.PodExecOptions{
+	Name:      "curl",
+	Namespace: "curl",
+	Container: "curl",
+}
 
 func (p *Provider) AssertEventualCurlReturnResponse(
 	ctx context.Context,
@@ -278,7 +283,7 @@ func (p *Provider) CurlConsistentlyRespondsWithStatus(ctx context.Context, host 
 
 	p.AssertEventuallyConsistentCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 		10*time.Second,
@@ -291,7 +296,7 @@ func (p *Provider) CurlEventuallyRespondsWithStatus(ctx context.Context, host st
 
 	p.AssertEventualCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 	)
@@ -302,7 +307,7 @@ func (p *Provider) CurlRespondsWithStatus(ctx context.Context, host string, stat
 
 	p.assertCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 	)
@@ -313,7 +318,7 @@ func (p *Provider) CurlWithHeadersConsistentlyRespondsWithStatus(ctx context.Con
 
 	p.AssertEventuallyConsistentCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 		10*time.Second,
@@ -326,7 +331,7 @@ func (p *Provider) CurlWithHeadersEventuallyRespondsWithStatus(ctx context.Conte
 
 	p.AssertEventualCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 	)
@@ -337,7 +342,7 @@ func (p *Provider) CurlWithHeadersRespondsWithStatus(ctx context.Context, host s
 
 	p.assertCurlResponse(
 		ctx,
-		e2edefaults.CurlPodExecOpt,
+		CurlPodExecOpt,
 		curlOptsHeader,
 		&matchers.HttpResponse{StatusCode: status},
 	)

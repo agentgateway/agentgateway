@@ -263,7 +263,7 @@ function step_preload_images() {(
 
 function step_warm_test() {
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e/tests
+    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e
   elif [[ "${TEST_MODE}" == "conformance" ]]; then
     # TODO
     :

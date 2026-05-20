@@ -21,11 +21,10 @@ var (
 )
 
 // ManifestPath returns the absolute path to a manifest file.
-// These are all stored in the tests/manifests directory
+// These are all stored in the manifests directory.
 func ManifestPath(pathParts ...string) string {
 	manifestPathParts := append([]string{
 		fsutils.MustGetThisDir(),
-		"tests",
 		"manifests",
 	}, pathParts...)
 	return filepath.Join(manifestPathParts...)
