@@ -55,7 +55,7 @@ func setupLocality(t base.Test) []weSpec {
 	assertions.EventuallyHTTPRouteCondition(t, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 
 	t.Cleanup(func() {
-		_ = t.TestInstallation.ClusterContext.Client.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
+		_ = t.TestInstallation.ClusterContext.CachedClient.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
 	})
 	return workloadEntries
 }
@@ -113,7 +113,7 @@ func setInternalTrafficPolicy(t base.Test, policy corev1.ServiceInternalTrafficP
 }
 
 func updateService(t base.Test, mutate func(*corev1.Service)) {
-	svcs := t.TestInstallation.ClusterContext.Clientset.CoreV1().Services(localityNamespace)
+	svcs := t.TestInstallation.ClusterContext.Client.Kube().CoreV1().Services(localityNamespace)
 	svc, err := svcs.Get(t.Ctx, localityServiceName, metav1.GetOptions{})
 	assert.NoError(t, err)
 	mutate(svc)
@@ -122,7 +122,7 @@ func updateService(t base.Test, mutate func(*corev1.Service)) {
 }
 
 func applyWorkloadEntries(t base.Test, entries []weSpec) {
-	err := t.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", workloadEntriesYAML(entries))
+	err := t.TestInstallation.ClusterContext.Client.ApplyYAMLContents("", workloadEntriesYAML(entries))
 	assert.NoError(t, err)
 }
 
@@ -130,7 +130,7 @@ func deleteWorkloadEntry(t base.Test, name string) {
 	we := workloadEntry()
 	we.SetName(name)
 	we.SetNamespace(localityNamespace)
-	err := t.TestInstallation.ClusterContext.Client.Delete(t.Ctx, we)
+	err := t.TestInstallation.ClusterContext.CachedClient.Delete(t.Ctx, we)
 	err = client.IgnoreNotFound(err)
 	assert.NoError(t, err)
 }
@@ -171,7 +171,7 @@ spec:
 func waitPodIP(t base.Test, labelSelector string) string {
 	var ip string
 	retry.UntilSuccessOrFail(t, func() error {
-		pods, err := t.TestInstallation.ClusterContext.Clientset.
+		pods, err := t.TestInstallation.ClusterContext.Client.Kube().
 			CoreV1().Pods(localityNamespace).
 			List(t.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {

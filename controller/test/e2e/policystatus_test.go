@@ -47,7 +47,7 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.Client.Get(
+		if err := t.TestInstallation.ClusterContext.CachedClient.Get(
 			t.Ctx,
 			types.NamespacedName{Name: policyName, Namespace: policyNamespace},
 			policy,
@@ -70,7 +70,7 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 		}
 
 		policy.Status.Ancestors = append(policy.Status.Ancestors, fakeStatus)
-		return t.TestInstallation.ClusterContext.Client.Status().Update(t.Ctx, policy)
+		return t.TestInstallation.ClusterContext.CachedClient.Status().Update(t.Ctx, policy)
 	})
 }
 
@@ -78,7 +78,7 @@ func assertAncestorStatuses(t base.Test, ancestorName string, expectedController
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.Client.Get(
+		if err := t.TestInstallation.ClusterContext.CachedClient.Get(
 			t.Ctx,
 			types.NamespacedName{Name: "example-policy", Namespace: base.Namespace},
 			policy,

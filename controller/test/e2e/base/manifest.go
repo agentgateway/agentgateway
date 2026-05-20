@@ -36,7 +36,7 @@ func (s *Test) applyManifests(manifests ...string) {
 	if len(manifests) > 0 {
 		done = traceStep(s, "applied manifests %v", manifestNames(manifests))
 	}
-	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
+	err := s.TestInstallation.ClusterContext.Client.ApplyYAMLFiles("", manifests...)
 	istioassert.NoError(s, err)
 	done()
 
@@ -134,7 +134,7 @@ func (s *Test) deleteManifests(manifests ...string) {
 	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
 	istioassert.NoError(s, os.WriteFile(fp, []byte(nf), 0o644)) //nolint:gosec // G306: Golden test file can be readable
 
-	err := s.TestInstallation.ClusterContext.IstioClient.DeleteYAMLFiles("", fp)
+	err := s.TestInstallation.ClusterContext.Client.DeleteYAMLFiles("", fp)
 	istioassert.NoError(s, err)
 }
 
@@ -145,7 +145,7 @@ func (s *Test) setupHelpers() {
 func (s *Test) loadManifestResources(manifests ...string) []client.Object {
 	var resources []client.Object
 	for _, manifest := range manifests {
-		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.Client.Scheme(), s.validator)
+		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.CachedClient.Scheme(), s.validator)
 		istioassert.NoError(s, err)
 		resources = append(resources, objs...)
 	}

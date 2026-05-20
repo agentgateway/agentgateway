@@ -29,7 +29,7 @@ import (
 )
 
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
-	err := installation.ClusterContext.IstioClient.ApplyYAMLFiles("", manifests...)
+	err := installation.ClusterContext.Client.ApplyYAMLFiles("", manifests...)
 	assert.NoError(t, err)
 }
 
@@ -127,7 +127,7 @@ func shouldUsePortForward() bool {
 
 func setupGatewayPortForwards(ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) (string, map[int]int, error) {
 	svc := &corev1.Service{}
-	if err := installation.ClusterContext.Client.Get(ctx, name, svc); err != nil {
+	if err := installation.ClusterContext.CachedClient.Get(ctx, name, svc); err != nil {
 		return "", nil, fmt.Errorf("failed to get gateway service %s/%s: %w", name.Namespace, name.Name, err)
 	}
 	if len(svc.Spec.Ports) == 0 {

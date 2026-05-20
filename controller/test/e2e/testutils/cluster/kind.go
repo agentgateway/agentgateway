@@ -7,7 +7,6 @@ import (
 
 	kubelib "istio.io/istio/pkg/kube"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -35,11 +34,6 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 		panic(err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(restCfg)
-	if err != nil {
-		panic(err)
-	}
-
 	// This line prevents controller-runtime from complaining about log.SetLogger never being called
 	log.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseDevMode(true)))
 	clt, err := client.New(restCfg, client.Options{
@@ -56,11 +50,9 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 	istio.SetDefaultApplyNamespace("default")
 
 	return &Context{
-		Name:        clusterName,
-		KubeContext: kubeCtx,
-		RestConfig:  restCfg,
-		Client:      clt,
-		IstioClient: istio,
-		Clientset:   clientset,
+		Name:         clusterName,
+		KubeContext:  kubeCtx,
+		CachedClient: clt,
+		Client:       istio,
 	}
 }

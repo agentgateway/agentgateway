@@ -269,7 +269,7 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	}
 
 	// The kubernetes/e2e tests may use multiple namespaces, so we need to dump all of them
-	namespaceList, err := i.ClusterContext.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	namespaceList, err := i.ClusterContext.Client.Kube().CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	istioassert.NoError(t, err)
 	namespaces := slices.Map(namespaceList.Items, func(ns corev1.Namespace) string {
 		return ns.Name
@@ -283,12 +283,12 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	})
 
 	// Dump the logs and state of the cluster
-	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.ClusterContext.Client, i.ClusterContext.Clientset, dir, namespaces)
+	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.ClusterContext.CachedClient, i.ClusterContext.Client.Kube(), dir, namespaces)
 }
 
 func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, namespace string) bool {
 	l := &corev1.SecretList{}
-	if err := i.ClusterContext.Client.List(ctx, l, &client.ListOptions{
+	if err := i.ClusterContext.CachedClient.List(ctx, l, &client.ListOptions{
 		Namespace: namespace,
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"owner": "helm",

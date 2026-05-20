@@ -235,7 +235,7 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 		return "", fmt.Errorf("failed to create clientset: %w", err)
 	}
 
-	cm, err := clientset.CoreV1().ConfigMaps("metallb-system").Get(context.Background(), "config", metav1.GetOptions{})
+	cm, err := Client.Kube().CoreV1().ConfigMaps("metallb-system").Get(context.Background(), "config", metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get ConfigMap: %w", err)
 	}

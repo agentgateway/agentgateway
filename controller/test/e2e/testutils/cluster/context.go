@@ -4,8 +4,6 @@ package cluster
 
 import (
 	kubelib "istio.io/istio/pkg/kube"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -19,15 +17,9 @@ type Context struct {
 	// The context of the Kubernetes cluster
 	KubeContext string
 
-	// RestConfig holds the common attributes that can be passed to a Kubernetes client on initialization
-	RestConfig *rest.Config
+	// A client to perform CRUD operations on the Kubernetes Cluster
+	CachedClient client.Client
 
 	// A client to perform CRUD operations on the Kubernetes Cluster
-	Client client.Client
-
-	// A client to perform CRUD operations on the Kubernetes Cluster
-	IstioClient kubelib.CLIClient
-
-	// A set of clients for interacting with the Kubernetes Cluster
-	Clientset *kubernetes.Clientset
+	Client kubelib.CLIClient
 }

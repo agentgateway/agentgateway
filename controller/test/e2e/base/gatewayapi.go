@@ -63,7 +63,7 @@ func gatewayAPIMinVersionMatches(requirements map[GwApiChannel]*GwApiVersion, ch
 
 func (s *Test) detectAndCacheGwApiInfo() {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
-	err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, client.ObjectKey{Name: "gateways.gateway.networking.k8s.io"}, crd)
+	err := s.TestInstallation.ClusterContext.CachedClient.Get(s.Ctx, client.ObjectKey{Name: "gateways.gateway.networking.k8s.io"}, crd)
 	istioassert.NoError(s, err)
 
 	channel, hasChannel := crd.Annotations["gateway.networking.k8s.io/channel"]

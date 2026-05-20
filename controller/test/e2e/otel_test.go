@@ -124,7 +124,7 @@ func otelManifest(name string) string {
 
 func getCollectorPod(t base.Test) (string, error) {
 	pods := &corev1.PodList{}
-	err := t.TestInstallation.ClusterContext.Client.List(
+	err := t.TestInstallation.ClusterContext.CachedClient.List(
 		t.Ctx,
 		pods,
 		client.InNamespace("default"),
@@ -159,7 +159,7 @@ func getCollectorLogs(t base.Test) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	stream, err := t.TestInstallation.ClusterContext.Clientset.CoreV1().
+	stream, err := t.TestInstallation.ClusterContext.Client.Kube().CoreV1().
 		Pods("default").
 		GetLogs(pod, &corev1.PodLogOptions{}).
 		Stream(t.Ctx)
