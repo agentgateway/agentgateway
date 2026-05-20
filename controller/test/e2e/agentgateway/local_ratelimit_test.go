@@ -15,6 +15,7 @@ import (
 
 func TestLocalRateLimit(t *testing.T) {
 	agw := New(t)
+	agw.Apply(manifest("rate-limit", "local", "httproutes.yaml"))
 
 	agw.Run("Route", func() {
 		testLocalRateLimitForRoute(agw)
@@ -32,7 +33,6 @@ func TestLocalRateLimit(t *testing.T) {
 
 func testLocalRateLimitForRoute(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		manifest("rate-limit", "local", "httproutes.yaml"),
 		manifest("rate-limit", "local", "route-local-rate-limit.yaml"),
 	)
 
@@ -50,7 +50,6 @@ func testLocalRateLimitForRoute(agw *base.BaseTestingSuite) {
 
 func testLocalRateLimitForGateway(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		manifest("rate-limit", "local", "httproutes.yaml"),
 		manifest("rate-limit", "local", "gw-local-rate-limit.yaml"),
 	)
 

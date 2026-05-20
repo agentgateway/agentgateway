@@ -26,6 +26,7 @@ const (
 
 func TestOTel(t *testing.T) {
 	agw := New(t)
+	agw.Apply(otelManifest("setup.yaml"))
 
 	agw.Run("Tracing", func() {
 		testOTelTracing(agw)
@@ -36,21 +37,16 @@ func TestOTel(t *testing.T) {
 }
 
 func testOTelTracing(agw *base.BaseTestingSuite) {
-	agw.Apply(
-		otelManifest("setup.yaml"),
-		otelManifest("tracing.yaml"),
-	)
+	agw.Apply(otelManifest("tracing.yaml"))
 
 	agw.TestInstallation.AssertionsT(agw.T()).EventuallyAgwPolicyCondition(agw.Ctx, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
-	collectorPod, err := getCollectorPod(agw)
-	agw.Require().NoError(err, "Failed to resolve collector pod")
 
 	agw.TestInstallation.AssertionsT(agw.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		agw.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
 
-		logs, err := getCollectorLogs(agw, collectorPod)
+		logs, err := getCollectorLogs(agw)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
@@ -79,20 +75,14 @@ func testOTelTracing(agw *base.BaseTestingSuite) {
 }
 
 func testOTelAccessLog(agw *base.BaseTestingSuite) {
-	agw.Apply(
-		otelManifest("setup.yaml"),
-		otelManifest("accesslog-otlp.yaml"),
-	)
+	agw.Apply(otelManifest("accesslog-otlp.yaml"))
 
 	agw.TestInstallation.AssertionsT(agw.T()).EventuallyAgwPolicyCondition(agw.Ctx, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
-
-	collectorPod, err := getCollectorPod(agw)
-	agw.Require().NoError(err, "Failed to resolve collector pod")
 
 	agw.TestInstallation.AssertionsT(agw.T()).Gomega.Eventually(func(g gomega.Gomega) {
 		agw.Send("www.example.com/status/200", base.ExpectOK())
 
-		logs, err := getCollectorLogs(agw, collectorPod)
+		logs, err := getCollectorLogs(agw)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
@@ -132,10 +122,28 @@ func getCollectorPod(t *base.BaseTestingSuite) (string, error) {
 		return "", fmt.Errorf("no collector pods found")
 	}
 
-	return pods.Items[0].Name, nil
+	var newest *corev1.Pod
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.DeletionTimestamp != nil || pod.Status.Phase != corev1.PodRunning || !podReady(pod) {
+			continue
+		}
+		if newest == nil || pod.CreationTimestamp.After(newest.CreationTimestamp.Time) {
+			newest = pod
+		}
+	}
+	if newest == nil {
+		return "", fmt.Errorf("no running collector pods found")
+	}
+
+	return newest.Name, nil
 }
 
-func getCollectorLogs(t *base.BaseTestingSuite, pod string) (string, error) {
+func getCollectorLogs(t *base.BaseTestingSuite) (string, error) {
+	pod, err := getCollectorPod(t)
+	if err != nil {
+		return "", err
+	}
 	stream, err := t.TestInstallation.ClusterContext.Clientset.CoreV1().
 		Pods("default").
 		GetLogs(pod, &corev1.PodLogOptions{}).
@@ -150,4 +158,13 @@ func getCollectorLogs(t *base.BaseTestingSuite, pod string) (string, error) {
 		return "", err
 	}
 	return string(logs), nil
+}
+
+func podReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }

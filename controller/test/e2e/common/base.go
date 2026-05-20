@@ -192,28 +192,53 @@ func (g *Gateway) Send(t *testing.T, match *matchers.HttpResponse, opts ...curl.
 }
 
 func (g *Gateway) SendWithResponse(t *testing.T, match *matchers.HttpResponse, opts ...curl.Option) http.Response {
+	t.Helper()
+
 	address := g.ResolvedAddress()
 	fullOpts := append(GatewayAddressOptions(address), opts...)
 	var passedRes http.Response
+	start := time.Now()
+	attempts := 0
+	var lastErr error
 	retry.UntilSuccessOrFail(t, func() error {
+		attempts++
 		r, err := curl.ExecuteRequest(fullOpts...)
 		if err != nil {
+			lastErr = err
 			return err
 		}
 		mm := matchers.HaveHttpResponse(match)
 		success, err := mm.Match(r)
 		if err != nil {
 			r.Body.Close()
+			lastErr = err
 			return err
 		}
 		if !success {
 			r.Body.Close()
-			return fmt.Errorf("match failed: %v", mm.FailureMessage(r))
+			lastErr = fmt.Errorf("match failed: %v", mm.FailureMessage(r))
+			return lastErr
 		}
 		passedRes = *r
 		return nil
 	}, retry.Timeout(time.Second*30))
+	elapsed := time.Since(start)
+	if attempts > 1 || elapsed > time.Second {
+		t.Logf("gateway request matched after %d attempts in %s; previous error: %s", attempts, elapsed.Round(time.Millisecond), shortError(lastErr))
+	}
 	return passedRes
+}
+
+func shortError(err error) string {
+	if err == nil {
+		return "<none>"
+	}
+	const maxLen = 300
+	msg := err.Error()
+	if len(msg) <= maxLen {
+		return msg
+	}
+	return msg[:maxLen] + "..."
 }
 
 func (g *Gateway) ResolvedAddress() string {

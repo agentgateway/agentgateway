@@ -123,6 +123,9 @@ func parseFile(
 			)
 			continue
 		}
+		if meta.APIVersion == "" && meta.Kind == "" && meta.Name == "" {
+			continue
+		}
 
 		gvk := schema.FromAPIVersionAndKind(meta.APIVersion, meta.Kind)
 		obj, err := scheme.New(gvk)

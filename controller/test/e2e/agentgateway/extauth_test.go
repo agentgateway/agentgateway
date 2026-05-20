@@ -15,6 +15,7 @@ import (
 
 func TestExtAuth(t *testing.T) {
 	agw := New(t)
+	agw.Apply(extAuthManifest("service.yaml"))
 
 	agw.Run("GatewayPolicy", func() {
 		testExtAuthGatewayPolicy(agw)
@@ -35,7 +36,6 @@ func TestExtAuth(t *testing.T) {
 
 func testExtAuthGatewayPolicy(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		extAuthManifest("service.yaml"),
 		extAuthManifest("secured-gateway-policy.yaml"),
 		extAuthManifest("insecure-route.yaml"),
 	)
@@ -64,7 +64,6 @@ func testExtAuthGatewayPolicy(agw *base.BaseTestingSuite) {
 
 func testExtAuthRoutePolicy(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		extAuthManifest("service.yaml"),
 		extAuthManifest("secured-route.yaml"),
 		extAuthManifest("insecure-route.yaml"),
 	)
@@ -92,7 +91,6 @@ func testExtAuthRoutePolicy(agw *base.BaseTestingSuite) {
 
 func testExtAuthBackendTargetedPolicy(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		extAuthManifest("service.yaml"),
 		extAuthManifest("backend-targeted-route.yaml"),
 	)
 
@@ -119,7 +117,6 @@ func testExtAuthBackendTargetedPolicy(agw *base.BaseTestingSuite) {
 
 func testExtAuthConditionalPolicy(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		extAuthManifest("service.yaml"),
 		extAuthManifest("conditional-route.yaml"),
 	)
 
@@ -153,7 +150,6 @@ func testExtAuthConditionalPolicy(agw *base.BaseTestingSuite) {
 
 func testExtAuthPolicyMissingBackendRef(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		extAuthManifest("service.yaml"),
 		extAuthManifest("secured-route-missing-ref.yaml"),
 	)
 

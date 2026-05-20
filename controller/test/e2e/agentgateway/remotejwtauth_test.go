@@ -13,6 +13,7 @@ import (
 
 func TestRemoteJwtAuth(t *testing.T) {
 	agw := New(t)
+	agw.Apply(manifest("remotejwtauth", "common.yaml"))
 
 	agw.Run("RoutePolicyBackend", func() {
 		testRemoteJwtAuthRoutePolicyBackend(agw)
@@ -115,7 +116,7 @@ func testRemoteJwtAuthGatewayPolicyWithRbac(agw *base.BaseTestingSuite) {
 }
 
 func applyRemoteJwtAuth(t *base.BaseTestingSuite, manifests ...string) {
-	all := []string{manifest("remotejwtauth", "common.yaml")}
+	all := make([]string, 0, len(manifests))
 	for _, name := range manifests {
 		all = append(all, manifest("remotejwtauth", name))
 	}

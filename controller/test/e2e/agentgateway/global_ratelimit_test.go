@@ -17,6 +17,10 @@ const rlBurstTries = 3
 
 func TestGlobalRateLimit(t *testing.T) {
 	agw := New(t)
+	agw.Apply(
+		globalRateLimitManifest("rate-limit-server.yaml"),
+		globalRateLimitManifest("routes.yaml"),
+	)
 
 	agw.Run("ByRemoteAddress", func() {
 		testGlobalRateLimitByRemoteAddress(agw)
@@ -34,8 +38,6 @@ func TestGlobalRateLimit(t *testing.T) {
 
 func testGlobalRateLimitByRemoteAddress(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		globalRateLimitManifest("rate-limit-server.yaml"),
-		globalRateLimitManifest("routes.yaml"),
 		globalRateLimitManifest("ip-rate-limit.yaml"),
 	)
 
@@ -46,8 +48,6 @@ func testGlobalRateLimitByRemoteAddress(agw *base.BaseTestingSuite) {
 
 func testGlobalRateLimitByPath(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		globalRateLimitManifest("rate-limit-server.yaml"),
-		globalRateLimitManifest("routes.yaml"),
 		globalRateLimitManifest("path-rate-limit.yaml"),
 	)
 
@@ -58,8 +58,6 @@ func testGlobalRateLimitByPath(agw *base.BaseTestingSuite) {
 
 func testGlobalRateLimitByUserID(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		globalRateLimitManifest("rate-limit-server.yaml"),
-		globalRateLimitManifest("routes.yaml"),
 		globalRateLimitManifest("user-rate-limit.yaml"),
 	)
 
@@ -70,8 +68,6 @@ func testGlobalRateLimitByUserID(agw *base.BaseTestingSuite) {
 
 func testCombinedLocalAndGlobalRateLimit(agw *base.BaseTestingSuite) {
 	agw.Apply(
-		globalRateLimitManifest("rate-limit-server.yaml"),
-		globalRateLimitManifest("routes.yaml"),
 		globalRateLimitManifest("combined-rate-limit.yaml"),
 	)
 

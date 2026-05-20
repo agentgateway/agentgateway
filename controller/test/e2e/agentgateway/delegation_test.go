@@ -17,6 +17,7 @@ import (
 
 func TestDelegation(t *testing.T) {
 	agw := New(t)
+	agw.Apply(delegationManifest("setup.yaml"))
 
 	agw.Run("Basic", func() {
 		testBasicDelegation(agw)
@@ -39,7 +40,7 @@ func TestDelegation(t *testing.T) {
 }
 
 func testBasicDelegation(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("basic-delegation.yaml"))
+	agw.Apply(delegationManifest("basic-delegation.yaml"))
 
 	assertHTTPRouteAccepted(agw, "root", "infra")
 	agw.Send("example.com/anything/team1/foo", base.ExpectOK())
@@ -47,7 +48,7 @@ func testBasicDelegation(agw *base.BaseTestingSuite) {
 }
 
 func testDelegationWithHeadersAndQueryParams(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("delegation-headers-query.yaml"))
+	agw.Apply(delegationManifest("delegation-headers-query.yaml"))
 
 	assertHTTPRouteAccepted(agw, "root", "infra")
 	agw.Send(
@@ -64,7 +65,7 @@ func testDelegationWithHeadersAndQueryParams(agw *base.BaseTestingSuite) {
 }
 
 func testCyclicDelegation(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("cyclic-delegation.yaml"))
+	agw.Apply(delegationManifest("cyclic-delegation.yaml"))
 
 	assertHTTPRouteAccepted(agw, "root", "infra")
 	agw.Send("example.com/anything/team1/foo", base.ExpectOK())
@@ -75,7 +76,7 @@ func testCyclicDelegation(agw *base.BaseTestingSuite) {
 }
 
 func testRecursiveDelegation(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("recursive-delegation.yaml"))
+	agw.Apply(delegationManifest("recursive-delegation.yaml"))
 
 	assertHTTPRouteAccepted(agw, "root", "infra")
 	agw.Send("example.com/anything/team1/foo", base.ExpectOK())
@@ -83,7 +84,7 @@ func testRecursiveDelegation(agw *base.BaseTestingSuite) {
 }
 
 func testMultipleParents(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("multiple-parents.yaml"))
+	agw.Apply(delegationManifest("multiple-parents.yaml"))
 
 	assertHTTPRouteAccepted(agw, "parent1", "infra")
 	assertHTTPRouteAccepted(agw, "parent2", "infra")
@@ -92,7 +93,7 @@ func testMultipleParents(agw *base.BaseTestingSuite) {
 }
 
 func testUnresolvedChild(agw *base.BaseTestingSuite) {
-	agw.Apply(delegationManifest("setup.yaml"), delegationManifest("unresolved-child.yaml"))
+	agw.Apply(delegationManifest("unresolved-child.yaml"))
 
 	assertHTTPRouteAccepted(agw, "root", "infra")
 	agw.Send("example.com/anything/team1/foo", base.Expect(http.StatusNotFound))
