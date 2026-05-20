@@ -143,6 +143,97 @@ async fn stream_to_multiplex() {
 }
 
 #[tokio::test]
+async fn stream_to_multiplex_resources() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	// 1. list_resources should return resources from both backends with prefixed URIs
+	let resources = client.list_resources(None).await.unwrap();
+	let uris: Vec<String> = resources
+		.resources
+		.iter()
+		.map(|r| r.uri.clone())
+		.sorted()
+		.collect();
+	// Each mock provides "str:////Users/to/some/path/" and "memo://insights"
+	// With multiplexing these become "a+str:////Users/to/some/path/", "a+memo://insights", etc.
+	assert!(
+		uris.iter().any(|u| u == "a+memo://insights"),
+		"Expected 'a+memo://insights' in resources, got: {:?}",
+		uris
+	);
+	assert!(
+		uris.iter().any(|u| u == "b+memo://insights"),
+		"Expected 'b+memo://insights' in resources, got: {:?}",
+		uris
+	);
+
+	// 2. read_resource with prefixed URI should route to the correct backend
+	let result = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"a+memo://insights",
+		))
+		.await
+		.unwrap();
+	assert!(
+		!result.contents.is_empty(),
+		"Expected non-empty resource contents"
+	);
+	let text = match &result.contents[0] {
+		rmcp::model::ResourceContents::TextResourceContents { text, .. } => text.clone(),
+		other => panic!("Expected text resource content, got: {:?}", other),
+	};
+	assert!(
+		text.contains("Business Intelligence Memo"),
+		"Expected memo content, got: {}",
+		text
+	);
+
+	// Also read from backend "b"
+	let result_b = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"b+memo://insights",
+		))
+		.await
+		.unwrap();
+	assert!(
+		!result_b.contents.is_empty(),
+		"Expected non-empty resource contents from backend b"
+	);
+
+	// 3. list_resource_templates should not error (mock returns empty)
+	let templates = client.list_resource_templates(None).await.unwrap();
+	// Templates may be empty since mock server returns empty vec, but should not error
+	assert!(
+		templates.resource_templates.is_empty(),
+		"Expected empty resource templates from mock, got: {:?}",
+		templates.resource_templates
+	);
+
+	// 4. read_resource with unprefixed URI should fail
+	assert!(
+		client
+			.read_resource(rmcp::model::ReadResourceRequestParams::new(
+				"memo://insights",
+			))
+			.await
+			.is_err(),
+		"Expected error when reading resource without service prefix"
+	);
+}
+
+#[tokio::test]
 async fn stateless_multiplex_tool_call_initializes_only_target() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
