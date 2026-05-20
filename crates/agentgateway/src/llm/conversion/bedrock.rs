@@ -538,7 +538,6 @@ pub mod from_completions {
 			request_metadata: metadata,
 			performance_config: None,
 		};
-
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
 				helpers::insert_message_cache_point(

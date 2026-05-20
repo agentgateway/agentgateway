@@ -1707,6 +1707,10 @@ async fn make_backend_call(
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings
 				| RouteType::Detect => {
+					let request_body_limit = crate::http::buffer_limit(&req);
+					let req = req.map(|b| {
+						dtrace::TracingBody::maybe_wrap("llm request before translation", b, request_body_limit)
+					});
 					let r = match route_type {
 						RouteType::Completions => Box::pin(llm.provider.process_completions_request(
 							&backend_info,
@@ -1875,6 +1879,8 @@ async fn make_backend_call(
 	)
 	.await?;
 	dtrace::snapshot!(Request, "final request", &req);
+	let request_body_limit = crate::http::buffer_limit(&req);
+	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
 	let call = client::Call {
 		req,
 		target: backend_call.target,
@@ -1940,6 +1946,8 @@ async fn make_backend_call(
 	if let Some(log) = log.as_ref() {
 		dtrace::snapshot!(Response, "backend response ready", log, &resp);
 	}
+	let response_body_limit = crate::http::response_buffer_limit(&resp);
+	let resp = resp.map(|b| dtrace::TracingBody::maybe_wrap("response", b, response_body_limit));
 	Ok(resp)
 }
 

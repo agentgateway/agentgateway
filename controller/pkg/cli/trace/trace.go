@@ -573,6 +573,8 @@ func displayEventType(eventType string) string {
 		return "Backend Result"
 	case "requestFinished":
 		return "Request Done"
+	case "bodySnapshot":
+		return "Body Snapshot"
 	default:
 		return eventType
 	}
@@ -621,6 +623,8 @@ func summarizeEvent(event traceEvent) string {
 		return truncate(strings.Join(parts, " "), 120)
 	case "requestFinished":
 		return "request finished"
+	case "bodySnapshot":
+		return fmt.Sprintf("%s body snapshot", event.Stage)
 	default:
 		return truncate(compactJSON(event), 120)
 	}
@@ -907,6 +911,7 @@ func normalizeTraceEventRequestStateBodies(value any) {
 	if !ok {
 		return
 	}
+	normalizeTraceBody(event, "message")
 	normalizeTraceRequestStateBodies(message["requestState"])
 }
 

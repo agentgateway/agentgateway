@@ -17158,6 +17158,8 @@
 |`llm.models[].auth.aws.secretAccessKey`|string||
 |`llm.models[].auth.aws.region`|string||
 |`llm.models[].auth.aws.sessionToken`|string||
+|`llm.models[].auth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].auth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].auth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].auth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].auth.azure.explicitConfig.clientSecret`|object||

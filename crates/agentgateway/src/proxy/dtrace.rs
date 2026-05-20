@@ -12,6 +12,32 @@ tokio::task_local! {
 		static ACTIVE: Option<DebugTracer>;
 }
 
+pub struct TracingBody(&'static str, RecordedBodyHandle, DebugTracer);
+
+impl TracingBody {
+	pub fn maybe_wrap(scope: &'static str, b: Body, limit: usize) -> Body {
+		if let Some(tracer) = ACTIVE.try_with(|f| f.clone()).ok().flatten() {
+			// RecordBody will get us the Bytes of the request. Note this doesn't block the body, just
+			// records.
+			let (b, handle) = RecordedBody::new_with_limit(b, limit);
+			let t = TracingBody(scope, handle, tracer);
+			// Now, we store it in a DropBody so when the body is done we can emit an event.
+			DropBody::new(b, t)
+		} else {
+			b
+		}
+	}
+}
+
+impl Drop for TracingBody {
+	fn drop(&mut self) {
+		self.2.send(MessageType::BodySnapshot {
+			stage: self.0.to_string(),
+			body: self.1.bytes(),
+		})
+	}
+}
+
 pub fn is_active() -> bool {
 	ACTIVE.try_with(|f| f.is_some()).unwrap_or(false)
 }
@@ -166,6 +192,8 @@ macro_rules! pol_result_timed {
 
 pub(crate) use pol_result_timed;
 
+use crate::http::{Body, DropBody, RecordedBody, RecordedBodyHandle};
+
 #[derive(Debug, Serialize)]
 #[allow(non_snake_case)]
 #[serde(rename_all = "camelCase")]
@@ -250,6 +278,11 @@ pub enum MessageType {
 		stage: String,
 		requestState: serde_json::Value,
 	},
+	BodySnapshot {
+		stage: String,
+		#[serde(serialize_with = "crate::serde_base64::serialize")]
+		body: Bytes,
+	},
 	RouteSelection {
 		selectedRoute: Option<RouteKey>,
 		evaluatedRoutes: Vec<RouteKey>,
@@ -287,6 +320,7 @@ impl MessageType {
 			MessageType::RequestStarted
 			| MessageType::RequestSnapshot { .. }
 			| MessageType::ResponseSnapshot { .. }
+			| MessageType::BodySnapshot { .. }
 			| MessageType::RouteSelection {
 				selectedRoute: Some(_),
 				..

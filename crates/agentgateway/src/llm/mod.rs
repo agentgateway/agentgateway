@@ -40,6 +40,7 @@ mod types;
 pub use types::SimpleChatCompletionMessage;
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
+use crate::proxy::dtrace;
 use crate::store;
 
 #[cfg(test)]
@@ -969,6 +970,7 @@ impl AIProvider {
 		// Buffer the body
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
+		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer_limit);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (encoding, bytes) =
 			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
