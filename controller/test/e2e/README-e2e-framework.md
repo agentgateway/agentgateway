@@ -72,29 +72,28 @@ You can find more information on running tests in the [e2e test debugging guide]
 
 ## Test Structure
 
-Feature suites are run as standard Go subtests. A suite is a small struct with
-`Test*` methods plus optional `SetupSuite`, `BeforeTest`, `AfterTest`, and
-`TearDownSuite` hooks.
-
-Use `testing.T`, `istio.io/istio/pkg/test/util/retry`, and focused assertion
-helpers for request/status checks. Avoid adding broader test frameworks; the
-common path should stay close to: apply manifests, run requests and assertions,
-optionally check status, then clean up.
-
-Prefer applying per-test config directly in the test body:
+E2E tests are normal Go tests with standard subtests. A typical test creates an
+e2e test handle with `New`, applies YAML, sends requests, performs assertions,
+and lets `t.Cleanup` remove applied resources.
 
 ```go
-func (s *testingSuite) TestExample() {
-    s.Apply(routesManifest, policyManifest)
+func TestExample(tt *testing.T) {
+    t := New(tt)
 
-    common.BaseGateway.Send(s.T(), &matchers.HttpResponse{StatusCode: http.StatusOK}, ...)
+    t.Run("Policy", func(t base.Test) {
+        t.Apply(manifest("example", "policy.yaml"))
+        t.Send("example.com/get", base.ExpectOK())
+    })
 }
 ```
 
-`Apply` registers cleanup with `t.Cleanup`, so the config contract stays
-local to the test without needing a parallel map keyed by test method name.
-Use `New(t, base.WithMinGwApiVersion(...))` only when the whole test
-requires a newer Gateway API version than the supported baseline.
+Use `istio.io/istio/pkg/test/util/assert`, `istio.io/istio/pkg/test/util/retry`,
+and focused request/status helpers. Avoid adding broader test frameworks; the
+common path should stay close to: apply manifests, run requests and assertions,
+optionally check status, then clean up.
+
+Use `New(tt, base.WithMinGwApiVersion(...))` only when the whole test requires a
+newer Gateway API version than the supported baseline.
 
 ## TestCluster
 
@@ -108,38 +107,14 @@ A [TestInstallation](./test.go) is the structure that manages a group of tests t
 
 We try to define a single `TestInstallation` per file in a `TestCluster`. This way, it is easy to identify what behaviors are expected for that installation.
 
-## Features
+## Test Files
 
-We define all tests in the [features](./features) package. This is done for a variety of reasons:
+Top-level `Test*` functions live directly in this package. Keep related cases
+in one file, use subtests for filterable groups, and place YAML under
+`testdata/<feature>/`.
 
-1. We group the tests by feature, so it's easy to identify which behaviors we assert for a given feature.
-2. We can invoke that same test against different `TestInstallation`s. This means we can test a feature against a variety of installation values.
-
-Many examples of testing features may be found in the [features](./features) package. The general pattern for adding a new feature should be to create a directory for the feature under `features/`, write manifest files for the resources the tests will need into `features/my_feature/testdata/`, define Go objects for them in a file called `features/my_feature/types.go`, and finally define the test suite in `features/my_feature/suite.go`. There are occasions where multiple suites will need to be created under a single feature. See [Suites](#test-suites) for more info on this case.
-
-### Agentgateway 
-
-One feature tested as part of the e2e suite is the [agentgateway](https://github.com/agentgateway/agentgateway) dataplane integration.
-
-Most feature tests can be reused for agentgateway, but some features (a2a, mcp, etc.) require special agentgateway-specific setup. You can 
-find more details in the agentgateway e2e suite [README](features/agentgateway/README.md).
-
-## Test Suites
-
-A Test Suite is a subset of the Feature concept. A single Feature has at minimum one Test Suite, and can have many. Each Test Suite should have its own appropriately named `.go` file from which is exported an appropriately named function which satisfies the signature `NewSuiteFunc` found in [suite.go](./suite.go).
-
-These test suites are registered by a name and this func in [Tests](#tests) to be run against various `TestInstallation`s.
-
-## Tests
-
-This package holds the entry point for each of our `TestInstallation`.
-
-See [Load balancing tests](./load_balancing_tests.md) for more information about how these tests are run in CI.
-
-Each `*_test.go` file contains a specific test installation and exists within the `tests_test` package. In order for tests to be imported and run from other repos, each `*_test.go` file has a corresponding `*_test.go` file which exists in the `tests` package. This is done because `_test` packages cannot be imported.
-
-In order to add a feature suite to be run in a given test installation, it must be added to the exported function in the corresponding `*_tests.go` file.
-e.g. In order to add a feature suite to be run with the test installation defined in `istio_test.go`, we have to register it by adding it to `IstioTests()` in `istio_tests.go` following the existing paradigm.
+See [Load balancing tests](./load_balancing_tests.md) for more information about
+how these tests are run in CI.
 
 ## Adding Tests to CI
 

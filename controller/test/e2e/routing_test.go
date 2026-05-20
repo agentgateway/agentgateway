@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 func TestAgentgatewayRouting(tt *testing.T) {
@@ -49,8 +50,7 @@ func testAgentgatewayTCPRoute(t base.Test) {
 
 func sharedGateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway {
 	t.GatewayReady("gateway", base.Namespace)
-	t.TestInstallation.AssertionsT(t).EventuallyGatewayListenerAttachedRoutes(
-		t.Ctx,
+	assertions.EventuallyGatewayListenerAttachedRoutes(t,
 		"gateway",
 		base.Namespace,
 		gwv1.SectionName(listenerName),
@@ -60,6 +60,6 @@ func sharedGateway(t base.Test, listenerName string, attachedRoutes int) base.Ga
 	name := types.NamespacedName{Name: "gateway", Namespace: base.Namespace}
 	return base.Gateway{
 		NamespacedName: name,
-		Address:        base.ResolveGatewayAddress(t.Ctx, t.TestInstallation, name),
+		Address:        base.ResolveGatewayAddress(t, t.Ctx, t.TestInstallation, name),
 	}
 }

@@ -18,7 +18,7 @@ import (
 
 // EventuallyReadyReplicas asserts that given a Deployment, eventually the number of pods matching the replicaMatcher
 // are in the ready state and able to receive traffic.
-func (p *Provider) EventuallyReadyReplicas(ctx context.Context, deploymentMeta metav1.ObjectMeta, replicaMatcher types.GomegaMatcher, timeout ...time.Duration) {
+func (p *provider) EventuallyReadyReplicas(ctx context.Context, deploymentMeta metav1.ObjectMeta, replicaMatcher types.GomegaMatcher, timeout ...time.Duration) {
 	currentTimeout, pollingInterval := helpers.GetTimeouts(timeout...)
 
 	p.Gomega.Eventually(func(innerG Gomega) {
@@ -36,7 +36,7 @@ func (p *Provider) EventuallyReadyReplicas(ctx context.Context, deploymentMeta m
 }
 
 // EventuallyDeploymentNotExists asserts that eventually no deployments matching the given selector and namespace exist on the cluster.
-func (p *Provider) EventuallyDeploymentNotExists(ctx context.Context,
+func (p *provider) EventuallyDeploymentNotExists(ctx context.Context,
 	deploymentNamespace string,
 	listOpt metav1.ListOptions,
 	timeout ...time.Duration,

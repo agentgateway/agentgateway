@@ -16,6 +16,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
@@ -68,8 +69,7 @@ func testMCPAuthn(t base.Test) {
 
 	// Wait for the authentication policy to be accepted before testing
 	t.Log("Waiting for authentication policy to be accepted")
-	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(
-		t.Ctx,
+	assertions.EventuallyAgwPolicyCondition(t,
 		"auth0-mcp-authn-policy",
 		"default",
 		"Accepted",
@@ -123,8 +123,7 @@ func testMCPAuthnRoute(t base.Test) {
 
 	// Wait for the authentication policy to be accepted before testing
 	t.Log("Waiting for authentication policy to be accepted")
-	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(
-		t.Ctx,
+	assertions.EventuallyAgwPolicyCondition(t,
 		"auth0-mcp-authn-policy",
 		"default",
 		"Accepted",
@@ -321,8 +320,7 @@ func runDynamicRoutingCase(t base.Test, clientName string, routeHeaders map[stri
 }
 
 func waitDynamicReady(t base.Test) {
-	t.TestInstallation.AssertionsT(t).EventuallyPodsRunning(
-		t.Ctx, "default",
+	assertions.EventuallyPodsRunning(t, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
@@ -335,18 +333,16 @@ func waitDynamicReady(t base.Test) {
 }
 
 func waitStaticReady(t base.Test) {
-	t.TestInstallation.AssertionsT(t).EventuallyPodsRunning(
-		t.Ctx, "default",
+	assertions.EventuallyPodsRunning(t, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
-	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(t.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
-	t.TestInstallation.AssertionsT(t).EventuallyAgwBackendCondition(t.Ctx, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
-	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(t.Ctx, "mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyGatewayCondition(t, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	assertions.EventuallyAgwBackendCondition(t, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(t, "mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 }
 
 func waitAuth0Ready(t base.Test) {
-	t.TestInstallation.AssertionsT(t).EventuallyPodsRunning(
-		t.Ctx, "default",
+	assertions.EventuallyPodsRunning(t, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 }

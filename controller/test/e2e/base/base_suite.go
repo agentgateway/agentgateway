@@ -34,6 +34,9 @@ import (
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
@@ -97,12 +100,11 @@ type Test struct {
 	// gwApiChannel stores the detected Gateway API channel (detected once and cached)
 	gwApiChannel GwApiChannel
 
-	// MinGwApiVersion specifies the minimum Gateway API version required for this entire suite.
-	// This is needed on the suite level, because individual tests are skipped after the suite is setup, and the suite setup may apply manifests that are not compatible with the current Gateway API version.
+	// MinGwApiVersion specifies the minimum Gateway API version required for this entire test.
 	// Map key is the channel (GwApiChannelStandard or GwApiChannelExperimental), value is the minimum version.
-	// If the map is empty/nil, the suite runs on any channel/version.
-	// The suite will only run if the Gateway API version is >= the specified minimum version.
-	// For minimum requirements, if only experimental constraints exist, the suite is considered experimental-only and will skip on standard channel.
+	// If the map is empty/nil, the test runs on any channel/version.
+	// The test will only run if the Gateway API version is >= the specified minimum version.
+	// For minimum requirements, if only experimental constraints exist, the test is considered experimental-only and will skip on standard channel.
 	// Matching logic based on installed channel:
 	//   - experimental: If experimental key exists, check version; otherwise run
 	//   - standard: If standard key exists, check version; if only experimental exists, skip; otherwise runs on any standard version.
@@ -112,25 +114,37 @@ type Test struct {
 // SuiteOption is a functional option for configuring Test
 type SuiteOption func(*Test)
 
-// WithMinGwApiVersion sets the minimum Gateway API version requirements for the suite
+// WithMinGwApiVersion sets the minimum Gateway API version requirements for the test.
 func WithMinGwApiVersion(minVersions map[GwApiChannel]*GwApiVersion) SuiteOption {
 	return func(s *Test) {
 		s.MinGwApiVersion = minVersions
 	}
 }
 
-func NewSuite(ctx context.Context, testInst *e2e.TestInstallation, t *testing.T, opts ...SuiteOption) Test {
-	suite := Test{
+func NewTest(ctx context.Context, testInst *e2e.TestInstallation, t *testing.T, opts ...SuiteOption) Test {
+	test := Test{
 		T:                t,
 		Ctx:              ctx,
 		TestInstallation: testInst,
 	}
 
 	for _, opt := range opts {
-		opt(&suite)
+		opt(&test)
 	}
 
-	return suite
+	return test
+}
+
+func (s Test) E2EContext() context.Context {
+	return s.Ctx
+}
+
+func (s Test) E2EClusterContext() *cluster.Context {
+	return s.TestInstallation.ClusterContext
+}
+
+func (s Test) E2EInstallContext() *install.Context {
+	return s.TestInstallation.Metadata
 }
 
 func (s *Test) Run(name string, f func(t Test)) bool {
@@ -164,24 +178,20 @@ func gatewayAPIMinVersionMatches(requirements map[GwApiChannel]*GwApiVersion, ch
 	}
 }
 
-func (s *Test) SetupSuite() {
+func (s *Test) Setup() {
 	// Detect and cache Gateway API version and channel once
 	done := traceStep(s, "detected Gateway API version")
 	s.detectAndCacheGwApiInfo()
 	done()
 
-	// Check suite-level version requirements before proceeding
-	if s.SkipSuite() {
+	// Check test-level version requirements before proceeding.
+	if s.ShouldSkip() {
 		s.Skipf("Test requires Gateway API %s, but current is %s/%s", s.MinGwApiVersion, s.getCurrentGwApiChannel(), s.getCurrentGwApiVersion())
 	}
 
-	// set up the helpers once and store them on the suite
-	done = traceStep(s, "setup suite helpers")
+	done = traceStep(s, "setup test helpers")
 	s.setupHelpers()
 	done()
-}
-
-func (s *Test) TearDownSuite() {
 }
 
 func (s *Test) applyManifests(manifests ...string) {
@@ -199,11 +209,11 @@ func (s *Test) applyManifests(manifests ...string) {
 	// GatewayParameters) must already exist on the cluster.
 	manifestResources := s.loadManifestResources(manifests...)
 	done = traceStep(s, "manifest resources ready")
-	s.TestInstallation.AssertionsT(s).EventuallyObjectsExist(s.Ctx, manifestResources...)
+	assertions.EventuallyObjectsExist(s, manifestResources...)
 	done()
 	dynamicResources := s.loadDynamicResources(manifestResources)
 	done = traceStep(s, "dynamic resources ready")
-	s.TestInstallation.AssertionsT(s).EventuallyObjectsExist(s.Ctx, dynamicResources...)
+	assertions.EventuallyObjectsExist(s, dynamicResources...)
 	done()
 
 	// wait until pods are ready; this assumes that pods use a well-known label
@@ -224,7 +234,7 @@ func (s *Test) applyManifests(manifests ...string) {
 			continue
 		}
 		done := traceStep(s, "pods ready %s/%s", ns, name)
-		s.TestInstallation.AssertionsT(s).EventuallyPodsRunning(s.Ctx, ns, metav1.ListOptions{
+		assertions.EventuallyPodsRunning(s, ns, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", WellKnownAppLabel, name),
 			// Provide a longer timeout as the pod needs to be pulled and pass HCs
 		}, time.Second*60, time.Millisecond*500)
@@ -234,8 +244,8 @@ func (s *Test) applyManifests(manifests ...string) {
 
 func (s *Test) Apply(manifests ...string) {
 	s.Helper()
-	if s.SkipSuite() {
-		s.Skip("Skipping all tests in suite due to gateway API version requirements")
+	if s.ShouldSkip() {
+		s.Skip("Skipping test due to gateway API version requirements")
 	}
 
 	s.applyManifests(manifests...)
@@ -270,14 +280,13 @@ func manifestNames(manifests []string) []string {
 
 func (s *Test) GatewayReady(name, namespace string) {
 	s.Helper()
-	p := s.TestInstallation.AssertionsT(s)
-	p.EventuallyGatewayCondition(s.Ctx, name, namespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
-	p.EventuallyGatewayCondition(s.Ctx, name, namespace, gwv1.GatewayConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyGatewayCondition(s, name, namespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	assertions.EventuallyGatewayCondition(s, name, namespace, gwv1.GatewayConditionAccepted, metav1.ConditionTrue)
 }
 
 func (s *Test) HTTPRouteAccepted(name, namespace string) {
 	s.Helper()
-	s.TestInstallation.AssertionsT(s).EventuallyHTTPRouteCondition(s.Ctx, name, namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(s, name, namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 }
 
 func (s *Test) Send(target string, expect *testmatchers.HttpResponse, opts ...curl.Option) {
@@ -409,8 +418,7 @@ func IsSelfManagedGateway(gw *gwv1.Gateway) bool {
 	return ok && strings.EqualFold(val, "true")
 }
 
-// detectAndCacheGwApiInfo detects the Gateway API version and channel from installed CRDs
-// and caches the results. This is called once during suite setup.
+// detectAndCacheGwApiInfo detects the Gateway API version and channel from installed CRDs.
 func (s *Test) detectAndCacheGwApiInfo() {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	err := s.TestInstallation.ClusterContext.Client.Get(s.Ctx, client.ObjectKey{Name: "gateways.gateway.networking.k8s.io"}, crd)
@@ -444,8 +452,8 @@ func (s *Test) getCurrentGwApiVersion() GwApiVersion {
 	return GwApiVersion{Version: *s.gwApiVersion}
 }
 
-// SkipSuite determines if the entire suite should be skipped based on suite-level minimum version requirements.
-func (s *Test) SkipSuite() bool {
+// ShouldSkip determines if the test should be skipped based on minimum Gateway API version requirements.
+func (s *Test) ShouldSkip() bool {
 	if len(s.MinGwApiVersion) == 0 {
 		return false // No requirements = run on any channel/version
 	}

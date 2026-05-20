@@ -17,6 +17,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 const (
@@ -39,11 +40,11 @@ func TestOTel(tt *testing.T) {
 func testOTelTracing(t base.Test) {
 	t.Apply(otelManifest("tracing.yaml"))
 
-	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(t.Ctx, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyAgwPolicyCondition(t, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
 
-	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		t.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
 
 		logs, err := getCollectorLogs(t)
@@ -77,9 +78,9 @@ func testOTelTracing(t base.Test) {
 func testOTelAccessLog(t base.Test) {
 	t.Apply(otelManifest("accesslog-otlp.yaml"))
 
-	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(t.Ctx, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyAgwPolicyCondition(t, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
 
-	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		t.Send("www.example.com/status/200", base.ExpectOK())
 
 		logs, err := getCollectorLogs(t)

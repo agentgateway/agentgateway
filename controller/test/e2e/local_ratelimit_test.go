@@ -11,6 +11,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 func TestLocalRateLimit(tt *testing.T) {
@@ -36,8 +37,7 @@ func testLocalRateLimitForRoute(t base.Test) {
 		manifest("rate-limit", "local", "route-local-rate-limit.yaml"),
 	)
 
-	t.TestInstallation.AssertionsT(t).EventuallyObjectsExist(
-		t.Ctx,
+	assertions.EventuallyObjectsExist(t,
 		httpRoute("svc-route"),
 		httpRoute("svc-route-2"),
 		agwPolicy("route-rl-policy"),
@@ -53,8 +53,7 @@ func testLocalRateLimitForGateway(t base.Test) {
 		manifest("rate-limit", "local", "gw-local-rate-limit.yaml"),
 	)
 
-	t.TestInstallation.AssertionsT(t).EventuallyObjectsExist(
-		t.Ctx,
+	assertions.EventuallyObjectsExist(t,
 		httpRoute("svc-route"),
 		httpRoute("svc-route-2"),
 		agwPolicy("gw-rl-policy"),

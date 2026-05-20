@@ -21,6 +21,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 func TestLocality(tt *testing.T) {
@@ -48,12 +49,8 @@ func setupLocality(t base.Test) []weSpec {
 	}
 	resetWorkloadEntries(t, workloadEntries)
 
-	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
-		t.Ctx, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue,
-	)
-	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(
-		t.Ctx, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue,
-	)
+	assertions.EventuallyGatewayCondition(t, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(t, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 
 	t.Cleanup(func() {
 		_ = t.TestInstallation.ClusterContext.Cli.RunCommand(
@@ -161,7 +158,7 @@ spec:
 
 func waitPodIP(t base.Test, labelSelector string) string {
 	var ip string
-	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		pods, err := t.TestInstallation.ClusterContext.Clientset.
 			CoreV1().Pods(localityNamespace).
 			List(t.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
@@ -238,7 +235,7 @@ func localityGateway(t base.Test) base.Gateway {
 	name := types.NamespacedName{Namespace: localityNamespace, Name: localityGatewayName}
 	return base.Gateway{
 		NamespacedName: name,
-		Address:        base.ResolveGatewayAddress(t.Ctx, t.TestInstallation, name),
+		Address:        base.ResolveGatewayAddress(t, t.Ctx, t.TestInstallation, name),
 	}
 }
 

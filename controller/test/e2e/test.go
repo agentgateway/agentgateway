@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/slices"
-	"istio.io/istio/pkg/test"
+	istioassert "istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -112,19 +112,6 @@ func createTestInstallationForCluster(
 			WithClusterContext(clusterContext).
 			WithInstallContext(installContext),
 
-		// Create an assertions provider, and point it to the running installation
-		Assertions: assertions.NewProvider(t).
-			WithClusterContext(clusterContext).
-			WithInstallContext(installContext),
-
-		// Create an assertions provider function that returns a new provider for each test
-		// This ensures each test gets its own properly scoped testing.T
-		AssertionsT: func(t test.Failer) *assertions.Provider {
-			return assertions.NewProvider(t).
-				WithClusterContext(clusterContext).
-				WithInstallContext(installContext)
-		},
-
 		// GeneratedFiles contains the unique location where files generated during the execution
 		// of tests against this installation will be stored
 		// By creating a unique location, per TestInstallation and per Cluster.Name we guarantee isolation
@@ -155,14 +142,6 @@ type TestInstallation struct {
 
 	// Actions is the entity that creates actions that can be executed by the Operator
 	Actions *actions.Provider
-
-	// Assertions is the entity that creates assertions that can be executed by the Operator
-	// DEPRECATED: Use AssertionsT instead (which is scoped to a specific test and not the root suite)
-	Assertions *assertions.Provider
-
-	// AssertionsT is a function that creates assertions for a specific test using the test-scoped testing.T
-	// This ensures that assertion failures are properly attributed to the correct test
-	AssertionsT func(test.Failer) *assertions.Provider
 
 	// GeneratedFiles is the collection of directories and files that this test installation _may_ create
 	GeneratedFiles GeneratedFiles
@@ -212,7 +191,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 			Namespace:       i.Metadata.InstallNamespace,
 			Chart:           crdChartPath,
 		})
-	i.AssertionsT(t).Require.NoError(err)
+	istioassert.NoError(t, err)
 }
 
 // InstallAgentgatewayCoreFromLocalChart installs the agentgateway main chart from the local filesystem
@@ -253,8 +232,8 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 			Chart:       coreChartPath,
 			ExtraArgs:   extraArgs,
 		})
-	i.AssertionsT(t).Require.NoError(err)
-	i.AssertionsT(t).EventuallyGatewayInstallSucceeded(ctx)
+	istioassert.NoError(t, err)
+	assertions.EventuallyGatewayInstallSucceeded(t, ctx, i.ClusterContext, i.Metadata)
 }
 
 func (i *TestInstallation) Uninstall(ctx context.Context, t *testing.T) {
@@ -283,8 +262,8 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 			ExtraArgs:   []string{"--wait"}, // Default timeout is 5m
 		},
 	)
-	i.AssertionsT(t).Require.NoError(err, "failed to uninstall main chart")
-	i.AssertionsT(t).EventuallyGatewayUninstallSucceeded(ctx)
+	istioassert.NoError(t, err)
+	assertions.EventuallyGatewayUninstallSucceeded(t, ctx, i.ClusterContext, i.Metadata)
 }
 
 // UninstallAgentgatewayCRDs uninstalls the agentgateway CRD chart
@@ -308,7 +287,7 @@ func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *tes
 			ExtraArgs:   []string{"--wait"}, // Default timeout is 5m
 		},
 	)
-	i.AssertionsT(t).Require.NoError(err, "failed to uninstall CRD chart")
+	istioassert.NoError(t, err)
 }
 
 // PreFailHandler is the function that is invoked if a test in the given TestInstallation fails
@@ -331,12 +310,12 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	// if multiple tests running in the same cluster from the same installation namespace
 	// fail.
 	if err != nil && !errors.Is(err, fs.ErrExist) {
-		i.AssertionsT(t).Require.NoError(err, "failed to create failure directory")
+		istioassert.NoError(t, err)
 	}
 
 	// The kubernetes/e2e tests may use multiple namespaces, so we need to dump all of them
 	namespaceList, err := i.ClusterContext.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	i.AssertionsT(t).Require.NoError(err, "failed to get namespaces for failure dump")
+	istioassert.NoError(t, err)
 	namespaces := slices.Map(namespaceList.Items, func(ns corev1.Namespace) string {
 		return ns.Name
 	})

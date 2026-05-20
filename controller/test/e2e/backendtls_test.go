@@ -59,8 +59,7 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, inCondition metav1.Condition) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	p := t.TestInstallation.AssertionsT(t)
-	p.Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		tlsPol := &gwv1.BackendTLSPolicy{}
 		objKey := client.ObjectKeyFromObject(policy)
 		err := t.TestInstallation.ClusterContext.Client.Get(t.Ctx, objKey, tlsPol)

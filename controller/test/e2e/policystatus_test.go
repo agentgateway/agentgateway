@@ -46,7 +46,7 @@ func TestAgwPolicyClearStaleStatus(tt *testing.T) {
 func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, controllerName string) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		policy := &agentgateway.AgentgatewayPolicy{}
 		err := t.TestInstallation.ClusterContext.Client.Get(
 			t.Ctx,
@@ -78,7 +78,7 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 func assertAncestorStatuses(t base.Test, ancestorName string, expectedControllers map[string]bool) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
 		policy := &agentgateway.AgentgatewayPolicy{}
 		err := t.TestInstallation.ClusterContext.Client.Get(
 			t.Ctx,

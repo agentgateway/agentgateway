@@ -18,7 +18,7 @@ import (
 )
 
 // EventuallyPodReady asserts that all containers in the pod are reporting a ready status.
-func (p *Provider) EventuallyPodReady(
+func (p *provider) EventuallyPodReady(
 	ctx context.Context,
 	podNamespace string,
 	podName string,
@@ -42,7 +42,7 @@ func (p *Provider) EventuallyPodReady(
 }
 
 // EventuallyPodsRunning asserts that eventually all pods matching the given ListOptions are running and ready.
-func (p *Provider) EventuallyPodsRunning(
+func (p *provider) EventuallyPodsRunning(
 	ctx context.Context,
 	podNamespace string,
 	listOpt metav1.ListOptions,
@@ -53,7 +53,7 @@ func (p *Provider) EventuallyPodsRunning(
 }
 
 // EventuallyPodsMatches asserts that the pod(s) in the given namespace matches the provided matcher
-func (p *Provider) EventuallyPodsMatches(
+func (p *provider) EventuallyPodsMatches(
 	ctx context.Context,
 	podNamespace string,
 	listOpt metav1.ListOptions,
@@ -77,7 +77,7 @@ func (p *Provider) EventuallyPodsMatches(
 }
 
 // EventuallyPodsNotExist asserts that eventually no pods matching the given selector exist on the cluster.
-func (p *Provider) EventuallyPodsNotExist(
+func (p *provider) EventuallyPodsNotExist(
 	ctx context.Context,
 	podNamespace string,
 	listOpt metav1.ListOptions,
@@ -99,7 +99,7 @@ func (p *Provider) EventuallyPodsNotExist(
 
 // EventuallyPodContainerContainsEnvVar asserts that eventually all pods matching the given pod namespace and selector
 // have a container with the given container name and the given env var.
-func (p *Provider) EventuallyPodContainerContainsEnvVar(
+func (p *provider) EventuallyPodContainerContainsEnvVar(
 	ctx context.Context,
 	podNamespace string,
 	podListOpt metav1.ListOptions,
@@ -132,7 +132,7 @@ func (p *Provider) EventuallyPodContainerContainsEnvVar(
 
 // EventuallyPodContainerDoesNotContainEnvVar asserts that eventually no pods matching the given pod namespace and selector
 // have a container with the given name and env var with the given name.
-func (p *Provider) EventuallyPodContainerDoesNotContainEnvVar(
+func (p *provider) EventuallyPodContainerDoesNotContainEnvVar(
 	ctx context.Context,
 	podNamespace string,
 	podListOpt metav1.ListOptions,

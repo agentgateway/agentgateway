@@ -10,7 +10,7 @@ import (
 
 const agentgatewayLabelSelector = "app.kubernetes.io/name=agentgateway"
 
-func (p *Provider) EventuallyGatewayInstallSucceeded(ctx context.Context) {
+func (p *provider) EventuallyGatewayInstallSucceeded(ctx context.Context) {
 	p.expectInstallContextDefined()
 	p.EventuallyPodsRunning(ctx, p.installContext.InstallNamespace,
 		metav1.ListOptions{
@@ -18,7 +18,7 @@ func (p *Provider) EventuallyGatewayInstallSucceeded(ctx context.Context) {
 		})
 }
 
-func (p *Provider) EventuallyGatewayUninstallSucceeded(ctx context.Context) {
+func (p *provider) EventuallyGatewayUninstallSucceeded(ctx context.Context) {
 	p.expectInstallContextDefined()
 
 	p.EventuallyPodsNotExist(ctx, p.installContext.InstallNamespace,

@@ -36,7 +36,7 @@ var CurlPodExecOpt = kubectl.PodExecOptions{
 	Container: "curl",
 }
 
-func (p *Provider) AssertEventualCurlReturnResponse(
+func (p *provider) AssertEventualCurlReturnResponse(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -96,7 +96,7 @@ func (p *Provider) AssertEventualCurlReturnResponse(
 }
 
 // We can't use one function and ignore the response because the response body must be closed
-func (p *Provider) AssertEventualCurlResponse(
+func (p *provider) AssertEventualCurlResponse(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -107,7 +107,7 @@ func (p *Provider) AssertEventualCurlResponse(
 	resp.Body.Close()
 }
 
-func (p *Provider) assertCurlReturnResponse(
+func (p *provider) assertCurlReturnResponse(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -142,7 +142,7 @@ func (p *Provider) assertCurlReturnResponse(
 	return curlHttpResponse
 }
 
-func (p *Provider) assertCurlResponse(
+func (p *provider) assertCurlResponse(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -154,7 +154,7 @@ func (p *Provider) assertCurlResponse(
 
 // AssertEventuallyConsistentCurlResponse asserts that the response from a curl command
 // eventually and then consistently matches the expected response
-func (p *Provider) AssertEventuallyConsistentCurlResponse(
+func (p *provider) AssertEventuallyConsistentCurlResponse(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -181,7 +181,7 @@ func (p *Provider) AssertEventuallyConsistentCurlResponse(
 // AssertEventualCurlError asserts that the response from a curl command is an error such as `Failed to connect`
 // as opposed to an http error from the server. This is useful when testing that a service is not reachable,
 // for example to validate that a delete operation has taken effect.
-func (p *Provider) AssertEventualCurlError(
+func (p *provider) AssertEventualCurlError(
 	ctx context.Context,
 	podOpts kubectl.PodExecOptions,
 	curlOptions []curl.Option,
@@ -234,7 +234,7 @@ func (p *Provider) AssertEventualCurlError(
 		Should(Succeed(), testMessage)
 }
 
-func (p *Provider) generateCurlOpts(host string) []curl.Option {
+func (p *provider) generateCurlOpts(host string) []curl.Option {
 	curlOpts := []curl.Option{
 		curl.WithHost(kubeutils.ServiceFQDN(metav1.ObjectMeta{Name: GatewayProxyName, Namespace: p.installContext.InstallNamespace})),
 		curl.WithPort(80),
@@ -270,7 +270,7 @@ func (p *Provider) generateCurlOpts(host string) []curl.Option {
 	return curlOpts
 }
 
-func (p *Provider) generateCurlOptsWithHeaders(host string, headers map[string]string) []curl.Option {
+func (p *provider) generateCurlOptsWithHeaders(host string, headers map[string]string) []curl.Option {
 	curlOpts := p.generateCurlOpts(host)
 	for k, v := range headers {
 		curlOpts = append(curlOpts, curl.WithHeader(k, v))
@@ -278,7 +278,7 @@ func (p *Provider) generateCurlOptsWithHeaders(host string, headers map[string]s
 	return curlOpts
 }
 
-func (p *Provider) CurlConsistentlyRespondsWithStatus(ctx context.Context, host string, status int) {
+func (p *provider) CurlConsistentlyRespondsWithStatus(ctx context.Context, host string, status int) {
 	curlOptsHeader := p.generateCurlOpts(host)
 
 	p.AssertEventuallyConsistentCurlResponse(
@@ -291,7 +291,7 @@ func (p *Provider) CurlConsistentlyRespondsWithStatus(ctx context.Context, host 
 	)
 }
 
-func (p *Provider) CurlEventuallyRespondsWithStatus(ctx context.Context, host string, status int) {
+func (p *provider) CurlEventuallyRespondsWithStatus(ctx context.Context, host string, status int) {
 	curlOptsHeader := p.generateCurlOpts(host)
 
 	p.AssertEventualCurlResponse(
@@ -302,7 +302,7 @@ func (p *Provider) CurlEventuallyRespondsWithStatus(ctx context.Context, host st
 	)
 }
 
-func (p *Provider) CurlRespondsWithStatus(ctx context.Context, host string, status int) {
+func (p *provider) CurlRespondsWithStatus(ctx context.Context, host string, status int) {
 	curlOptsHeader := p.generateCurlOpts(host)
 
 	p.assertCurlResponse(
@@ -313,7 +313,7 @@ func (p *Provider) CurlRespondsWithStatus(ctx context.Context, host string, stat
 	)
 }
 
-func (p *Provider) CurlWithHeadersConsistentlyRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
+func (p *provider) CurlWithHeadersConsistentlyRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
 	curlOptsHeader := p.generateCurlOptsWithHeaders(host, headers)
 
 	p.AssertEventuallyConsistentCurlResponse(
@@ -326,7 +326,7 @@ func (p *Provider) CurlWithHeadersConsistentlyRespondsWithStatus(ctx context.Con
 	)
 }
 
-func (p *Provider) CurlWithHeadersEventuallyRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
+func (p *provider) CurlWithHeadersEventuallyRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
 	curlOptsHeader := p.generateCurlOptsWithHeaders(host, headers)
 
 	p.AssertEventualCurlResponse(
@@ -337,7 +337,7 @@ func (p *Provider) CurlWithHeadersEventuallyRespondsWithStatus(ctx context.Conte
 	)
 }
 
-func (p *Provider) CurlWithHeadersRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
+func (p *provider) CurlWithHeadersRespondsWithStatus(ctx context.Context, host string, headers map[string]string, status int) {
 	curlOptsHeader := p.generateCurlOptsWithHeaders(host, headers)
 
 	p.assertCurlResponse(

@@ -60,10 +60,9 @@ func New(t *testing.T, opts ...base.SuiteOption) base.Test {
 		}
 	})
 
-	suite := base.NewSuite(agwCtx, agwInstallation, t, opts...)
-	suite.SetupSuite()
-	t.Cleanup(suite.TearDownSuite)
-	return suite
+	test := base.NewTest(agwCtx, agwInstallation, t, opts...)
+	test.Setup()
+	return test
 }
 
 func setup(t *testing.T) {
@@ -101,7 +100,7 @@ func setup(t *testing.T) {
 	done()
 
 	done = base.TraceStep(t, "resolved base gateway")
-	base.SetupBaseGateway(agwCtx, agwInstallation, types.NamespacedName{
+	base.SetupBaseGateway(agwCtx, t, agwInstallation, types.NamespacedName{
 		Namespace: base.Namespace,
 		Name:      "gateway",
 	})

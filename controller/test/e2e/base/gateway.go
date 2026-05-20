@@ -24,6 +24,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/portforward"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
@@ -32,12 +33,13 @@ func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestIn
 	assert.NoError(t, err)
 }
 
-func SetupBaseGateway(ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) {
+func SetupBaseGateway(ctx context.Context, t test.Failer, installation *e2e.TestInstallation, name types.NamespacedName) {
 	baseInstallation = installation
 	baseContext = ctx
+	baseT = t
 	BaseGateway = Gateway{
 		NamespacedName: name,
-		Address:        ResolveGatewayAddress(ctx, installation, name),
+		Address:        ResolveGatewayAddress(t, ctx, installation, name),
 	}
 }
 
@@ -47,13 +49,14 @@ var (
 	gatewayPorts     = map[types.NamespacedName]map[int]int{}
 	baseInstallation *e2e.TestInstallation
 	baseContext      context.Context
+	baseT            test.Failer
 )
 
 // ResolveGatewayAddress returns a reachable gateway address for e2e traffic.
 // If USE_PORTFORWARD is set, tests use a local port-forward; otherwise, they use the LoadBalancer address.
-func ResolveGatewayAddress(ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) string {
+func ResolveGatewayAddress(t test.Failer, ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) string {
 	if !shouldUsePortForward() {
-		return installation.Assertions.EventuallyGatewayAddress(ctx, name.Name, name.Namespace)
+		return assertions.EventuallyGatewayAddress(t, ctx, installation.ClusterContext, name.Name, name.Namespace)
 	}
 
 	gatewayAddressMu.Lock()
@@ -71,7 +74,7 @@ func ResolveGatewayAddress(ctx context.Context, installation *e2e.TestInstallati
 			err,
 		)
 		// Do not cache the fallback LB address. Keep retrying port-forward resolution on subsequent calls.
-		return installation.Assertions.EventuallyGatewayAddress(ctx, name.Name, name.Namespace)
+		return assertions.EventuallyGatewayAddress(t, ctx, installation.ClusterContext, name.Name, name.Namespace)
 	}
 	gatewayAddresses[name] = addr
 	gatewayPorts[name] = portMap
@@ -245,7 +248,7 @@ func shortError(err error) string {
 func (g *Gateway) ResolvedAddress() string {
 	address := g.Address
 	if shouldUsePortForward() && g.NamespacedName.Name != "" && !addressHasPort(address) && baseInstallation != nil {
-		return ResolveGatewayAddress(resolveBaseGatewayContext(), baseInstallation, g.NamespacedName)
+		return ResolveGatewayAddress(baseT, resolveBaseGatewayContext(), baseInstallation, g.NamespacedName)
 	}
 	return address
 }

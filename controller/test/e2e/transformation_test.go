@@ -22,6 +22,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
@@ -129,10 +130,10 @@ func testGatewayWithTransformedGRPCRoute(t base.Test) {
 	assertTransformGatewayReady(t)
 
 	const grpcRouteName = "example-route"
-	t.TestInstallation.AssertionsT(t).EventuallyGRPCRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	t.TestInstallation.AssertionsT(t).EventuallyGRPCRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
-	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
+	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
+	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
+	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
+	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
 
 	const (
 		expectedHostname        = "example.com"
@@ -179,16 +180,14 @@ func transformManifest(name string) string {
 }
 
 func assertTransformGatewayReady(t base.Test) {
-	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
-		t.Ctx,
+	assertions.EventuallyGatewayCondition(t,
 		"gateway",
 		base.Namespace,
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 		transformTimeout,
 	)
-	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
-		t.Ctx,
+	assertions.EventuallyGatewayCondition(t,
 		"gateway",
 		base.Namespace,
 		gwv1.GatewayConditionAccepted,

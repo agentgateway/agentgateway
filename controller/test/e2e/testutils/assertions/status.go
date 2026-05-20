@@ -36,7 +36,7 @@ func (p *Provider) WithConditionHandlers(h ...ConditionHandler) *Provider {
 
 // EventuallyGatewayAddress asserts that eventually at least one of the HTTPRoute's route parent statuses contains
 // the given message substring.
-func (p *Provider) EventuallyGatewayAddress(
+func (p *provider) EventuallyGatewayAddress(
 	ctx context.Context,
 	gatewayName string,
 	gatewayNamespace string,
@@ -58,7 +58,7 @@ func (p *Provider) EventuallyGatewayAddress(
 
 // EventuallyHTTPRouteStatusContainsMessage asserts that eventually at least one of the HTTPRoute's route parent statuses contains
 // the given message substring.
-func (p *Provider) EventuallyHTTPRouteStatusContainsMessage(
+func (p *provider) EventuallyHTTPRouteStatusContainsMessage(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -86,7 +86,7 @@ func (p *Provider) EventuallyHTTPRouteStatusContainsMessage(
 
 // EventuallyHTTPRouteStatusContainsReason asserts that eventually at least one of the HTTPRoute's route parent statuses contains
 // the given reason substring.
-func (p *Provider) EventuallyHTTPRouteStatusContainsReason(
+func (p *provider) EventuallyHTTPRouteStatusContainsReason(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -118,7 +118,7 @@ func (p *Provider) EventuallyHTTPRouteStatusContainsReason(
 }
 
 // EventuallyGatewayCondition checks the provided Gateway condition is set to expect.
-func (p *Provider) EventuallyGatewayCondition(
+func (p *provider) EventuallyGatewayCondition(
 	ctx context.Context,
 	gatewayName string,
 	gatewayNamespace string,
@@ -137,7 +137,7 @@ func (p *Provider) EventuallyGatewayCondition(
 }
 
 // EventuallyGatewayListenerAttachedRoutes checks the provided Gateway contains the expected attached routes for the listener.
-func (p *Provider) EventuallyGatewayListenerAttachedRoutes(
+func (p *provider) EventuallyGatewayListenerAttachedRoutes(
 	ctx context.Context,
 	gatewayName string,
 	gatewayNamespace string,
@@ -166,7 +166,7 @@ func (p *Provider) EventuallyGatewayListenerAttachedRoutes(
 	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
 }
 
-func (p *Provider) EventuallyGatewayStatus(
+func (p *provider) EventuallyGatewayStatus(
 	ctx context.Context,
 	name string,
 	namespace string,
@@ -221,7 +221,7 @@ func extractParentConditions(parents []gwv1.RouteParentStatus) [][]metav1.Condit
 }
 
 // EventuallyHTTPRouteCondition checks that provided HTTPRoute condition is set to expect.
-func (p *Provider) EventuallyHTTPRouteCondition(
+func (p *provider) EventuallyHTTPRouteCondition(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -240,7 +240,7 @@ func (p *Provider) EventuallyHTTPRouteCondition(
 }
 
 // EventuallyTCPRouteCondition checks that provided TCPRoute condition is set to expect.
-func (p *Provider) EventuallyTCPRouteCondition(
+func (p *provider) EventuallyTCPRouteCondition(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -259,7 +259,7 @@ func (p *Provider) EventuallyTCPRouteCondition(
 }
 
 // EventuallyTLSRouteCondition checks that provided TLSRoute condition is set to expect.
-func (p *Provider) EventuallyTLSRouteCondition(
+func (p *provider) EventuallyTLSRouteCondition(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -278,7 +278,7 @@ func (p *Provider) EventuallyTLSRouteCondition(
 }
 
 // EventuallyGRPCRouteCondition checks that provided GRPCRoute condition is set to expect.
-func (p *Provider) EventuallyGRPCRouteCondition(
+func (p *provider) EventuallyGRPCRouteCondition(
 	ctx context.Context,
 	routeName string,
 	routeNamespace string,
@@ -307,7 +307,7 @@ func extractInferencePoolParentConditions(parents []inf.ParentStatus) [][]metav1
 
 // EventuallyInferencePoolCondition checks that the specified InferencePool condition
 // eventually has the desired status on any parent managed by agentgateway.
-func (p *Provider) EventuallyInferencePoolCondition(
+func (p *provider) EventuallyInferencePoolCondition(
 	ctx context.Context,
 	poolName string,
 	poolNamespace string,
@@ -335,7 +335,7 @@ func GetConditionByType(conditions []metav1.Condition, conditionType string) *me
 	return nil
 }
 
-func (p *Provider) EventuallyListenerSetStatus(
+func (p *provider) EventuallyListenerSetStatus(
 	ctx context.Context,
 	name string,
 	namespace string,
@@ -399,7 +399,7 @@ func getListenerStatus(listeners []gwv1.ListenerStatus, name string) *gwv1.Liste
 }
 
 // EventuallyAgwBackendCondition checks that provided AgentgatewayBackend condition is set to expect.
-func (p *Provider) EventuallyAgwBackendCondition(
+func (p *provider) EventuallyAgwBackendCondition(
 	ctx context.Context,
 	name string,
 	namespace string,
@@ -427,7 +427,7 @@ func extractAgwPolicyAncestorConditions(ancestors []gwv1.PolicyAncestorStatus) [
 }
 
 // EventuallyAgwPolicyCondition checks that provided AgentgatewayPolicy condition is set to expect.
-func (p *Provider) EventuallyAgwPolicyCondition(
+func (p *provider) EventuallyAgwPolicyCondition(
 	ctx context.Context,
 	name string,
 	namespace string,

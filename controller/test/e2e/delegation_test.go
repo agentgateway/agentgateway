@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
@@ -105,8 +106,7 @@ func delegationManifest(name string) string {
 
 func assertHTTPRouteAccepted(t base.Test, name, namespace string) {
 	t.Helper()
-	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(
-		t.Ctx,
+	assertions.EventuallyHTTPRouteCondition(t,
 		name,
 		namespace,
 		gwv1.RouteConditionAccepted,
