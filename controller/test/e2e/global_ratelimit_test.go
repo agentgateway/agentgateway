@@ -15,71 +15,71 @@ import (
 // straddle the boundary and flake.
 const rlBurstTries = 3
 
-func TestGlobalRateLimit(t *testing.T) {
-	agw := New(t)
-	agw.Apply(
+func TestGlobalRateLimit(tt *testing.T) {
+	t := New(tt)
+	t.Apply(
 		globalRateLimitManifest("rate-limit-server.yaml"),
 		globalRateLimitManifest("routes.yaml"),
 	)
 
-	agw.Run("ByRemoteAddress", func() {
-		testGlobalRateLimitByRemoteAddress(agw)
+	t.Run("ByRemoteAddress", func(t base.Test) {
+		testGlobalRateLimitByRemoteAddress(t)
 	})
-	agw.Run("ByPath", func() {
-		testGlobalRateLimitByPath(agw)
+	t.Run("ByPath", func(t base.Test) {
+		testGlobalRateLimitByPath(t)
 	})
-	agw.Run("ByUserID", func() {
-		testGlobalRateLimitByUserID(agw)
+	t.Run("ByUserID", func(t base.Test) {
+		testGlobalRateLimitByUserID(t)
 	})
-	agw.Run("CombinedLocalAndGlobal", func() {
-		testCombinedLocalAndGlobalRateLimit(agw)
+	t.Run("CombinedLocalAndGlobal", func(t base.Test) {
+		testCombinedLocalAndGlobalRateLimit(t)
 	})
 }
 
-func testGlobalRateLimitByRemoteAddress(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testGlobalRateLimitByRemoteAddress(t base.Test) {
+	t.Apply(
 		globalRateLimitManifest("ip-rate-limit.yaml"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK())
-	assertConsistentRateLimitResponse(agw, "example.com/path1", http.StatusTooManyRequests)
-	assertConsistentRateLimitResponse(agw, "example.com/path2", http.StatusTooManyRequests)
+	t.Send("example.com/path1", base.ExpectOK())
+	assertConsistentRateLimitResponse(t, "example.com/path1", http.StatusTooManyRequests)
+	assertConsistentRateLimitResponse(t, "example.com/path2", http.StatusTooManyRequests)
 }
 
-func testGlobalRateLimitByPath(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testGlobalRateLimitByPath(t base.Test) {
+	t.Apply(
 		globalRateLimitManifest("path-rate-limit.yaml"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK())
-	assertConsistentRateLimitResponse(agw, "example.com/path1", http.StatusTooManyRequests)
-	assertConsistentRateLimitResponse(agw, "example.com/path2", http.StatusOK)
+	t.Send("example.com/path1", base.ExpectOK())
+	assertConsistentRateLimitResponse(t, "example.com/path1", http.StatusTooManyRequests)
+	assertConsistentRateLimitResponse(t, "example.com/path2", http.StatusOK)
 }
 
-func testGlobalRateLimitByUserID(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testGlobalRateLimitByUserID(t base.Test) {
+	t.Apply(
 		globalRateLimitManifest("user-rate-limit.yaml"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK(), curl.WithHeader("X-User-ID", "user1"))
-	assertConsistentRateLimitResponse(agw, "example.com/path1", http.StatusTooManyRequests, curl.WithHeader("X-User-ID", "user1"))
-	agw.Send("example.com/path1", base.ExpectOK(), curl.WithHeader("X-User-ID", "user2"))
+	t.Send("example.com/path1", base.ExpectOK(), curl.WithHeader("X-User-ID", "user1"))
+	assertConsistentRateLimitResponse(t, "example.com/path1", http.StatusTooManyRequests, curl.WithHeader("X-User-ID", "user1"))
+	t.Send("example.com/path1", base.ExpectOK(), curl.WithHeader("X-User-ID", "user2"))
 }
 
-func testCombinedLocalAndGlobalRateLimit(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testCombinedLocalAndGlobalRateLimit(t base.Test) {
+	t.Apply(
 		globalRateLimitManifest("combined-rate-limit.yaml"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK())
-	assertConsistentRateLimitResponse(agw, "example.com/path1", http.StatusTooManyRequests)
+	t.Send("example.com/path1", base.ExpectOK())
+	assertConsistentRateLimitResponse(t, "example.com/path1", http.StatusTooManyRequests)
 }
 
 func globalRateLimitManifest(name string) string {
 	return manifest("rate-limit", "global", name)
 }
 
-func assertConsistentRateLimitResponse(t *base.BaseTestingSuite, target string, status int, opts ...curl.Option) {
+func assertConsistentRateLimitResponse(t base.Test, target string, status int, opts ...curl.Option) {
 	for range rlBurstTries {
 		t.Send(target, base.Expect(status), opts...)
 	}

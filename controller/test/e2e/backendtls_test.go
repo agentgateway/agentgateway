@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/assert"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -18,15 +19,12 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
-func TestBackendTLSPolicyAndStatus(t *testing.T) {
-	agw := New(t)
-	agw.ApplyConfig(base.TestCase{
-		Manifests: []string{
-			manifest("backendtls", "configmap.yaml"),
-			manifest("backendtls", "base.yaml"),
-		},
-		MinGwApiVersion: base.GwApiRequireBackendTLSPolicy,
-	})
+func TestBackendTLSPolicyAndStatus(tt *testing.T) {
+	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireBackendTLSPolicy))
+	t.Apply(
+		manifest("backendtls", "configmap.yaml"),
+		manifest("backendtls", "base.yaml"),
+	)
 
 	backendTLSPolicy := &gwv1.BackendTLSPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -34,23 +32,23 @@ func TestBackendTLSPolicyAndStatus(t *testing.T) {
 			Namespace: base.Namespace,
 		},
 	}
-	err := agw.TestInstallation.ClusterContext.Client.Get(agw.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
-	agw.Require().NoError(err)
+	err := t.TestInstallation.ClusterContext.Client.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
+	assert.NoError(t, err)
 
-	agw.Send("example.com", base.ExpectOK())
-	agw.Send("example2.com", base.ExpectOK())
-	agw.Send("foo.com", base.Expect(http.StatusMovedPermanently))
+	t.Send("example.com", base.ExpectOK())
+	t.Send("example2.com", base.ExpectOK())
+	t.Send("foo.com", base.Expect(http.StatusMovedPermanently))
 
-	assertBackendTLSPolicyStatus(t, agw, backendTLSPolicy, metav1.Condition{
+	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
 		Type:               string(shared.PolicyConditionAccepted),
 		Status:             metav1.ConditionTrue,
 		Reason:             string(gwv1.PolicyReasonAccepted),
 		ObservedGeneration: backendTLSPolicy.Generation,
 	})
 
-	agw.Delete(manifest("backendtls", "configmap.yaml"))
+	t.Delete(manifest("backendtls", "configmap.yaml"))
 
-	assertBackendTLSPolicyStatus(t, agw, backendTLSPolicy, metav1.Condition{
+	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
 		Type:               string(gwv1.PolicyConditionAccepted),
 		Status:             metav1.ConditionFalse,
 		Reason:             string(gwv1.BackendTLSPolicyReasonNoValidCACertificate),
@@ -58,14 +56,14 @@ func TestBackendTLSPolicyAndStatus(t *testing.T) {
 	})
 }
 
-func assertBackendTLSPolicyStatus(t *testing.T, agw *base.BaseTestingSuite, policy *gwv1.BackendTLSPolicy, inCondition metav1.Condition) {
+func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, inCondition metav1.Condition) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	p := agw.TestInstallation.AssertionsT(t)
+	p := t.TestInstallation.AssertionsT(t)
 	p.Gomega.Eventually(func(g gomega.Gomega) {
 		tlsPol := &gwv1.BackendTLSPolicy{}
 		objKey := client.ObjectKeyFromObject(policy)
-		err := agw.TestInstallation.ClusterContext.Client.Get(agw.Ctx, objKey, tlsPol)
+		err := t.TestInstallation.ClusterContext.Client.Get(t.Ctx, objKey, tlsPol)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get BackendTLSPolicy %s", objKey)
 
 		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(1), "ancestors didn't have length of 1")

@@ -25,79 +25,79 @@ const (
 	jwt5 = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjcwNzMwMjQzNTI5MTkzMjkwOTQiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FnZW50Z2F0ZXdheS5kZXYiLCJzdWIiOiJib29tQGFnZW50Z2F0ZXdheS5kZXYiLCJleHAiOjIwODUzMTcxMTUsIm5iZiI6MTc3NzczMzExNSwiaWF0IjoxNzc3NzMzMTE1fQ.MS9PaXb81m8tBEs1qtTBD6LSD8lTYJuP2ygvmrzwnwiYLb7-QbLJUwtxwCSxu6icwOU50OHQiFsyLnYnmpACvJ0Nc3co_a2q4lThUNuUyLxwxqJWRRFiFqF78hv3E3A3Nrdpuvk5qF4M8yqusPcpOd6dhAwwlSoEM8_2q5__PuNNFIx6Z37LS507rKcmYfk7kCvpBbddi5n9tyYcHpvZEckPhNdWn_E7yyEi_WrIhAq1OcgrwbS2JFrLoeUap2FrpSVvkk-dfRzR2QreTehc4WihFCPTPc0edhHeb0AW8wfsyjSQvq4DkXw_SWMdonRWqxQYqnYiDv1v49bC-ro6Xg"
 )
 
-func TestJwtAuth(t *testing.T) {
-	agw := New(t)
+func TestJwtAuth(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("RoutePolicy", func() {
-		testJwtAuthRoutePolicy(agw)
+	t.Run("RoutePolicy", func(t base.Test) {
+		testJwtAuthRoutePolicy(t)
 	})
-	agw.Run("RoutePolicyWithRBAC", func() {
-		testJwtAuthRoutePolicyWithRbac(agw)
+	t.Run("RoutePolicyWithRBAC", func(t base.Test) {
+		testJwtAuthRoutePolicyWithRbac(t)
 	})
-	agw.Run("GatewayPolicy", func() {
-		testJwtAuthGatewayPolicy(agw)
+	t.Run("GatewayPolicy", func(t base.Test) {
+		testJwtAuthGatewayPolicy(t)
 	})
-	agw.Run("GatewayPolicyWithRBAC", func() {
-		testJwtAuthGatewayPolicyWithRbac(agw)
+	t.Run("GatewayPolicyWithRBAC", func(t base.Test) {
+		testJwtAuthGatewayPolicyWithRbac(t)
 	})
 }
 
-func testJwtAuthRoutePolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testJwtAuthRoutePolicy(t base.Test) {
+	t.Apply(
 		manifest("jwtauth", "insecure-route.yaml"),
 		manifest("jwtauth", "secured-route.yaml"),
 	)
 
-	agw.HTTPRouteAccepted("route-example-insecure", base.Namespace)
+	t.HTTPRouteAccepted("route-example-insecure", base.Namespace)
 	// verify unprotected route works
-	assertJwtResponse(agw, "insecureroute.com", "", http.StatusOK)
+	assertJwtResponse(t, "insecureroute.com", "", http.StatusOK)
 
-	agw.HTTPRouteAccepted("route-secure", base.Namespace)
+	t.HTTPRouteAccepted("route-secure", base.Namespace)
 	// verify a provider with a single key in jwks works
-	assertJwtResponse(agw, "secureroute.com", jwt1, http.StatusOK)
+	assertJwtResponse(t, "secureroute.com", jwt1, http.StatusOK)
 	// verify a provider with multiple keys in jwks works
-	assertJwtResponse(agw, "secureroute.com", jwt2, http.StatusOK)
-	assertJwtResponse(agw, "secureroute.com", jwt3, http.StatusOK)
+	assertJwtResponse(t, "secureroute.com", jwt2, http.StatusOK)
+	assertJwtResponse(t, "secureroute.com", jwt3, http.StatusOK)
 	// verify invalid/missing tokens are caught
-	assertJwtResponse(agw, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	assertJwtResponse(agw, "secureroute.com", "", http.StatusUnauthorized)
+	assertJwtResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertJwtResponse(t, "secureroute.com", "", http.StatusUnauthorized)
 }
 
-func testJwtAuthRoutePolicyWithRbac(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("jwtauth", "secured-route-with-rbac.yaml"))
+func testJwtAuthRoutePolicyWithRbac(t base.Test) {
+	t.Apply(manifest("jwtauth", "secured-route-with-rbac.yaml"))
 
-	agw.HTTPRouteAccepted("route-secure", base.Namespace)
+	t.HTTPRouteAccepted("route-secure", base.Namespace)
 	// jwt subject matches rbac policy
-	assertJwtResponse(agw, "secureroute.com", jwt4, http.StatusOK)
+	assertJwtResponse(t, "secureroute.com", jwt4, http.StatusOK)
 	// jwt subject doesn't match rbac policy
-	assertJwtResponse(agw, "secureroute.com", jwt5, http.StatusForbidden)
+	assertJwtResponse(t, "secureroute.com", jwt5, http.StatusForbidden)
 }
 
-func testJwtAuthGatewayPolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("jwtauth", "secured-gateway-policy.yaml"))
+func testJwtAuthGatewayPolicy(t base.Test) {
+	t.Apply(manifest("jwtauth", "secured-gateway-policy.yaml"))
 
-	agw.HTTPRouteAccepted("route-secure-gw", base.Namespace)
+	t.HTTPRouteAccepted("route-secure-gw", base.Namespace)
 	// verify a provider with a single key in jwks works
-	assertJwtResponse(agw, "securegateways.com", jwt1, http.StatusOK)
+	assertJwtResponse(t, "securegateways.com", jwt1, http.StatusOK)
 	// verify a provider with multiple keys in jwks works
-	assertJwtResponse(agw, "securegateways.com", jwt2, http.StatusOK)
-	assertJwtResponse(agw, "securegateways.com", jwt3, http.StatusOK)
-	assertJwtResponse(agw, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
+	assertJwtResponse(t, "securegateways.com", jwt2, http.StatusOK)
+	assertJwtResponse(t, "securegateways.com", jwt3, http.StatusOK)
+	assertJwtResponse(t, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
 	// verify invalid/missing tokens are caught
-	assertJwtResponse(agw, "securegateways.com", "", http.StatusUnauthorized)
+	assertJwtResponse(t, "securegateways.com", "", http.StatusUnauthorized)
 }
 
-func testJwtAuthGatewayPolicyWithRbac(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("jwtauth", "secured-gateway-policy-with-rbac.yaml"))
+func testJwtAuthGatewayPolicyWithRbac(t base.Test) {
+	t.Apply(manifest("jwtauth", "secured-gateway-policy-with-rbac.yaml"))
 
-	agw.HTTPRouteAccepted("route-secure-gw", base.Namespace)
+	t.HTTPRouteAccepted("route-secure-gw", base.Namespace)
 	// jwt subject matches rbac policy
-	assertJwtResponse(agw, "securegateways.com", jwt4, http.StatusOK)
+	assertJwtResponse(t, "securegateways.com", jwt4, http.StatusOK)
 	// jwt subject doesn't match rbac policy
-	assertJwtResponse(agw, "securegateways.com", jwt5, http.StatusForbidden)
+	assertJwtResponse(t, "securegateways.com", jwt5, http.StatusForbidden)
 }
 
-func assertJwtResponse(t *base.BaseTestingSuite, host, token string, status int) {
+func assertJwtResponse(t base.Test, host, token string, status int) {
 	opts := []curl.Option{}
 	if token != "" {
 		opts = append(opts, curl.WithHeader("Authorization", "Bearer "+token))

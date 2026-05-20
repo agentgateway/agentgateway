@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
@@ -23,33 +24,31 @@ import (
 )
 
 type localitySuite struct {
-	*base.BaseTestingSuite
+	base.Test
 
 	workloadEntries []weSpec
 }
 
 func newLocalitySuite(t *testing.T) *localitySuite {
-	s := &localitySuite{BaseTestingSuite: New(t)}
-	s.Setup = localitySetup
-	s.SetupSuite()
-	t.Cleanup(s.TearDownSuite)
+	s := &localitySuite{Test: New(t)}
+	s.Apply(localitySetup...)
 	return s
 }
 
-func TestLocality(t *testing.T) {
-	s := newLocalitySuite(t)
-	s.Run("PreferSameZone", func() {
+func TestLocality(tt *testing.T) {
+	s := newLocalitySuite(tt)
+	s.Run("PreferSameZone", func(t base.Test) {
 		s.SetupTest()
 		s.testPreferSameZone()
 	})
-	s.Run("InternalTrafficPolicyLocal", func() {
+	s.Run("InternalTrafficPolicyLocal", func(t base.Test) {
 		s.SetupTest()
 		s.testInternalTrafficPolicyLocal()
 	})
 }
 
 func (s *localitySuite) SetupSuite() {
-	s.BaseTestingSuite.SetupSuite()
+	s.Test.SetupSuite()
 
 	// we deploy pods via the yamls, and then we need to copy their IPs onto WorkloadEntries
 	// we do this because WorkloadEntry is easier to override locality on, without messing with node info
@@ -63,10 +62,10 @@ func (s *localitySuite) SetupSuite() {
 	}
 	s.resetWorkloadEntries()
 
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s).EventuallyGatewayCondition(
 		s.Ctx, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
+	s.TestInstallation.AssertionsT(s).EventuallyHTTPRouteCondition(
 		s.Ctx, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue,
 	)
 }
@@ -80,7 +79,7 @@ func (s *localitySuite) TearDownSuite() {
 	_ = s.TestInstallation.ClusterContext.Cli.RunCommand(
 		s.Ctx, "-n", localityNamespace, "delete", "workloadentry", "--all", "--ignore-not-found=true",
 	)
-	s.BaseTestingSuite.TearDownSuite()
+	s.Test.TearDownSuite()
 }
 
 func (s *localitySuite) testPreferSameZone() {
@@ -135,22 +134,22 @@ func (s *localitySuite) setInternalTrafficPolicy(policy corev1.ServiceInternalTr
 func (s *localitySuite) updateService(mutate func(*corev1.Service)) {
 	svcs := s.TestInstallation.ClusterContext.Clientset.CoreV1().Services(localityNamespace)
 	svc, err := svcs.Get(s.Ctx, localityServiceName, metav1.GetOptions{})
-	s.Require().NoError(err)
+	assert.NoError(s, err)
 	mutate(svc)
 	_, err = svcs.Update(s.Ctx, svc, metav1.UpdateOptions{})
-	s.Require().NoError(err)
+	assert.NoError(s, err)
 }
 
 func (s *localitySuite) applyWorkloadEntries(entries []weSpec) {
 	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", workloadEntriesYAML(entries))
-	s.Require().NoError(err)
+	assert.NoError(s, err)
 }
 
 func (s *localitySuite) deleteWorkloadEntry(name string) {
 	err := s.TestInstallation.ClusterContext.Cli.RunCommand(
 		s.Ctx, "-n", localityNamespace, "delete", "workloadentry", name, "--ignore-not-found=true",
 	)
-	s.Require().NoError(err)
+	assert.NoError(s, err)
 }
 
 // workloadEntriesYAML renders a set of WorkloadEntries, each labeled so the
@@ -180,7 +179,7 @@ spec:
 
 func (s *localitySuite) waitPodIP(labelSelector string) string {
 	var ip string
-	s.TestInstallation.AssertionsT(s.T()).Gomega.Eventually(func(g gomega.Gomega) {
+	s.TestInstallation.AssertionsT(s).Gomega.Eventually(func(g gomega.Gomega) {
 		pods, err := s.TestInstallation.ClusterContext.Clientset.
 			CoreV1().Pods(localityNamespace).
 			List(s.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
@@ -203,7 +202,7 @@ func (s *localitySuite) assertTrafficGoesTo(expectedBackends ...string) {
 	)
 
 	want := sets.New(expectedBackends...)
-	retry.UntilSuccessOrFail(s.T(), func() error {
+	retry.UntilSuccessOrFail(s, func() error {
 		got := sets.New[string]()
 		for i := range requestsPerAttempt {
 			body, err := curlBody(opts...)
@@ -239,7 +238,7 @@ func (s *localitySuite) assertServiceUnavailable() {
 		curl.WithPath("/"),
 	)
 
-	retry.UntilSuccessOrFail(s.T(), func() error {
+	retry.UntilSuccessOrFail(s, func() error {
 		for i := range requestsPerAttempt {
 			status, err := curlStatus(opts...)
 			if err != nil {

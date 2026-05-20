@@ -24,29 +24,29 @@ const (
 	collectorLogPoll    = 500 * time.Millisecond
 )
 
-func TestOTel(t *testing.T) {
-	agw := New(t)
-	agw.Apply(otelManifest("setup.yaml"))
+func TestOTel(tt *testing.T) {
+	t := New(tt)
+	t.Apply(otelManifest("setup.yaml"))
 
-	agw.Run("Tracing", func() {
-		testOTelTracing(agw)
+	t.Run("Tracing", func(t base.Test) {
+		testOTelTracing(t)
 	})
-	agw.Run("AccessLog", func() {
-		testOTelAccessLog(agw)
+	t.Run("AccessLog", func(t base.Test) {
+		testOTelAccessLog(t)
 	})
 }
 
-func testOTelTracing(agw *base.BaseTestingSuite) {
-	agw.Apply(otelManifest("tracing.yaml"))
+func testOTelTracing(t base.Test) {
+	t.Apply(otelManifest("tracing.yaml"))
 
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyAgwPolicyCondition(agw.Ctx, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
+	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(t.Ctx, "agw", base.Namespace, "Accepted", metav1.ConditionTrue)
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
 
-	agw.TestInstallation.AssertionsT(agw.T()).Gomega.Eventually(func(g gomega.Gomega) {
-		agw.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
+	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+		t.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
 
-		logs, err := getCollectorLogs(agw)
+		logs, err := getCollectorLogs(t)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
@@ -74,15 +74,15 @@ func testOTelTracing(agw *base.BaseTestingSuite) {
 	}, collectorLogTimeout, collectorLogPoll, "should find traces in collector pod logs").Should(gomega.Succeed())
 }
 
-func testOTelAccessLog(agw *base.BaseTestingSuite) {
-	agw.Apply(otelManifest("accesslog-otlp.yaml"))
+func testOTelAccessLog(t base.Test) {
+	t.Apply(otelManifest("accesslog-otlp.yaml"))
 
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyAgwPolicyCondition(agw.Ctx, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
+	t.TestInstallation.AssertionsT(t).EventuallyAgwPolicyCondition(t.Ctx, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
 
-	agw.TestInstallation.AssertionsT(agw.T()).Gomega.Eventually(func(g gomega.Gomega) {
-		agw.Send("www.example.com/status/200", base.ExpectOK())
+	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+		t.Send("www.example.com/status/200", base.ExpectOK())
 
-		logs, err := getCollectorLogs(agw)
+		logs, err := getCollectorLogs(t)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
 
 		mustContain := []string{
@@ -107,7 +107,7 @@ func otelManifest(name string) string {
 	return manifest("otel", name)
 }
 
-func getCollectorPod(t *base.BaseTestingSuite) (string, error) {
+func getCollectorPod(t base.Test) (string, error) {
 	pods := &corev1.PodList{}
 	err := t.TestInstallation.ClusterContext.Client.List(
 		t.Ctx,
@@ -139,7 +139,7 @@ func getCollectorPod(t *base.BaseTestingSuite) (string, error) {
 	return newest.Name, nil
 }
 
-func getCollectorLogs(t *base.BaseTestingSuite) (string, error) {
+func getCollectorLogs(t base.Test) (string, error) {
 	pod, err := getCollectorPod(t)
 	if err != nil {
 		return "", err

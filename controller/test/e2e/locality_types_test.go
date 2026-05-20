@@ -2,10 +2,6 @@
 
 package e2e_test
 
-import (
-	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-)
-
 const (
 	localityNamespace = "agentgateway-locality"
 
@@ -32,7 +28,5 @@ var (
 	backendsManifest     = manifest("locality", "backends.yaml")
 	serviceRouteManifest = manifest("locality", "service-route.yaml")
 
-	localitySetup = base.TestCase{
-		Manifests: []string{gatewayManifest, backendsManifest, serviceRouteManifest},
-	}
+	localitySetup = []string{gatewayManifest, backendsManifest, serviceRouteManifest}
 )

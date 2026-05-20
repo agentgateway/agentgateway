@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -29,25 +30,25 @@ const (
 	transformRetryInterval = 50 * time.Millisecond
 )
 
-func TestTransformation(t *testing.T) {
-	agw := New(t)
+func TestTransformation(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("HTTPRoute", func() {
-		testGatewayWithTransformedHTTPRoute(agw)
+	t.Run("HTTPRoute", func(t base.Test) {
+		testGatewayWithTransformedHTTPRoute(t)
 	})
-	agw.Run("GRPCRoute", func() {
-		testGatewayWithTransformedGRPCRoute(agw)
+	t.Run("GRPCRoute", func(t base.Test) {
+		testGatewayWithTransformedGRPCRoute(t)
 	})
 }
 
-func testGatewayWithTransformedHTTPRoute(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testGatewayWithTransformedHTTPRoute(t base.Test) {
+	t.Apply(
 		transformManifest("transform-for-headers.yaml"),
 		transformManifest("transform-for-body.yaml"),
 		transformManifest("gateway-attached-transform.yaml"),
 	)
 
-	assertTransformGatewayReady(agw)
+	assertTransformGatewayReady(t)
 
 	testCases := []struct {
 		name      string
@@ -116,22 +117,22 @@ func testGatewayWithTransformedHTTPRoute(agw *base.BaseTestingSuite) {
 	}
 	for _, tc := range testCases {
 		tc := tc
-		agw.Run(tc.name, func() {
-			agw.Send(fmt.Sprintf("example-%s.com", tc.routeName), tc.resp, tc.opts...)
+		t.Run(tc.name, func(t base.Test) {
+			t.Send(fmt.Sprintf("example-%s.com", tc.routeName), tc.resp, tc.opts...)
 		})
 	}
 }
 
-func testGatewayWithTransformedGRPCRoute(agw *base.BaseTestingSuite) {
-	agw.Apply(transformManifest("grpc-transformation.yaml"))
+func testGatewayWithTransformedGRPCRoute(t base.Test) {
+	t.Apply(transformManifest("grpc-transformation.yaml"))
 
-	assertTransformGatewayReady(agw)
+	assertTransformGatewayReady(t)
 
 	const grpcRouteName = "example-route"
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyGRPCRouteCondition(agw.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyGRPCRouteCondition(agw.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyHTTPRouteCondition(agw.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyHTTPRouteCondition(agw.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
+	t.TestInstallation.AssertionsT(t).EventuallyGRPCRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
+	t.TestInstallation.AssertionsT(t).EventuallyGRPCRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
+	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
+	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(t.Ctx, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
 
 	const (
 		expectedHostname        = "example.com"
@@ -140,7 +141,7 @@ func testGatewayWithTransformedGRPCRoute(agw *base.BaseTestingSuite) {
 		expectedResponseMetaVal = "from-grpc"
 	)
 
-	agw.Require().Eventually(func() bool {
+	retry.UntilSuccessOrFail(t, func() error {
 		resp, _, err := sendH2CGrpcRequest(
 			base.BaseGateway.Address,
 			expectedHostname,
@@ -148,27 +149,24 @@ func testGatewayWithTransformedGRPCRoute(agw *base.BaseTestingSuite) {
 			[]byte{0x0a, 0x05, 'h', 'e', 'l', 'l', 'o'},
 		)
 		if err != nil {
-			agw.T().Logf("grpc request failed: %v", err)
-			return false
+			return fmt.Errorf("grpc request failed: %w", err)
 		}
 
 		grpcStatus := resp.Trailer.Get("grpc-status")
 		if resp.StatusCode != http.StatusOK || grpcStatus != "0" {
-			agw.T().Logf("unexpected grpc response status=%d grpc-status=%q headers=%v trailers=%v",
+			return fmt.Errorf("unexpected grpc response status=%d grpc-status=%q headers=%v trailers=%v",
 				resp.StatusCode, grpcStatus, resp.Header, resp.Trailer)
-			return false
 		}
 
 		if resp.Header.Get(expectedResponseMetaKey) != expectedResponseMetaVal {
-			agw.T().Logf("missing transformed grpc response header %s=%s, got headers=%v",
+			return fmt.Errorf("missing transformed grpc response header %s=%s, got headers=%v",
 				expectedResponseMetaKey, expectedResponseMetaVal, resp.Header)
-			return false
 		}
 
-		return true
-	}, transformTimeout, transformRetryInterval, "expected transformed response metadata on gRPC route")
+		return nil
+	})
 
-	agw.Send(expectedHostname, &testmatchers.HttpResponse{
+	t.Send(expectedHostname, &testmatchers.HttpResponse{
 		StatusCode: http.StatusOK,
 		NotHeaders: []string{
 			"x-grpc-response",
@@ -180,8 +178,8 @@ func transformManifest(name string) string {
 	return manifest("transformation", name)
 }
 
-func assertTransformGatewayReady(t *base.BaseTestingSuite) {
-	t.TestInstallation.AssertionsT(t.T()).EventuallyGatewayCondition(
+func assertTransformGatewayReady(t base.Test) {
+	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
 		t.Ctx,
 		"gateway",
 		base.Namespace,
@@ -189,7 +187,7 @@ func assertTransformGatewayReady(t *base.BaseTestingSuite) {
 		metav1.ConditionTrue,
 		transformTimeout,
 	)
-	t.TestInstallation.AssertionsT(t.T()).EventuallyGatewayCondition(
+	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
 		t.Ctx,
 		"gateway",
 		base.Namespace,

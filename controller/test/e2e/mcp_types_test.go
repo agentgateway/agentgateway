@@ -9,7 +9,7 @@ import (
 )
 
 type mcpSuite struct {
-	*base.BaseTestingSuite
+	base.Test
 }
 
 type ToolsListResponse struct {
@@ -79,23 +79,8 @@ var (
 	authnPolicyManifest      = manifest("mcp", "remote-authn-auth0.yaml")
 	routeAuthnPolicyManifest = manifest("mcp", "remote-route-authn-auth0.yaml")
 
-	// Dynamic test setup (only dynamic-specific resources)
-	dynamicSetup = base.TestCase{
-		Manifests: []string{dynamicSetupManifest},
-	}
-
-	// Static test setup (resources needed for non-dynamic tests)
-	staticSetup = base.TestCase{
-		Manifests: []string{staticSetupManifest},
-	}
-
-	// MCP authn keycloak test setup (resources needed for non-dynamic tests)
-	authnSetup = base.TestCase{
-		Manifests: []string{authnPolicyManifest},
-	}
-
-	// MCP authn keycloak test setup (resources needed for non-dynamic tests)
-	authnRouteSetup = base.TestCase{
-		Manifests: []string{routeAuthnPolicyManifest},
-	}
+	dynamicSetup    = []string{dynamicSetupManifest}
+	staticSetup     = []string{staticSetupManifest}
+	authnSetup      = []string{authnPolicyManifest}
+	authnRouteSetup = []string{routeAuthnPolicyManifest}
 )

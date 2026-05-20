@@ -11,17 +11,17 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
-func TestRBACHeaderAuthorization(t *testing.T) {
-	agw := New(t)
+func TestRBACHeaderAuthorization(tt *testing.T) {
+	t := New(tt)
 
-	agw.Apply(manifest("rbac", "cel-rbac.yaml"))
-	agw.HTTPRouteAccepted("httpbin-route", base.Namespace)
+	t.Apply(manifest("rbac", "cel-rbac.yaml"))
+	t.HTTPRouteAccepted("httpbin-route", base.Namespace)
 
-	agw.Send(
+	t.Send(
 		"httpbin/get",
 		base.ExpectForbidden(gomega.ContainSubstring("authorization failed")),
 	)
-	agw.Send(
+	t.Send(
 		"httpbin/get",
 		base.ExpectOK(),
 		curl.WithHeader("x-my-header", "cool-beans"),

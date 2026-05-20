@@ -13,56 +13,56 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
-func TestLocalRateLimit(t *testing.T) {
-	agw := New(t)
-	agw.Apply(manifest("rate-limit", "local", "httproutes.yaml"))
+func TestLocalRateLimit(tt *testing.T) {
+	t := New(tt)
+	t.Apply(manifest("rate-limit", "local", "httproutes.yaml"))
 
-	agw.Run("Route", func() {
-		testLocalRateLimitForRoute(agw)
+	t.Run("Route", func(t base.Test) {
+		testLocalRateLimitForRoute(t)
 	})
-	agw.Run("Gateway", func() {
-		testLocalRateLimitForGateway(agw)
+	t.Run("Gateway", func(t base.Test) {
+		testLocalRateLimitForGateway(t)
 	})
-	agw.Run("RouteDisabled", func() {
-		agw.T().Skip("Skipping LocalRateLimit disabled at Route level on agentgateway: not supported yet")
+	t.Run("RouteDisabled", func(t base.Test) {
+		t.Skip("Skipping LocalRateLimit disabled at Route level on agentgateway: not supported yet")
 	})
-	agw.Run("RouteUsingExtensionRef", func() {
-		agw.T().Skip("Skipping LocalRateLimit using extensionRef in HTTPRoute on agentgateway: not supported yet")
+	t.Run("RouteUsingExtensionRef", func(t base.Test) {
+		t.Skip("Skipping LocalRateLimit using extensionRef in HTTPRoute on agentgateway: not supported yet")
 	})
 }
 
-func testLocalRateLimitForRoute(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testLocalRateLimitForRoute(t base.Test) {
+	t.Apply(
 		manifest("rate-limit", "local", "route-local-rate-limit.yaml"),
 	)
 
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyObjectsExist(
-		agw.Ctx,
+	t.TestInstallation.AssertionsT(t).EventuallyObjectsExist(
+		t.Ctx,
 		httpRoute("svc-route"),
 		httpRoute("svc-route-2"),
 		agwPolicy("route-rl-policy"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK())
-	agw.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
-	agw.Send("example.com/path2", base.ExpectOK())
+	t.Send("example.com/path1", base.ExpectOK())
+	t.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
+	t.Send("example.com/path2", base.ExpectOK())
 }
 
-func testLocalRateLimitForGateway(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testLocalRateLimitForGateway(t base.Test) {
+	t.Apply(
 		manifest("rate-limit", "local", "gw-local-rate-limit.yaml"),
 	)
 
-	agw.TestInstallation.AssertionsT(agw.T()).EventuallyObjectsExist(
-		agw.Ctx,
+	t.TestInstallation.AssertionsT(t).EventuallyObjectsExist(
+		t.Ctx,
 		httpRoute("svc-route"),
 		httpRoute("svc-route-2"),
 		agwPolicy("gw-rl-policy"),
 	)
 
-	agw.Send("example.com/path1", base.ExpectOK())
-	agw.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
-	agw.Send("example.com/path2", base.Expect(http.StatusTooManyRequests))
+	t.Send("example.com/path1", base.ExpectOK())
+	t.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
+	t.Send("example.com/path2", base.Expect(http.StatusTooManyRequests))
 }
 
 func httpRoute(name string) *gwv1.HTTPRoute {

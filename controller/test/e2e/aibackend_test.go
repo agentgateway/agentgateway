@@ -26,40 +26,30 @@ var (
 	// manifests
 	setupManifest            = manifest("aibackend", "setup.yaml")
 	failoverEvictionManifest = manifest("aibackend", "failover_eviction.yaml")
-
-	// test cases
-	aiBackendSetup = base.TestCase{
-		Manifests: []string{
-			setupManifest,
-		},
-	}
 )
 
-func TestAIBackend(t *testing.T) {
-	agw := New(t)
-	agw.MinGwApiVersion = base.GwApiRequireRouteNames
-	agw.ApplyConfig(aiBackendSetup)
+func TestAIBackend(tt *testing.T) {
+	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireRouteNames))
+	t.Apply(setupManifest)
 
-	agw.Run("Routing", func() {
-		testAIBackendRouting(agw)
+	t.Run("Routing", func(t base.Test) {
+		testAIBackendRouting(t)
 	})
-	agw.Run("PromptGuard", func() {
-		testAIBackendPromptGuard(agw)
+	t.Run("PromptGuard", func(t base.Test) {
+		testAIBackendPromptGuard(t)
 	})
-	agw.Run("Webhook", func() {
-		testAIBackendWebhook(agw)
+	t.Run("Webhook", func(t base.Test) {
+		testAIBackendWebhook(t)
 	})
-	agw.Run("Failover", func() {
-		agw.ApplyConfig(base.TestCase{
-			Manifests: []string{failoverEvictionManifest},
-		})
-		testAIBackendFailover(agw)
+	t.Run("Failover", func(t base.Test) {
+		t.Apply(failoverEvictionManifest)
+		testAIBackendFailover(t)
 	})
 }
 
-func testAIBackendRouting(agw *base.BaseTestingSuite) {
+func testAIBackendRouting(t base.Test) {
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(`The name of this project is agentgateway`),
@@ -70,10 +60,10 @@ func testAIBackendRouting(agw *base.BaseTestingSuite) {
 	)
 }
 
-func testAIBackendPromptGuard(agw *base.BaseTestingSuite) {
+func testAIBackendPromptGuard(t base.Test) {
 	// Test request guard
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(`request rejected`),
@@ -85,7 +75,7 @@ func testAIBackendPromptGuard(agw *base.BaseTestingSuite) {
 
 	// Test response guard
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(agwDefaultPromptGuardResponse),
@@ -96,10 +86,10 @@ func testAIBackendPromptGuard(agw *base.BaseTestingSuite) {
 	)
 }
 
-func testAIBackendWebhook(agw *base.BaseTestingSuite) {
+func testAIBackendWebhook(t base.Test) {
 	// Test request webhook
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(guardrailsWebhookBlockResponse),
@@ -117,7 +107,7 @@ func testAIBackendWebhook(agw *base.BaseTestingSuite) {
 
 	// Test response webhook
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(maskedPatternResponse),
@@ -134,7 +124,7 @@ func testAIBackendWebhook(agw *base.BaseTestingSuite) {
 	)
 }
 
-func testAIBackendFailover(agw *base.BaseTestingSuite) {
+func testAIBackendFailover(t base.Test) {
 	expectedResponse := "The name of this project is agentgateway"
 
 	// The failover backend has two groups:
@@ -144,7 +134,7 @@ func testAIBackendFailover(agw *base.BaseTestingSuite) {
 	// The health policy evicts the primary after 3 consecutive unhealthy responses (threshold: 3).
 	// Send will retry until the primary is evicted and the fallback returns the expected response.
 	base.BaseGateway.Send(
-		agw.T(),
+		t,
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),

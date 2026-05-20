@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/slices"
+	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -118,7 +119,7 @@ func createTestInstallationForCluster(
 
 		// Create an assertions provider function that returns a new provider for each test
 		// This ensures each test gets its own properly scoped testing.T
-		AssertionsT: func(t *testing.T) *assertions.Provider {
+		AssertionsT: func(t test.Failer) *assertions.Provider {
 			return assertions.NewProvider(t).
 				WithClusterContext(clusterContext).
 				WithInstallContext(installContext)
@@ -161,7 +162,7 @@ type TestInstallation struct {
 
 	// AssertionsT is a function that creates assertions for a specific test using the test-scoped testing.T
 	// This ensures that assertion failures are properly attributed to the correct test
-	AssertionsT func(*testing.T) *assertions.Provider
+	AssertionsT func(test.Failer) *assertions.Provider
 
 	// GeneratedFiles is the collection of directories and files that this test installation _may_ create
 	GeneratedFiles GeneratedFiles

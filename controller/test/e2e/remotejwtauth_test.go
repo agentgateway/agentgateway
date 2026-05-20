@@ -11,111 +11,111 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
 
-func TestRemoteJwtAuth(t *testing.T) {
-	agw := New(t)
-	agw.Apply(manifest("remotejwtauth", "common.yaml"))
+func TestRemoteJwtAuth(tt *testing.T) {
+	t := New(tt)
+	t.Apply(manifest("remotejwtauth", "common.yaml"))
 
-	agw.Run("RoutePolicyBackend", func() {
-		testRemoteJwtAuthRoutePolicyBackend(agw)
+	t.Run("RoutePolicyBackend", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicyBackend(t)
 	})
-	agw.Run("RoutePolicyBackendAndTLSPolicy", func() {
-		testRemoteJwtAuthRoutePolicyBackendAndTLSPolicy(agw)
+	t.Run("RoutePolicyBackendAndTLSPolicy", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicyBackendAndTLSPolicy(t)
 	})
-	agw.Run("RoutePolicySvcCACert", func() {
-		testRemoteJwtAuthRoutePolicySvc(agw, "secured-route-with-svc-ca-cert.yaml")
+	t.Run("RoutePolicySvcCACert", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicySvc(t, "secured-route-with-svc-ca-cert.yaml")
 	})
-	agw.Run("RoutePolicySvc", func() {
-		testRemoteJwtAuthRoutePolicySvc(agw, "secured-route-with-svc.yaml")
+	t.Run("RoutePolicySvc", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicySvc(t, "secured-route-with-svc.yaml")
 	})
-	agw.Run("RoutePolicyWithRBAC", func() {
-		testRemoteJwtAuthRoutePolicyWithRbac(agw)
+	t.Run("RoutePolicyWithRBAC", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicyWithRbac(t)
 	})
-	agw.Run("GatewayPolicySvc", func() {
-		testRemoteJwtAuthGatewayPolicySvc(agw, "secured-gateway-policy-with-svc.yaml")
+	t.Run("GatewayPolicySvc", func(t base.Test) {
+		testRemoteJwtAuthGatewayPolicySvc(t, "secured-gateway-policy-with-svc.yaml")
 	})
-	agw.Run("GatewayPolicySvcCACert", func() {
-		testRemoteJwtAuthGatewayPolicySvc(agw, "secured-gateway-policy-with-svc-ca-cert.yaml")
+	t.Run("GatewayPolicySvcCACert", func(t base.Test) {
+		testRemoteJwtAuthGatewayPolicySvc(t, "secured-gateway-policy-with-svc-ca-cert.yaml")
 	})
-	agw.Run("GatewayPolicyBackend", func() {
-		testRemoteJwtAuthGatewayPolicyBackend(agw)
+	t.Run("GatewayPolicyBackend", func(t base.Test) {
+		testRemoteJwtAuthGatewayPolicyBackend(t)
 	})
-	agw.Run("GatewayPolicyBackendWithTLSPolicy", func() {
-		testRemoteJwtAuthGatewayPolicyBackendWithTLSPolicy(agw)
+	t.Run("GatewayPolicyBackendWithTLSPolicy", func(t base.Test) {
+		testRemoteJwtAuthGatewayPolicyBackendWithTLSPolicy(t)
 	})
-	agw.Run("GatewayPolicyWithRBAC", func() {
-		testRemoteJwtAuthGatewayPolicyWithRbac(agw)
+	t.Run("GatewayPolicyWithRBAC", func(t base.Test) {
+		testRemoteJwtAuthGatewayPolicyWithRbac(t)
 	})
 }
 
-func testRemoteJwtAuthRoutePolicyBackend(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "insecure-route.yaml", "secured-route-with-backend.yaml")
+func testRemoteJwtAuthRoutePolicyBackend(t base.Test) {
+	applyRemoteJwtAuth(t, "insecure-route.yaml", "secured-route-with-backend.yaml")
 
-	assertRemoteJwtRouteAccepted(agw, "route-example-insecure")
-	assertRemoteJwtResponse(agw, "insecureroute.com", "", http.StatusOK)
+	assertRemoteJwtRouteAccepted(t, "route-example-insecure")
+	assertRemoteJwtResponse(t, "insecureroute.com", "", http.StatusOK)
 
-	assertRemoteJwtRouteAccepted(agw, "route-secure")
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgTwoJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "secureroute.com", "", http.StatusUnauthorized)
+	assertRemoteJwtRouteAccepted(t, "route-secure")
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgTwoJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "secureroute.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthRoutePolicyBackendAndTLSPolicy(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "secured-route-with-backend-and-ref.yaml")
-	assertRemoteJwtRouteAccepted(agw, "route-secure")
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "secureroute.com", "", http.StatusUnauthorized)
+func testRemoteJwtAuthRoutePolicyBackendAndTLSPolicy(t base.Test) {
+	applyRemoteJwtAuth(t, "secured-route-with-backend-and-ref.yaml")
+	assertRemoteJwtRouteAccepted(t, "route-secure")
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "secureroute.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthRoutePolicySvc(agw *base.BaseTestingSuite, manifestName string) {
-	applyRemoteJwtAuth(agw, manifestName)
-	assertRemoteJwtRouteAccepted(agw, "route-secure")
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "secureroute.com", "", http.StatusUnauthorized)
+func testRemoteJwtAuthRoutePolicySvc(t base.Test, manifestName string) {
+	applyRemoteJwtAuth(t, manifestName)
+	assertRemoteJwtRouteAccepted(t, "route-secure")
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "secureroute.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthRoutePolicyWithRbac(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "secured-route-with-rbac.yaml")
-	assertRemoteJwtRouteAccepted(agw, "route-secure")
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "secureroute.com", testjwt.OrgFourJWT, http.StatusForbidden)
+func testRemoteJwtAuthRoutePolicyWithRbac(t base.Test) {
+	applyRemoteJwtAuth(t, "secured-route-with-rbac.yaml")
+	assertRemoteJwtRouteAccepted(t, "route-secure")
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "secureroute.com", testjwt.OrgFourJWT, http.StatusForbidden)
 }
 
-func testRemoteJwtAuthGatewayPolicySvc(agw *base.BaseTestingSuite, manifestName string) {
-	applyRemoteJwtAuth(agw, manifestName)
-	assertRemoteJwtRouteAccepted(agw, "route-secure-gw")
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "securegateways.com", "", http.StatusUnauthorized)
+func testRemoteJwtAuthGatewayPolicySvc(t base.Test, manifestName string) {
+	applyRemoteJwtAuth(t, manifestName)
+	assertRemoteJwtRouteAccepted(t, "route-secure-gw")
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "securegateways.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthGatewayPolicyBackend(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "secured-gateway-policy-with-backend.yaml")
-	assertRemoteJwtRouteAccepted(agw, "route-secure-gw")
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgTwoJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "securegateways.com", "", http.StatusUnauthorized)
+func testRemoteJwtAuthGatewayPolicyBackend(t base.Test) {
+	applyRemoteJwtAuth(t, "secured-gateway-policy-with-backend.yaml")
+	assertRemoteJwtRouteAccepted(t, "route-secure-gw")
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgTwoJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "securegateways.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthGatewayPolicyBackendWithTLSPolicy(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "secured-gateway-policy-with-backend-and-ref.yaml")
-	assertRemoteJwtRouteAccepted(agw, "route-secure-gw")
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
-	assertRemoteJwtResponse(agw, "securegateways.com", "", http.StatusUnauthorized)
+func testRemoteJwtAuthGatewayPolicyBackendWithTLSPolicy(t base.Test) {
+	applyRemoteJwtAuth(t, "secured-gateway-policy-with-backend-and-ref.yaml")
+	assertRemoteJwtRouteAccepted(t, "route-secure-gw")
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
+	assertRemoteJwtResponse(t, "securegateways.com", "", http.StatusUnauthorized)
 }
 
-func testRemoteJwtAuthGatewayPolicyWithRbac(agw *base.BaseTestingSuite) {
-	applyRemoteJwtAuth(agw, "secured-gateway-policy-with-rbac.yaml")
-	assertRemoteJwtRouteAccepted(agw, "route-secure-gw")
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
-	assertRemoteJwtResponse(agw, "securegateways.com", testjwt.OrgFourJWT, http.StatusForbidden)
+func testRemoteJwtAuthGatewayPolicyWithRbac(t base.Test) {
+	applyRemoteJwtAuth(t, "secured-gateway-policy-with-rbac.yaml")
+	assertRemoteJwtRouteAccepted(t, "route-secure-gw")
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgOneJWT, http.StatusOK)
+	assertRemoteJwtResponse(t, "securegateways.com", testjwt.OrgFourJWT, http.StatusForbidden)
 }
 
-func applyRemoteJwtAuth(t *base.BaseTestingSuite, manifests ...string) {
+func applyRemoteJwtAuth(t base.Test, manifests ...string) {
 	all := make([]string, 0, len(manifests))
 	for _, name := range manifests {
 		all = append(all, manifest("remotejwtauth", name))
@@ -123,11 +123,11 @@ func applyRemoteJwtAuth(t *base.BaseTestingSuite, manifests ...string) {
 	t.Apply(all...)
 }
 
-func assertRemoteJwtRouteAccepted(t *base.BaseTestingSuite, route string) {
+func assertRemoteJwtRouteAccepted(t base.Test, route string) {
 	t.HTTPRouteAccepted(route, base.Namespace)
 }
 
-func assertRemoteJwtResponse(t *base.BaseTestingSuite, host, token string, status int) {
+func assertRemoteJwtResponse(t base.Test, host, token string, status int) {
 	opts := []curl.Option{}
 	if token != "" {
 		opts = append(opts, curl.WithHeader("Authorization", "Bearer "+token))

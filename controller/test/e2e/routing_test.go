@@ -13,46 +13,43 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
-func TestAgentgatewayRouting(t *testing.T) {
-	agw := New(t)
+func TestAgentgatewayRouting(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("HTTPRoute", func() {
-		testAgentgatewayHTTPRoute(agw)
+	t.Run("HTTPRoute", func(t base.Test) {
+		testAgentgatewayHTTPRoute(t)
 	})
-	agw.Run("TCPRoute", func() {
-		testAgentgatewayTCPRoute(agw)
+	t.Run("TCPRoute", func(t base.Test) {
+		testAgentgatewayTCPRoute(t)
 	})
 }
 
-func testAgentgatewayHTTPRoute(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("routing", "agw-http-route.yaml"))
+func testAgentgatewayHTTPRoute(t base.Test) {
+	t.Apply(manifest("routing", "agw-http-route.yaml"))
 
-	gateway := sharedGateway(agw, "http", 1)
+	gateway := sharedGateway(t, "http", 1)
 	gateway.Send(
-		agw.T(),
+		t,
 		base.ExpectOK(),
 		curl.WithHostHeader("www.example.com"),
 		curl.WithPath("/status/200"),
 	)
 }
 
-func testAgentgatewayTCPRoute(agw *base.BaseTestingSuite) {
-	agw.ApplyConfig(base.TestCase{
-		Manifests:       []string{manifest("routing", "agw-tcp-route.yaml")},
-		MinGwApiVersion: base.GwApiRequireTcpRoutes,
-	})
+func testAgentgatewayTCPRoute(t base.Test) {
+	t.Apply(manifest("routing", "agw-tcp-route.yaml"))
 
-	gateway := sharedGateway(agw, "tcp", 1)
+	gateway := sharedGateway(t, "tcp", 1)
 	gateway.Send(
-		agw.T(),
+		t,
 		base.Expect(http.StatusOK),
 		curl.WithPort(gateway.PortForRemote(9090)),
 	)
 }
 
-func sharedGateway(t *base.BaseTestingSuite, listenerName string, attachedRoutes int) base.Gateway {
+func sharedGateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway {
 	t.GatewayReady("gateway", base.Namespace)
-	t.TestInstallation.AssertionsT(t.T()).EventuallyGatewayListenerAttachedRoutes(
+	t.TestInstallation.AssertionsT(t).EventuallyGatewayListenerAttachedRoutes(
 		t.Ctx,
 		"gateway",
 		base.Namespace,

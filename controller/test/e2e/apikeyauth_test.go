@@ -10,44 +10,44 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
-func TestApiKeyAuth(t *testing.T) {
-	agw := New(t)
+func TestApiKeyAuth(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("RoutePolicy", func() {
-		testApiKeyAuthRoutePolicy(agw)
+	t.Run("RoutePolicy", func(t base.Test) {
+		testApiKeyAuthRoutePolicy(t)
 	})
-	agw.Run("GatewayPolicy", func() {
-		testApiKeyAuthGatewayPolicy(agw)
+	t.Run("GatewayPolicy", func(t base.Test) {
+		testApiKeyAuthGatewayPolicy(t)
 	})
 }
 
-func testApiKeyAuthRoutePolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testApiKeyAuthRoutePolicy(t base.Test) {
+	t.Apply(
 		manifest("apikeyauth", "insecure-route.yaml"),
 		manifest("apikeyauth", "secured-route.yaml"),
 	)
 
-	agw.HTTPRouteAccepted("route-example-insecure", base.Namespace)
-	assertApiKeyResponse(agw, "insecureroute.com", "", http.StatusOK)
+	t.HTTPRouteAccepted("route-example-insecure", base.Namespace)
+	assertApiKeyResponse(t, "insecureroute.com", "", http.StatusOK)
 
-	agw.HTTPRouteAccepted("route-secure", base.Namespace)
-	assertApiKeyResponse(agw, "secureroute.com", "k-1230", http.StatusOK)
-	assertApiKeyResponse(agw, "secureroute.com", "k-4560", http.StatusOK)
-	assertApiKeyResponse(agw, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
-	assertApiKeyResponse(agw, "secureroute.com", "", http.StatusUnauthorized)
+	t.HTTPRouteAccepted("route-secure", base.Namespace)
+	assertApiKeyResponse(t, "secureroute.com", "k-1230", http.StatusOK)
+	assertApiKeyResponse(t, "secureroute.com", "k-4560", http.StatusOK)
+	assertApiKeyResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertApiKeyResponse(t, "secureroute.com", "", http.StatusUnauthorized)
 }
 
-func testApiKeyAuthGatewayPolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("apikeyauth", "secured-gateway-policy.yaml"))
+func testApiKeyAuthGatewayPolicy(t base.Test) {
+	t.Apply(manifest("apikeyauth", "secured-gateway-policy.yaml"))
 
-	agw.HTTPRouteAccepted("route-secure-gw", base.Namespace)
-	assertApiKeyResponse(agw, "securegateways.com", "k-123", http.StatusOK)
-	assertApiKeyResponse(agw, "securegateways.com", "k-456", http.StatusOK)
-	assertApiKeyResponse(agw, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
-	assertApiKeyResponse(agw, "securegateways.com", "", http.StatusUnauthorized)
+	t.HTTPRouteAccepted("route-secure-gw", base.Namespace)
+	assertApiKeyResponse(t, "securegateways.com", "k-123", http.StatusOK)
+	assertApiKeyResponse(t, "securegateways.com", "k-456", http.StatusOK)
+	assertApiKeyResponse(t, "securegateways.com", "nosuchkey", http.StatusUnauthorized)
+	assertApiKeyResponse(t, "securegateways.com", "", http.StatusUnauthorized)
 }
 
-func assertApiKeyResponse(t *base.BaseTestingSuite, host, key string, status int) {
+func assertApiKeyResponse(t base.Test, host, key string, status int) {
 	opts := []curl.Option{}
 	if key != "" {
 		opts = append(opts, curl.WithHeader("Authorization", "Bearer "+key))

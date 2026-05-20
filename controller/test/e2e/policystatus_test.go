@@ -17,39 +17,39 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
-func TestAgwPolicyClearStaleStatus(t *testing.T) {
-	agw := New(t)
-	agw.Apply(manifest("policystatus", "policy-with-gw.yaml"))
+func TestAgwPolicyClearStaleStatus(tt *testing.T) {
+	t := New(tt)
+	t.Apply(manifest("policystatus", "policy-with-gw.yaml"))
 
 	agwControllerName := wellknown.DefaultAgwControllerName
 	otherControllerName := "other-controller.example.com/controller"
 
-	addAncestorStatus(t, agw, "example-policy", base.Namespace, "other-gw", otherControllerName)
+	addAncestorStatus(t, "example-policy", base.Namespace, "other-gw", otherControllerName)
 
-	assertAncestorStatuses(t, agw, "gateway", map[string]bool{
+	assertAncestorStatuses(t, "gateway", map[string]bool{
 		agwControllerName: true,
 	})
-	assertAncestorStatuses(t, agw, "other-gw", map[string]bool{
+	assertAncestorStatuses(t, "other-gw", map[string]bool{
 		otherControllerName: true,
 	})
 
-	agw.Apply(manifest("policystatus", "policy-with-missing-gw.yaml"))
+	t.Apply(manifest("policystatus", "policy-with-missing-gw.yaml"))
 
-	assertAncestorStatuses(t, agw, "gateway", map[string]bool{
+	assertAncestorStatuses(t, "gateway", map[string]bool{
 		agwControllerName: false,
 	})
-	assertAncestorStatuses(t, agw, "other-gw", map[string]bool{
+	assertAncestorStatuses(t, "other-gw", map[string]bool{
 		otherControllerName: true,
 	})
 }
 
-func addAncestorStatus(t *testing.T, agw *base.BaseTestingSuite, policyName, policyNamespace, gwName, controllerName string) {
+func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, controllerName string) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	agw.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		err := agw.TestInstallation.ClusterContext.Client.Get(
-			agw.Ctx,
+		err := t.TestInstallation.ClusterContext.Client.Get(
+			t.Ctx,
 			types.NamespacedName{Name: policyName, Namespace: policyNamespace},
 			policy,
 		)
@@ -70,18 +70,18 @@ func addAncestorStatus(t *testing.T, agw *base.BaseTestingSuite, policyName, pol
 		}
 
 		policy.Status.Ancestors = append(policy.Status.Ancestors, fakeStatus)
-		err = agw.TestInstallation.ClusterContext.Client.Status().Update(agw.Ctx, policy)
+		err = t.TestInstallation.ClusterContext.Client.Status().Update(t.Ctx, policy)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
 }
 
-func assertAncestorStatuses(t *testing.T, agw *base.BaseTestingSuite, ancestorName string, expectedControllers map[string]bool) {
+func assertAncestorStatuses(t base.Test, ancestorName string, expectedControllers map[string]bool) {
 	t.Helper()
 	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	agw.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		err := agw.TestInstallation.ClusterContext.Client.Get(
-			agw.Ctx,
+		err := t.TestInstallation.ClusterContext.Client.Get(
+			t.Ctx,
 			types.NamespacedName{Name: "example-policy", Namespace: base.Namespace},
 			policy,
 		)

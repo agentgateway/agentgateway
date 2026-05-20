@@ -15,20 +15,20 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
 )
 
-func TestExtProc(t *testing.T) {
-	agw := New(t)
+func TestExtProc(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("GatewayTargetRef", func() {
-		testExtProcWithGatewayTargetRef(agw)
+	t.Run("GatewayTargetRef", func(t base.Test) {
+		testExtProcWithGatewayTargetRef(t)
 	})
-	agw.Run("HTTPRouteTargetRef", func() {
-		testExtProcWithHTTPRouteTargetRef(agw)
+	t.Run("HTTPRouteTargetRef", func(t base.Test) {
+		testExtProcWithHTTPRouteTargetRef(t)
 	})
 }
 
 // testExtProcWithGatewayTargetRef tests ExtProc with targetRef to Gateway using AgentgatewayPolicy
-func testExtProcWithGatewayTargetRef(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("extproc", "gateway-targetref.yaml"))
+func testExtProcWithGatewayTargetRef(t base.Test) {
+	t.Apply(manifest("extproc", "gateway-targetref.yaml"))
 
 	testCases := []struct {
 		name string
@@ -69,15 +69,15 @@ func testExtProcWithGatewayTargetRef(agw *base.BaseTestingSuite) {
 	}
 	for _, tc := range testCases {
 		tc := tc
-		agw.Run(tc.name, func() {
-			agw.Send(tc.url, tc.resp, tc.opts...)
+		t.Run(tc.name, func(t base.Test) {
+			t.Send(tc.url, tc.resp, tc.opts...)
 		})
 	}
 }
 
 // testExtProcWithHTTPRouteTargetRef tests ExtProc with targetRef to HTTPRoute using AgentgatewayPolicy
-func testExtProcWithHTTPRouteTargetRef(agw *base.BaseTestingSuite) {
-	agw.Apply(manifest("extproc", "httproute-targetref.yaml"))
+func testExtProcWithHTTPRouteTargetRef(t base.Test) {
+	t.Apply(manifest("extproc", "httproute-targetref.yaml"))
 
 	testCases := []struct {
 		name string
@@ -118,8 +118,8 @@ func testExtProcWithHTTPRouteTargetRef(agw *base.BaseTestingSuite) {
 	}
 	for _, tc := range testCases {
 		tc := tc
-		agw.Run(tc.name, func() {
-			agw.Send(tc.url, tc.resp, tc.opts...)
+		t.Run(tc.name, func(t base.Test) {
+			t.Send(tc.url, tc.resp, tc.opts...)
 		})
 	}
 }

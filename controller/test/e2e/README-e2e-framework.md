@@ -93,8 +93,8 @@ func (s *testingSuite) TestExample() {
 
 `Apply` registers cleanup with `t.Cleanup`, so the config contract stays
 local to the test without needing a parallel map keyed by test method name.
-Use `ApplyConfig(base.TestCase{...})` only when the test needs version gates or
-manifest transforms.
+Use `New(t, base.WithMinGwApiVersion(...))` only when the whole test
+requires a newer Gateway API version than the supported baseline.
 
 ## TestCluster
 

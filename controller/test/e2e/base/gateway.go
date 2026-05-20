@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
@@ -186,12 +187,12 @@ type Gateway struct {
 
 var BaseGateway Gateway
 
-func (g *Gateway) Send(t *testing.T, match *matchers.HttpResponse, opts ...curl.Option) {
+func (g *Gateway) Send(t test.Failer, match *matchers.HttpResponse, opts ...curl.Option) {
 	resp := g.SendWithResponse(t, match, opts...)
 	_ = resp.Body.Close()
 }
 
-func (g *Gateway) SendWithResponse(t *testing.T, match *matchers.HttpResponse, opts ...curl.Option) http.Response {
+func (g *Gateway) SendWithResponse(t test.Failer, match *matchers.HttpResponse, opts ...curl.Option) http.Response {
 	t.Helper()
 
 	address := g.ResolvedAddress()

@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func New(t *testing.T) *base.BaseTestingSuite {
+func New(t *testing.T, opts ...base.SuiteOption) base.Test {
 	t.Helper()
 	agwSetupOnce.Do(func() {
 		done := base.TraceStep(t, "shared e2e setup")
@@ -60,8 +60,7 @@ func New(t *testing.T) *base.BaseTestingSuite {
 		}
 	})
 
-	suite := base.NewSuite(agwCtx, agwInstallation)
-	suite.SetT(t)
+	suite := base.NewSuite(agwCtx, agwInstallation, t, opts...)
 	suite.SetupSuite()
 	t.Cleanup(suite.TearDownSuite)
 	return suite

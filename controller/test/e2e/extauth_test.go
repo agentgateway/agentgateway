@@ -13,34 +13,34 @@ import (
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
-func TestExtAuth(t *testing.T) {
-	agw := New(t)
-	agw.Apply(extAuthManifest("service.yaml"))
+func TestExtAuth(tt *testing.T) {
+	t := New(tt)
+	t.Apply(extAuthManifest("service.yaml"))
 
-	agw.Run("GatewayPolicy", func() {
-		testExtAuthGatewayPolicy(agw)
+	t.Run("GatewayPolicy", func(t base.Test) {
+		testExtAuthGatewayPolicy(t)
 	})
-	agw.Run("RoutePolicy", func() {
-		testExtAuthRoutePolicy(agw)
+	t.Run("RoutePolicy", func(t base.Test) {
+		testExtAuthRoutePolicy(t)
 	})
-	agw.Run("BackendTargetedPolicy", func() {
-		testExtAuthBackendTargetedPolicy(agw)
+	t.Run("BackendTargetedPolicy", func(t base.Test) {
+		testExtAuthBackendTargetedPolicy(t)
 	})
-	agw.Run("ConditionalPolicy", func() {
-		testExtAuthConditionalPolicy(agw)
+	t.Run("ConditionalPolicy", func(t base.Test) {
+		testExtAuthConditionalPolicy(t)
 	})
-	agw.Run("PolicyMissingBackendRef", func() {
-		testExtAuthPolicyMissingBackendRef(agw)
+	t.Run("PolicyMissingBackendRef", func(t base.Test) {
+		testExtAuthPolicyMissingBackendRef(t)
 	})
 }
 
-func testExtAuthGatewayPolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testExtAuthGatewayPolicy(t base.Test) {
+	t.Apply(
 		extAuthManifest("secured-gateway-policy.yaml"),
 		extAuthManifest("insecure-route.yaml"),
 	)
 
-	runExtAuthCases(agw, []extAuthCase{
+	runExtAuthCases(t, []extAuthCase{
 		{
 			name:    "request allowed with allow header",
 			target:  "example.com",
@@ -62,13 +62,13 @@ func testExtAuthGatewayPolicy(agw *base.BaseTestingSuite) {
 	})
 }
 
-func testExtAuthRoutePolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testExtAuthRoutePolicy(t base.Test) {
+	t.Apply(
 		extAuthManifest("secured-route.yaml"),
 		extAuthManifest("insecure-route.yaml"),
 	)
 
-	runExtAuthCases(agw, []extAuthCase{
+	runExtAuthCases(t, []extAuthCase{
 		{
 			name:   "request allowed by default",
 			target: "example.com",
@@ -89,12 +89,12 @@ func testExtAuthRoutePolicy(agw *base.BaseTestingSuite) {
 	})
 }
 
-func testExtAuthBackendTargetedPolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testExtAuthBackendTargetedPolicy(t base.Test) {
+	t.Apply(
 		extAuthManifest("backend-targeted-route.yaml"),
 	)
 
-	runExtAuthCases(agw, []extAuthCase{
+	runExtAuthCases(t, []extAuthCase{
 		{
 			name:   "request allowed on backend without ext auth",
 			target: "backendextauth.com/open",
@@ -115,12 +115,12 @@ func testExtAuthBackendTargetedPolicy(agw *base.BaseTestingSuite) {
 	})
 }
 
-func testExtAuthConditionalPolicy(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testExtAuthConditionalPolicy(t base.Test) {
+	t.Apply(
 		extAuthManifest("conditional-route.yaml"),
 	)
 
-	runExtAuthCases(agw, []extAuthCase{
+	runExtAuthCases(t, []extAuthCase{
 		{
 			name:    "request allowed by matching conditional policy",
 			target:  "conditionalextauth.com/secure",
@@ -148,12 +148,12 @@ func testExtAuthConditionalPolicy(agw *base.BaseTestingSuite) {
 	})
 }
 
-func testExtAuthPolicyMissingBackendRef(agw *base.BaseTestingSuite) {
-	agw.Apply(
+func testExtAuthPolicyMissingBackendRef(t base.Test) {
+	t.Apply(
 		extAuthManifest("secured-route-missing-ref.yaml"),
 	)
 
-	runExtAuthCases(agw, []extAuthCase{
+	runExtAuthCases(t, []extAuthCase{
 		{
 			name:   "request denied for invalid extauth policy due to missing backendRef",
 			target: "secureroute.com",
@@ -174,16 +174,16 @@ func extAuthManifest(name string) string {
 	return manifest("extauth", name)
 }
 
-func runExtAuthCases(agw *base.BaseTestingSuite, cases []extAuthCase) {
-	agw.T().Helper()
+func runExtAuthCases(t base.Test, cases []extAuthCase) {
+	t.Helper()
 	for _, tc := range cases {
 		tc := tc
-		agw.Run(tc.name, func() {
+		t.Run(tc.name, func(t base.Test) {
 			opts := []curl.Option{}
 			for k, v := range tc.headers {
 				opts = append(opts, curl.WithHeader(k, v))
 			}
-			agw.Send(tc.target, &testmatchers.HttpResponse{
+			t.Send(tc.target, &testmatchers.HttpResponse{
 				StatusCode: tc.status,
 				Body:       gomega.ContainSubstring(tc.body),
 			}, opts...)

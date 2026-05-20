@@ -4,8 +4,9 @@ package base
 
 import (
 	"os"
-	"testing"
 	"time"
+
+	"istio.io/istio/pkg/test"
 )
 
 const traceEnv = "AGW_E2E_TRACE"
@@ -19,19 +20,19 @@ func traceEnabled() bool {
 	}
 }
 
-func tracef(t *testing.T, format string, args ...any) {
+func tracef(t test.Failer, format string, args ...any) {
 	t.Helper()
 	if traceEnabled() {
 		t.Logf(format, args...)
 	}
 }
 
-func TraceStep(t *testing.T, format string, args ...any) func() {
+func TraceStep(t test.Failer, format string, args ...any) func() {
 	t.Helper()
 	return traceStep(t, format, args...)
 }
 
-func traceStep(t *testing.T, format string, args ...any) func() {
+func traceStep(t test.Failer, format string, args ...any) func() {
 	t.Helper()
 	if !traceEnabled() {
 		return func() {}

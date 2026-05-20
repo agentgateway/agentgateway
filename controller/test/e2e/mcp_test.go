@@ -9,62 +9,65 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
 
-func TestMCP(t *testing.T) {
-	agw := New(t)
+func TestMCP(tt *testing.T) {
+	t := New(tt)
 
-	agw.Run("Authn", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(authnSetup)
+	t.Run("Authn", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(authnSetup...)
 		s.TestMCPAuthn()
 	})
-	agw.Run("AuthnRoute", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(authnRouteSetup)
+	t.Run("AuthnRoute", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(authnRouteSetup...)
 		s.TestMCPAuthnRoute()
 	})
-	agw.Run("Workflow", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(staticSetup)
+	t.Run("Workflow", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(staticSetup...)
 		s.TestMCPWorkflow()
 	})
-	agw.Run("SSEEndpoint", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(staticSetup)
+	t.Run("SSEEndpoint", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(staticSetup...)
 		s.TestSSEEndpoint()
 	})
-	agw.Run("DynamicAdminRouting", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(dynamicSetup)
+	t.Run("DynamicAdminRouting", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(dynamicSetup...)
 		s.TestDynamicMCPAdminRouting()
 	})
-	agw.Run("DynamicUserRouting", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(dynamicSetup)
+	t.Run("DynamicUserRouting", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(dynamicSetup...)
 		s.TestDynamicMCPUserRouting()
 	})
-	agw.Run("DynamicDefaultRouting", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(dynamicSetup)
+	t.Run("DynamicDefaultRouting", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(dynamicSetup...)
 		s.TestDynamicMCPDefaultRouting()
 	})
-	agw.Run("DynamicAdminVsUserTools", func() {
-		s := &mcpSuite{BaseTestingSuite: agw}
-		s.ApplyConfig(dynamicSetup)
+	t.Run("DynamicAdminVsUserTools", func(t base.Test) {
+		s := &mcpSuite{Test: t}
+		s.Apply(dynamicSetup...)
 		s.TestDynamicMCPAdminVsUserTools()
 	})
 }
 
 func (s *mcpSuite) TestMCPAuthn() {
 	// Single test that does the full workflow with session management
-	s.T().Log("Testing complete MCP workflow with session management")
+	s.Log("Testing complete MCP workflow with session management")
 
 	// Ensure static components are ready
 	s.waitStaticReady()
@@ -72,8 +75,8 @@ func (s *mcpSuite) TestMCPAuthn() {
 	s.waitAuth0Ready()
 
 	// Wait for the authentication policy to be accepted before testing
-	s.T().Log("Waiting for authentication policy to be accepted")
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(
+	s.Log("Waiting for authentication policy to be accepted")
+	s.TestInstallation.AssertionsT(s).EventuallyAgwPolicyCondition(
 		s.Ctx,
 		"auth0-mcp-authn-policy",
 		"default",
@@ -85,39 +88,41 @@ func (s *mcpSuite) TestMCPAuthn() {
 
 	// Verify authentication is actually enforced (not just policy accepted)
 	// by waiting for an unauthenticated request to return 401
-	s.T().Log("Verifying authentication is enforced")
+	s.Log("Verifying authentication is enforced")
 	s.waitForAuthnEnforced()
 
 	// Test 1: Initialize without token should fail
-	s.T().Log("Test 1: Initialize without Authorization header should return 401")
+	s.Log("Test 1: Initialize without Authorization header should return 401")
 	s.testInitializeWithExpectedStatus(nil, 401, "missing token")
 
 	// Test 2: Initialize with invalid token should fail
-	s.T().Log("Test 2: Initialize with invalid token should return 401")
+	s.Log("Test 2: Initialize with invalid token should return 401")
 	invalidAuthnHeader := map[string]string{"Authorization": "Bearer " + "fake"}
 	s.testInitializeWithExpectedStatus(invalidAuthnHeader, 401, "invalid token")
 
 	// Test 3: Initialize with valid token should succeed
-	s.T().Log("Test 3: Initialize with valid token should succeed")
+	s.Log("Test 3: Initialize with valid token should succeed")
 	sessionID := s.initializeAndGetSessionID(validAuthnHeader)
-	s.Require().NotEmpty(sessionID, "Failed to get session ID from initialize")
+	if sessionID == "" {
+		s.Fatal("Failed to get session ID from initialize")
+	}
 
 	// Test 4: tools/list with valid token should succeed
-	s.T().Log("Test 4: tools/list with valid token should succeed")
+	s.Log("Test 4: tools/list with valid token should succeed")
 	s.testToolsListWithSession(sessionID, validAuthnHeader)
 
 	// Test 5: tools/list with invalid token should fail
-	s.T().Log("Test 5: tools/list with invalid token should fail")
+	s.Log("Test 5: tools/list with invalid token should fail")
 	s.testUnauthorizedToolsListWithSession(sessionID, invalidAuthnHeader, 401)
 
 	// Test 6: tools/list with missing token should fail
-	s.T().Log("Test 6: tools/list with missing token should fail")
+	s.Log("Test 6: tools/list with missing token should fail")
 	s.testUnauthorizedToolsListWithSession(sessionID, nil, 401)
 }
 
 func (s *mcpSuite) TestMCPAuthnRoute() {
 	// Single test that does the full workflow with session management
-	s.T().Log("Testing complete MCP workflow with session management")
+	s.Log("Testing complete MCP workflow with session management")
 
 	// Ensure static components are ready
 	s.waitStaticReady()
@@ -125,8 +130,8 @@ func (s *mcpSuite) TestMCPAuthnRoute() {
 	s.waitAuth0Ready()
 
 	// Wait for the authentication policy to be accepted before testing
-	s.T().Log("Waiting for authentication policy to be accepted")
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(
+	s.Log("Waiting for authentication policy to be accepted")
+	s.TestInstallation.AssertionsT(s).EventuallyAgwPolicyCondition(
 		s.Ctx,
 		"auth0-mcp-authn-policy",
 		"default",
@@ -138,46 +143,50 @@ func (s *mcpSuite) TestMCPAuthnRoute() {
 
 	// Verify authentication is actually enforced (not just policy accepted)
 	// by waiting for an unauthenticated request to return 401
-	s.T().Log("Verifying authentication is enforced")
+	s.Log("Verifying authentication is enforced")
 	s.waitForAuthnEnforced()
 
 	// Test 1: Initialize without token should fail
-	s.T().Log("Test 1: Initialize without Authorization header should return 401")
+	s.Log("Test 1: Initialize without Authorization header should return 401")
 	s.testInitializeWithExpectedStatus(nil, 401, "missing token")
 
 	// Test 2: Initialize with invalid token should fail
-	s.T().Log("Test 2: Initialize with invalid token should return 401")
+	s.Log("Test 2: Initialize with invalid token should return 401")
 	invalidAuthnHeader := map[string]string{"Authorization": "Bearer " + "fake"}
 	s.testInitializeWithExpectedStatus(invalidAuthnHeader, 401, "invalid token")
 
 	// Test 3: Initialize with valid token should succeed
-	s.T().Log("Test 3: Initialize with valid token should succeed")
+	s.Log("Test 3: Initialize with valid token should succeed")
 	sessionID := s.initializeAndGetSessionID(validAuthnHeader)
-	s.Require().NotEmpty(sessionID, "Failed to get session ID from initialize")
+	if sessionID == "" {
+		s.Fatal("Failed to get session ID from initialize")
+	}
 
 	// Test 4: tools/list with valid token should succeed
-	s.T().Log("Test 4: tools/list with valid token should succeed")
+	s.Log("Test 4: tools/list with valid token should succeed")
 	s.testToolsListWithSession(sessionID, validAuthnHeader)
 
 	// Test 5: tools/list with invalid token should fail
-	s.T().Log("Test 5: tools/list with invalid token should fail")
+	s.Log("Test 5: tools/list with invalid token should fail")
 	s.testUnauthorizedToolsListWithSession(sessionID, invalidAuthnHeader, 401)
 
 	// Test 6: tools/list with missing token should fail
-	s.T().Log("Test 6: tools/list with missing token should fail")
+	s.Log("Test 6: tools/list with missing token should fail")
 	s.testUnauthorizedToolsListWithSession(sessionID, nil, 401)
 }
 
 func (s *mcpSuite) TestMCPWorkflow() {
 	// Single test that does the full workflow with session management
-	s.T().Log("Testing complete MCP workflow with session management")
+	s.Log("Testing complete MCP workflow with session management")
 
 	// Ensure static components are ready
 	s.waitStaticReady()
 
 	// Step 1: Initialize and get session ID
 	sessionID := s.initializeAndGetSessionID(nil)
-	s.Require().NotEmpty(sessionID, "Failed to get session ID from initialize")
+	if sessionID == "" {
+		s.Fatal("Failed to get session ID from initialize")
+	}
 
 	// Step 2: Test tools/list with session ID
 	s.testToolsListWithSession(sessionID, nil)
@@ -202,32 +211,34 @@ func (s *mcpSuite) TestSSEEndpoint() {
 
 func (s *mcpSuite) TestDynamicMCPAdminRouting() {
 	s.waitDynamicReady()
-	s.T().Log("Testing dynamic MCP routing for admin user")
+	s.Log("Testing dynamic MCP routing for admin user")
 	adminTools := s.runDynamicRoutingCase("admin-client", map[string]string{"user-type": "admin"}, "admin")
 	// Admin will have more than two tools
-	s.Require().GreaterOrEqual(len(adminTools), 2, "admin should expose than two tools")
-	s.T().Logf("admin tools: %s", strings.Join(adminTools, ", "))
-	s.T().Log("Admin routing working correctly")
+	if len(adminTools) < 2 {
+		s.Fatalf("admin should expose at least two tools, got %d", len(adminTools))
+	}
+	s.Logf("admin tools: %s", strings.Join(adminTools, ", "))
+	s.Log("Admin routing working correctly")
 }
 
 func (s *mcpSuite) TestDynamicMCPUserRouting() {
 	s.waitDynamicReady()
-	s.T().Log("Testing dynamic MCP routing for regular user")
+	s.Log("Testing dynamic MCP routing for regular user")
 	userTools := s.runDynamicRoutingCase("user-client", map[string]string{"user-type": "user"}, "user")
 	// user should expose only one tool
-	s.Require().Equal(len(userTools), 1, "user should expose exactly one tool")
-	s.T().Logf("user tools: %s", strings.Join(userTools, ", "))
-	s.T().Log("User routing working correctly")
+	assert.Equal(s, len(userTools), 1, "user should expose exactly one tool")
+	s.Logf("user tools: %s", strings.Join(userTools, ", "))
+	s.Log("User routing working correctly")
 }
 
 func (s *mcpSuite) TestDynamicMCPDefaultRouting() {
 	s.waitDynamicReady()
-	s.T().Log("Testing dynamic MCP routing with no header (default to user)")
+	s.Log("Testing dynamic MCP routing with no header (default to user)")
 	defTools := s.runDynamicRoutingCase("default-client", map[string]string{}, "default")
 	// default uses user backend and should expose only one tool available
-	s.Require().Equal(len(defTools), 1, "default/user should expose exactly one tool")
-	s.T().Logf("default tools: %s", strings.Join(defTools, ", "))
-	s.T().Log("Default routing working correctly")
+	assert.Equal(s, len(defTools), 1, "default/user should expose exactly one tool")
+	s.Logf("default tools: %s", strings.Join(defTools, ", "))
+	s.Log("Default routing working correctly")
 }
 
 // TestDynamicMCPAdminVsUserTools initializes two sessions (admin and user) against the same
@@ -235,7 +246,7 @@ func (s *mcpSuite) TestDynamicMCPDefaultRouting() {
 // header-based routing is sending traffic to distinct backends.
 func (s *mcpSuite) TestDynamicMCPAdminVsUserTools() {
 	s.waitDynamicReady()
-	s.T().Log("Comparing admin vs user tool sets on dynamic MCP route")
+	s.Log("Comparing admin vs user tool sets on dynamic MCP route")
 
 	// Execute admin and user cases via shared helper
 	adminTools := s.runDynamicRoutingCase("compare-client", map[string]string{"user-type": "admin"}, "admin (compare)")
@@ -256,12 +267,12 @@ func (s *mcpSuite) TestDynamicMCPAdminVsUserTools() {
 		}
 	}
 	if same {
-		s.T().Logf("admin tools (%d found): %s", len(adminTools), strings.Join(adminTools, ", "))
-		s.T().Logf("user tools (%d found): %s", len(userTools), strings.Join(userTools, ", "))
-		s.Require().Fail("admin and user tool sets are identical; backend config should provide different tool sets")
+		s.Logf("admin tools (%d found): %s", len(adminTools), strings.Join(adminTools, ", "))
+		s.Logf("user tools (%d found): %s", len(userTools), strings.Join(userTools, ", "))
+		s.Fatal("admin and user tool sets are identical; backend config should provide different tool sets")
 	} else {
-		s.T().Logf("admin tools (%d found): %s", len(adminTools), strings.Join(adminTools, ", "))
-		s.T().Logf("user tools (%d found): %s", len(userTools), strings.Join(userTools, ", "))
+		s.Logf("admin tools (%d found): %s", len(adminTools), strings.Join(adminTools, ", "))
+		s.Logf("user tools (%d found): %s", len(userTools), strings.Join(userTools, ", "))
 	}
 }
 
@@ -277,59 +288,89 @@ func (s *mcpSuite) runDynamicRoutingCase(clientName string, routeHeaders map[str
 	// Get full response for logging + session extraction
 	// nolint: bodyclose // false positive
 	resp, body, err := s.execCurlMCP(headers, initBody)
-	s.Require().NoError(err, "%s initialize failed", label)
-	s.T().Logf("%s initialize body: %s", label, body)
+	if err != nil {
+		s.Fatalf("%s initialize failed: %v", label, err)
+	}
+	s.Logf("%s initialize body: %s", label, body)
 
 	sid := ExtractMCPSessionID(resp)
-	s.Require().NotEmpty(sid, "%s initialize must return mcp-session-id header", label)
+	if sid == "" {
+		s.Fatalf("%s initialize must return mcp-session-id header", label)
+	}
 	s.notifyInitializedWithHeaders(sid, routeHeaders)
 
 	payload, ok := FirstSSEDataPayload(body)
-	s.Require().True(ok, "%s initialize must return SSE payload", label)
+	if !ok {
+		s.Fatalf("%s initialize must return SSE payload", label)
+	}
 
 	var initResp InitializeResponse
-	s.Require().NoError(json.Unmarshal([]byte(payload), &initResp), "%s initialize payload must be JSON", label)
-	s.Require().Nil(initResp.Error, "%s initialize returned error: %+v", label, initResp.Error)
-	s.Require().NotNil(initResp.Result, "%s initialize missing result", label)
+	if err := json.Unmarshal([]byte(payload), &initResp); err != nil {
+		s.Fatalf("%s initialize payload must be JSON: %v", label, err)
+	}
+	if initResp.Error != nil {
+		s.Fatalf("%s initialize returned error: %+v", label, initResp.Error)
+	}
+	if initResp.Result == nil {
+		s.Fatalf("%s initialize missing result", label)
+	}
 
 	// Update the global protocol version from the server response
 	updateProtocolVersion(payload)
 
 	// Now validate that the protocol version matches what we sent
-	s.Require().Equal(mcpProto, initResp.Result.ProtocolVersion, "protocolVersion mismatch")
-	s.Require().NotEmpty(initResp.Result.ServerInfo.Name, "serverInfo.name must be set")
+	assert.Equal(s, mcpProto, initResp.Result.ProtocolVersion, "protocolVersion mismatch")
+	if initResp.Result.ServerInfo.Name == "" {
+		s.Fatal("serverInfo.name must be set")
+	}
 
 	tools := s.mustListTools(sid, label+" tools/list", routeHeaders)
 	return tools
 }
 
 func (s *mcpSuite) waitDynamicReady() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
+	s.TestInstallation.AssertionsT(s).EventuallyPodsRunning(
 		s.Ctx, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
+<<<<<<< HEAD
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAllAccepted(s.Ctx, []client.Object{
 		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "admin-mcp-backend", Namespace: "default"}},
 		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "user-mcp-backend", Namespace: "default"}},
 		&gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "dynamic-mcp-route", Namespace: "default"}},
 	})
+=======
+	s.TestInstallation.AssertionsT(s).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s).EventuallyAgwBackendCondition(s.Ctx, "admin-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s).EventuallyAgwBackendCondition(s.Ctx, "user-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s).EventuallyHTTPRouteCondition(
+		s.Ctx, "dynamic-mcp-route", "default",
+		gwv1.RouteConditionAccepted, metav1.ConditionTrue,
+	)
+>>>>>>> 29c781ee8 (More cleanup)
 }
 
 func (s *mcpSuite) waitStaticReady() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
+	s.TestInstallation.AssertionsT(s).EventuallyPodsRunning(
 		s.Ctx, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
+<<<<<<< HEAD
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyAllAccepted(s.Ctx, []client.Object{
 		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "mcp-backend", Namespace: "default"}},
 		&gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "mcp-route", Namespace: "default"}},
 	})
+=======
+	s.TestInstallation.AssertionsT(s).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s).EventuallyAgwBackendCondition(s.Ctx, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s).EventuallyHTTPRouteCondition(s.Ctx, "mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+>>>>>>> 29c781ee8 (More cleanup)
 }
 
 func (s *mcpSuite) waitAuth0Ready() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
+	s.TestInstallation.AssertionsT(s).EventuallyPodsRunning(
 		s.Ctx, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)

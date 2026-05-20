@@ -3,11 +3,10 @@
 package assertions
 
 import (
-	"testing"
-
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/test"
 
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/install"
@@ -16,7 +15,7 @@ import (
 // Provider is the entity that provides methods which assert behaviors of a Kubernetes Cluster
 // These assertions occur against a running instance of agentgateway, within a Kubernetes Cluster.
 type Provider struct {
-	t *testing.T
+	t test.Failer
 
 	Assert  *assert.Assertions
 	Require *require.Assertions
@@ -33,13 +32,13 @@ type Provider struct {
 
 // NewProvider returns a Provider that will provide Assertions that can be executed against an
 // installation of agentgateway
-func NewProvider(t *testing.T) *Provider {
+func NewProvider(t test.Failer) *Provider {
 	gomega.RegisterTestingT(t)
 	return &Provider{
-		t:       t,
-		Assert:  assert.New(t),
-		Require: require.New(t),
-		Gomega:  gomega.NewWithT(t),
+		t: t,
+		//Assert:  assert.New(t),
+		//Require: require.New(t),
+		Gomega: gomega.NewWithT(t),
 
 		clusterContext: nil,
 		installContext: nil,

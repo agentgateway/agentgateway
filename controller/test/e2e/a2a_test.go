@@ -10,76 +10,99 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"istio.io/istio/pkg/test/util/assert"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
-func TestA2A(t *testing.T) {
-	agw := New(t)
-	agw.Apply(manifest("a2a", "common.yaml"))
+func TestA2A(tt *testing.T) {
+	t := New(tt)
+	t.Apply(manifest("a2a", "common.yaml"))
 
-	agw.Run("AgentCard", func() {
-		testA2AAgentCard(agw)
+	t.Run("AgentCard", func(t base.Test) {
+		testA2AAgentCard(t)
 	})
-	agw.Run("MessageSend", func() {
-		testA2AMessageSend(agw)
+	t.Run("MessageSend", func(t base.Test) {
+		testA2AMessageSend(t)
 	})
-	agw.Run("HelloWorld", func() {
-		testA2AHelloWorld(agw)
+	t.Run("HelloWorld", func(t base.Test) {
+		testA2AHelloWorld(t)
 	})
 }
 
-func testA2AAgentCard(agw *base.BaseTestingSuite) {
-	out, err := execCurlA2A(agw, "/agent-card", a2aHeaders(), "")
-	agw.Require().NoError(err, "agent card curl failed")
+func testA2AAgentCard(t base.Test) {
+	out, err := execCurlA2A(t, "/agent-card", a2aHeaders(), "")
+	assert.NoError(t, err)
 
 	var card a2aAgentCard
-	agw.Require().NoError(json.Unmarshal([]byte(strings.TrimSpace(out)), &card), "failed to parse agent card")
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &card))
 
-	agw.Require().Equal("Example A2A Agent", card.Name)
-	agw.Require().Equal("1.0.0", card.Version)
-	agw.Require().Equal("An example A2A agent using the a2a-protocol crate", card.Description)
-	agw.Require().GreaterOrEqual(len(card.Skills), 1, "expected at least one skill")
+	assert.Equal(t, "Example A2A Agent", card.Name)
+	assert.Equal(t, "1.0.0", card.Version)
+	assert.Equal(t, "An example A2A agent using the a2a-protocol crate", card.Description)
+	if len(card.Skills) < 1 {
+		t.Fatal("expected at least one skill")
+	}
 }
 
-func testA2AMessageSend(agw *base.BaseTestingSuite) {
+func testA2AMessageSend(t base.Test) {
 	request := buildMessageSendRequest("hello", "test-123")
-	out, err := execCurlA2A(agw, "/", a2aHeaders(), request)
-	agw.Require().NoError(err, "tasks/send curl failed")
+	out, err := execCurlA2A(t, "/", a2aHeaders(), request)
+	assert.NoError(t, err)
 
 	var resp a2aTaskResponse
-	agw.Require().NoError(json.Unmarshal([]byte(strings.TrimSpace(out)), &resp), "failed to parse response")
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &resp))
 
-	agw.Require().Nil(resp.Error, "unexpected error in response")
-	agw.Require().NotNil(resp.Result, "missing result")
-	agw.Require().Equal("task", resp.Result.Kind)
-	agw.Require().Equal("working", resp.Result.Status.State)
-	agw.Require().GreaterOrEqual(len(resp.Result.History), 1)
+	if resp.Error != nil {
+		t.Fatalf("unexpected error in response: %+v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("missing result")
+	}
+	assert.Equal(t, "task", resp.Result.Kind)
+	assert.Equal(t, "working", resp.Result.Status.State)
+	if len(resp.Result.History) < 1 {
+		t.Fatal("expected at least one history item")
+	}
 
 	agentMessage := findAgentMessage(resp.Result.History)
-	agw.Require().NotNil(agentMessage, "expected agent response in history")
-	agw.Require().GreaterOrEqual(len(agentMessage.Parts), 1)
+	if agentMessage == nil {
+		t.Fatal("expected agent response in history")
+	}
+	if len(agentMessage.Parts) < 1 {
+		t.Fatal("expected at least one agent message part")
+	}
 }
 
-func testA2AHelloWorld(agw *base.BaseTestingSuite) {
+func testA2AHelloWorld(t base.Test) {
 	request := buildMessageSendRequest("hello world", "test-hello")
-	out, err := execCurlA2A(agw, "/", a2aHeaders(), request)
-	agw.Require().NoError(err, "hello world curl failed")
+	out, err := execCurlA2A(t, "/", a2aHeaders(), request)
+	assert.NoError(t, err)
 
 	var resp a2aTaskResponse
-	agw.Require().NoError(json.Unmarshal([]byte(strings.TrimSpace(out)), &resp), "failed to parse response")
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &resp))
 
-	agw.Require().Nil(resp.Error)
-	agw.Require().NotNil(resp.Result)
-	agw.Require().Equal("task", resp.Result.Kind)
-	agw.Require().Equal("working", resp.Result.Status.State)
+	if resp.Error != nil {
+		t.Fatalf("unexpected error in response: %+v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("missing result")
+	}
+	assert.Equal(t, "task", resp.Result.Kind)
+	assert.Equal(t, "working", resp.Result.Status.State)
 
 	agentMessage := findAgentMessage(resp.Result.History)
-	agw.Require().NotNil(agentMessage, "expected agent response in history")
-	agw.Require().GreaterOrEqual(len(agentMessage.Parts), 1)
-	agw.Require().Contains(agentMessage.Parts[0].Text, "Echo", "expected Echo in response")
+	if agentMessage == nil {
+		t.Fatal("expected agent response in history")
+	}
+	if len(agentMessage.Parts) < 1 {
+		t.Fatal("expected at least one agent message part")
+	}
+	if !strings.Contains(agentMessage.Parts[0].Text, "Echo") {
+		t.Fatalf("expected Echo in response, got %q", agentMessage.Parts[0].Text)
+	}
 }
 
 type a2aMessage struct {
@@ -170,7 +193,7 @@ func a2aHeaders() map[string]string {
 	}
 }
 
-func execCurlA2A(t *base.BaseTestingSuite, path string, headers map[string]string, body string) (string, error) {
+func execCurlA2A(t base.Test, path string, headers map[string]string, body string) (string, error) {
 	curlOpts := []curl.Option{
 		curl.WithPath(path),
 	}
@@ -181,14 +204,14 @@ func execCurlA2A(t *base.BaseTestingSuite, path string, headers map[string]strin
 		curlOpts = append(curlOpts, curl.WithBody(body))
 	}
 
-	resp := base.BaseGateway.SendWithResponse(t.T(), &matchers.HttpResponse{
+	resp := base.BaseGateway.SendWithResponse(t, &matchers.HttpResponse{
 		StatusCode: 200,
 	}, curlOpts...)
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.T().Logf("read body error: %v", err)
+		t.Logf("read body error: %v", err)
 		return "", err
 	}
 	return string(bodyBytes), nil

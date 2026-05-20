@@ -8,6 +8,7 @@ import (
 
 	"istio.io/istio/pkg/config/crd"
 	"istio.io/istio/pkg/lazy"
+	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
@@ -26,7 +27,7 @@ func NewAgentgatewayValidator(t *testing.T) *crd.Validator {
 	return v
 }
 
-func NewAgentgatewayValidatorSkipMissing(t *testing.T) *crd.Validator {
+func NewAgentgatewayValidatorSkipMissing(t test.Failer) *crd.Validator {
 	v, err := validatorSkipMissing.Get()
 	assert.NoError(t, err)
 	return v
