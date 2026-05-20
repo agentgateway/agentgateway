@@ -11,10 +11,8 @@ import (
 	"github.com/onsi/gomega"
 	"istio.io/istio/pkg/test/util/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
@@ -323,13 +321,10 @@ func waitDynamicReady(t base.Test) {
 	assertions.EventuallyPodsRunning(t, "default",
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAllAccepted(s.Ctx, []client.Object{
-		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "admin-mcp-backend", Namespace: "default"}},
-		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "user-mcp-backend", Namespace: "default"}},
-		&gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "dynamic-mcp-route", Namespace: "default"}},
-	})
-
+	assertions.EventuallyGatewayCondition(t, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	assertions.EventuallyAgwBackendCondition(t, "admin-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyAgwBackendCondition(t, "user-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(t, "dynamic-mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 }
 
 func waitStaticReady(t base.Test) {
