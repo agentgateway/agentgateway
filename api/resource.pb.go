@@ -12059,7 +12059,8 @@ type BackendPolicySpec_ExtMcp_Remote struct {
 	Target      *BackendReference                    `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	FailureMode BackendPolicySpec_ExtMcp_FailureMode `protobuf:"varint,2,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_FailureMode" json:"failure_mode,omitempty"`
 	// Static or CEL-evaluated context, surfaced to the policy server as
-	// the wire `Metadata.filter_metadata` map. Keyed by metadata namespace.
+	// fields of the `metadata_context` google.protobuf.Struct, keyed by
+	// config key.
 	Metadata      map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
