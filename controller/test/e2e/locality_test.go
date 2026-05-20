@@ -23,84 +23,68 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
-type localitySuite struct {
-	base.Test
-
-	workloadEntries []weSpec
-}
-
-func newLocalitySuite(t *testing.T) *localitySuite {
-	s := &localitySuite{Test: New(t)}
-	s.Apply(localitySetup...)
-	return s
-}
-
 func TestLocality(tt *testing.T) {
-	s := newLocalitySuite(tt)
-	s.Run("PreferSameZone", func(t base.Test) {
-		s.SetupTest()
-		s.testPreferSameZone()
+	t := New(tt)
+	t.Apply(localitySetup...)
+	workloadEntries := setupLocality(t)
+
+	t.Run("PreferSameZone", func(t base.Test) {
+		setupLocalityTest(t, workloadEntries)
+		testPreferSameZone(t, workloadEntries)
 	})
-	s.Run("InternalTrafficPolicyLocal", func(t base.Test) {
-		s.SetupTest()
-		s.testInternalTrafficPolicyLocal()
+	t.Run("InternalTrafficPolicyLocal", func(t base.Test) {
+		setupLocalityTest(t, workloadEntries)
+		testInternalTrafficPolicyLocal(t)
 	})
 }
 
-func (s *localitySuite) SetupSuite() {
-	s.Test.SetupSuite()
-
-	// we deploy pods via the yamls, and then we need to copy their IPs onto WorkloadEntries
-	// we do this because WorkloadEntry is easier to override locality on, without messing with node info
-	zoneAIP := s.waitPodIP("app=" + backendZoneA)
-	zoneBIP := s.waitPodIP("app=" + backendZoneB)
-	regionBIP := s.waitPodIP("app=" + backendRegionB)
-	s.workloadEntries = []weSpec{
-		{"we-zone-a", zoneAIP, sameRegion + "/" + sameZone},
-		{"we-zone-b", zoneBIP, sameRegion + "/" + otherZone},
-		{"we-region-b", regionBIP, otherRegion + "/" + sameZone},
+func setupLocality(t base.Test) []weSpec {
+	// We deploy pods via YAML, then copy their IPs onto WorkloadEntries. WorkloadEntry
+	// is easier to assign locality to without changing node labels.
+	workloadEntries := []weSpec{
+		{"we-zone-a", waitPodIP(t, "app="+backendZoneA), sameRegion + "/" + sameZone},
+		{"we-zone-b", waitPodIP(t, "app="+backendZoneB), sameRegion + "/" + otherZone},
+		{"we-region-b", waitPodIP(t, "app="+backendRegionB), otherRegion + "/" + sameZone},
 	}
-	s.resetWorkloadEntries()
+	resetWorkloadEntries(t, workloadEntries)
 
-	s.TestInstallation.AssertionsT(s).EventuallyGatewayCondition(
-		s.Ctx, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue,
+	t.TestInstallation.AssertionsT(t).EventuallyGatewayCondition(
+		t.Ctx, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s).EventuallyHTTPRouteCondition(
-		s.Ctx, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue,
+	t.TestInstallation.AssertionsT(t).EventuallyHTTPRouteCondition(
+		t.Ctx, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue,
 	)
+
+	t.Cleanup(func() {
+		_ = t.TestInstallation.ClusterContext.Cli.RunCommand(
+			t.Ctx, "-n", localityNamespace, "delete", "workloadentry", "--all", "--ignore-not-found=true",
+		)
+	})
+	return workloadEntries
 }
 
-func (s *localitySuite) SetupTest() {
-	s.resetWorkloadEntries()
-	s.resetService()
+func setupLocalityTest(t base.Test, workloadEntries []weSpec) {
+	resetWorkloadEntries(t, workloadEntries)
+	resetService(t)
 }
 
-func (s *localitySuite) TearDownSuite() {
-	_ = s.TestInstallation.ClusterContext.Cli.RunCommand(
-		s.Ctx, "-n", localityNamespace, "delete", "workloadentry", "--all", "--ignore-not-found=true",
-	)
-	s.Test.TearDownSuite()
-}
+func testPreferSameZone(t base.Test, workloadEntries []weSpec) {
+	setTrafficDistribution(t, "PreferSameZone")
 
-func (s *localitySuite) testPreferSameZone() {
-	s.setTrafficDistribution("PreferSameZone")
-
-	s.assertTrafficGoesTo(backendZoneA)
-	s.deleteWorkloadEntry("we-zone-a")
-	s.assertTrafficGoesTo(backendZoneB)
-	s.deleteWorkloadEntry("we-zone-b")
-	s.assertTrafficGoesTo(backendRegionB)
+	assertTrafficGoesTo(t, backendZoneA)
+	deleteWorkloadEntry(t, workloadEntries[0].name)
+	assertTrafficGoesTo(t, backendZoneB)
+	deleteWorkloadEntry(t, workloadEntries[1].name)
+	assertTrafficGoesTo(t, backendRegionB)
 }
 
 // TestInternalTrafficPolicyLocal verifies the policy is honored: WorkloadEntries
 // have no node association, so with InternalTrafficPolicy: Local nothing is
 // eligible and every request should 503.
-func (s *localitySuite) testInternalTrafficPolicyLocal() {
-	s.setInternalTrafficPolicy(corev1.ServiceInternalTrafficPolicyLocal)
-	s.assertServiceUnavailable()
+func testInternalTrafficPolicyLocal(t base.Test) {
+	setInternalTrafficPolicy(t, corev1.ServiceInternalTrafficPolicyLocal)
+	assertServiceUnavailable(t)
 }
-
-// ---------- helpers ----------
 
 type weSpec struct {
 	name     string
@@ -108,52 +92,50 @@ type weSpec struct {
 	locality string
 }
 
-func (s *localitySuite) resetWorkloadEntries() {
-	s.applyWorkloadEntries(s.workloadEntries)
+func resetWorkloadEntries(t base.Test, entries []weSpec) {
+	applyWorkloadEntries(t, entries)
 }
 
-func (s *localitySuite) resetService() {
-	s.updateService(func(svc *corev1.Service) {
+func resetService(t base.Test) {
+	updateService(t, func(svc *corev1.Service) {
 		svc.Spec.TrafficDistribution = nil
 		svc.Spec.InternalTrafficPolicy = nil
 	})
 }
 
-func (s *localitySuite) setTrafficDistribution(trafficDistribution string) {
-	s.updateService(func(svc *corev1.Service) {
+func setTrafficDistribution(t base.Test, trafficDistribution string) {
+	updateService(t, func(svc *corev1.Service) {
 		svc.Spec.TrafficDistribution = new(trafficDistribution)
 	})
 }
 
-func (s *localitySuite) setInternalTrafficPolicy(policy corev1.ServiceInternalTrafficPolicy) {
-	s.updateService(func(svc *corev1.Service) {
+func setInternalTrafficPolicy(t base.Test, policy corev1.ServiceInternalTrafficPolicy) {
+	updateService(t, func(svc *corev1.Service) {
 		svc.Spec.InternalTrafficPolicy = new(policy)
 	})
 }
 
-func (s *localitySuite) updateService(mutate func(*corev1.Service)) {
-	svcs := s.TestInstallation.ClusterContext.Clientset.CoreV1().Services(localityNamespace)
-	svc, err := svcs.Get(s.Ctx, localityServiceName, metav1.GetOptions{})
-	assert.NoError(s, err)
+func updateService(t base.Test, mutate func(*corev1.Service)) {
+	svcs := t.TestInstallation.ClusterContext.Clientset.CoreV1().Services(localityNamespace)
+	svc, err := svcs.Get(t.Ctx, localityServiceName, metav1.GetOptions{})
+	assert.NoError(t, err)
 	mutate(svc)
-	_, err = svcs.Update(s.Ctx, svc, metav1.UpdateOptions{})
-	assert.NoError(s, err)
+	_, err = svcs.Update(t.Ctx, svc, metav1.UpdateOptions{})
+	assert.NoError(t, err)
 }
 
-func (s *localitySuite) applyWorkloadEntries(entries []weSpec) {
-	err := s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", workloadEntriesYAML(entries))
-	assert.NoError(s, err)
+func applyWorkloadEntries(t base.Test, entries []weSpec) {
+	err := t.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", workloadEntriesYAML(entries))
+	assert.NoError(t, err)
 }
 
-func (s *localitySuite) deleteWorkloadEntry(name string) {
-	err := s.TestInstallation.ClusterContext.Cli.RunCommand(
-		s.Ctx, "-n", localityNamespace, "delete", "workloadentry", name, "--ignore-not-found=true",
+func deleteWorkloadEntry(t base.Test, name string) {
+	err := t.TestInstallation.ClusterContext.Cli.RunCommand(
+		t.Ctx, "-n", localityNamespace, "delete", "workloadentry", name, "--ignore-not-found=true",
 	)
-	assert.NoError(s, err)
+	assert.NoError(t, err)
 }
 
-// workloadEntriesYAML renders a set of WorkloadEntries, each labeled so the
-// Service's selector picks it up.
 func workloadEntriesYAML(entries []weSpec) string {
 	var b strings.Builder
 	for i, e := range entries {
@@ -177,12 +159,12 @@ spec:
 	return b.String()
 }
 
-func (s *localitySuite) waitPodIP(labelSelector string) string {
+func waitPodIP(t base.Test, labelSelector string) string {
 	var ip string
-	s.TestInstallation.AssertionsT(s).Gomega.Eventually(func(g gomega.Gomega) {
-		pods, err := s.TestInstallation.ClusterContext.Clientset.
+	t.TestInstallation.AssertionsT(t).Gomega.Eventually(func(g gomega.Gomega) {
+		pods, err := t.TestInstallation.ClusterContext.Clientset.
 			CoreV1().Pods(localityNamespace).
-			List(s.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
+			List(t.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		g.Expect(pods.Items).To(gomega.HaveLen(1))
 		g.Expect(pods.Items[0].Status.PodIP).NotTo(gomega.BeEmpty())
@@ -191,10 +173,10 @@ func (s *localitySuite) waitPodIP(labelSelector string) string {
 	return ip
 }
 
-func (s *localitySuite) assertTrafficGoesTo(expectedBackends ...string) {
+func assertTrafficGoesTo(t base.Test, expectedBackends ...string) {
 	const requestsPerAttempt = 20
 
-	gw := s.gateway()
+	gw := localityGateway(t)
 	addr := gw.ResolvedAddress()
 	opts := append(base.GatewayAddressOptions(addr),
 		curl.WithHostHeader(localityHostname),
@@ -202,7 +184,7 @@ func (s *localitySuite) assertTrafficGoesTo(expectedBackends ...string) {
 	)
 
 	want := sets.New(expectedBackends...)
-	retry.UntilSuccessOrFail(s, func() error {
+	retry.UntilSuccessOrFail(t, func() error {
 		got := sets.New[string]()
 		for i := range requestsPerAttempt {
 			body, err := curlBody(opts...)
@@ -228,23 +210,23 @@ func (s *localitySuite) assertTrafficGoesTo(expectedBackends ...string) {
 	}, retry.Timeout(45*time.Second), retry.Delay(500*time.Millisecond))
 }
 
-func (s *localitySuite) assertServiceUnavailable() {
+func assertServiceUnavailable(t base.Test) {
 	const requestsPerAttempt = 20
 
-	gw := s.gateway()
+	gw := localityGateway(t)
 	addr := gw.ResolvedAddress()
 	opts := append(base.GatewayAddressOptions(addr),
 		curl.WithHostHeader(localityHostname),
 		curl.WithPath("/"),
 	)
 
-	retry.UntilSuccessOrFail(s, func() error {
+	retry.UntilSuccessOrFail(t, func() error {
 		for i := range requestsPerAttempt {
 			status, err := curlStatus(opts...)
 			if err != nil {
 				return fmt.Errorf("request %d: %w", i, err)
 			}
-			if status != 503 {
+			if status != http.StatusServiceUnavailable {
 				return fmt.Errorf("request %d: got status %d, want 503", i, status)
 			}
 		}
@@ -252,11 +234,11 @@ func (s *localitySuite) assertServiceUnavailable() {
 	}, retry.Timeout(45*time.Second), retry.Delay(500*time.Millisecond))
 }
 
-func (s *localitySuite) gateway() base.Gateway {
+func localityGateway(t base.Test) base.Gateway {
 	name := types.NamespacedName{Namespace: localityNamespace, Name: localityGatewayName}
 	return base.Gateway{
 		NamespacedName: name,
-		Address:        base.ResolveGatewayAddress(s.Ctx, s.TestInstallation, name),
+		Address:        base.ResolveGatewayAddress(t.Ctx, t.TestInstallation, name),
 	}
 }
 

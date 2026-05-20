@@ -2,15 +2,7 @@
 
 package e2e_test
 
-import (
-	"time"
-
-	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-)
-
-type mcpSuite struct {
-	base.Test
-}
+import "time"
 
 type ToolsListResponse struct {
 	JSONRPC string `json:"jsonrpc"`

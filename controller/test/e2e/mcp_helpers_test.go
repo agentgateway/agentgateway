@@ -86,22 +86,22 @@ func withRouteHeaders(headers map[string]string, extras map[string]string) map[s
 	return cp
 }
 
-func (s *mcpSuite) initializeAndGetSessionID(extraHeaders map[string]string) string {
+func initializeAndGetSessionID(t base.Test, extraHeaders map[string]string) string {
 	// Delegate to initializeSession, then warm the session to avoid races
 	initBody := buildInitializeRequest("test-client", 1)
 	headers := mcpHeaders(extraHeaders)
-	sid := s.initializeSession(initBody, headers, "workflow")
-	s.notifyInitialized(sid, extraHeaders)
+	sid := initializeSession(t, initBody, headers, "workflow")
+	notifyInitialized(t, sid, extraHeaders)
 	return sid
 }
 
 // nolint: unparam
-func (s *mcpSuite) testUnauthorizedToolsListWithSession(sessionID string, extraHeaders map[string]string, expectedStatus int) {
-	s.Log("Testing tools/list with session ID")
+func testUnauthorizedToolsListWithSession(t base.Test, sessionID string, extraHeaders map[string]string, expectedStatus int) {
+	t.Log("Testing tools/list with session ID")
 
 	mcpRequest := buildToolsListRequest(3)
 	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: expectedStatus}, headers, mcpRequest)
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: expectedStatus}, headers, mcpRequest)
 
 	if expectedStatus != httpOKCode {
 		return
@@ -109,101 +109,101 @@ func (s *mcpSuite) testUnauthorizedToolsListWithSession(sessionID string, extraH
 
 	// If session was replaced, some gateways emit a JSON error as SSE payload (HTTP 200).
 	// So parse SSE first, then decide.
-	_, body, err := s.execCurlMCP(headers, mcpRequest)
-	assert.NoError(s, err)
+	_, body, err := execCurlMCP(t, headers, mcpRequest)
+	assert.NoError(t, err)
 	payload, ok := FirstSSEDataPayload(body)
 	if !ok {
-		s.Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
-		s.notifyInitialized(sessionID, extraHeaders)
-		s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
-		_, body, err = s.execCurlMCP(headers, mcpRequest)
-		assert.NoError(s, err)
+		t.Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
+		notifyInitialized(t, sessionID, extraHeaders)
+		sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
+		_, body, err = execCurlMCP(t, headers, mcpRequest)
+		assert.NoError(t, err)
 		payload, ok = FirstSSEDataPayload(body)
 	}
 	if !ok {
-		s.Fatal("expected SSE data payload in tools/list (after retry)")
+		t.Fatal("expected SSE data payload in tools/list (after retry)")
 	}
 	if !IsJSONValid(payload) {
-		s.Fatalf("tools/list SSE payload is not valid JSON: %s", payload)
+		t.Fatalf("tools/list SSE payload is not valid JSON: %s", payload)
 	}
 
 	var toolsResp ToolsListResponse
 	_ = json.Unmarshal([]byte(payload), &toolsResp)
 	if toolsResp.Error != nil && strings.Contains(toolsResp.Error.Message, "Session not found") {
 		// Re-init and retry once
-		s.Log("Session expired; re-initializing and retrying tools/list")
-		newID := s.initializeAndGetSessionID(extraHeaders)
-		s.testToolsListWithSession(newID, extraHeaders)
+		t.Log("Session expired; re-initializing and retrying tools/list")
+		newID := initializeAndGetSessionID(t, extraHeaders)
+		testToolsListWithSession(t, newID, extraHeaders)
 		return
 	}
 }
 
-func (s *mcpSuite) testToolsListWithSession(sessionID string, extraHeaders map[string]string) {
-	s.Log("Testing tools/list with session ID")
+func testToolsListWithSession(t base.Test, sessionID string, extraHeaders map[string]string) {
+	t.Log("Testing tools/list with session ID")
 
 	mcpRequest := buildToolsListRequest(3)
 	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
 
-	_, body, err := s.execCurlMCP(headers, mcpRequest)
-	assert.NoError(s, err)
+	_, body, err := execCurlMCP(t, headers, mcpRequest)
+	assert.NoError(t, err)
 
 	// If session was replaced, some gateways emit a JSON error as SSE payload (HTTP 200).
 	// So parse SSE first, then decide.
 	payload, ok := FirstSSEDataPayload(body)
 	if !ok {
-		s.Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
-		s.notifyInitialized(sessionID, extraHeaders)
-		s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
-		_, body, err = s.execCurlMCP(headers, mcpRequest)
-		assert.NoError(s, err)
+		t.Log("No SSE payload from tools/list; sending notifications/initialized and retrying once")
+		notifyInitialized(t, sessionID, extraHeaders)
+		sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
+		_, body, err = execCurlMCP(t, headers, mcpRequest)
+		assert.NoError(t, err)
 		payload, ok = FirstSSEDataPayload(body)
 	}
 	if !ok {
-		s.Fatal("expected SSE data payload in tools/list (after retry)")
+		t.Fatal("expected SSE data payload in tools/list (after retry)")
 	}
 	if !IsJSONValid(payload) {
-		s.Fatalf("tools/list SSE payload is not valid JSON: %s", payload)
+		t.Fatalf("tools/list SSE payload is not valid JSON: %s", payload)
 	}
 
 	var toolsResp ToolsListResponse
 	_ = json.Unmarshal([]byte(payload), &toolsResp)
 	if toolsResp.Error != nil && strings.Contains(toolsResp.Error.Message, "Session not found") {
 		// Re-init and retry once
-		s.Log("Session expired; re-initializing and retrying tools/list")
-		newID := s.initializeAndGetSessionID(extraHeaders)
-		s.testToolsListWithSession(newID, extraHeaders)
+		t.Log("Session expired; re-initializing and retrying tools/list")
+		newID := initializeAndGetSessionID(t, extraHeaders)
+		testToolsListWithSession(t, newID, extraHeaders)
 		return
 	}
 
 	if toolsResp.Result == nil {
-		s.Fatal("tools/list missing result")
+		t.Fatal("tools/list missing result")
 	}
-	s.Logf("tools: %d", len(toolsResp.Result.Tools))
+	t.Logf("tools: %d", len(toolsResp.Result.Tools))
 	if len(toolsResp.Result.Tools) < 1 {
-		s.Fatal("expected at least one tool")
+		t.Fatal("expected at least one tool")
 	}
 }
 
 // notifyInitialized sends the "notifications/initialized" message once for a session.
-func (s *mcpSuite) notifyInitialized(sessionID string, extraHeaders map[string]string) {
+func notifyInitialized(t base.Test, sessionID string, extraHeaders map[string]string) {
 	mcpRequest := buildNotifyInitializedRequest()
 	headers := withSessionID(mcpHeaders(extraHeaders), sessionID)
 
-	resp, _, err := s.execCurlMCP(headers, mcpRequest)
+	resp, _, err := execCurlMCP(t, headers, mcpRequest)
 	if err == nil && resp != nil && resp.StatusCode == http.StatusUnauthorized {
-		s.Log("notifyInitialized hit 401; session likely already GC’d")
+		t.Log("notifyInitialized hit 401; session likely already GC’d")
 	}
 
 	// Allow the gateway to register the session before the first RPC.
 	time.Sleep(warmupTime)
 }
 
-func (s *mcpSuite) sendMCP(match *testmatchers.HttpResponse, headers map[string]string, body string) {
-	base.BaseGateway.Send(s, match, s.mcpCurlOptions(headers, body)...)
+func sendMCP(t base.Test, match *testmatchers.HttpResponse, headers map[string]string, body string) {
+	base.BaseGateway.Send(t, match, mcpCurlOptions(t, headers, body)...)
 }
 
-func (s *mcpSuite) mcpCurlOptions(headers map[string]string, body string) []curl.Option {
+func mcpCurlOptions(t base.Test, headers map[string]string, body string) []curl.Option {
 	opts := []curl.Option{
 		curl.WithPath("/mcp"),
 		curl.WithMethod(http.MethodPost),
@@ -218,7 +218,7 @@ func (s *mcpSuite) mcpCurlOptions(headers map[string]string, body string) []curl
 }
 
 // helper to run a request to a given path and return response and body text.
-func (s *mcpSuite) execCurl(path string, headers map[string]string, body string) (*http.Response, string, error) {
+func execCurl(t base.Test, path string, headers map[string]string, body string) (*http.Response, string, error) {
 	opts := append(base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
 		curl.WithPath(path),
 		curl.WithMethod(http.MethodPost),
@@ -242,13 +242,13 @@ func (s *mcpSuite) execCurl(path string, headers map[string]string, body string)
 	}
 
 	bodyText := string(bodyBytes)
-	s.Logf("mcp response status=%d content-type=%q body=%s", resp.StatusCode, resp.Header.Get("Content-Type"), bodyText)
+	t.Logf("mcp response status=%d content-type=%q body=%s", resp.StatusCode, resp.Header.Get("Content-Type"), bodyText)
 	return resp, bodyText, nil
 }
 
 // helper to run a POST to /mcp with optional headers and body
-func (s *mcpSuite) execCurlMCP(headers map[string]string, body string) (*http.Response, string, error) {
-	return s.execCurl("/mcp", headers, body)
+func execCurlMCP(t base.Test, headers map[string]string, body string) (*http.Response, string, error) {
+	return execCurl(t, "/mcp", headers, body)
 }
 
 func isTimeoutError(err error) bool {
@@ -319,51 +319,51 @@ func updateProtocolVersion(payload string) {
 // mustListTools issues tools/list with an existing session and returns tool names.
 // Pass routeHeaders (e.g., map[string]string{"user-type":"admin"}) so the gateway
 // picks the same backend as the initialize call.
-func (s *mcpSuite) mustListTools(sessionID, label string, routeHeaders map[string]string) []string {
+func mustListTools(t base.Test, sessionID, label string, routeHeaders map[string]string) []string {
 	mcpRequest := buildToolsListRequest(999)
 	headers := withRouteHeaders(withSessionID(mcpHeaders(nil), sessionID), routeHeaders)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
 
-	_, body, err := s.execCurlMCP(headers, mcpRequest)
+	_, body, err := execCurlMCP(t, headers, mcpRequest)
 	if err != nil {
-		s.Fatalf("%s request failed: %v", label, err)
+		t.Fatalf("%s request failed: %v", label, err)
 	}
 
 	payload, ok := FirstSSEDataPayload(body)
 	if !ok {
-		s.Fatalf("%s expected SSE data payload", label)
+		t.Fatalf("%s expected SSE data payload", label)
 	}
 
 	var toolsResp ToolsListResponse
 	if err := json.Unmarshal([]byte(payload), &toolsResp); err != nil {
-		s.Fatalf("%s unmarshal failed: %v\npayload: %s", label, err, payload)
+		t.Fatalf("%s unmarshal failed: %v\npayload: %s", label, err, payload)
 	}
 
 	if toolsResp.Error != nil {
 		// Common transient: session not warm yet; give it one nudge and retry once.
 		if strings.Contains(strings.ToLower(toolsResp.Error.Message), "session not found") ||
 			strings.Contains(strings.ToLower(toolsResp.Error.Message), "start sse client") {
-			s.notifyInitializedWithHeaders(sessionID, routeHeaders)
-			s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
-			_, body, err = s.execCurlMCP(headers, mcpRequest)
+			notifyInitializedWithHeaders(t, sessionID, routeHeaders)
+			sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, headers, mcpRequest)
+			_, body, err = execCurlMCP(t, headers, mcpRequest)
 			if err != nil {
-				s.Fatalf("%s retry request failed: %v", label, err)
+				t.Fatalf("%s retry request failed: %v", label, err)
 			}
 			payload, ok = FirstSSEDataPayload(body)
 			if !ok {
-				s.Fatalf("%s expected SSE data payload (retry)", label)
+				t.Fatalf("%s expected SSE data payload (retry)", label)
 			}
 			if err := json.Unmarshal([]byte(payload), &toolsResp); err != nil {
-				s.Fatalf("%s unmarshal failed (retry): %v", label, err)
+				t.Fatalf("%s unmarshal failed (retry): %v", label, err)
 			}
 		}
 	}
 	if toolsResp.Error != nil {
-		s.Fatalf("%s tools/list returned error: %d %s", label, toolsResp.Error.Code, toolsResp.Error.Message)
+		t.Fatalf("%s tools/list returned error: %d %s", label, toolsResp.Error.Code, toolsResp.Error.Message)
 	}
 
 	if toolsResp.Result == nil {
-		s.Fatalf("%s missing result", label)
+		t.Fatalf("%s missing result", label)
 	}
 	names := make([]string, 0, len(toolsResp.Result.Tools))
 	for _, tool := range toolsResp.Result.Tools {
@@ -372,18 +372,18 @@ func (s *mcpSuite) mustListTools(sessionID, label string, routeHeaders map[strin
 	return names
 }
 
-func (s *mcpSuite) notifyInitializedWithHeaders(sessionID string, routeHeaders map[string]string) {
+func notifyInitializedWithHeaders(t base.Test, sessionID string, routeHeaders map[string]string) {
 	mcpRequest := buildNotifyInitializedRequest()
 	headers := withRouteHeaders(withSessionID(mcpHeaders(nil), sessionID), routeHeaders)
-	_, _, _ = s.execCurlMCP(headers, mcpRequest)
+	_, _, _ = execCurlMCP(t, headers, mcpRequest)
 
 	// Allow the gateway to register the session before the first RPC.
 	time.Sleep(warmupTime)
 }
 
-func (s *mcpSuite) initializeSession(initBody string, hdr map[string]string, label string) string {
+func initializeSession(t base.Test, initBody string, hdr map[string]string, label string) string {
 	// One deterministic probe with retry to ensure the endpoint is ready
-	s.waitForMCP200(hdr, initBody, label)
+	waitForMCP200(t, hdr, initBody, label)
 
 	backoffs := []time.Duration{
 		100 * time.Millisecond,
@@ -392,10 +392,10 @@ func (s *mcpSuite) initializeSession(initBody string, hdr map[string]string, lab
 		1 * time.Second,
 	}
 	for attempt := 0; attempt <= len(backoffs); attempt++ {
-		s.sendMCP(&testmatchers.HttpResponse{StatusCode: httpOKCode}, hdr, initBody)
-		resp, body, err := s.execCurlMCP(hdr, initBody)
+		sendMCP(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, hdr, initBody)
+		resp, body, err := execCurlMCP(t, hdr, initBody)
 		if err != nil {
-			s.Fatalf("%s initialize failed: %v", label, err)
+			t.Fatalf("%s initialize failed: %v", label, err)
 		}
 
 		payload, ok := FirstSSEDataPayload(body)
@@ -407,50 +407,50 @@ func (s *mcpSuite) initializeSession(initBody string, hdr map[string]string, lab
 				updateProtocolVersion(payload)
 				sid := ExtractMCPSessionID(resp)
 				if sid == "" {
-					s.Fatalf("%s initialize must return mcp-session-id header", label)
+					t.Fatalf("%s initialize must return mcp-session-id header", label)
 				}
 				return sid
 			}
 			if initResp.Error != nil && !strings.Contains(strings.ToLower(initResp.Error.Message), "start sse client") {
-				s.Fatalf("%s initialize returned error: %v", label, initResp.Error)
+				t.Fatalf("%s initialize returned error: %v", label, initResp.Error)
 			}
 		}
 
 		if attempt < len(backoffs) {
 			time.Sleep(backoffs[attempt])
 		} else {
-			s.Fatalf("%s initialize returned no SSE payload", label)
+			t.Fatalf("%s initialize returned no SSE payload", label)
 		}
 	}
 	return "" // unreachable
 }
 
-func (s *mcpSuite) waitForMCP200(
+func waitForMCP200(t base.Test,
 	headers map[string]string,
 	body string,
 	label string,
 ) {
 	opts := append(
 		base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
-		s.mcpCurlOptions(headers, body)...,
+		mcpCurlOptions(t, headers, body)...,
 	)
-	base.BaseGateway.Send(s, &testmatchers.HttpResponse{StatusCode: httpOKCode}, opts...)
-	s.Logf("%s init ready (status=%d)", label, httpOKCode)
+	base.BaseGateway.Send(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, opts...)
+	t.Logf("%s init ready (status=%d)", label, httpOKCode)
 }
 
 // nolint: unparam
-func (s *mcpSuite) testInitializeWithExpectedStatus(headers map[string]string, expectedStatus int, _ string) {
+func testInitializeWithExpectedStatus(t base.Test, headers map[string]string, expectedStatus int, _ string) {
 	initBody := buildInitializeRequest("test-client", 1)
 	hdr := mcpHeaders(headers)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: expectedStatus}, hdr, initBody)
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: expectedStatus}, hdr, initBody)
 }
 
 // waitForAuthnEnforced waits for authentication to actually be enforced by making
 // unauthenticated requests until we get a 401 response. This ensures the authentication
 // policy is not just accepted, but configured in the dataplane.
-func (s *mcpSuite) waitForAuthnEnforced() {
+func waitForAuthnEnforced(t base.Test) {
 	initBody := buildInitializeRequest("authn-check", 0)
 	hdr := mcpHeaders(nil)
-	s.sendMCP(&testmatchers.HttpResponse{StatusCode: http.StatusUnauthorized}, hdr, initBody)
-	s.Log("waitForAuthnEnforced: authentication is enforced (got 401)")
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: http.StatusUnauthorized}, hdr, initBody)
+	t.Log("waitForAuthnEnforced: authentication is enforced (got 401)")
 }
