@@ -1493,6 +1493,7 @@ pub struct StoreUpdater {
 pub struct RoutesDump {
 	http_mesh: HashMap<NamespacedHostname, RouteSet>,
 	tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+	route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
 #[derive(serde::Serialize)]
@@ -1588,6 +1589,16 @@ impl StoreUpdater {
 					.iter()
 					.filter_map(|(target, routes)| match target {
 						RouteTarget::Service(service) => Some((service.clone(), routes.as_ref().clone())),
+						_ => None,
+					})
+					.collect(),
+				route_groups: store
+					.http_routes
+					.iter()
+					.filter_map(|(target, routes)| match target {
+						RouteTarget::RouteGroup(route_group) => {
+							Some((route_group.clone(), routes.as_ref().clone()))
+						},
 						_ => None,
 					})
 					.collect(),
