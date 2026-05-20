@@ -1859,6 +1859,12 @@
         },
         "jwtValidationOptions": {
           "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,

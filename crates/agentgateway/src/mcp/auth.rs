@@ -295,6 +295,21 @@ pub(super) async fn client_registration(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
+	if let Some(client_id) = &auth.client_id {
+		let body = serde_json::json!({
+			"client_id": client_id
+		});
+		let body = bytes::Bytes::from(
+			serde_json::to_vec(&body).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
+		);
+		return Ok(
+			Response::builder()
+				.status(::http::StatusCode::CREATED)
+				.header(::http::header::CONTENT_TYPE, "application/json")
+				.body(body.into())?,
+		);
+	}
+
 	// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 	let issuer = auth.issuer.trim_end_matches('/');
 	let body = std::mem::take(req.body_mut());

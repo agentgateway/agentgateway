@@ -179,6 +179,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string||
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object||
@@ -6152,6 +6153,7 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpAuthentication.clientId`|string||
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object||
@@ -11248,6 +11250,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string||
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object||
@@ -17977,6 +17980,7 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpAuthentication.clientId`|string||
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object||

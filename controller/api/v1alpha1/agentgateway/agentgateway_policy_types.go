@@ -878,6 +878,11 @@ type JWTMCPConfig struct {
 	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
+
+	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// +optional
+	ClientID *string `json:"clientId,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline
@@ -1340,6 +1345,11 @@ type MCPAuthentication struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
+	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// +optional
+	ClientID *string `json:"clientId,omitempty"`
 }
 
 type McpIDP string

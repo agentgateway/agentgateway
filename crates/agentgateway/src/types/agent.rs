@@ -2440,6 +2440,7 @@ pub struct McpAuthentication {
 	pub resource_metadata: ResourceMetadata,
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
+	pub client_id: Option<String>,
 }
 
 #[apply(schema_enum!)]
@@ -2483,6 +2484,7 @@ pub struct LocalMcpAuthentication {
 	pub authorization_location: http::auth::AuthorizationLocation,
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	pub client_id: Option<String>,
 }
 
 impl LocalMcpAuthentication {
@@ -2529,6 +2531,7 @@ impl LocalMcpAuthentication {
 			resource_metadata: self.resource_metadata.clone(),
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
+			client_id: self.client_id.clone(),
 		})
 	}
 }
