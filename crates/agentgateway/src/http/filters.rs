@@ -201,9 +201,15 @@ pub struct UrlRewrite {
 #[derive(Debug, Clone)]
 pub struct OriginalUrl(pub Uri);
 
-/// AutoHostname is an HTTP Extension that signals that auto-hostname rewrite should be used
+/// AutoHostname is an HTTP Extension that signals that auto-hostname rewrite should be used.
 #[derive(Debug, Clone)]
-pub struct AutoHostname();
+pub struct AutoHostname {
+	/// True when auto-hostname rewrite was explicitly configured, rather than only applied as the
+	/// default.
+	pub explicit: bool,
+	/// Hostname to use when the network target is not itself hostname-based.
+	pub target: Option<Strng>,
+}
 
 /// BackendRequestTimeout is an HTTP Extension that signals the backend request timeout to use for backend calls.
 #[derive(Debug, Clone)]

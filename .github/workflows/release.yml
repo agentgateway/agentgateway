@@ -42,6 +42,7 @@ env:
   GO_VERSION: "1.26.3"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
+  VEX_FILE: .github/vex/openvex.json
   # Note: /charts is added to this
   CHART_REGISTRY_IMAGE_BASE: ghcr.io/${{ github.repository_owner }}
 
@@ -437,6 +438,10 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
       - name: Download digests
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -482,6 +487,14 @@ jobs:
       - name: Sign the extra tag
         if: ${{ inputs.extra_tag != '' }}
         run: cosign sign --yes ${{ env.CONTROLLER_REGISTRY_IMAGE }}:${{ inputs.extra_tag }}
+
+      - name: Attach VEX attestation
+        run: |
+          cosign attest \
+            --predicate "${{ env.VEX_FILE }}" \
+            --type openvex \
+            --yes \
+            ${{ env.CONTROLLER_REGISTRY_IMAGE }}:v${{ env.VERSION }}
 
       - name: Inspect image
         run: |

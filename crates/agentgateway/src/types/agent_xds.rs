@@ -799,6 +799,11 @@ fn backend_auth_from_proto(
 			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Aws(a)) => {
+			let service_name = if a.service_name.is_empty() {
+				None
+			} else {
+				Some(a.service_name.clone())
+			};
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
 					access_key_id: config.access_key_id.into(),
@@ -809,8 +814,9 @@ fn backend_auth_from_proto(
 						Some(config.region.clone())
 					},
 					session_token: config.session_token.map(|token| token.into()),
+					service_name,
 				},
-				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {},
+				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit { service_name },
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Aws(aws_auth)
@@ -1707,6 +1713,8 @@ fn traffic_policy_from_proto(
 				providers,
 				mode,
 				authorization_location(
+					diagnostics,
+					"jwtAuthentication.authorizationLocation.expression",
 					jwt.authorization_location.as_ref(),
 					http::auth::AuthorizationLocation::bearer_header(),
 				)?,
@@ -2001,6 +2009,8 @@ fn traffic_policy_from_proto(
 					ba.realm.clone(),
 					mode,
 					authorization_location(
+						diagnostics,
+						"basicAuthentication.authorizationLocation.expression",
 						ba.authorization_location.as_ref(),
 						http::auth::AuthorizationLocation::basic_header(),
 					)?,
@@ -2013,6 +2023,7 @@ fn traffic_policy_from_proto(
 			{
 				tps::api_key::Mode::Strict => http::apikey::Mode::Strict,
 				tps::api_key::Mode::Optional => http::apikey::Mode::Optional,
+				tps::api_key::Mode::Permissive => http::apikey::Mode::Permissive,
 			};
 			let keys = ba
 				.api_keys
@@ -2032,6 +2043,8 @@ fn traffic_policy_from_proto(
 					keys,
 					mode,
 					authorization_location(
+						diagnostics,
+						"apiKeyAuthentication.authorizationLocation.expression",
 						ba.authorization_location.as_ref(),
 						http::auth::AuthorizationLocation::bearer_header(),
 					)?,
@@ -2170,6 +2183,8 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 }
 
 fn authorization_location(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
 	location: Option<&proto::agent::AuthorizationLocation>,
 	default: http::auth::AuthorizationLocation,
 ) -> Result<http::auth::AuthorizationLocation, ProtoError> {
@@ -2189,6 +2204,9 @@ fn authorization_location(
 		}),
 		Some(Kind::Cookie(cookie)) => Ok(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
+		}),
+		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression {
+			expression: permissive_cel_expression_arc(diagnostics, context, expression),
 		}),
 		None => Ok(default),
 	}
@@ -2218,6 +2236,9 @@ fn optional_authorization_location(
 		Some(Kind::Cookie(cookie)) => Ok(Some(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
 		})),
+		Some(Kind::Expression(_)) => Err(ProtoError::Generic(
+			"expression auth location is only supported for credential extraction".to_string(),
+		)),
 		None => Ok(None),
 	}
 }

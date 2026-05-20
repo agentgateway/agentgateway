@@ -181,6 +181,7 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 		if !ok {
 			return fmt.Errorf("unexpected converted type %T", converted)
 		}
+		fixIntOrStringSchemas(crdV1)
 		removeDescriptionFromMetadata(crdV1)
 
 		out, err := marshalCRD(crdV1)
@@ -201,6 +202,48 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 	}
 
 	return nil
+}
+
+func fixIntOrStringSchemas(crdObj *apiextensionsv1.CustomResourceDefinition) {
+	for i := range crdObj.Spec.Versions {
+		version := &crdObj.Spec.Versions[i]
+		if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+		crd.EditSchema(version.Schema.OpenAPIV3Schema, intOrStringSchemaFixer{})
+	}
+}
+
+type intOrStringSchemaFixer struct{}
+
+func (intOrStringSchemaFixer) Visit(schema *apiextensionsv1.JSONSchemaProps) crd.SchemaVisitor {
+	if schema == nil {
+		return nil
+	}
+	if schema.XIntOrString && schema.Type == "object" {
+		schema.Type = ""
+		if !hasIntegerAndStringAnyOf(schema.AnyOf) {
+			schema.AnyOf = append(schema.AnyOf,
+				apiextensionsv1.JSONSchemaProps{Type: "integer"},
+				apiextensionsv1.JSONSchemaProps{Type: "string"},
+			)
+		}
+	}
+	return intOrStringSchemaFixer{}
+}
+
+func hasIntegerAndStringAnyOf(anyOf []apiextensionsv1.JSONSchemaProps) bool {
+	hasInteger := false
+	hasString := false
+	for _, schema := range anyOf {
+		switch schema.Type {
+		case "integer":
+			hasInteger = true
+		case "string":
+			hasString = true
+		}
+	}
+	return hasInteger && hasString
 }
 
 func registerCustomMarkers(registry *markers.Registry) error {

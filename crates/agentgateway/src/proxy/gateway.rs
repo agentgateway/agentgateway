@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
-use agent_core::{drain, strng};
+use agent_core::{drain, strng, telemetry};
 use agent_hbone::server::H2Request;
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -281,7 +281,7 @@ impl Gateway {
 				let start = Instant::now();
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
-				tokio::spawn(async move {
+				tokio::spawn(telemetry::connection_scope(async move {
 					debug!(bind=?name, "connection started");
 					tokio::select! {
 						// We took too long; shutdown now.
@@ -291,7 +291,7 @@ impl Gateway {
 						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
-				});
+				}));
 			};
 			let wait = drain_watch.wait_for_drain();
 			tokio::pin!(wait);
@@ -731,15 +731,16 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				dtrace::DebugTracer::maybe_scope(async move {
+				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(async move {
 					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
-				})
+				}))
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
 		let parent_drain = drain.clone();
 		let listener_drain = selected_listener.clone().zip(listener_change);
-		let watch_task = tokio::spawn(async move {
+		let connection_id = telemetry::current_connection_id();
+		let watch_connection_drain = async move {
 			let max_connection_duration = async {
 				match max_connection_duration {
 					Some(d) => tokio::time::sleep(d).await,
@@ -777,7 +778,15 @@ impl Gateway {
 				}
 			};
 			connection_drain_tx.start_drain_and_wait(mode).await;
-		});
+		};
+		let watch_task = if let Some(connection_id) = connection_id {
+			tokio::spawn(telemetry::connection_scope_with(
+				connection_id,
+				watch_connection_drain,
+			))
+		} else {
+			tokio::spawn(watch_connection_drain)
+		};
 		let res = connection_drain_rx.wrap_connection(serve).await;
 		watch_task.abort();
 		match res {

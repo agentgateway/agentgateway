@@ -109,7 +109,7 @@ output:
         weight: 1
       hostnames:
       - foo.example.com
-      key: default/foo.00.http-9090
+      key: default/foo.00.default.foo.http-9090
       listenerKey: default/foo.http-9090
       matches:
       - path:

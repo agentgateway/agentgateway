@@ -6,7 +6,7 @@ use aws_sigv4::sign::v4::SigningParams;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::OnceCell;
 
-use crate::llm::bedrock::{AwsRegion, AwsServiceName};
+use crate::llm::bedrock::AwsRegion;
 use crate::*;
 
 #[apply(schema!)]
@@ -25,10 +25,27 @@ pub enum AwsAuth {
 		#[serde(serialize_with = "ser_redact", skip_serializing_if = "Option::is_none")]
 		#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 		session_token: Option<SecretString>,
-		// TODO: make service configurable (only bedrock for now)
+		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+		#[serde(skip_serializing_if = "Option::is_none")]
+		service_name: Option<String>,
 	},
 	/// Use implicit AWS authentication (environment variables, IAM roles, etc.)
-	Implicit {},
+	#[serde(rename_all = "camelCase")]
+	Implicit {
+		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+		#[serde(skip_serializing_if = "Option::is_none")]
+		service_name: Option<String>,
+	},
+}
+
+impl AwsAuth {
+	fn service_name(&self) -> Option<&str> {
+		match self {
+			AwsAuth::ExplicitConfig { service_name, .. } | AwsAuth::Implicit { service_name } => {
+				service_name.as_deref()
+			},
+		}
+	}
 }
 
 pub(super) async fn sign_request(
@@ -44,7 +61,7 @@ pub(super) async fn sign_request(
 			region: Some(region),
 			..
 		} => region.as_str(),
-		AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit {} => {
+		AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit { .. } => {
 			// Try to get region from request extensions first, then fall back to AWS config
 			if let Some(aws_region) = req.extensions().get::<AwsRegion>() {
 				aws_region.region.as_str()
@@ -58,11 +75,7 @@ pub(super) async fn sign_request(
 		},
 	};
 
-	let service = req
-		.extensions()
-		.get::<AwsServiceName>()
-		.map(|s| s.name)
-		.unwrap_or("bedrock");
+	let service = aws_auth.service_name().unwrap_or("bedrock");
 	trace!("AWS signing with region: {}, service: {}", region, service);
 
 	// Sign the request
@@ -119,6 +132,7 @@ async fn load_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
 			secret_access_key,
 			session_token,
 			region: _,
+			service_name: _,
 		} => {
 			// Use explicit credentials
 			let mut builder = Credentials::builder()
@@ -132,7 +146,7 @@ async fn load_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
 
 			Ok(builder.build())
 		},
-		AwsAuth::Implicit {} => {
+		AwsAuth::Implicit { .. } => {
 			// Load AWS configuration and credentials from environment/IAM
 			let config = Box::pin(sdk_config()).await;
 

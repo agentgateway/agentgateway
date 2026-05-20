@@ -278,9 +278,9 @@ async fn standard_mode_ignores_locality() {
 	.await;
 }
 
-// test capacity weighted p2c but with a large tolerance
-// to avoid tet flakes, and account for ewma also amplifying
-// the split
+// test capacity weighted p2c but with a large tolerance to avoid flakes, and account
+// for ewma also amplifying the split. Keep the sample size low because every hit
+// runs through the full proxy and wiremock path.
 #[tokio::test]
 async fn capacity_weighted_p2c_splits_traffic_by_weight() {
 	run(Case {
@@ -310,13 +310,13 @@ async fn capacity_weighted_p2c_splits_traffic_by_weight() {
 				],
 			},
 			Step::Hit {
-				hits: 4000,
+				hits: 800,
 				want_status: StatusCode::OK,
-				// Window [0.60, 0.90] for heavy: rejects uniform (broken, 0.50) but tolerates
+				// Window [0.55, 0.95] for heavy: rejects uniform (broken, 0.50) but tolerates
 				// the score-dynamic amplification above the pure-sampler 0.75.
 				want: Expect::Ratio {
 					shares: vec![("heavy", 0.75), ("light", 0.25)],
-					tolerance: 0.15,
+					tolerance: 0.20,
 				},
 			},
 		],

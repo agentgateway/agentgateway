@@ -90,7 +90,7 @@ impl ClientCore {
 			.body(body.into())
 			.map_err(ClientError::new)?;
 
-		ctx.apply(&mut req);
+		ctx.apply(&mut req).map_err(ClientError::new)?;
 
 		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
 
@@ -113,7 +113,7 @@ impl ClientCore {
 			.body(http::Body::empty())
 			.map_err(ClientError::new)?;
 
-		ctx.apply(&mut req);
+		ctx.apply(&mut req).map_err(ClientError::new)?;
 
 		let resp = self.http_client.call(req).await?;
 

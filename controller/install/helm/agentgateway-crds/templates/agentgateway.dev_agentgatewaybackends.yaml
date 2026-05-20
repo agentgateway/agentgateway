@@ -54,6 +54,24 @@ spec:
           spec:
             description: spec defines the desired state of AgentgatewayBackend.
             properties:
+              a2a:
+                description: a2a represents an A2A backend.
+                properties:
+                  host:
+                    description: host is the hostname or IP address of the A2A backend.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  port:
+                    description: port is the port number of the A2A backend.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
               ai:
                 description: ai represents a LLM backend.
                 properties:
@@ -542,6 +560,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -1140,6 +1166,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -1734,6 +1768,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -2554,6 +2596,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -3152,6 +3202,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -4029,6 +4087,14 @@ spec:
                                                 type: string
                                             type: object
                                             x-kubernetes-map-type: atomic
+                                          serviceName:
+                                            description: |-
+                                              `serviceName` is the AWS SigV4 signing service name (for example,
+                                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                              backends may provide this automatically.
+                                            maxLength: 256
+                                            minLength: 1
+                                            type: string
                                         required:
                                         - secretRef
                                         type: object
@@ -5401,6 +5467,14 @@ spec:
                                               type: string
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        serviceName:
+                                          description: |-
+                                            `serviceName` is the AWS SigV4 signing service name (for example,
+                                            `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                            backends may provide this automatically.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
                                       required:
                                       - secretRef
                                       type: object
@@ -6172,6 +6246,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -6725,6 +6807,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -7275,6 +7365,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -8042,6 +8140,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -8595,6 +8701,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -9421,6 +9535,14 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          serviceName:
+                            description: |-
+                              `serviceName` is the AWS SigV4 signing service name (for example,
+                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                              backends may provide this automatically.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                         required:
                         - secretRef
                         type: object
@@ -9701,13 +9823,14 @@ spec:
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
                             maxLength: 32
-                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
                             x-kubernetes-int-or-string: true
                             x-kubernetes-validations:
-                            - message: value must be at least 1 byte
-                              rule: '!quantity(string(self)).isLessThan(quantity(''1''))'
-                            - message: value must fit within uint32
-                              rule: '!quantity(string(self)).isGreaterThan(quantity(''4294967295''))'
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -10801,8 +10924,8 @@ spec:
               rule: 'has(self.policies) && has(self.policies.mcp) ? has(self.mcp)
                 : true'
             - message: exactly one of the fields in [ai static dynamicForwardProxy
-                mcp aws] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws)].filter(x,x==true).size()
+                mcp aws a2a] must be set
+              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws),has(self.a2a)].filter(x,x==true).size()
                 == 1'
           status:
             description: status defines the current state of AgentgatewayBackend.

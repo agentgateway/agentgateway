@@ -33,7 +33,10 @@ podSecurityContext: {}
 securityContext: {}
 
 # -- Configure resource requests and limits for the container, such as 'limits.cpu: 100m' or 'requests.memory: 128Mi'.
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
 
 # -- Set node selector labels for pod scheduling, such as 'kubernetes.io/arch: amd64'.
 nodeSelector: {}

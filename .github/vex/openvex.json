@@ -1,0 +1,69 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/agentgateway/agentgateway/.github/vex/openvex.json",
+  "author": "agentgateway",
+  "timestamp": "2026-05-14T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2019-14993"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/istio.io/istio"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Scanner version matching is incorrect for this pseudo-version; the vendored dependency code is already patched."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2021-39155"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/istio.io/istio"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Scanner version matching is incorrect for this pseudo-version; the vendored dependency code is already patched."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2021-39156"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/istio.io/istio"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Scanner version matching is incorrect for this pseudo-version; the vendored dependency code is already patched."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2022-23635"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/istio.io/istio"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Scanner version matching is incorrect for this pseudo-version; the vendored dependency code is already patched."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2022-31045"
+      },
+      "products": [
+        {
+          "@id": "pkg:golang/istio.io/istio"
+        }
+      ],
+      "status": "fixed",
+      "impact_statement": "Scanner version matching is incorrect for this pseudo-version; the vendored dependency code is already patched."
+    }
+  ]
+}

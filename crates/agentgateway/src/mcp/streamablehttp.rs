@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use ::http::StatusCode;
-use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
+use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ProtocolVersion, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
+	EVENT_STREAM_MIME_TYPE, HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 
 use crate::http::{DropBody, Request, Response};
@@ -105,6 +105,7 @@ impl StreamableHttpService {
 				return mcp::Error::Deserialize(e).into();
 			},
 		};
+		let header_protocol_version = protocol_version_header(&part.headers)?;
 
 		if !self.config.stateful_mode {
 			let relay = inputs.build_new_connections()?;
@@ -141,11 +142,26 @@ impl StreamableHttpService {
 			return session.send(part, message).await;
 		}
 
-		// No session header... we need to create one, if it is an initialize
-		if let ClientJsonRpcMessage::Request(req) = &message
-			&& !matches!(req.request, ClientRequest::InitializeRequest(_))
-		{
+		// No session header... we need to create one, if it is an initialize.
+		// Notifications and responses are subsequent-session messages too.
+		let is_initialize_request = match &message {
+			ClientJsonRpcMessage::Request(req) => {
+				matches!(req.request, ClientRequest::InitializeRequest(_))
+			},
+			_ => false,
+		};
+		if !is_initialize_request {
 			return mcp::Error::MissingSessionHeader.into();
+		}
+		// Legacy stable clients did not consistently send MCP-Protocol-Version on
+		// initialize, so omission is accepted. If the header is present, it must
+		// describe the same protocol version as the JSON-RPC initialize body.
+		if let Some(header_protocol_version) = header_protocol_version.as_ref()
+			&& let ClientJsonRpcMessage::Request(req) = &message
+			&& let ClientRequest::InitializeRequest(init) = &req.request
+			&& header_protocol_version != &init.params.protocol_version
+		{
+			return mcp::Error::InvalidProtocolVersion.into();
 		}
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let relay = inputs.build_new_connections()?;
@@ -165,6 +181,8 @@ impl StreamableHttpService {
 		request: Request,
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
+		// Just validate it
+		let _header_protocol_version = protocol_version_header(request.headers())?;
 		// check accept header
 		if !request
 			.headers()
@@ -192,6 +210,8 @@ impl StreamableHttpService {
 	}
 
 	pub async fn handle_delete(&self, request: Request) -> Result<Response, ProxyError> {
+		// Just validate it
+		let _header_protocol_version = protocol_version_header(request.headers())?;
 		// check session id
 		let session_id = request
 			.headers()
@@ -210,6 +230,23 @@ impl StreamableHttpService {
 				.unwrap_or_else(accepted_response),
 		)
 	}
+}
+
+fn protocol_version_header(
+	headers: &::http::HeaderMap,
+) -> Result<Option<ProtocolVersion>, ProxyError> {
+	let Some(value) = headers.get(HEADER_MCP_PROTOCOL_VERSION) else {
+		return Ok(None);
+	};
+	let value = value
+		.to_str()
+		.map_err(|_| ProxyError::MCP(mcp::Error::InvalidProtocolVersion))?;
+	let version = ProtocolVersion::KNOWN_VERSIONS
+		.iter()
+		.find(|version| version.as_str() == value)
+		.cloned()
+		.ok_or(ProxyError::MCP(mcp::Error::InvalidProtocolVersion))?;
+	Ok(Some(version))
 }
 
 fn accepted_response() -> Response {

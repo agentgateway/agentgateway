@@ -28,6 +28,13 @@ type ResolvedPolicySelectorTarget struct {
 }
 
 type ReferenceTypes struct {
+	// KnownFromReferences is the set of GroupKinds this controller understands
+	// as ReferenceGrant from entries.
+	KnownFromReferences sets.Set[schema.GroupKind]
+	// KnownToReferences is the set of GroupKinds this controller understands as
+	// ReferenceGrant to entries. Extension authors must add their kinds here
+	// when they need ReferenceGrant permission checks to recognize those targets.
+	KnownToReferences       sets.Set[schema.GroupKind]
 	PolicyTargets           func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool)
 	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector shared.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
 	PolicyBackend           func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
@@ -63,6 +70,19 @@ func (e *BackendReferenceError) Error() string {
 
 func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	return ReferenceTypes{
+		KnownFromReferences: sets.New(
+			wellknown.GatewayGVK.GroupKind(),
+			wellknown.HTTPRouteGVK.GroupKind(),
+			wellknown.GRPCRouteGVK.GroupKind(),
+			wellknown.TCPRouteGVK.GroupKind(),
+			wellknown.TLSRouteGVK.GroupKind(),
+			wellknown.ListenerSetGVK.GroupKind(),
+		),
+		KnownToReferences: sets.New(
+			wellknown.ServiceGVK.GroupKind(),
+			wellknown.SecretGVK.GroupKind(),
+			wellknown.AgentgatewayBackendGVK.GroupKind(),
+		),
 		// AgentgatewayPolicy targets
 		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool) {
 			key := namespace + "/" + string(name)

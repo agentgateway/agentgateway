@@ -492,9 +492,12 @@ pub struct LocalLLMModels {
 	/// responseHeaders modifies headers in responses from the LLM provider.
 	#[serde(default)]
 	response_headers: Option<filters::HeaderModifier>,
-	/// backendTLS configures TLS when connecting to the LLM provider.
-	#[serde(rename = "backendTLS", default)]
+	/// tls configures TLS when connecting to the LLM provider.
+	#[serde(rename = "tls", alias = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// auth configures authentication when connecting to the LLM provider.
+	#[serde(default, deserialize_with = "de_backend_auth")]
+	auth: Option<BackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -551,18 +554,53 @@ pub struct LocalLLMParams {
 	azure_api_version: Option<Strng>,
 	/// For Azure: the Foundry project name (required for foundry resource type)
 	azure_project_name: Option<Strng>,
+	/// Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
+	#[serde(default)]
+	base_url: Option<Strng>,
 	/// Override the upstream host for this provider.
 	#[serde(default)]
+	#[deprecated(note = "use baseUrl instead")]
 	host_override: Option<Target>,
 	/// Override the upstream path for this provider.
 	#[serde(default)]
+	#[deprecated(note = "use baseUrl instead")]
 	path_override: Option<Strng>,
 	/// Override the default base path prefix for this provider.
 	#[serde(default)]
+	#[deprecated(note = "use baseUrl instead")]
 	path_prefix: Option<Strng>,
 	/// Whether to tokenize the request before forwarding it upstream.
 	#[serde(default)]
 	tokenize: bool,
+}
+
+impl LocalLLMModels {
+	#[allow(deprecated)]
+	fn apply_base_url(&mut self) -> anyhow::Result<()> {
+		let Some(base_url) = self.params.base_url.as_deref() else {
+			return Ok(());
+		};
+		let url = url::Url::parse(base_url)
+			.with_context(|| format!("invalid params.baseUrl for model {}", self.name))?;
+		let port = url.port_or_known_default().with_context(|| {
+			format!(
+				"params.baseUrl for model {} must use http or https, or include an explicit port",
+				self.name
+			)
+		})?;
+		let host = url
+			.host_str()
+			.with_context(|| format!("params.baseUrl for model {} must include a host", self.name))?;
+		self.params.host_override = Some((host, port).into());
+		let path = url.path().trim_end_matches('/');
+		if !path.is_empty() {
+			self.params.path_prefix = Some(strng::new(path));
+		}
+		if url.scheme() == "https" && self.backend_tls.is_none() {
+			self.backend_tls = Some(http::backendtls::LocalBackendTLS::default());
+		}
+		Ok(())
+	}
 }
 
 #[apply(schema_de!)]
@@ -1945,6 +1983,7 @@ fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMa
 	bail!("model name wildcard must be either at the beginning or the end: '{model_name}'")
 }
 
+#[allow(deprecated)]
 async fn convert_llm_config(
 	client: client::Client,
 	config: &crate::Config,
@@ -2087,7 +2126,9 @@ json(request.body).model
 	routes.push(model_list_route);
 
 	// Create routes and backends for each model
-	for (idx, model_config) in models.iter().enumerate() {
+	for (idx, model_config) in models.iter().cloned().enumerate() {
+		let mut model_config = model_config;
+		model_config.apply_base_url()?;
 		let model_name = strng::new(&model_config.name);
 		// Index is needed because the same name can be used with different match criteria
 		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
@@ -2157,6 +2198,9 @@ json(request.body).model
 		let mut pols = vec![];
 		if let Some(p) = model_config.backend_tls.clone() {
 			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?));
+		}
+		if let Some(p) = model_config.auth.clone() {
+			pols.push(BackendTrafficPolicy::BackendAuth(p));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));

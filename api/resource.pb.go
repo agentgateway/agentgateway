@@ -996,6 +996,8 @@ const (
 	TrafficPolicySpec_APIKey_STRICT TrafficPolicySpec_APIKey_Mode = 0
 	// If credentials exist, validate them (default)
 	TrafficPolicySpec_APIKey_OPTIONAL TrafficPolicySpec_APIKey_Mode = 1
+	// Requests are never rejected for missing or invalid API keys
+	TrafficPolicySpec_APIKey_PERMISSIVE TrafficPolicySpec_APIKey_Mode = 2
 )
 
 // Enum value maps for TrafficPolicySpec_APIKey_Mode.
@@ -1003,10 +1005,12 @@ var (
 	TrafficPolicySpec_APIKey_Mode_name = map[int32]string{
 		0: "STRICT",
 		1: "OPTIONAL",
+		2: "PERMISSIVE",
 	}
 	TrafficPolicySpec_APIKey_Mode_value = map[string]int32{
-		"STRICT":   0,
-		"OPTIONAL": 1,
+		"STRICT":     0,
+		"OPTIONAL":   1,
+		"PERMISSIVE": 2,
 	}
 )
 
@@ -3538,6 +3542,7 @@ type AuthorizationLocation struct {
 	//	*AuthorizationLocation_Header_
 	//	*AuthorizationLocation_QueryParameter_
 	//	*AuthorizationLocation_Cookie_
+	//	*AuthorizationLocation_Expression
 	Kind          isAuthorizationLocation_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3607,6 +3612,15 @@ func (x *AuthorizationLocation) GetCookie() *AuthorizationLocation_Cookie {
 	return nil
 }
 
+func (x *AuthorizationLocation) GetExpression() string {
+	if x != nil {
+		if x, ok := x.Kind.(*AuthorizationLocation_Expression); ok {
+			return x.Expression
+		}
+	}
+	return ""
+}
+
 type isAuthorizationLocation_Kind interface {
 	isAuthorizationLocation_Kind()
 }
@@ -3623,11 +3637,17 @@ type AuthorizationLocation_Cookie_ struct {
 	Cookie *AuthorizationLocation_Cookie `protobuf:"bytes,3,opt,name=cookie,proto3,oneof"`
 }
 
+type AuthorizationLocation_Expression struct {
+	Expression string `protobuf:"bytes,4,opt,name=expression,proto3,oneof"` // CEL expression
+}
+
 func (*AuthorizationLocation_Header_) isAuthorizationLocation_Kind() {}
 
 func (*AuthorizationLocation_QueryParameter_) isAuthorizationLocation_Kind() {}
 
 func (*AuthorizationLocation_Cookie_) isAuthorizationLocation_Kind() {}
+
+func (*AuthorizationLocation_Expression) isAuthorizationLocation_Kind() {}
 
 type Passthrough struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
@@ -3826,7 +3846,10 @@ type Aws struct {
 	//
 	//	*Aws_ExplicitConfig
 	//	*Aws_Implicit
-	Kind          isAws_Kind `protobuf_oneof:"kind"`
+	Kind isAws_Kind `protobuf_oneof:"kind"`
+	// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+	// If unset, typed AWS backends may provide this automatically.
+	ServiceName   string `protobuf:"bytes,3,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3884,6 +3907,13 @@ func (x *Aws) GetImplicit() *AwsImplicit {
 		}
 	}
 	return nil
+}
+
+func (x *Aws) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
 }
 
 type isAws_Kind interface {
@@ -4011,7 +4041,7 @@ type AwsExplicitConfig struct {
 	// AWS Region (e.g., "us-west-2", "us-east-1"). Optional for AWS backends.
 	Region string `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	// Optional session token for temporary credentials
-	SessionToken  *string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3,oneof" json:"session_token,omitempty"` // TODO: make service configurable
+	SessionToken  *string `protobuf:"bytes,4,opt,name=session_token,json=sessionToken,proto3,oneof" json:"session_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -13050,11 +13080,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x03gcp\x18\x03 \x01(\v2\x1e.agentgateway.dev.resource.GcpH\x00R\x03gcp\x122\n" +
 	"\x03aws\x18\x04 \x01(\v2\x1e.agentgateway.dev.resource.AwsH\x00R\x03aws\x128\n" +
 	"\x05azure\x18\x05 \x01(\v2 .agentgateway.dev.resource.AzureH\x00R\x05azureB\x06\n" +
-	"\x04kind\"\xbb\x03\n" +
+	"\x04kind\"\xdd\x03\n" +
 	"\x15AuthorizationLocation\x12Q\n" +
 	"\x06header\x18\x01 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.HeaderH\x00R\x06header\x12j\n" +
 	"\x0fquery_parameter\x18\x02 \x01(\v2?.agentgateway.dev.resource.AuthorizationLocation.QueryParameterH\x00R\x0equeryParameter\x12Q\n" +
-	"\x06cookie\x18\x03 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.CookieH\x00R\x06cookie\x1aD\n" +
+	"\x06cookie\x18\x03 \x01(\v27.agentgateway.dev.resource.AuthorizationLocation.CookieH\x00R\x06cookie\x12 \n" +
+	"\n" +
+	"expression\x18\x04 \x01(\tH\x00R\n" +
+	"expression\x1aD\n" +
 	"\x06Header\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\x06prefix\x18\x02 \x01(\tH\x00R\x06prefix\x88\x01\x01B\t\n" +
@@ -13081,10 +13114,11 @@ const file_resource_proto_rawDesc = "" +
 	"\t_audienceB\f\n" +
 	"\n" +
 	"token_typeB\r\n" +
-	"\v_credential\"\xac\x01\n" +
+	"\v_credential\"\xcf\x01\n" +
 	"\x03Aws\x12W\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2,.agentgateway.dev.resource.AwsExplicitConfigH\x00R\x0eexplicitConfig\x12D\n" +
-	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicitB\x06\n" +
+	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicit\x12!\n" +
+	"\fservice_name\x18\x03 \x01(\tR\vserviceNameB\x06\n" +
 	"\x04kind\"\x96\x02\n" +
 	"\x05Azure\x12Y\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2..agentgateway.dev.resource.AzureExplicitConfigH\x00R\x0eexplicitConfig\x12b\n" +
@@ -13342,7 +13376,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xe3A\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xf3A\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -13476,18 +13510,20 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +
 	"\bOPTIONAL\x10\x01B\b\n" +
-	"\x06_realm\x1a\x85\x03\n" +
+	"\x06_realm\x1a\x95\x03\n" +
 	"\x06APIKey\x12S\n" +
 	"\bapi_keys\x18\x01 \x03(\v28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.UserR\aapiKeys\x12L\n" +
 	"\x04mode\x18\x02 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.ModeR\x04mode\x12g\n" +
 	"\x16authorization_location\x18\x03 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1aM\n" +
 	"\x04User\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\" \n" +
+	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"0\n" +
 	"\x04Mode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +
-	"\bOPTIONAL\x10\x01\x1a\xbf\x05\n" +
+	"\bOPTIONAL\x10\x01\x12\x0e\n" +
+	"\n" +
+	"PERMISSIVE\x10\x02\x1a\xbf\x05\n" +
 	"\x14TransformationPolicy\x12e\n" +
 	"\arequest\x18\x01 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\arequest\x12g\n" +
 	"\bresponse\x18\x02 \x01(\v2K.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.TransformR\bresponse\x1a\xd6\x03\n" +
@@ -14491,6 +14527,7 @@ func file_resource_proto_init() {
 		(*AuthorizationLocation_Header_)(nil),
 		(*AuthorizationLocation_QueryParameter_)(nil),
 		(*AuthorizationLocation_Cookie_)(nil),
+		(*AuthorizationLocation_Expression)(nil),
 	}
 	file_resource_proto_msgTypes[21].OneofWrappers = []any{
 		(*Gcp_AccessToken_)(nil),

@@ -34,8 +34,8 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
 						return translatePoliciesForInferencePool(krtctx, agw.ControllerName, input.References, agw.Services, infPool)
-					}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
-					return ConvertStatusCollection(status), policyCol
+					}, agw.KrtOpts.ToOptions("policies/InferencePool")...)
+					return ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "policies/InferencePool"), policyCol
 				},
 			},
 		},
@@ -59,8 +59,22 @@ func translatePoliciesForInferencePool(
 
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
-	eppPort := epr.Port.Number
-	eppSvc := kubeutils.GetServiceHostname(string(epr.Name), pool.Namespace)
+	eppPort := int32(0)
+	eppSvc := ""
+	endpointPicker := &api.BackendReference{}
+	if validationErr == nil {
+		eppPort = int32(epr.Port.Number)
+		eppSvc = kubeutils.GetServiceHostname(string(epr.Name), pool.Namespace)
+		endpointPicker = &api.BackendReference{
+			Kind: &api.BackendReference_Service_{
+				Service: &api.BackendReference_Service{
+					Hostname:  eppSvc,
+					Namespace: pool.Namespace,
+				},
+			},
+			Port: uint32(eppPort), //nolint:gosec // G115: eppPort is derived from validated port numbers
+		}
+	}
 
 	failureMode := api.BackendPolicySpec_InferenceRouting_FAIL_CLOSED
 	if epr.FailureMode == inf.EndpointPickerFailOpen {
@@ -76,16 +90,8 @@ func translatePoliciesForInferencePool(
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_InferenceRouting_{
 					InferenceRouting: &api.BackendPolicySpec_InferenceRouting{
-						EndpointPicker: &api.BackendReference{
-							Kind: &api.BackendReference_Service_{
-								Service: &api.BackendReference_Service{
-									Hostname:  eppSvc,
-									Namespace: pool.Namespace,
-								},
-							},
-							Port: uint32(eppPort), //nolint:gosec // G115: eppPort is derived from validated port numbers
-						},
-						FailureMode: failureMode,
+						EndpointPicker: endpointPicker,
+						FailureMode:    failureMode,
 					},
 				},
 			},
@@ -96,6 +102,14 @@ func translatePoliciesForInferencePool(
 		gatewayTargets = append(gatewayTargets, gatewayTarget)
 	}
 	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicy)
+
+	if validationErr != nil {
+		logger.Debug("generated invalid inference pool policy",
+			"pool", pool.Name,
+			"namespace", pool.Namespace,
+			"inference_policy", inferencePolicy.Name)
+		return status, infPolicies
+	}
 
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that

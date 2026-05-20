@@ -168,7 +168,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header.name`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header.prefix`|string||
@@ -176,6 +176,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -241,6 +243,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -252,6 +256,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -265,6 +271,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -342,6 +350,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -353,6 +363,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -366,6 +378,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -443,6 +457,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -454,6 +470,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -467,6 +485,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -542,6 +562,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -553,6 +575,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -566,6 +590,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -677,6 +703,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -688,6 +716,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -701,6 +731,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -778,6 +810,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -789,6 +823,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -802,6 +838,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -877,6 +915,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -888,6 +928,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -901,6 +943,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -997,6 +1041,8 @@
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.value.file`|string||
@@ -1008,6 +1054,8 @@
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1021,6 +1069,8 @@
 |`binds[].listeners[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1095,6 +1145,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -1106,6 +1158,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1119,6 +1173,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1208,6 +1264,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -1219,6 +1277,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1232,6 +1292,8 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1277,7 +1339,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header.prefix`|string||
@@ -1285,6 +1347,8 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers`|[]object||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].issuer`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].audiences`|[]string||
@@ -1294,7 +1358,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.header.prefix`|string||
@@ -1302,6 +1366,8 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object||
@@ -1329,7 +1395,7 @@
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string||
 |`binds[].listeners[].routes[].policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`binds[].listeners[].routes[].policies.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header`|object||
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header.name`|string||
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.header.prefix`|string||
@@ -1337,12 +1403,14 @@
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie`|object||
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.expression`|object||
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any||
-|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`binds[].listeners[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.apiKey.location.header`|object||
 |`binds[].listeners[].routes[].policies.apiKey.location.header.name`|string||
 |`binds[].listeners[].routes[].policies.apiKey.location.header.prefix`|string||
@@ -1350,6 +1418,8 @@
 |`binds[].listeners[].routes[].policies.apiKey.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.apiKey.location.expression`|object||
+|`binds[].listeners[].routes[].policies.apiKey.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].service`|object||
@@ -1398,6 +1468,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -1409,6 +1481,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1422,6 +1496,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1519,6 +1595,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -1530,6 +1608,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1543,6 +1623,8 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1643,6 +1725,8 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -1654,6 +1738,8 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1667,6 +1753,8 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1751,6 +1839,8 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -1762,6 +1852,8 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1775,6 +1867,8 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -1923,6 +2017,8 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -1934,6 +2030,8 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1947,6 +2045,8 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2055,6 +2155,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -2066,6 +2168,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2079,6 +2183,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2181,6 +2287,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -2192,6 +2300,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2205,6 +2315,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2332,6 +2444,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -2343,6 +2457,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2356,6 +2472,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2433,6 +2551,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -2444,6 +2564,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2457,6 +2579,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2534,6 +2658,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -2545,6 +2671,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2558,6 +2686,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2633,6 +2763,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -2644,6 +2776,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2657,6 +2791,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2768,6 +2904,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -2779,6 +2917,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2792,6 +2932,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2869,6 +3011,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -2880,6 +3024,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2893,6 +3039,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -2968,6 +3116,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -2979,6 +3129,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2992,6 +3144,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3128,6 +3282,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -3139,6 +3295,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3152,6 +3310,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3254,6 +3414,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -3265,6 +3427,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3278,6 +3442,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3405,6 +3571,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -3416,6 +3584,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3429,6 +3599,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3506,6 +3678,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -3517,6 +3691,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3530,6 +3706,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3607,6 +3785,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -3618,6 +3798,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3631,6 +3813,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3706,6 +3890,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -3717,6 +3903,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3730,6 +3918,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3841,6 +4031,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -3852,6 +4044,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3865,6 +4059,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -3942,6 +4138,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -3953,6 +4151,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3966,6 +4166,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4041,6 +4243,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -4052,6 +4256,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4065,6 +4271,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4176,6 +4384,8 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value.file`|string||
@@ -4187,6 +4397,8 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4200,6 +4412,8 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4302,6 +4516,8 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -4313,6 +4529,8 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4326,6 +4544,8 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4453,6 +4673,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -4464,6 +4686,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4477,6 +4701,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4554,6 +4780,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -4565,6 +4793,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4578,6 +4808,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4655,6 +4887,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -4666,6 +4900,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4679,6 +4915,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4754,6 +4992,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -4765,6 +5005,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4778,6 +5020,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4889,6 +5133,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -4900,6 +5146,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4913,6 +5161,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -4990,6 +5240,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -5001,6 +5253,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5014,6 +5268,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5089,6 +5345,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -5100,6 +5358,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5113,6 +5373,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5243,7 +5505,7 @@
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.jwtAuth.location.header`|object||
 |`binds[].listeners[].policies.jwtAuth.location.header.name`|string||
 |`binds[].listeners[].policies.jwtAuth.location.header.prefix`|string||
@@ -5251,6 +5513,8 @@
 |`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.jwtAuth.location.cookie`|object||
 |`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.expression`|object||
+|`binds[].listeners[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object||
 |`binds[].listeners[].policies.jwtAuth.providers[].issuer`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].audiences`|[]string||
@@ -5260,7 +5524,7 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.jwtAuth.location.header`|object||
 |`binds[].listeners[].policies.jwtAuth.location.header.name`|string||
 |`binds[].listeners[].policies.jwtAuth.location.header.prefix`|string||
@@ -5268,6 +5532,8 @@
 |`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.jwtAuth.location.cookie`|object||
 |`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string||
+|`binds[].listeners[].policies.jwtAuth.location.expression`|object||
+|`binds[].listeners[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].policies.jwtAuth.jwks`|object||
@@ -5323,6 +5589,8 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -5334,6 +5602,8 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5347,6 +5617,8 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5444,6 +5716,8 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -5455,6 +5729,8 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5468,6 +5744,8 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5568,6 +5846,8 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -5579,6 +5859,8 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5592,6 +5874,8 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5676,6 +5960,8 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -5687,6 +5973,8 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.cookie`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5700,6 +5988,8 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5771,7 +6061,7 @@
 |`binds[].listeners[].policies.basicAuth.htpasswd.file`|string||
 |`binds[].listeners[].policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`binds[].listeners[].policies.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`binds[].listeners[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.header`|object||
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.header.name`|string||
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.header.prefix`|string||
@@ -5779,12 +6069,14 @@
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie`|object||
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie.name`|string||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.expression`|object||
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.expression.expression`|string||
 |`binds[].listeners[].policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`binds[].listeners[].policies.apiKey.keys`|[]object|List of API keys|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string||
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any||
-|`binds[].listeners[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`binds[].listeners[].policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`binds[].listeners[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].policies.apiKey.location.header`|object||
 |`binds[].listeners[].policies.apiKey.location.header.name`|string||
 |`binds[].listeners[].policies.apiKey.location.header.prefix`|string||
@@ -5792,6 +6084,8 @@
 |`binds[].listeners[].policies.apiKey.location.queryParameter.name`|string||
 |`binds[].listeners[].policies.apiKey.location.cookie`|object||
 |`binds[].listeners[].policies.apiKey.location.cookie.name`|string||
+|`binds[].listeners[].policies.apiKey.location.expression`|object||
+|`binds[].listeners[].policies.apiKey.location.expression.expression`|string||
 |`binds[].tunnelProtocol`|enum|Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`.|
 |`frontendPolicies`|object||
 |`frontendPolicies.http`|object|Settings for handling incoming HTTP requests.|
@@ -5873,6 +6167,8 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.cookie`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.expression`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value.file`|string||
@@ -5884,6 +6180,8 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.queryParameter.name`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.cookie`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.cookie.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.expression`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.expression.expression`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5897,6 +6195,8 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.secretAccessKey`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.region`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.sessionToken`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -5980,6 +6280,8 @@
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.cookie`|object||
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.location.expression`|object||
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`frontendPolicies.tracing.policies.backendAuth.key`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.value`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.value.file`|string||
@@ -5991,6 +6293,8 @@
 |`frontendPolicies.tracing.policies.backendAuth.key.location.queryParameter.name`|string||
 |`frontendPolicies.tracing.policies.backendAuth.key.location.cookie`|object||
 |`frontendPolicies.tracing.policies.backendAuth.key.location.cookie.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.key.location.expression`|object||
+|`frontendPolicies.tracing.policies.backendAuth.key.location.expression.expression`|string||
 |`frontendPolicies.tracing.policies.backendAuth.gcp`|object||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6004,6 +6308,8 @@
 |`frontendPolicies.tracing.policies.backendAuth.aws.secretAccessKey`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.region`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.sessionToken`|string||
+|`frontendPolicies.tracing.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`frontendPolicies.tracing.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.tracing.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6141,7 +6447,7 @@
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
 |`policies[].policy.mcpAuthentication.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`policies[].policy.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.header`|object||
 |`policies[].policy.mcpAuthentication.authorizationLocation.header.name`|string||
 |`policies[].policy.mcpAuthentication.authorizationLocation.header.prefix`|string||
@@ -6149,6 +6455,8 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
 |`policies[].policy.mcpAuthentication.authorizationLocation.cookie`|object||
 |`policies[].policy.mcpAuthentication.authorizationLocation.cookie.name`|string||
+|`policies[].policy.mcpAuthentication.authorizationLocation.expression`|object||
+|`policies[].policy.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -6214,6 +6522,8 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -6225,6 +6535,8 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6238,6 +6550,8 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6315,6 +6629,8 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -6326,6 +6642,8 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6339,6 +6657,8 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6416,6 +6736,8 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -6427,6 +6749,8 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6440,6 +6764,8 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6515,6 +6841,8 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -6526,6 +6854,8 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6539,6 +6869,8 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6650,6 +6982,8 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -6661,6 +6995,8 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6674,6 +7010,8 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6751,6 +7089,8 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -6762,6 +7102,8 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6775,6 +7117,8 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6850,6 +7194,8 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -6861,6 +7207,8 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6874,6 +7222,8 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -6970,6 +7320,8 @@
 |`policies[].policy.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.backendAuth.key`|object||
 |`policies[].policy.backendAuth.key.value`|object||
 |`policies[].policy.backendAuth.key.value.file`|string||
@@ -6981,6 +7333,8 @@
 |`policies[].policy.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.backendAuth.key.location.cookie`|object||
 |`policies[].policy.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.backendAuth.key.location.expression`|object||
+|`policies[].policy.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.backendAuth.gcp`|object||
 |`policies[].policy.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6994,6 +7348,8 @@
 |`policies[].policy.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.backendAuth.aws.region`|string||
 |`policies[].policy.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7068,6 +7424,8 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -7079,6 +7437,8 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7092,6 +7452,8 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7181,6 +7543,8 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -7192,6 +7556,8 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7205,6 +7571,8 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7250,7 +7618,7 @@
 |`policies[].policy.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`policies[].policy.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.jwtAuth.location.header`|object||
 |`policies[].policy.jwtAuth.location.header.name`|string||
 |`policies[].policy.jwtAuth.location.header.prefix`|string||
@@ -7258,6 +7626,8 @@
 |`policies[].policy.jwtAuth.location.queryParameter.name`|string||
 |`policies[].policy.jwtAuth.location.cookie`|object||
 |`policies[].policy.jwtAuth.location.cookie.name`|string||
+|`policies[].policy.jwtAuth.location.expression`|object||
+|`policies[].policy.jwtAuth.location.expression.expression`|string||
 |`policies[].policy.jwtAuth.providers`|[]object||
 |`policies[].policy.jwtAuth.providers[].issuer`|string||
 |`policies[].policy.jwtAuth.providers[].audiences`|[]string||
@@ -7267,7 +7637,7 @@
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.jwtAuth.location.header`|object||
 |`policies[].policy.jwtAuth.location.header.name`|string||
 |`policies[].policy.jwtAuth.location.header.prefix`|string||
@@ -7275,6 +7645,8 @@
 |`policies[].policy.jwtAuth.location.queryParameter.name`|string||
 |`policies[].policy.jwtAuth.location.cookie`|object||
 |`policies[].policy.jwtAuth.location.cookie.name`|string||
+|`policies[].policy.jwtAuth.location.expression`|object||
+|`policies[].policy.jwtAuth.location.expression.expression`|string||
 |`policies[].policy.jwtAuth.issuer`|string||
 |`policies[].policy.jwtAuth.audiences`|[]string||
 |`policies[].policy.jwtAuth.jwks`|object||
@@ -7302,7 +7674,7 @@
 |`policies[].policy.basicAuth.htpasswd.file`|string||
 |`policies[].policy.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`policies[].policy.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`policies[].policy.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.basicAuth.authorizationLocation.header`|object||
 |`policies[].policy.basicAuth.authorizationLocation.header.name`|string||
 |`policies[].policy.basicAuth.authorizationLocation.header.prefix`|string||
@@ -7310,12 +7682,14 @@
 |`policies[].policy.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`policies[].policy.basicAuth.authorizationLocation.cookie`|object||
 |`policies[].policy.basicAuth.authorizationLocation.cookie.name`|string||
+|`policies[].policy.basicAuth.authorizationLocation.expression`|object||
+|`policies[].policy.basicAuth.authorizationLocation.expression.expression`|string||
 |`policies[].policy.apiKey`|object|Authenticate incoming requests using API Keys|
 |`policies[].policy.apiKey.keys`|[]object|List of API keys|
 |`policies[].policy.apiKey.keys[].key`|string||
 |`policies[].policy.apiKey.keys[].metadata`|any||
-|`policies[].policy.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`policies[].policy.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`policies[].policy.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`policies[].policy.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.apiKey.location.header`|object||
 |`policies[].policy.apiKey.location.header.name`|string||
 |`policies[].policy.apiKey.location.header.prefix`|string||
@@ -7323,6 +7697,8 @@
 |`policies[].policy.apiKey.location.queryParameter.name`|string||
 |`policies[].policy.apiKey.location.cookie`|object||
 |`policies[].policy.apiKey.location.cookie.name`|string||
+|`policies[].policy.apiKey.location.expression`|object||
+|`policies[].policy.apiKey.location.expression.expression`|string||
 |`policies[].policy.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`policies[].policy.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extAuthz.conditional[].service`|object||
@@ -7371,6 +7747,8 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -7382,6 +7760,8 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7395,6 +7775,8 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7492,6 +7874,8 @@
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.key`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.value`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -7503,6 +7887,8 @@
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7516,6 +7902,8 @@
 |`policies[].policy.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.region`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7616,6 +8004,8 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -7627,6 +8017,8 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7640,6 +8032,8 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7724,6 +8118,8 @@
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`policies[].policy.extProc.policies.backendAuth.key`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.value`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.value.file`|string||
@@ -7735,6 +8131,8 @@
 |`policies[].policy.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`policies[].policy.extProc.policies.backendAuth.key.location.cookie`|object||
 |`policies[].policy.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`policies[].policy.extProc.policies.backendAuth.gcp`|object||
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7748,6 +8146,8 @@
 |`policies[].policy.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.region`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -7891,6 +8291,8 @@
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -7902,6 +8304,8 @@
 |`backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object||
 |`backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object||
+|`backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7915,6 +8319,8 @@
 |`backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8023,6 +8429,8 @@
 |`backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.backendAuth.key`|object||
 |`backends[].ai.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -8034,6 +8442,8 @@
 |`backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8047,6 +8457,8 @@
 |`backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8149,6 +8561,8 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -8160,6 +8574,8 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8173,6 +8589,8 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8300,6 +8718,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -8311,6 +8731,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8324,6 +8746,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8401,6 +8825,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -8412,6 +8838,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8425,6 +8853,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8502,6 +8932,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -8513,6 +8945,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8526,6 +8960,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8601,6 +9037,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -8612,6 +9050,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8625,6 +9065,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8736,6 +9178,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -8747,6 +9191,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8760,6 +9206,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8837,6 +9285,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -8848,6 +9298,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8861,6 +9313,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -8936,6 +9390,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -8947,6 +9403,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8960,6 +9418,8 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9096,6 +9556,8 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -9107,6 +9569,8 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9120,6 +9584,8 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9222,6 +9688,8 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -9233,6 +9701,8 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9246,6 +9716,8 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9373,6 +9845,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -9384,6 +9858,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9397,6 +9873,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9474,6 +9952,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -9485,6 +9965,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9498,6 +9980,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9575,6 +10059,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -9586,6 +10072,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9599,6 +10087,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9674,6 +10164,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -9685,6 +10177,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9698,6 +10192,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9809,6 +10305,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -9820,6 +10318,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9833,6 +10333,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -9910,6 +10412,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -9921,6 +10425,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9934,6 +10440,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10009,6 +10517,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -10020,6 +10530,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10033,6 +10545,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10143,6 +10657,8 @@
 |`backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.backendAuth.key`|object||
 |`backends[].policies.backendAuth.key.value`|object||
 |`backends[].policies.backendAuth.key.value.file`|string||
@@ -10154,6 +10670,8 @@
 |`backends[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.backendAuth.gcp`|object||
 |`backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10167,6 +10685,8 @@
 |`backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.backendAuth.aws.region`|string||
 |`backends[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10269,6 +10789,8 @@
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.key`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -10280,6 +10802,8 @@
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10293,6 +10817,8 @@
 |`backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10420,6 +10946,8 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -10431,6 +10959,8 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10444,6 +10974,8 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10521,6 +11053,8 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -10532,6 +11066,8 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10545,6 +11081,8 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10622,6 +11160,8 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -10633,6 +11173,8 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10646,6 +11188,8 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10721,6 +11265,8 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -10732,6 +11278,8 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10745,6 +11293,8 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10856,6 +11406,8 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -10867,6 +11419,8 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10880,6 +11434,8 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -10957,6 +11513,8 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -10968,6 +11526,8 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10981,6 +11541,8 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11056,6 +11618,8 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -11067,6 +11631,8 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11080,6 +11646,8 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11236,7 +11804,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header.name`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header.prefix`|string||
@@ -11244,6 +11812,8 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.cookie`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -11309,6 +11879,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -11320,6 +11892,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11333,6 +11907,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11410,6 +11986,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -11421,6 +11999,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11434,6 +12014,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11511,6 +12093,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -11522,6 +12106,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11535,6 +12121,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11610,6 +12198,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -11621,6 +12211,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11634,6 +12226,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11745,6 +12339,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -11756,6 +12352,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11769,6 +12367,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11846,6 +12446,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -11857,6 +12459,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11870,6 +12474,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -11945,6 +12551,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -11956,6 +12564,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11969,6 +12579,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12065,6 +12677,8 @@
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.value.file`|string||
@@ -12076,6 +12690,8 @@
 |`routeGroups[].routes[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12089,6 +12705,8 @@
 |`routeGroups[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12163,6 +12781,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -12174,6 +12794,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12187,6 +12809,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12276,6 +12900,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -12287,6 +12913,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12300,6 +12928,8 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12345,7 +12975,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`routeGroups[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.jwtAuth.location.header`|object||
 |`routeGroups[].routes[].policies.jwtAuth.location.header.name`|string||
 |`routeGroups[].routes[].policies.jwtAuth.location.header.prefix`|string||
@@ -12353,6 +12983,8 @@
 |`routeGroups[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie`|object||
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.jwtAuth.location.expression`|object||
+|`routeGroups[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers`|[]object||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].issuer`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].audiences`|[]string||
@@ -12362,7 +12994,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`routeGroups[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.jwtAuth.location.header`|object||
 |`routeGroups[].routes[].policies.jwtAuth.location.header.name`|string||
 |`routeGroups[].routes[].policies.jwtAuth.location.header.prefix`|string||
@@ -12370,6 +13002,8 @@
 |`routeGroups[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie`|object||
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.jwtAuth.location.expression`|object||
+|`routeGroups[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string||
 |`routeGroups[].routes[].policies.jwtAuth.audiences`|[]string||
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object||
@@ -12397,7 +13031,7 @@
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string||
 |`routeGroups[].routes[].policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`routeGroups[].routes[].policies.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`routeGroups[].routes[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.header`|object||
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.header.name`|string||
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.header.prefix`|string||
@@ -12405,12 +13039,14 @@
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.cookie`|object||
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.cookie.name`|string||
+|`routeGroups[].routes[].policies.basicAuth.authorizationLocation.expression`|object||
+|`routeGroups[].routes[].policies.basicAuth.authorizationLocation.expression.expression`|string||
 |`routeGroups[].routes[].policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|List of API keys|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string||
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any||
-|`routeGroups[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`routeGroups[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`routeGroups[].routes[].policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routeGroups[].routes[].policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.apiKey.location.header`|object||
 |`routeGroups[].routes[].policies.apiKey.location.header.name`|string||
 |`routeGroups[].routes[].policies.apiKey.location.header.prefix`|string||
@@ -12418,6 +13054,8 @@
 |`routeGroups[].routes[].policies.apiKey.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.apiKey.location.cookie`|object||
 |`routeGroups[].routes[].policies.apiKey.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.apiKey.location.expression`|object||
+|`routeGroups[].routes[].policies.apiKey.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].service`|object||
@@ -12466,6 +13104,8 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -12477,6 +13117,8 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12490,6 +13132,8 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12587,6 +13231,8 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -12598,6 +13244,8 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12611,6 +13259,8 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12711,6 +13361,8 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -12722,6 +13374,8 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12735,6 +13389,8 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12819,6 +13475,8 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -12830,6 +13488,8 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12843,6 +13503,8 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -12991,6 +13653,8 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -13002,6 +13666,8 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13015,6 +13681,8 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13123,6 +13791,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -13134,6 +13804,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13147,6 +13819,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13249,6 +13923,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -13260,6 +13936,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13273,6 +13951,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13400,6 +14080,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -13411,6 +14093,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13424,6 +14108,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13501,6 +14187,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -13512,6 +14200,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13525,6 +14215,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13602,6 +14294,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -13613,6 +14307,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13626,6 +14322,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13701,6 +14399,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -13712,6 +14412,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13725,6 +14427,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13836,6 +14540,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -13847,6 +14553,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13860,6 +14568,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -13937,6 +14647,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -13948,6 +14660,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13961,6 +14675,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14036,6 +14752,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -14047,6 +14765,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14060,6 +14780,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14196,6 +14918,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -14207,6 +14931,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14220,6 +14946,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14322,6 +15050,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -14333,6 +15063,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14346,6 +15078,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14473,6 +15207,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -14484,6 +15220,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14497,6 +15235,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14574,6 +15314,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -14585,6 +15327,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14598,6 +15342,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14675,6 +15421,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -14686,6 +15434,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14699,6 +15449,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14774,6 +15526,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -14785,6 +15539,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14798,6 +15554,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -14909,6 +15667,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -14920,6 +15680,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14933,6 +15695,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15010,6 +15774,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -15021,6 +15787,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15034,6 +15802,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15109,6 +15879,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -15120,6 +15892,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15133,6 +15907,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15244,6 +16020,8 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value.file`|string||
@@ -15255,6 +16033,8 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15268,6 +16048,8 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15370,6 +16152,8 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -15381,6 +16165,8 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15394,6 +16180,8 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15521,6 +16309,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -15532,6 +16322,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15545,6 +16337,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15622,6 +16416,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -15633,6 +16429,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15646,6 +16444,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15723,6 +16523,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -15734,6 +16536,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15747,6 +16551,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15822,6 +16628,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -15833,6 +16641,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15846,6 +16656,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -15957,6 +16769,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -15968,6 +16782,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15981,6 +16797,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16058,6 +16876,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -16069,6 +16889,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16082,6 +16904,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16157,6 +16981,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -16168,6 +16994,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16181,6 +17009,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16263,6 +17093,7 @@
 |`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`.|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
+|`llm.models[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -16279,16 +17110,68 @@
 |`llm.models[].responseHeaders.add`|object||
 |`llm.models[].responseHeaders.set`|object||
 |`llm.models[].responseHeaders.remove`|[]string||
-|`llm.models[].backendTLS`|object|backendTLS configures TLS when connecting to the LLM provider.|
-|`llm.models[].backendTLS.cert`|string||
-|`llm.models[].backendTLS.key`|string||
-|`llm.models[].backendTLS.root`|string||
-|`llm.models[].backendTLS.hostname`|string||
-|`llm.models[].backendTLS.insecure`|boolean||
-|`llm.models[].backendTLS.insecureHost`|boolean||
-|`llm.models[].backendTLS.alpn`|[]string||
-|`llm.models[].backendTLS.subjectAltNames`|[]string||
-|`llm.models[].backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.models[].tls`|object|tls configures TLS when connecting to the LLM provider.|
+|`llm.models[].tls.cert`|string||
+|`llm.models[].tls.key`|string||
+|`llm.models[].tls.root`|string||
+|`llm.models[].tls.hostname`|string||
+|`llm.models[].tls.insecure`|boolean||
+|`llm.models[].tls.insecureHost`|boolean||
+|`llm.models[].tls.alpn`|[]string||
+|`llm.models[].tls.subjectAltNames`|[]string||
+|`llm.models[].tls.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.models[].auth`|object|auth configures authentication when connecting to the LLM provider.|
+|`llm.models[].auth.passthrough`|object||
+|`llm.models[].auth.passthrough.location`|object||
+|`llm.models[].auth.passthrough.location.header`|object||
+|`llm.models[].auth.passthrough.location.header.name`|string||
+|`llm.models[].auth.passthrough.location.header.prefix`|string||
+|`llm.models[].auth.passthrough.location.queryParameter`|object||
+|`llm.models[].auth.passthrough.location.queryParameter.name`|string||
+|`llm.models[].auth.passthrough.location.cookie`|object||
+|`llm.models[].auth.passthrough.location.cookie.name`|string||
+|`llm.models[].auth.passthrough.location.expression`|object||
+|`llm.models[].auth.passthrough.location.expression.expression`|string||
+|`llm.models[].auth.key`|object||
+|`llm.models[].auth.key.value`|object||
+|`llm.models[].auth.key.value.file`|string||
+|`llm.models[].auth.key.location`|object||
+|`llm.models[].auth.key.location.header`|object||
+|`llm.models[].auth.key.location.header.name`|string||
+|`llm.models[].auth.key.location.header.prefix`|string||
+|`llm.models[].auth.key.location.queryParameter`|object||
+|`llm.models[].auth.key.location.queryParameter.name`|string||
+|`llm.models[].auth.key.location.cookie`|object||
+|`llm.models[].auth.key.location.cookie.name`|string||
+|`llm.models[].auth.key.location.expression`|object||
+|`llm.models[].auth.key.location.expression.expression`|string||
+|`llm.models[].auth.gcp`|object||
+|`llm.models[].auth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.models[].auth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].auth.gcp.credential.file`|string||
+|`llm.models[].auth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.models[].auth.gcp.credential.file`|string||
+|`llm.models[].auth.aws`|object||
+|`llm.models[].auth.aws.accessKeyId`|string||
+|`llm.models[].auth.aws.secretAccessKey`|string||
+|`llm.models[].auth.aws.region`|string||
+|`llm.models[].auth.aws.sessionToken`|string||
+|`llm.models[].auth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.models[].auth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.models[].auth.azure.explicitConfig.clientSecret`|object||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.models[].auth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity`|object||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.models[].auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.models[].auth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.models[].auth.azure.developerImplicit`|object||
+|`llm.models[].auth.azure.implicit`|object||
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.<br>When unset, any 5xx or connection failure is treated as unhealthy.|
 |`llm.models[].health.eviction`|object|Local/config eviction sub-policy with duration as string; mirrors `Eviction`.|
@@ -16366,6 +17249,8 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -16377,6 +17262,8 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16390,6 +17277,8 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16467,6 +17356,8 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -16478,6 +17369,8 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16491,6 +17384,8 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16568,6 +17463,8 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -16579,6 +17476,8 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16592,6 +17491,8 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16667,6 +17568,8 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -16678,6 +17581,8 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16691,6 +17596,8 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16802,6 +17709,8 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -16813,6 +17722,8 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16826,6 +17737,8 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -16903,6 +17816,8 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -16914,6 +17829,8 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16927,6 +17844,8 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17002,6 +17921,8 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -17013,6 +17934,8 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17026,6 +17949,8 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17099,7 +18024,7 @@
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`llm.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.jwtAuth.location.header`|object||
 |`llm.policies.jwtAuth.location.header.name`|string||
 |`llm.policies.jwtAuth.location.header.prefix`|string||
@@ -17107,6 +18032,8 @@
 |`llm.policies.jwtAuth.location.queryParameter.name`|string||
 |`llm.policies.jwtAuth.location.cookie`|object||
 |`llm.policies.jwtAuth.location.cookie.name`|string||
+|`llm.policies.jwtAuth.location.expression`|object||
+|`llm.policies.jwtAuth.location.expression.expression`|string||
 |`llm.policies.jwtAuth.providers`|[]object||
 |`llm.policies.jwtAuth.providers[].issuer`|string||
 |`llm.policies.jwtAuth.providers[].audiences`|[]string||
@@ -17116,7 +18043,7 @@
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.jwtAuth.location.header`|object||
 |`llm.policies.jwtAuth.location.header.name`|string||
 |`llm.policies.jwtAuth.location.header.prefix`|string||
@@ -17124,6 +18051,8 @@
 |`llm.policies.jwtAuth.location.queryParameter.name`|string||
 |`llm.policies.jwtAuth.location.cookie`|object||
 |`llm.policies.jwtAuth.location.cookie.name`|string||
+|`llm.policies.jwtAuth.location.expression`|object||
+|`llm.policies.jwtAuth.location.expression.expression`|string||
 |`llm.policies.jwtAuth.issuer`|string||
 |`llm.policies.jwtAuth.audiences`|[]string||
 |`llm.policies.jwtAuth.jwks`|object||
@@ -17179,6 +18108,8 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -17190,6 +18121,8 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17203,6 +18136,8 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17300,6 +18235,8 @@
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.policies.extAuthz.policies.backendAuth.key`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -17311,6 +18248,8 @@
 |`llm.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`llm.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`llm.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17324,6 +18263,8 @@
 |`llm.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17424,6 +18365,8 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.key`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -17435,6 +18378,8 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17448,6 +18393,8 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17532,6 +18479,8 @@
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.policies.extProc.policies.backendAuth.key`|object||
 |`llm.policies.extProc.policies.backendAuth.key.value`|object||
 |`llm.policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -17543,6 +18492,8 @@
 |`llm.policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.policies.extProc.policies.backendAuth.key.location.cookie`|object||
 |`llm.policies.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.extProc.policies.backendAuth.key.location.expression`|object||
+|`llm.policies.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.policies.extProc.policies.backendAuth.gcp`|object||
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17556,6 +18507,8 @@
 |`llm.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.region`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17627,7 +18580,7 @@
 |`llm.policies.basicAuth.htpasswd.file`|string||
 |`llm.policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`llm.policies.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`llm.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.basicAuth.authorizationLocation.header`|object||
 |`llm.policies.basicAuth.authorizationLocation.header.name`|string||
 |`llm.policies.basicAuth.authorizationLocation.header.prefix`|string||
@@ -17635,12 +18588,14 @@
 |`llm.policies.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`llm.policies.basicAuth.authorizationLocation.cookie`|object||
 |`llm.policies.basicAuth.authorizationLocation.cookie.name`|string||
+|`llm.policies.basicAuth.authorizationLocation.expression`|object||
+|`llm.policies.basicAuth.authorizationLocation.expression.expression`|string||
 |`llm.policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`llm.policies.apiKey.keys`|[]object|List of API keys|
 |`llm.policies.apiKey.keys[].key`|string||
 |`llm.policies.apiKey.keys[].metadata`|any||
-|`llm.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`llm.policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`llm.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`llm.policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`llm.policies.apiKey.location.header`|object||
 |`llm.policies.apiKey.location.header.name`|string||
 |`llm.policies.apiKey.location.header.prefix`|string||
@@ -17648,6 +18603,8 @@
 |`llm.policies.apiKey.location.queryParameter.name`|string||
 |`llm.policies.apiKey.location.cookie`|object||
 |`llm.policies.apiKey.location.cookie.name`|string||
+|`llm.policies.apiKey.location.expression`|object||
+|`llm.policies.apiKey.location.expression.expression`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
 |`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
@@ -17702,6 +18659,8 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -17713,6 +18672,8 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17726,6 +18687,8 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17834,6 +18797,8 @@
 |`mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.targets[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.targets[].policies.backendAuth.key`|object||
 |`mcp.targets[].policies.backendAuth.key.value`|object||
 |`mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -17845,6 +18810,8 @@
 |`mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.targets[].policies.backendAuth.key.location.cookie`|object||
 |`mcp.targets[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.targets[].policies.backendAuth.key.location.expression`|object||
+|`mcp.targets[].policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.targets[].policies.backendAuth.gcp`|object||
 |`mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17858,6 +18825,8 @@
 |`mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.targets[].policies.backendAuth.aws.region`|string||
 |`mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -17964,7 +18933,7 @@
 |`mcp.policies.mcpAuthentication.jwks.file`|string||
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
 |`mcp.policies.mcpAuthentication.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`mcp.policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.mcpAuthentication.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.header`|object||
 |`mcp.policies.mcpAuthentication.authorizationLocation.header.name`|string||
 |`mcp.policies.mcpAuthentication.authorizationLocation.header.prefix`|string||
@@ -17972,6 +18941,8 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string||
 |`mcp.policies.mcpAuthentication.authorizationLocation.cookie`|object||
 |`mcp.policies.mcpAuthentication.authorizationLocation.cookie.name`|string||
+|`mcp.policies.mcpAuthentication.authorizationLocation.expression`|object||
+|`mcp.policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -18037,6 +19008,8 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -18048,6 +19021,8 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18061,6 +19036,8 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18138,6 +19115,8 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -18149,6 +19128,8 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18162,6 +19143,8 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18239,6 +19222,8 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -18250,6 +19235,8 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18263,6 +19250,8 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18338,6 +19327,8 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -18349,6 +19340,8 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18362,6 +19355,8 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18473,6 +19468,8 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -18484,6 +19481,8 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18497,6 +19496,8 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18574,6 +19575,8 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -18585,6 +19588,8 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18598,6 +19603,8 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18673,6 +19680,8 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -18684,6 +19693,8 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18697,6 +19708,8 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18793,6 +19806,8 @@
 |`mcp.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.backendAuth.key`|object||
 |`mcp.policies.backendAuth.key.value`|object||
 |`mcp.policies.backendAuth.key.value.file`|string||
@@ -18804,6 +19819,8 @@
 |`mcp.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.backendAuth.gcp`|object||
 |`mcp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18817,6 +19834,8 @@
 |`mcp.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.backendAuth.aws.region`|string||
 |`mcp.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -18891,6 +19910,8 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -18902,6 +19923,8 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18915,6 +19938,8 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19004,6 +20029,8 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -19015,6 +20042,8 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19028,6 +20057,8 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19073,7 +20104,7 @@
 |`mcp.policies.remoteRateLimit.failureMode`|enum|Behavior when the remote rate limit service is unavailable or returns an error.<br>Defaults to failClosed, denying requests with a 500 status on service failure.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
 |`mcp.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.jwtAuth.location.header`|object||
 |`mcp.policies.jwtAuth.location.header.name`|string||
 |`mcp.policies.jwtAuth.location.header.prefix`|string||
@@ -19081,6 +20112,8 @@
 |`mcp.policies.jwtAuth.location.queryParameter.name`|string||
 |`mcp.policies.jwtAuth.location.cookie`|object||
 |`mcp.policies.jwtAuth.location.cookie.name`|string||
+|`mcp.policies.jwtAuth.location.expression`|object||
+|`mcp.policies.jwtAuth.location.expression.expression`|string||
 |`mcp.policies.jwtAuth.providers`|[]object||
 |`mcp.policies.jwtAuth.providers[].issuer`|string||
 |`mcp.policies.jwtAuth.providers[].audiences`|[]string||
@@ -19090,7 +20123,7 @@
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.jwtAuth.location.header`|object||
 |`mcp.policies.jwtAuth.location.header.name`|string||
 |`mcp.policies.jwtAuth.location.header.prefix`|string||
@@ -19098,6 +20131,8 @@
 |`mcp.policies.jwtAuth.location.queryParameter.name`|string||
 |`mcp.policies.jwtAuth.location.cookie`|object||
 |`mcp.policies.jwtAuth.location.cookie.name`|string||
+|`mcp.policies.jwtAuth.location.expression`|object||
+|`mcp.policies.jwtAuth.location.expression.expression`|string||
 |`mcp.policies.jwtAuth.issuer`|string||
 |`mcp.policies.jwtAuth.audiences`|[]string||
 |`mcp.policies.jwtAuth.jwks`|object||
@@ -19125,7 +20160,7 @@
 |`mcp.policies.basicAuth.htpasswd.file`|string||
 |`mcp.policies.basicAuth.realm`|string|Realm name for the WWW-Authenticate header|
 |`mcp.policies.basicAuth.mode`|enum|Validation mode for basic authentication<br>Possible values: `strict`, `optional`.|
-|`mcp.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.basicAuth.authorizationLocation`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.basicAuth.authorizationLocation.header`|object||
 |`mcp.policies.basicAuth.authorizationLocation.header.name`|string||
 |`mcp.policies.basicAuth.authorizationLocation.header.prefix`|string||
@@ -19133,12 +20168,14 @@
 |`mcp.policies.basicAuth.authorizationLocation.queryParameter.name`|string||
 |`mcp.policies.basicAuth.authorizationLocation.cookie`|object||
 |`mcp.policies.basicAuth.authorizationLocation.cookie.name`|string||
+|`mcp.policies.basicAuth.authorizationLocation.expression`|object||
+|`mcp.policies.basicAuth.authorizationLocation.expression.expression`|string||
 |`mcp.policies.apiKey`|object|Authenticate incoming requests using API Keys|
 |`mcp.policies.apiKey.keys`|[]object|List of API keys|
 |`mcp.policies.apiKey.keys[].key`|string||
 |`mcp.policies.apiKey.keys[].metadata`|any||
-|`mcp.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`.|
-|`mcp.policies.apiKey.location`|object|Exactly one of header, queryParameter, or cookie may be set.|
+|`mcp.policies.apiKey.mode`|enum|Validation mode for API keys<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.policies.apiKey.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.apiKey.location.header`|object||
 |`mcp.policies.apiKey.location.header.name`|string||
 |`mcp.policies.apiKey.location.header.prefix`|string||
@@ -19146,6 +20183,8 @@
 |`mcp.policies.apiKey.location.queryParameter.name`|string||
 |`mcp.policies.apiKey.location.cookie`|object||
 |`mcp.policies.apiKey.location.cookie.name`|string||
+|`mcp.policies.apiKey.location.expression`|object||
+|`mcp.policies.apiKey.location.expression.expression`|string||
 |`mcp.policies.extAuthz`|object|Authenticate incoming requests by calling an external authorization server.|
 |`mcp.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extAuthz.conditional[].service`|object||
@@ -19194,6 +20233,8 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -19205,6 +20246,8 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19218,6 +20261,8 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19315,6 +20360,8 @@
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.key`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.value`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -19326,6 +20373,8 @@
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19339,6 +20388,8 @@
 |`mcp.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19439,6 +20490,8 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.value`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -19450,6 +20503,8 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19463,6 +20518,8 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
@@ -19547,6 +20604,8 @@
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.cookie`|object||
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string||
 |`mcp.policies.extProc.policies.backendAuth.key`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.value`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -19558,6 +20617,8 @@
 |`mcp.policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string||
 |`mcp.policies.extProc.policies.backendAuth.key.location.cookie`|object||
 |`mcp.policies.extProc.policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.extProc.policies.backendAuth.key.location.expression.expression`|string||
 |`mcp.policies.extProc.policies.backendAuth.gcp`|object||
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19571,6 +20632,8 @@
 |`mcp.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.region`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig.clientSecret`|object||

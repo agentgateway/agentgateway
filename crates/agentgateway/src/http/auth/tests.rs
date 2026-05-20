@@ -6,6 +6,37 @@ use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
+#[test]
+fn test_authorization_location_expression_extracts_from_cel() {
+	let req = ::http::Request::builder()
+		.uri("http://example.com/")
+		.header("x-token", "from-cel")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(
+			crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+		),
+	};
+
+	assert_eq!(location.extract(&req).as_deref(), Some("from-cel"));
+}
+
+#[test]
+fn test_authorization_location_expression_cannot_insert() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(crate::cel::Expression::new_strict(r#""token""#).unwrap()),
+	};
+
+	let err = location.insert(&mut req, "token").unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("only supported for credential extraction")
+	);
+}
+
 #[tokio::test]
 async fn test_backend_auth_passthrough_happy_path() {
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
@@ -195,6 +226,7 @@ async fn test_aws_sign_request_explicit_region() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: Some("us-west-2".to_string()),
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -251,6 +283,7 @@ async fn test_aws_sign_requestallback() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// Insert default AwsRegion into request extensions
@@ -283,6 +316,7 @@ async fn test_aws_sign_request_no_region_error() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -322,7 +356,7 @@ async fn test_aws_sign_request_implicit_with_extension() {
 		region: "ap-southeast-1".to_string(),
 	});
 
-	let aws_auth = AwsAuth::Implicit {};
+	let aws_auth = AwsAuth::Implicit { service_name: None };
 
 	// Should use region from request extensions
 	let result = aws::sign_request(&mut req, &aws_auth).await;

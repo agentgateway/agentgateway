@@ -15,6 +15,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extmcp"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/extproc"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/hostrewrite"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/jwtauth"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/locality"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/agentgateway/mcp"
@@ -42,6 +43,7 @@ func AgentgatewaySuiteRunner() e2e.SuiteRunner {
 	agentgatewaySuiteRunner.Register("Extauth", extauth.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("ExtMcp", extmcp.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("Extproc", extproc.NewTestingSuite)
+	agentgatewaySuiteRunner.Register("HostRewrite", hostrewrite.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("LocalRateLimit", local_rate_limit.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("GlobalRateLimit", global_rate_limit.NewTestingSuite)
 	agentgatewaySuiteRunner.Register("RBAC", rbac.NewTestingSuite)

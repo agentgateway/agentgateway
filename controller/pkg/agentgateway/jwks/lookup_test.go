@@ -36,7 +36,7 @@ func TestLookupFailsClosedWhenKeysetIsMissing(t *testing.T) {
 	stop := test.NewStop(t)
 	target := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupMissingPersistedConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)
@@ -75,7 +75,7 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupPersistedConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)
@@ -115,7 +115,7 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupLegacyNameConfigMaps")),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
 	)
@@ -140,7 +140,7 @@ func TestLookupPropagatesResolverError(t *testing.T) {
 	sentinel := errors.New("resolver failed")
 	lookupIndex := NewLookup(
 		NewPersistedEntriesFromCollection(
-			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil),
+			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupResolverErrorConfigMaps")),
 			DefaultJwksStorePrefix,
 			"agentgateway-system",
 		),

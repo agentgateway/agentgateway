@@ -52,13 +52,17 @@ type AgentgatewayBackendList struct {
 	Items           []AgentgatewayBackend `json:"items"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws
+// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws;a2a
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.ai) ? has(self.ai) : true",message="AI policies require AI backend"
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.mcp) ? has(self.mcp) : true",message="MCP policies require MCP backend"
 type AgentgatewayBackendSpec struct {
 	// static represents a static hostname.
 	// +optional
 	Static *StaticBackend `json:"static,omitempty"`
+
+	// a2a represents an A2A backend.
+	// +optional
+	A2A *A2ABackend `json:"a2a,omitempty"`
 
 	// ai represents a LLM backend.
 	// +optional
@@ -125,6 +129,19 @@ type StaticBackend struct {
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	UnixPath *string `json:"unixPath,omitempty"`
+}
+
+// A2ABackend specifies an A2A backend endpoint.
+type A2ABackend struct {
+	// host is the hostname or IP address of the A2A backend.
+	// +required
+	Host ShortString `json:"host"`
+
+	// port is the port number of the A2A backend.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +required
+	Port int32 `json:"port"`
 }
 
 // AIBackend specifies the AI backend configuration

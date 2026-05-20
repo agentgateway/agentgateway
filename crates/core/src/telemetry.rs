@@ -11,8 +11,10 @@ mod worker;
 
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Write as FmtWrite};
+use std::future::Future;
 use std::str::FromStr;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use std::{env, fmt, io};
 
@@ -40,6 +42,55 @@ pub static APPLICATION_START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
 static LOG_HANDLE: OnceCell<LogHandle> = OnceCell::new();
 static DEFAULT_LEVEL: OnceCell<String> = OnceCell::new();
 static NON_BLOCKING: OnceCell<(NonBlocking, bool)> = OnceCell::new();
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
+tokio::task_local! {
+	static CONNECTION_ID: u64;
+	static REQUEST_ID: u64;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TaskLocalIds {
+	connection_id: Option<u64>,
+	request_id: Option<u64>,
+}
+
+pub fn connection_scope<F>(future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	connection_scope_with(NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed), future)
+}
+
+pub fn connection_scope_with<F>(id: u64, future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	CONNECTION_ID.scope(id, future)
+}
+
+pub fn request_scope<F>(future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	REQUEST_ID.scope(NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed), future)
+}
+
+pub fn current_connection_id() -> Option<u64> {
+	CONNECTION_ID.try_with(|id| *id).ok()
+}
+
+pub fn current_request_id() -> Option<u64> {
+	REQUEST_ID.try_with(|id| *id).ok()
+}
+
+fn current_task_local_ids() -> TaskLocalIds {
+	TaskLocalIds {
+		connection_id: current_connection_id(),
+		request_id: current_request_id(),
+	}
+}
 
 pub trait OtelLogSink: Send + Sync {
 	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]);
@@ -311,6 +362,7 @@ struct Visitor<'writer> {
 	res: std::fmt::Result,
 	is_empty: bool,
 	writer: Writer<'writer>,
+	task_local_ids: Option<TaskLocalIds>,
 }
 
 impl Visitor<'_> {
@@ -322,6 +374,19 @@ impl Visitor<'_> {
 			" "
 		};
 		write!(self.writer, "{padding}{value:?}")
+	}
+
+	fn write_task_local_ids(&mut self) -> std::fmt::Result {
+		let Some(ids) = self.task_local_ids.take() else {
+			return Ok(());
+		};
+		if let Some(id) = ids.connection_id {
+			self.write_padded(&format_args!("connection.id={id}"))?;
+		}
+		if let Some(id) = ids.request_id {
+			self.write_padded(&format_args!("request.id={id}"))?;
+		}
+		Ok(())
 	}
 }
 
@@ -339,9 +404,11 @@ impl field::Visit for Visitor<'_> {
 			// Skip fields that are actually log metadata that have already been handled
 			name if name.starts_with("log.") => Ok(()),
 			// For the message, write out the message and a tab to separate the future fields
-			"message" => write!(self.writer, "{val:?}\t"),
+			"message" => write!(self.writer, "{val:?}\t").and_then(|_| self.write_task_local_ids()),
 			// For the rest, k=v.
-			_ => self.write_padded(&format_args!("{}={:?}", field.name(), val)),
+			_ => self
+				.write_task_local_ids()
+				.and_then(|_| self.write_padded(&format_args!("{}={:?}", field.name(), val))),
 		}
 	}
 }
@@ -356,8 +423,10 @@ impl<'writer> FormatFields<'writer> for IstioFormat {
 			writer,
 			res: Ok(()),
 			is_empty: true,
+			task_local_ids: None,
 		};
 		fields.record(&mut visitor);
+		visitor.write_task_local_ids()?;
 		visitor.res
 	}
 }
@@ -386,6 +455,7 @@ where
 		// No need to prefix everything
 		let target = target.strip_prefix("agentgateway::").unwrap_or(target);
 		write!(writer, "{target}")?;
+		let task_local_ids = current_task_local_ids();
 
 		// Write out span fields. Istio logging outside of Rust doesn't really have this concept
 		if let Some(scope) = ctx.event_scope() {
@@ -399,12 +469,21 @@ where
 				}
 			}
 		};
-		// Insert tab only if there is fields
-		if event.fields().any(|_| true) {
+		let has_fields = event.fields().any(|_| true);
+		// Insert tab only if there are fields or formatter-level context.
+		if has_fields || task_local_ids.connection_id.is_some() || task_local_ids.request_id.is_some() {
 			write!(writer, "\t")?;
 		}
 
-		ctx.format_fields(writer.by_ref(), event)?;
+		let mut visitor = Visitor {
+			writer: writer.by_ref(),
+			res: Ok(()),
+			is_empty: true,
+			task_local_ids: Some(task_local_ids),
+		};
+		event.record(&mut visitor);
+		visitor.write_task_local_ids()?;
+		visitor.res?;
 
 		writeln!(writer)
 	}
@@ -531,6 +610,13 @@ where
 			serializer.serialize_entry("level", &meta.level().as_str().to_ascii_lowercase())?;
 			serializer.serialize_entry("time", &timestamp)?;
 			serializer.serialize_entry("scope", meta.target())?;
+			let task_local_ids = current_task_local_ids();
+			if let Some(id) = task_local_ids.connection_id {
+				serializer.serialize_entry("connection.id", &id)?;
+			}
+			if let Some(id) = task_local_ids.request_id {
+				serializer.serialize_entry("request.id", &id)?;
+			}
 			let mut v = JsonVisitory {
 				serializer,
 				state: Ok(()),

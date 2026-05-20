@@ -2,6 +2,8 @@ package agentgateway
 
 import (
 	"iter"
+	"log/slog"
+	"math"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -283,31 +285,54 @@ type SNI = string
 // ByteSize is a byte quantity that must fit in a uint32 dataplane field.
 // +kubebuilder:validation:XIntOrString
 // +kubebuilder:validation:MaxLength=32
-// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isLessThan(quantity('1'))",message="value must be at least 1 byte"
-// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isGreaterThan(quantity('4294967295'))",message="value must fit within uint32"
-type ByteSize resource.Quantity
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:Pattern=`^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$`
+// +kubebuilder:validation:XValidation:rule="(self >= 1 && self <= 4294967295) || self.size() > 0",message="value must be at least 1 byte and fit within uint32"
+type ByteSize struct {
+	Value *resource.Quantity `json:"-"`
+}
 
-func (b ByteSize) Value() int64 {
-	q := resource.Quantity(b)
-	return q.Value()
+// ClampedValue returns the quantity as a uint32, clamping values to 0..MaxUint32.
+func (b *ByteSize) ClampedValue() *uint32 {
+	if b == nil || b.Value == nil {
+		return nil
+	}
+	v := b.Value.Value()
+	if v < 0 {
+		return new(uint32(0))
+	}
+	if v > math.MaxUint32 {
+		return new(uint32(math.MaxUint32))
+	}
+	return new(uint32(v))
 }
 
 func (b ByteSize) MarshalJSON() ([]byte, error) {
-	q := resource.Quantity(b)
-	return q.MarshalJSON()
+	if b.Value == nil {
+		return []byte("null"), nil
+	}
+	return b.Value.MarshalJSON()
 }
 
 func (b *ByteSize) UnmarshalJSON(data []byte) error {
 	var q resource.Quantity
 	if err := q.UnmarshalJSON(data); err != nil {
-		return err
+		// Invalid byte sizes must not block informer decoding. CEL cannot validate
+		// this safely until the quantity cost bug is fixed, so treat it as unset.
+		slog.Warn("failed to unmarshal quantity, ignoring", "value", string(data), "error", err)
+		b.Value = nil
+		return nil
 	}
-	*b = ByteSize(q)
+	b.Value = &q
 	return nil
 }
 
 func (b ByteSize) DeepCopy() ByteSize {
-	return ByteSize(resource.Quantity(b).DeepCopy())
+	if b.Value == nil {
+		return ByteSize{}
+	}
+	q := b.Value.DeepCopy()
+	return ByteSize{Value: &q}
 }
 
 type InsecureTLSMode string
@@ -833,6 +858,15 @@ type AuthorizationLocation struct {
 	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie;expression
+type AuthorizationExtractionLocation struct {
+	AuthorizationLocation `json:",inline"`
+
+	// expression extracts the credential from the request using a CEL expression.
+	// +optional
+	Expression *shared.CELExpression `json:"expression,omitempty"`
+}
+
 type AuthorizationHeaderLocation struct {
 	// +required
 	Name gwv1.HTTPHeaderName `json:"name"`
@@ -872,7 +906,7 @@ type JWTAuthentication struct {
 	// `location` controls where JWT credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 
 	// `mcp` optionally enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
@@ -1014,10 +1048,10 @@ type BasicAuthentication struct {
 	// `location` controls where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +kubebuilder:validation:Enum=Strict;Optional;Permissive
 type APIKeyAuthenticationMode string
 
 const (
@@ -1027,6 +1061,9 @@ const (
 	// If an API Key exists, validate it.
 	// Warning: this allows requests without an API Key!
 	APIKeyAuthenticationModeOptional APIKeyAuthenticationMode = "Optional"
+	// Requests are never rejected for missing or invalid API keys.
+	// Warning: this allows requests without a valid API key!
+	APIKeyAuthenticationModePermissive APIKeyAuthenticationMode = "Permissive"
 )
 
 // +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector
@@ -1100,7 +1137,7 @@ type APIKeyAuthentication struct {
 	// `location` controls where API keys are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
 type SecretSelector struct {
@@ -1201,6 +1238,13 @@ type AwsAuth struct {
 	// optionally `sessionToken`.
 	// +required
 	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+
+	// `serviceName` is the AWS SigV4 signing service name (for example,
+	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+	// backends may provide this automatically.
+	//
+	// +optional
+	ServiceName *ShortString `json:"serviceName,omitempty"`
 }
 
 type AzureAuth struct {

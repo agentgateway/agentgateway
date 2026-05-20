@@ -190,6 +190,11 @@ pub enum AuthorizationLocation {
 	Cookie {
 		name: Strng,
 	},
+	/// CEL expression that evaluates to the credential string.
+	/// Only supported for credential extraction.
+	Expression {
+		expression: Arc<crate::cel::Expression>,
+	},
 }
 
 impl Default for AuthorizationLocation {
@@ -227,6 +232,11 @@ impl AuthorizationLocation {
 			},
 			AuthorizationLocation::QueryParameter { name } => query_parameter(req, name),
 			AuthorizationLocation::Cookie { name } => crate::http::read_request_cookie(req, name),
+			AuthorizationLocation::Expression { expression } => crate::cel::Executor::new_request(req)
+				.eval(expression)
+				.ok()
+				.and_then(|v| v.as_str().ok().map(Cow::into_owned))
+				.map(Cow::Owned),
 		}
 	}
 
@@ -246,6 +256,7 @@ impl AuthorizationLocation {
 			AuthorizationLocation::Cookie { name } => {
 				set_request_cookie(req, name, None)?;
 			},
+			AuthorizationLocation::Expression { .. } => {},
 		}
 		Ok(())
 	}
@@ -273,8 +284,20 @@ impl AuthorizationLocation {
 			AuthorizationLocation::Cookie { name } => {
 				set_request_cookie(req, name, Some(value))?;
 			},
+			AuthorizationLocation::Expression { .. } => {
+				return Err(ProcessingString(
+					"expression auth location is only supported for credential extraction".to_string(),
+				));
+			},
 		}
 		Ok(())
+	}
+
+	pub fn expression(&self) -> Option<&crate::cel::Expression> {
+		match self {
+			AuthorizationLocation::Expression { expression } => Some(expression),
+			_ => None,
+		}
 	}
 }
 

@@ -127,11 +127,28 @@ function current-version() {
   fi
 }
 
+binaryFileName() {
+  if [[ "$OS" == "windows" ]]; then
+    echo "$BINARY_NAME.exe"
+  else
+    echo "$BINARY_NAME"
+  fi
+}
+
+agentGatewayDist() {
+  if [[ "$OS" == "windows" ]]; then
+    echo "$BINARY_NAME-$OS-$ARCH.exe"
+  else
+    echo "$BINARY_NAME-$OS-$ARCH"
+  fi
+}
+
 # checkAgentGatewayInstalledVersion checks which version of    is installed and
 # if it needs to be changed.
 checkAgentGatewayInstalledVersion() {
-  if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version="$(current-version "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}")"
+  local binary_name="$(binaryFileName)"
+  if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${binary_name}" ]]; then
+    local version="$(current-version "${AGENTGATEWAY_INSTALL_DIR}/${binary_name}")"
     if [[ "$version" == "$TAG" ]]; then
       echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
@@ -147,7 +164,7 @@ checkAgentGatewayInstalledVersion() {
 # downloadFile downloads the latest binary package and also the checksum
 # for that binary.
 downloadFile() {
-  AGENTGATEWAY_DIST="agentgateway-$OS-$ARCH"
+  AGENTGATEWAY_DIST="$(agentGatewayDist)"
   DOWNLOAD_URL="https://github.com/agentgateway/agentgateway/releases/download/$TAG/$AGENTGATEWAY_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
   AGENTGATEWAY_TMP_ROOT="$(mktemp -dt agentgateway-installer-XXXXXX)"
@@ -174,10 +191,11 @@ verifyFile() {
 
 # installFile installs the agentgateway binary.
 installFile() {
-  echo "Preparing to install $BINARY_NAME into ${AGENTGATEWAY_INSTALL_DIR}"
-  runAsRoot chmod +x "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH"
-  runAsRoot cp "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH" "$AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
-  echo "$BINARY_NAME installed into $AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
+  local binary_name="$(binaryFileName)"
+  echo "Preparing to install $binary_name into ${AGENTGATEWAY_INSTALL_DIR}"
+  runAsRoot chmod +x "$AGENTGATEWAY_TMP_FILE"
+  runAsRoot cp "$AGENTGATEWAY_TMP_FILE" "$AGENTGATEWAY_INSTALL_DIR/$binary_name"
+  echo "$binary_name installed into $AGENTGATEWAY_INSTALL_DIR/$binary_name"
 }
 
 # verifyChecksum verifies the SHA256 checksum of the binary package.
@@ -211,7 +229,7 @@ fail_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  AGENTGATEWAY="$(command -v $BINARY_NAME)"
+  AGENTGATEWAY="$(command -v "$(binaryFileName)")"
   if [ "$?" = "1" ]; then
     echo "$BINARY_NAME not found. Is $AGENTGATEWAY_INSTALL_DIR on your "'$PATH?'
     exit 1

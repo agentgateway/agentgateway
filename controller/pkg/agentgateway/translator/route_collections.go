@@ -119,7 +119,7 @@ func isDelegatedChildHTTPRoute(obj *gwv1.HTTPRoute) bool {
 }
 func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 	allowedParents := slices.MapFilter(obj.Spec.ParentRefs, func(ref gwv1.ParentReference) *types.NamespacedName {
-		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK) != wellknown.HTTPRouteGVK {
+		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
 			return nil
 		}
 		return new(types.NamespacedName{
@@ -136,8 +136,8 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 func extractHTTPRouteGroupRefs(rule gwv1.HTTPRouteRule, routeNamespace string) []routeGroupBindingKey {
 	var res []routeGroupBindingKey
 	for _, backend := range rule.BackendRefs {
-		ref := NormalizeReference(backend.Group, backend.Kind, wellknown.ServiceGVK)
-		if ref != wellknown.HTTPRouteGVK {
+		ref := NormalizeReference(backend.Group, backend.Kind, wellknown.ServiceGVK.GroupKind())
+		if ref != wellknown.HTTPRouteGVK.GroupKind() {
 			continue
 		}
 		namespace := routeNamespace
@@ -213,7 +213,7 @@ func buildHTTPRouteGroupBindings(
 		}
 
 		return bindings
-	}, krtopts.ToOptions("HTTPRouteGroupBindingsRaw")...)
+	}, krtopts.ToOptions("translator/HTTPRouteGroupBindingsRaw")...)
 	return raw
 }
 
@@ -313,7 +313,7 @@ func buildDelegatedHTTPRoutes(
 			}
 		}
 		return resources
-	}, krtopts.ToOptions("DelegatedHTTPRoutes")...)
+	}, krtopts.ToOptions("translator/DelegatedHTTPRoutes")...)
 
 	ancestors := krt.NewManyCollection(httpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []*utils.AncestorBackend {
 		if !isDelegatedChildHTTPRoute(obj) {
@@ -340,7 +340,7 @@ func buildDelegatedHTTPRoutes(
 		for _, rule := range obj.Spec.Rules {
 			for _, backend := range rule.BackendRefs {
 				ref, refNs, refName := GetBackendRef(backend)
-				if ref == wellknown.HTTPRouteGVK {
+				if ref == wellknown.HTTPRouteGVK.GroupKind() {
 					continue
 				}
 				backends.Insert(utils.TypedNamespacedName{
@@ -363,7 +363,7 @@ func buildDelegatedHTTPRoutes(
 			}
 		}
 		return res
-	}, krtopts.ToOptions("DelegatedHTTPRouteAncestors")...)
+	}, krtopts.ToOptions("translator/DelegatedHTTPRouteAncestors")...)
 
 	return routes, ancestors
 }
@@ -448,7 +448,7 @@ func AgwRouteCollection(
 		return []string{binding.Source.String()}
 	})
 
-	httpRouteStatus, httpRoutes := createRouteCollectionGeneric(httpRouteCol, inputs, krtopts, "HTTPRoutes",
+	httpRouteStatus, httpRoutes := createRouteCollectionGeneric(httpRouteCol, inputs, krtopts, "translator/HTTPRoutes",
 		func(ctx RouteContext, obj *gwv1.HTTPRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
@@ -469,7 +469,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
 	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, inputs, krtopts)
 
-	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "GRPCRoutes",
+	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "translator/GRPCRoutes",
 		func(ctx RouteContext, obj *gwv1.GRPCRoute) (RouteContext, iter.Seq2[AgwRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
@@ -486,7 +486,7 @@ func AgwRouteCollection(
 		})
 	status.RegisterStatus(queue, grpcRouteStatus, GetStatus)
 
-	tcpRouteStatus, tcpRoutes := createRouteCollectionGeneric(tcpRouteCol, inputs, krtopts, "TCPRoutes",
+	tcpRouteStatus, tcpRoutes := createRouteCollectionGeneric(tcpRouteCol, inputs, krtopts, "translator/TCPRoutes",
 		func(ctx RouteContext, obj *gwv1a2.TCPRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
@@ -503,7 +503,7 @@ func AgwRouteCollection(
 		})
 	status.RegisterStatus(queue, tcpRouteStatus, GetStatus)
 
-	tlsRouteStatus, tlsRoutes := createRouteCollectionGeneric(tlsRouteCol, inputs, krtopts, "TLSRoutes",
+	tlsRouteStatus, tlsRoutes := createRouteCollectionGeneric(tlsRouteCol, inputs, krtopts, "translator/TLSRoutes",
 		func(ctx RouteContext, obj *gwv1.TLSRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
@@ -528,7 +528,7 @@ func AgwRouteCollection(
 			tcpRoutes,
 			tlsRoutes,
 		},
-		krtopts.ToOptions("ADPRoutes")...,
+		krtopts.ToOptions("translator/Routes")...,
 	)
 
 	routeAttachments := krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{
@@ -537,7 +537,7 @@ func AgwRouteCollection(
 		gatewayRouteAttachmentCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
 		gatewayRouteAttachmentCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
 		gatewayRouteAttachmentCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
-	})
+	}, krtopts.ToOptions("translator/RouteAttachments")...)
 
 	ancestorBackends := krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{
 		krt.NewManyCollection(httpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []*utils.AncestorBackend {
@@ -545,27 +545,27 @@ func AgwRouteCollection(
 			return extractAncestorBackends(ctx, obj, "HTTPRoute", obj.Spec.Rules, func(r gwv1.HTTPRouteRule) []gwv1.HTTPBackendRef {
 				return r.BackendRefs
 			})
-		}, krtopts.ToOptions("HTTPAncestors")...),
+		}, krtopts.ToOptions("translator/HTTPAncestors")...),
 		delegatedHTTPAncestors,
 		krt.NewManyCollection(grpcRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.GRPCRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
 			return extractAncestorBackends(ctx, obj, "GRPCRoute", obj.Spec.Rules, func(r gwv1.GRPCRouteRule) []gwv1.GRPCBackendRef {
 				return r.BackendRefs
 			})
-		}, krtopts.ToOptions("GRPCAncestors")...),
+		}, krtopts.ToOptions("translator/GRPCAncestors")...),
 		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TLSRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
 			return extractAncestorBackends(ctx, obj, "TLSRoute", obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1a2.BackendRef {
 				return r.BackendRefs
 			})
-		}, krtopts.ToOptions("TLSAncestors")...),
+		}, krtopts.ToOptions("translator/TLSAncestors")...),
 		krt.NewManyCollection(tcpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TCPRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
 			return extractAncestorBackends(ctx, obj, "TCPRoute", obj.Spec.Rules, func(r gwv1a2.TCPRouteRule) []gwv1a2.BackendRef {
 				return r.BackendRefs
 			})
-		}, krtopts.ToOptions("TCPAncestors")...),
-	})
+		}, krtopts.ToOptions("translator/TCPAncestors")...),
+	}, krtopts.ToOptions("translator/RouteAncestorBackends")...)
 
 	return routes, routeAttachments, ancestorBackends
 }
@@ -756,10 +756,14 @@ func routeKeySuffix(parent RouteParentReference) string {
 	if parent.ServiceKey != nil {
 		return ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Name
 	}
-	if sec := string(parent.ParentSection); sec != "" {
-		return "." + sec
+	section := string(parent.ParentSection)
+	if section == "" {
+		return ""
 	}
-	return ""
+	if parent.ParentKey.Kind != wellknown.GatewayGVK.Kind {
+		return "." + parent.ParentKey.Namespace + "." + parent.ParentKey.Name + "." + section
+	}
+	return "." + section
 }
 
 // reasonResolvedRefs picks a ResolvedRefs reason from a conversion failure condition.
@@ -1019,7 +1023,7 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 				ListenerName: string(e.ParentSection),
 			})
 		})
-	}, opts.ToOptions(kind.Kind+"/count")...)
+	}, opts.ToOptions("translator/"+kind.Kind+"/count")...)
 }
 
 // gatewayRouteAttachmentCountCollection holds the generic logic to determine the parents a route is attached to, used for
@@ -1044,7 +1048,7 @@ func delegatedGatewayRouteAttachmentCountCollection(
 			ListenerName: "",
 			Gateway:      obj.Gateway,
 		}}
-	}, opts.ToOptions("DelegatedHTTPRoute/count")...)
+	}, opts.ToOptions("translator/DelegatedHTTPRoute/count")...)
 }
 
 func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext, obj T, kind string, rules []RT, extract func(RT) []BT) []*utils.AncestorBackend {
@@ -1063,7 +1067,7 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	for _, r := range rules {
 		for _, b := range extract(r) {
 			ref, refNs, refName := GetBackendRef(b)
-			if ref == wellknown.HTTPRouteGVK {
+			if ref == wellknown.HTTPRouteGVK.GroupKind() {
 				continue
 			}
 			be := utils.TypedNamespacedName{
@@ -1091,16 +1095,16 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	return res
 }
 
-func GetBackendRef[I any](spec I) (schema.GroupVersionKind, *gwv1.Namespace, gwv1.ObjectName) {
+func GetBackendRef[I any](spec I) (schema.GroupKind, *gwv1.Namespace, gwv1.ObjectName) {
 	switch t := any(spec).(type) {
 	case gwv1.HTTPBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	case gwv1.GRPCBackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	case gwv1.BackendRef:
-		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK), t.Namespace, t.Name
+		return NormalizeReference(t.Group, t.Kind, wellknown.ServiceGVK.GroupKind()), t.Namespace, t.Name
 	default:
 		log.Fatalf("unknown GetBackendRef type %T", t)
-		return schema.GroupVersionKind{}, nil, ""
+		return schema.GroupKind{}, nil, ""
 	}
 }

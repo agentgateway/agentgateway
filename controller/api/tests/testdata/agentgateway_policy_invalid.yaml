@@ -127,6 +127,10 @@ kind: AgentgatewayPolicy
 metadata:
   name: frontend-http-buffer-small
 spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
   frontend:
     http:
       maxBufferSize: 0
@@ -167,9 +171,55 @@ kind: AgentgatewayPolicy
 metadata:
   name: frontend-http2-window-small
 spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
   frontend:
     http:
       http2WindowSize: 0
+---
+_err: 'http.maxBufferSize'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-buffer-empty
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  frontend:
+    http:
+      maxBufferSize: ""
+---
+_err: 'http.maxBufferSize'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-buffer-negative
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  frontend:
+    http:
+      maxBufferSize: -1
+---
+_err: 'http.maxBufferSize'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-http-buffer-too-large
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  frontend:
+    http:
+      maxBufferSize: 4294967296
 ---
 _err: 'keepalive.retries'
 apiVersion: agentgateway.dev/v1alpha1
@@ -181,17 +231,6 @@ spec:
     tcp:
       keepalive:
         retries: 0
----
-_err: 'backendRef: Required'
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayPolicy
-metadata:
-  name: traffic-extauth-no-backend
-spec:
-  traffic:
-    extAuth:
-      forwardBody:
-        maxSize: 1024
 ---
 _err: 'backendRef: Required'
 apiVersion: agentgateway.dev/v1alpha1

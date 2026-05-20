@@ -27,5 +27,5 @@ func GatewayClassesCollection(
 			Name:       obj.Name,
 			Controller: obj.Spec.ControllerName,
 		}
-	}, krtopts.ToOptions("GatewayClasses")...)
+	}, krtopts.ToOptions("translator/GatewayClasses")...)
 }
