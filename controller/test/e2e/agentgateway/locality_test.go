@@ -166,7 +166,7 @@ func workloadEntriesYAML(entries []weSpec) string {
 kind: WorkloadEntry
 metadata:
   name: %s
-  localityNamespace: %s
+  namespace: %s
   labels:
     app: locality-svc-workloadentry
 spec:

@@ -97,7 +97,7 @@ spec:
       - name: openai-fallback
         openai:
           model: gpt-4o-mini
-        host: 172.17.0.1
+        host: ai-testbox.default.svc.cluster.local
         port: 9234
   policies:
     auth:

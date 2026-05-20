@@ -3,22 +3,13 @@
 package agentgateway
 
 import (
-	"encoding/json"
 	"net/http"
-	"runtime"
-	"strings"
 	"testing"
-	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/kagent-dev/mockllm"
 	"github.com/onsi/gomega"
-	"github.com/openai/openai-go/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
-	testdefaults "github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
@@ -27,16 +18,9 @@ const (
 	// Ref: https://github.com/agentgateway/agentgateway/blob/0eff44a748b80030141ebe1d3626c780d05b0265/crates/agentgateway/src/llm/policy.rs#L502
 	agwDefaultPromptGuardResponse = "The request was rejected due to inappropriate content"
 
-	// Ref: https://github.com/solo-io/gloo-gateway-use-cases/blob/76e6cec2f0b41eda7a93ac87a1b0f41ddb17503c/ai-guardrail-webhook-server/main.py#L105
 	guardrailsWebhookBlockResponse = "request blocked"
 
-	// Ref: https://github.com/solo-io/gloo-gateway-use-cases/blob/76e6cec2f0b41eda7a93ac87a1b0f41ddb17503c/ai-guardrail-webhook-server/main.py#L112
 	maskedPatternResponse = "****ing"
-
-	// TODO(nfuden): This shouldnt be in this specific file, it should either be an overarching replacement or a special env variable as we see in some other projects
-	// Mac causes a lot of problems but we should be able to support it in general
-	dockerBridgeIfaceIP   = "172.17.0.1"
-	macOSDockerBridgeHost = "host.docker.internal"
 )
 
 var (
@@ -47,67 +31,36 @@ var (
 	// test cases
 	aiBackendSetup = base.TestCase{
 		Manifests: []string{
-			testdefaults.AIGuardrailsWebhookManifest,
-		},
-		ManifestsWithTransform: map[string]func(string) string{
-			setupManifest: func(original string) string {
-				if runtime.GOOS == "darwin" {
-					return strings.ReplaceAll(original, dockerBridgeIfaceIP, macOSDockerBridgeHost)
-				}
-				return original
-			},
-		},
-	}
-	aiBackendTestCases = map[string]*base.TestCase{
-		"TestFailover": {
-			ManifestsWithTransform: map[string]func(string) string{
-				failoverEvictionManifest: func(original string) string {
-					if runtime.GOOS == "darwin" {
-						return strings.ReplaceAll(original, dockerBridgeIfaceIP, macOSDockerBridgeHost)
-					}
-					return original
-				},
-			},
+			setupManifest,
 		},
 	}
 )
 
-type aiBackendSuite struct {
-	*base.BaseTestingSuite
-}
-
-func newAIBackendSuite(t *testing.T) *aiBackendSuite {
-	s := &aiBackendSuite{BaseTestingSuite: New(t)}
-	s.MinGwApiVersion = base.GwApiRequireRouteNames
-	s.ApplyConfig(aiBackendSetup)
-	return s
-}
-
 func TestAIBackend(t *testing.T) {
-	s := newAIBackendSuite(t)
-	s.Run("Routing", func() {
-		s.TestRouting()
+	agw := New(t)
+	agw.MinGwApiVersion = base.GwApiRequireRouteNames
+	agw.ApplyConfig(aiBackendSetup)
+
+	agw.Run("Routing", func() {
+		testAIBackendRouting(agw)
 	})
-	s.Run("PromptGuard", func() {
-		s.TestPromptGuard()
+	agw.Run("PromptGuard", func() {
+		testAIBackendPromptGuard(agw)
 	})
-	s.Run("Webhook", func() {
-		s.TestWebhook()
+	agw.Run("Webhook", func() {
+		testAIBackendWebhook(agw)
 	})
-	s.Run("Failover", func() {
-		s.ApplyConfig(*aiBackendTestCases["TestFailover"])
-		s.TestFailover()
+	agw.Run("Failover", func() {
+		agw.ApplyConfig(base.TestCase{
+			Manifests: []string{failoverEvictionManifest},
+		})
+		testAIBackendFailover(agw)
 	})
 }
 
-func (s *aiBackendSuite) TestRouting() {
-	server := s.NewMockReqRespServer(MockReqResp{
-		Req:  "What is the name of this project?",
-		Resp: "The name of this project is agentgateway",
-	})
-
+func testAIBackendRouting(agw *base.BaseTestingSuite) {
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(`The name of this project is agentgateway`),
@@ -116,25 +69,12 @@ func (s *aiBackendSuite) TestRouting() {
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 	)
-
-	s.Require().NoError(server.Stop(s.T().Context()))
 }
 
-func (s *aiBackendSuite) TestPromptGuard() {
-	server := s.NewMockReqRespServer(
-		MockReqResp{
-			Req:  "Return an example credit card number",
-			Resp: "4111-1111-1111-1111 is an example credit card number",
-		},
-		MockReqResp{
-			Req:  "Return an example SSN",
-			Resp: "123-45-6789 is an example SSN",
-		},
-	)
-
+func testAIBackendPromptGuard(agw *base.BaseTestingSuite) {
 	// Test request guard
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(`request rejected`),
@@ -146,7 +86,7 @@ func (s *aiBackendSuite) TestPromptGuard() {
 
 	// Test response guard
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(agwDefaultPromptGuardResponse),
@@ -155,37 +95,12 @@ func (s *aiBackendSuite) TestPromptGuard() {
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "Return an example SSN"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 	)
-
-	s.Require().NoError(server.Stop(s.T().Context()))
 }
 
-func (s *aiBackendSuite) TestWebhook() {
-	// TODO: fix webhook in e2e tests
-	s.T().Skipf("Skipping Webhook")
-	server := s.NewMockReqRespServer(
-		MockReqResp{
-			Provider: MockProviderAnthropic,
-			Req:      "return blocked content",
-			// Resp is not relevant as the request will be blocked by the webhook
-		},
-		MockReqResp{
-			Provider: MockProviderAnthropic,
-			Req:      "Explain data masking",
-			Resp:     "Data masking is the process of hiding sensitive information by redacting or obfuscating it",
-		},
-	)
-
-	// Ensure the guardrails webhook Pod is running and ready before sending traffic
-	s.TestInstallation.AssertionsT(s.T()).EventuallyPodsRunning(
-		s.T().Context(),
-		"default",
-		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=ai-guardrails-webhook"},
-		30*time.Second,
-	)
-
+func testAIBackendWebhook(agw *base.BaseTestingSuite) {
 	// Test request webhook
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusForbidden,
 			Body:       gomega.ContainSubstring(guardrailsWebhookBlockResponse),
@@ -203,7 +118,7 @@ func (s *aiBackendSuite) TestWebhook() {
 
 	// Test response webhook
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(maskedPatternResponse),
@@ -218,26 +133,19 @@ func (s *aiBackendSuite) TestWebhook() {
 			"anthropic-version": "fake",
 		}),
 	)
-
-	s.Require().NoError(server.Stop(s.T().Context()))
 }
 
-func (s *aiBackendSuite) TestFailover() {
+func testAIBackendFailover(agw *base.BaseTestingSuite) {
 	expectedResponse := "The name of this project is agentgateway"
-
-	server := s.NewMockReqRespServer(MockReqResp{
-		Req:  "What is the name of this project?",
-		Resp: expectedResponse,
-	})
 
 	// The failover backend has two groups:
 	//   Priority 0 (primary): mock-llm-primary Service with replicas=0 (no endpoints → connection error)
-	//   Priority 1 (fallback): local mock server
+	//   Priority 1 (fallback): shared testbox LLM server
 	//
 	// The health policy evicts the primary after 3 consecutive unhealthy responses (threshold: 3).
 	// Send will retry until the primary is evicted and the fallback returns the expected response.
 	common.BaseGateway.Send(
-		s.T(),
+		agw.T(),
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),
@@ -248,145 +156,4 @@ func (s *aiBackendSuite) TestFailover() {
 		curl.WithHeader("Content-Type", "application/json"),
 		curl.WithHeader("x-test-failover", "1"),
 	)
-
-	s.Require().NoError(server.Stop(s.T().Context()))
-}
-
-type MockProvider string
-
-const (
-	MockProviderOpenAI    MockProvider = "openai"
-	MockProviderAnthropic MockProvider = "anthropic"
-)
-
-type MockReqResp struct {
-	Req      string
-	Resp     string
-	Provider MockProvider // defaults to OpenAI
-}
-
-// NewMockReqRespServer creates and starts a new mock LLM server that responds with `resp` when it receives a request containing `req`.
-// The caller must stop the server with server.Stop()
-func (s *aiBackendSuite) NewMockReqRespServer(mocks ...MockReqResp) *mockllm.Server {
-	var mOpenAI []mockllm.OpenAIMock
-	var mAnthropic []mockllm.AnthropicMock
-
-	for _, mr := range mocks {
-		switch mr.Provider {
-		case MockProviderAnthropic:
-			anthropicRequest := anthropic.MessageNewParams{
-				Model:     "claude-3-5-sonnet-20240620",
-				MaxTokens: 1000,
-				Messages: []anthropic.MessageParam{
-					{
-						Role: anthropic.MessageParamRoleUser,
-						Content: []anthropic.ContentBlockParamUnion{
-							{
-								OfText: &anthropic.TextBlockParam{
-									Text: mr.Req,
-								},
-							},
-						},
-					},
-				},
-			}
-
-			anthropicResponse := anthropic.Message{
-				ID:   "msg_123",
-				Type: "message",
-				Role: "assistant",
-				Content: []anthropic.ContentBlockUnion{
-					{
-						Type: "text",
-						Text: mr.Resp,
-					},
-				},
-				Model:      "claude-3-5-sonnet-20240620",
-				StopReason: "end_turn",
-			}
-
-			// Convert to JSON and back to get SDK-compatible structure
-			var mock mockllm.AnthropicMock
-			mock.Name = string(mr.Provider) + ": " + mr.Req
-			mock.Response = anthropicResponse
-			mock.Match = mockllm.AnthropicRequestMatch{
-				MatchType: mockllm.MatchTypeExact,
-				Message:   anthropicRequest.Messages[len(anthropicRequest.Messages)-1],
-			}
-			// Marshal and unmarshal the request to get it in the right format
-			reqBytes, err := json.Marshal(anthropicRequest)
-			s.Require().NoError(err)
-			err = json.Unmarshal(reqBytes, &mock.Match)
-			s.Require().NoError(err)
-
-			mAnthropic = append(mAnthropic, mock)
-
-		case MockProviderOpenAI:
-			fallthrough
-		default:
-			openaiRequest := openai.ChatCompletionNewParams{
-				Model: "gpt-4o-mini",
-				Messages: []openai.ChatCompletionMessageParamUnion{
-					{
-						OfUser: &openai.ChatCompletionUserMessageParam{
-							Role: "user",
-							Content: openai.ChatCompletionUserMessageParamContentUnion{
-								OfString: openai.String(mr.Req),
-							},
-						},
-					},
-				},
-			}
-
-			openaiResponse := openai.ChatCompletion{
-				ID:      "chatcmpl-123",
-				Object:  "chat.completion",
-				Created: 1677652288,
-				Model:   "gpt-4o-mini",
-				Choices: []openai.ChatCompletionChoice{
-					{
-						Index: 0,
-						Message: openai.ChatCompletionMessage{
-							Role:    "assistant",
-							Content: mr.Resp,
-						},
-						FinishReason: "stop",
-					},
-				},
-				ServiceTier: openai.ChatCompletionServiceTierDefault, // required to avoid Agw parse error with an empty value
-			}
-
-			// Convert to JSON and back to get SDK-compatible structure
-			var mock mockllm.OpenAIMock
-			mock.Name = string(mr.Provider) + ": " + mr.Req
-			mock.Response = openaiResponse
-			mock.Match = mockllm.OpenAIRequestMatch{
-				MatchType: mockllm.MatchTypeExact,
-				Message:   openaiRequest.Messages[len(openaiRequest.Messages)-1],
-			}
-
-			// Marshal and unmarshal the request to get it in the right format
-			reqBytes, err := json.Marshal(openaiRequest)
-			s.Require().NoError(err)
-			s.T().Logf("Request: %s", string(reqBytes))
-			err = json.Unmarshal(reqBytes, &mock.Match)
-			s.Require().NoError(err)
-
-			mOpenAI = append(mOpenAI, mock)
-		}
-	}
-
-	config := mockllm.Config{
-		OpenAI:     mOpenAI,
-		Anthropic:  mAnthropic,
-		ListenAddr: "0.0.0.0:9234",
-	}
-
-	// Start server
-	server := mockllm.NewServer(config)
-	baseURL, err := server.Start(s.T().Context())
-	s.T().Logf("Started mock LLM server at %s", baseURL)
-	s.Require().NoError(err)
-
-	return server
 }

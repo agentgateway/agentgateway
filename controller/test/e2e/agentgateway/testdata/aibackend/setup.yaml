@@ -8,7 +8,7 @@ spec:
     provider:
       openai:
         model: gpt-4o-mini
-      host: 172.17.0.1
+      host: ai-testbox.default.svc.cluster.local
       port: 9234
   policies:
     auth:
@@ -24,7 +24,7 @@ spec:
     provider:
       anthropic:
         model: claude-sonnet-4@20250514
-      host: 172.17.0.1
+      host: ai-testbox.default.svc.cluster.local
       port: 9234
   policies:
     auth:
@@ -108,7 +108,7 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: anthropic-request-guardrails
+  name: anthropic-guardrails
   namespace: default
 spec:
   targetRefs:
@@ -121,24 +121,10 @@ spec:
         request:
         - webhook:
             backendRef:
-              name: ai-guardrails-webhook
-              port: 8000
----
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayPolicy
-metadata:
-  name: anthropic-response-guardrails
-  namespace: default
-spec:
-  targetRefs:
-    - group: agentgateway.dev
-      kind: AgentgatewayBackend
-      name: anthropic
-  backend:
-    ai:
-      promptGuard:
+              name: ai-testbox
+              port: 9234
         response:
         - webhook:
             backendRef:
-              name: ai-guardrails-webhook
-              port: 8000
+              name: ai-testbox
+              port: 9234
