@@ -5,18 +5,23 @@ package base
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/stretchr/testify/suite"
+	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/config/crd"
 	"istio.io/istio/pkg/maps"
-	"istio.io/istio/pkg/test/util/assert"
+	istioassert "istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/yml"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,8 +34,11 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/defaults"
+	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
@@ -42,6 +50,8 @@ const (
 	GwApiChannelStandard     GwApiChannel = "standard"
 	GwApiChannelExperimental GwApiChannel = "experimental"
 )
+
+const Namespace = "agentgateway-base"
 
 // GwApiVersion is its own type to avoid having to import the implementation package in other files.
 type GwApiVersion struct {
@@ -120,11 +130,13 @@ type TestCase struct {
 }
 
 type BaseTestingSuite struct {
-	suite.Suite
 	Ctx              context.Context
 	TestInstallation *e2e.TestInstallation
 	Setup            TestCase
 	TestCases        map[string]*TestCase
+	t                *testing.T
+	assert           *assert.Assertions
+	require          *require.Assertions
 
 	// (Optional) Path of directory (relative to git root) containing the CRDs that will be used to read
 	// the objects from the manifests. If empty then defaults to "install/helm/agentgateway-crds/templates"
@@ -204,6 +216,47 @@ func NewBaseTestingSuite(ctx context.Context, testInst *e2e.TestInstallation, se
 	}
 
 	return suite
+}
+
+func NewSuite(ctx context.Context, testInst *e2e.TestInstallation, opts ...SuiteOption) *BaseTestingSuite {
+	return NewBaseTestingSuite(ctx, testInst, TestCase{}, nil, opts...)
+}
+
+func (s *BaseTestingSuite) SetT(t *testing.T) {
+	s.t = t
+	s.assert = assert.New(t)
+	s.require = require.New(t)
+}
+
+func (s *BaseTestingSuite) T() *testing.T {
+	if s.t == nil {
+		panic("BaseTestingSuite used before SetT")
+	}
+	return s.t
+}
+
+func (s *BaseTestingSuite) Assert() *assert.Assertions {
+	if s.assert == nil {
+		s.SetT(s.T())
+	}
+	return s.assert
+}
+
+func (s *BaseTestingSuite) Require() *require.Assertions {
+	if s.require == nil {
+		s.SetT(s.T())
+	}
+	return s.require
+}
+
+func (s *BaseTestingSuite) Run(name string, f func()) bool {
+	parentT := s.T()
+	parentT.Helper()
+	return parentT.Run(name, func(t *testing.T) {
+		s.SetT(t)
+		defer s.SetT(parentT)
+		f()
+	})
 }
 
 // versionChecker is a function type for checking version constraints
@@ -326,6 +379,9 @@ func (s *BaseTestingSuite) TearDownSuite() {
 
 	// Use the selected setup if available, otherwise fall back to default Setup
 	setupToDelete := s.selectedSetup
+	if setupToDelete == nil {
+		setupToDelete = &s.Setup
+	}
 	s.DeleteManifests(setupToDelete)
 }
 
@@ -372,13 +428,6 @@ func (s *BaseTestingSuite) AfterTest(suiteName, testName string) {
 		return
 	}
 	s.DeleteManifests(testCase)
-}
-
-func (s *BaseTestingSuite) GetKubectlOutput(command ...string) string {
-	out, _, err := s.TestInstallation.Actions.Kubectl().Execute(s.Ctx, command...)
-	s.TestInstallation.AssertionsT(s.T()).Require.NoError(err)
-
-	return out
 }
 
 // ApplyManifests applies the manifests and waits until the resources are created and ready.
@@ -428,6 +477,111 @@ func (s *BaseTestingSuite) ApplyManifests(testCase *TestCase) {
 	}
 }
 
+// ApplyConfig applies the manifests for a single test and registers cleanup
+// against that test's testing.T. New e2e tests should prefer calling this at
+// the top of the test body so the test's config is visible next to its traffic
+// and status assertions.
+func (s *BaseTestingSuite) ApplyConfig(testCase TestCase) {
+	s.T().Helper()
+	if s.SkipSuite() {
+		s.T().Skip("Skipping all tests in suite due to gateway API version requirements")
+	}
+	if shouldSkip := s.skipTest(&testCase); shouldSkip {
+		s.T().Skipf("Test requires Gateway API %s, but current is %s/%s",
+			testCase.MinGwApiVersion, s.getCurrentGwApiChannel(), s.getCurrentGwApiVersion())
+	}
+
+	s.ApplyManifests(&testCase)
+	s.T().Cleanup(func() {
+		if testutils.ShouldSkipCleanup(s.T()) {
+			return
+		}
+		s.DeleteManifests(&testCase)
+	})
+}
+
+func (s *BaseTestingSuite) Apply(manifests ...string) {
+	s.T().Helper()
+	s.ApplyConfig(TestCase{Manifests: manifests})
+}
+
+func (s *BaseTestingSuite) Delete(manifests ...string) {
+	s.T().Helper()
+	s.DeleteManifests(&TestCase{Manifests: manifests})
+}
+
+func Manifest(pathParts ...string) string {
+	_, file, _, ok := goruntime.Caller(1)
+	if !ok {
+		panic("failed to resolve caller for test manifest")
+	}
+	return filepath.Join(append([]string{filepath.Dir(file), "testdata"}, pathParts...)...)
+}
+
+func (s *BaseTestingSuite) GatewayReady(name, namespace string) {
+	s.T().Helper()
+	p := s.TestInstallation.AssertionsT(s.T())
+	p.EventuallyGatewayCondition(s.Ctx, name, namespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	p.EventuallyGatewayCondition(s.Ctx, name, namespace, gwv1.GatewayConditionAccepted, metav1.ConditionTrue)
+}
+
+func (s *BaseTestingSuite) HTTPRouteAccepted(name, namespace string) {
+	s.T().Helper()
+	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(s.Ctx, name, namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+}
+
+func (s *BaseTestingSuite) Send(target string, expect *testmatchers.HttpResponse, opts ...curl.Option) {
+	s.T().Helper()
+	common.BaseGateway.Send(s.T(), expect, append(targetOptions(s.T(), target), opts...)...)
+}
+
+func Expect(status int) *testmatchers.HttpResponse {
+	return &testmatchers.HttpResponse{StatusCode: status}
+}
+
+func ExpectOK() *testmatchers.HttpResponse {
+	return Expect(http.StatusOK)
+}
+
+func ExpectForbidden(body gomega.OmegaMatcher) *testmatchers.HttpResponse {
+	return &testmatchers.HttpResponse{
+		StatusCode: http.StatusForbidden,
+		Body:       body,
+	}
+}
+
+func targetOptions(t *testing.T, target string) []curl.Option {
+	t.Helper()
+	if target == "" {
+		t.Fatal("target must not be empty")
+	}
+
+	raw := target
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + strings.TrimPrefix(raw, "/")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("invalid request target %q: %v", target, err)
+	}
+	if u.Host == "" {
+		t.Fatalf("invalid request target %q: missing host", target)
+	}
+
+	path := strings.TrimPrefix(u.EscapedPath(), "/")
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	opts := []curl.Option{
+		curl.WithHostHeader(u.Host),
+		curl.WithPath(path),
+	}
+	if u.Scheme != "" {
+		opts = append(opts, curl.WithScheme(u.Scheme))
+	}
+	return opts
+}
+
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
 // Deleting namespaces is super super super slow. Avoid deleting them, ever
@@ -435,7 +589,7 @@ func stripNamespaceResources(t *testing.T, manifests ...string) string {
 	cfgs := []string{}
 	for _, manifest := range manifests {
 		d, err := os.ReadFile(manifest)
-		assert.NoError(t, err)
+		istioassert.NoError(t, err)
 		for _, yml := range yml.SplitString(string(d)) {
 			obj := &unstructured.Unstructured{}
 			_, gvk, err := decUnstructured.Decode([]byte(yml), nil, obj)
@@ -443,7 +597,7 @@ func stripNamespaceResources(t *testing.T, manifests ...string) string {
 				// Not a k8s object, skip
 				continue
 			}
-			assert.NoError(t, err)
+			istioassert.NoError(t, err)
 			if gvk.Kind != "Namespace" {
 				cfgs = append(cfgs, yml)
 			}

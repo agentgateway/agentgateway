@@ -140,7 +140,7 @@ func setupGatewayPortForwards(ctx context.Context, installation *e2e.TestInstall
 			portforward.WithRemotePort(remotePort),
 		}
 
-		forwarder, err := installation.Actions.Kubectl().StartPortForward(ctx, options...)
+		forwarder, err := installation.Actions.PortForward().Start(ctx, options...)
 		if err != nil {
 			for _, started := range forwarders {
 				started.Close()

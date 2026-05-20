@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	"github.com/stretchr/testify/suite"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -29,7 +28,7 @@ type testingSuite struct {
 	*base.BaseTestingSuite
 }
 
-func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) e2e.TestingSuite {
 	setup := base.TestCase{
 		Manifests: []string{},
 	}
@@ -94,7 +93,7 @@ func (s *testingSuite) TestTLSCertificateRotation() {
 	rotatedSecretYAML, err := SecretManifest(s.TestInstallation.Metadata.InstallNamespace, DefaultExpiration)
 	s.Require().NoError(err, "failed to generate rotated certificate")
 
-	err = s.TestInstallation.Actions.Kubectl().Apply(s.Ctx, []byte(rotatedSecretYAML))
+	err = s.TestInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", rotatedSecretYAML)
 	s.Require().NoError(err, "failed to apply rotated TLS secret")
 
 	// wait for certificate rotation to propagate. arbitrary sleep used here to allow

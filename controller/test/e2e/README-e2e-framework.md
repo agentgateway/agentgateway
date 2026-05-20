@@ -70,9 +70,31 @@ go test -tags=e2e -v -timeout 600s ./test/e2e/tests -run ^TestAgentgatewayIntegr
 
 You can find more information on running tests in the [e2e test debugging guide](debugging.md#step-2-running-tests).
 
-## Testify
+## Test Structure
 
-We rely on [testify](https://github.com/stretchr/testify) to provide the structure for our end-to-end testing. This allows us to decouple where tests are defined, from where they are run.
+Feature suites are run as standard Go subtests. A suite is a small struct with
+`Test*` methods plus optional `SetupSuite`, `BeforeTest`, `AfterTest`, and
+`TearDownSuite` hooks.
+
+Use `testing.T`, `istio.io/istio/pkg/test/util/retry`, and focused assertion
+helpers for request/status checks. Avoid adding broader test frameworks; the
+common path should stay close to: apply manifests, run requests and assertions,
+optionally check status, then clean up.
+
+Prefer applying per-test config directly in the test body:
+
+```go
+func (s *testingSuite) TestExample() {
+    s.Apply(routesManifest, policyManifest)
+
+    common.BaseGateway.Send(s.T(), &matchers.HttpResponse{StatusCode: http.StatusOK}, ...)
+}
+```
+
+`Apply` registers cleanup with `t.Cleanup`, so the config contract stays
+local to the test without needing a parallel map keyed by test method name.
+Use `ApplyConfig(base.TestCase{...})` only when the test needs version gates or
+manifest transforms.
 
 ## TestCluster
 

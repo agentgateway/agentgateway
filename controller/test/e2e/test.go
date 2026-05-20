@@ -13,6 +13,7 @@ import (
 
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,6 +45,23 @@ func CreateTestInstallation(
 	return CreateTestInstallationForCluster(t, runtimeContext, clusterContext, installContext)
 }
 
+// CreateSharedTestInstallation constructs an installation for package-level
+// fixtures. Call Finalize after the shared installation is no longer needed.
+func CreateSharedTestInstallation(
+	t *testing.T,
+	installContext *install.Context,
+) *TestInstallation {
+	runtimeContext := testruntime.NewContext()
+	clusterContext := cluster.MustKindContext(runtimeContext.ClusterName)
+
+	if err := install.ValidateInstallContext(installContext); err != nil {
+		// We error loudly if the context is misconfigured
+		panic(err)
+	}
+
+	return CreateSharedTestInstallationForCluster(t, runtimeContext, clusterContext, installContext)
+}
+
 // CreateTestInstallationForCluster is the standard way to construct a TestInstallation
 // It accepts context objects from 3 relevant sources:
 //
@@ -55,6 +73,28 @@ func CreateTestInstallationForCluster(
 	runtimeContext testruntime.Context,
 	clusterContext *cluster.Context,
 	installContext *install.Context,
+) *TestInstallation {
+	return createTestInstallationForCluster(t, runtimeContext, clusterContext, installContext, true)
+}
+
+// CreateSharedTestInstallationForCluster constructs a TestInstallation without
+// binding its generated-file cleanup to a single test. Call Finalize after the
+// shared installation is no longer needed.
+func CreateSharedTestInstallationForCluster(
+	t *testing.T,
+	runtimeContext testruntime.Context,
+	clusterContext *cluster.Context,
+	installContext *install.Context,
+) *TestInstallation {
+	return createTestInstallationForCluster(t, runtimeContext, clusterContext, installContext, false)
+}
+
+func createTestInstallationForCluster(
+	t *testing.T,
+	runtimeContext testruntime.Context,
+	clusterContext *cluster.Context,
+	installContext *install.Context,
+	registerCleanup bool,
 ) *TestInstallation {
 	installation := &TestInstallation{
 		// RuntimeContext contains the set of properties that are defined at runtime by whoever is invoking tests
@@ -90,9 +130,11 @@ func CreateTestInstallationForCluster(
 		// between TestInstallation outputs per CI run
 		GeneratedFiles: MustGeneratedFiles(installContext.InstallNamespace, clusterContext.Name),
 	}
-	testutils.Cleanup(t, func() {
-		installation.finalize()
-	})
+	if registerCleanup {
+		testutils.Cleanup(t, func() {
+			installation.Finalize()
+		})
+	}
 	return installation
 }
 
@@ -132,7 +174,7 @@ func (i *TestInstallation) String() string {
 	return i.Metadata.InstallNamespace
 }
 
-func (i *TestInstallation) finalize() {
+func (i *TestInstallation) Finalize() {
 	if err := os.RemoveAll(i.GeneratedFiles.TempDir); err != nil {
 		panic(fmt.Sprintf("Failed to remove temporary directory: %s", i.GeneratedFiles.TempDir))
 	}
@@ -292,8 +334,11 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	}
 
 	// The kubernetes/e2e tests may use multiple namespaces, so we need to dump all of them
-	namespaces, err := i.Actions.Kubectl().Namespaces(ctx)
+	namespaceList, err := i.ClusterContext.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	i.AssertionsT(t).Require.NoError(err, "failed to get namespaces for failure dump")
+	namespaces := slices.Map(namespaceList.Items, func(ns corev1.Namespace) string {
+		return ns.Name
+	})
 	namespaces = slices.Filter(namespaces, func(s string) bool {
 		return s != "kube-node-lease" &&
 			s != "kube-public" &&
@@ -303,7 +348,7 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	})
 
 	// Dump the logs and state of the cluster
-	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.Actions.Kubectl(), dir, namespaces)
+	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.ClusterContext.Client, i.ClusterContext.Clientset, dir, namespaces)
 }
 
 func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, namespace string) bool {

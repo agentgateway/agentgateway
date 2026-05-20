@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
@@ -35,7 +34,7 @@ type testingSuiteAgentgateway struct {
 	*base.BaseTestingSuite
 }
 
-func NewTestingSuiteAgentgateway(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+func NewTestingSuiteAgentgateway(ctx context.Context, testInst *e2e.TestInstallation) e2e.TestingSuite {
 	return &testingSuiteAgentgateway{
 		base.NewBaseTestingSuite(
 			ctx,
@@ -101,6 +100,6 @@ func (s *testingSuiteAgentgateway) TestZeroDowntimeRolloutAgentgateway() {
 	}
 
 	// Verify that there were no errors.
-	s.Contains(string(cmd.Output()), "[200]	800 responses")
-	s.NotContains(string(cmd.Output()), "Error distribution")
+	s.Assert().Contains(string(cmd.Output()), "[200]	800 responses")
+	s.Assert().NotContains(string(cmd.Output()), "Error distribution")
 }

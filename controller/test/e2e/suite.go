@@ -4,13 +4,16 @@ package e2e
 
 import (
 	"context"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/suite"
 )
 
 type (
-	NewSuiteFunc func(ctx context.Context, testInstallation *TestInstallation) suite.TestingSuite
+	TestingSuite any
+
+	NewSuiteFunc func(ctx context.Context, testInstallation *TestInstallation) TestingSuite
 
 	namedSuite struct {
 		name     string
@@ -55,7 +58,7 @@ func NewSuiteRunner(ordered bool) SuiteRunner {
 func (o *orderedSuites) Run(ctx context.Context, t *testing.T, testInstallation *TestInstallation) {
 	for _, namedTest := range o.suites {
 		t.Run(namedTest.name, func(t *testing.T) {
-			suite.Run(t, namedTest.newSuite(ctx, testInstallation))
+			runTestingSuite(t, namedTest.name, namedTest.newSuite(ctx, testInstallation))
 		})
 	}
 }
@@ -75,7 +78,7 @@ func (u *suites) Run(ctx context.Context, t *testing.T, testInstallation *TestIn
 	// from https://goplay.tools/snippet/A-qqQCWkFaZ it looks like maps are not stable, but tend toward stability.
 	for testName, newSuite := range u.suites {
 		t.Run(testName, func(t *testing.T) {
-			suite.Run(t, newSuite(ctx, testInstallation))
+			runTestingSuite(t, testName, newSuite(ctx, testInstallation))
 		})
 	}
 }
@@ -85,4 +88,101 @@ func (u *suites) Register(name string, newSuite NewSuiteFunc) {
 		u.suites = make(map[string]NewSuiteFunc)
 	}
 	u.suites[name] = newSuite
+}
+
+type (
+	suiteTSetter interface {
+		SetT(*testing.T)
+	}
+
+	suiteSetup interface {
+		SetupSuite()
+	}
+
+	suiteTearDown interface {
+		TearDownSuite()
+	}
+
+	suiteBeforeTest interface {
+		BeforeTest(suiteName, testName string)
+	}
+
+	suiteAfterTest interface {
+		AfterTest(suiteName, testName string)
+	}
+
+	runnableSuite interface {
+		RunSuite(t *testing.T, suiteName string)
+	}
+)
+
+func runTestingSuite(t *testing.T, suiteName string, testSuite TestingSuite) {
+	t.Helper()
+	if runnable, ok := testSuite.(runnableSuite); ok {
+		runnable.RunSuite(t, suiteName)
+		return
+	}
+
+	setSuiteT(t, testSuite)
+
+	if tearDown, ok := testSuite.(suiteTearDown); ok {
+		defer func() {
+			setSuiteT(t, testSuite)
+			tearDown.TearDownSuite()
+		}()
+	}
+	if setup, ok := testSuite.(suiteSetup); ok {
+		setup.SetupSuite()
+	}
+
+	testNames := suiteTestNames(t, testSuite)
+	if len(testNames) == 0 {
+		t.Fatalf("suite %s has no Test* methods", suiteName)
+	}
+
+	for _, testName := range testNames {
+		testName := testName
+		t.Run(testName, func(t *testing.T) {
+			setSuiteT(t, testSuite)
+			defer setSuiteT(t, testSuite)
+
+			if after, ok := testSuite.(suiteAfterTest); ok {
+				defer after.AfterTest(suiteName, testName)
+			}
+			if before, ok := testSuite.(suiteBeforeTest); ok {
+				before.BeforeTest(suiteName, testName)
+			}
+
+			reflect.ValueOf(testSuite).MethodByName(testName).Call(nil)
+		})
+	}
+}
+
+func setSuiteT(t *testing.T, testSuite TestingSuite) {
+	if setter, ok := testSuite.(suiteTSetter); ok {
+		setter.SetT(t)
+	}
+}
+
+func suiteTestNames(t *testing.T, testSuite TestingSuite) []string {
+	t.Helper()
+
+	typ := reflect.TypeOf(testSuite)
+	if typ == nil {
+		t.Fatal("nil suite")
+	}
+
+	var names []string
+	for i := 0; i < typ.NumMethod(); i++ {
+		method := typ.Method(i)
+		if !strings.HasPrefix(method.Name, "Test") {
+			continue
+		}
+		if method.Type.NumIn() != 1 || method.Type.NumOut() != 0 {
+			t.Fatalf("suite test method %s must have signature func()", method.Name)
+		}
+		names = append(names, method.Name)
+	}
+	sort.Strings(names)
+	return names
 }

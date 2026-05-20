@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/onsi/gomega"
-	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -38,7 +37,7 @@ var (
 	}
 )
 
-func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) suite.TestingSuite {
+func NewTestingSuite(ctx context.Context, testInst *e2e.TestInstallation) e2e.TestingSuite {
 	setup := base.TestCase{
 		Manifests: []string{},
 	}

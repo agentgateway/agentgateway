@@ -8,6 +8,10 @@ import (
 	"os"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/features/tls"
@@ -41,11 +45,11 @@ func TestControlPlaneTLS(t *testing.T) {
 	// the TLS secret in it before agentgateway starts.
 	nsYAML := nsManifest(installNs)
 	testutils.Cleanup(t, func() {
-		if err := testInstallation.Actions.Kubectl().Delete(cleanupCtx, []byte(nsYAML)); err != nil {
+		if err := deleteNamespace(cleanupCtx, testInstallation, installNs); err != nil {
 			t.Fatalf("failed to delete namespace: %v", err)
 		}
 	})
-	err := testInstallation.Actions.Kubectl().Apply(t.Context(), []byte(nsYAML))
+	err := testInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", nsYAML)
 	if err != nil {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
@@ -59,7 +63,7 @@ func TestControlPlaneTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create TLS secret: %v", err)
 	}
-	if err := testInstallation.Actions.Kubectl().Apply(t.Context(), []byte(secretYAML)); err != nil {
+	if err := testInstallation.ClusterContext.IstioClient.ApplyYAMLContents("", secretYAML); err != nil {
 		t.Fatalf("failed to create TLS secret: %v", err)
 	}
 
@@ -83,4 +87,14 @@ kind: Namespace
 metadata:
   name: %s
 `, ns)
+}
+
+func deleteNamespace(ctx context.Context, testInstallation *e2e.TestInstallation, name string) error {
+	err := testInstallation.ClusterContext.Client.Delete(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+	})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
