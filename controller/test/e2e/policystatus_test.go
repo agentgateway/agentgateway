@@ -3,9 +3,10 @@
 package e2e_test
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -14,7 +15,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 func TestAgwPolicyClearStaleStatus(tt *testing.T) {
@@ -45,15 +45,15 @@ func TestAgwPolicyClearStaleStatus(tt *testing.T) {
 
 func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, controllerName string) {
 	t.Helper()
-	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		err := t.TestInstallation.ClusterContext.Client.Get(
+		if err := t.TestInstallation.ClusterContext.Client.Get(
 			t.Ctx,
 			types.NamespacedName{Name: policyName, Namespace: policyNamespace},
 			policy,
-		)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
+		); err != nil {
+			return err
+		}
 
 		fakeStatus := gwv1.PolicyAncestorStatus{
 			AncestorRef:    gwv1.ParentReference{Name: gwv1.ObjectName(gwName)},
@@ -70,22 +70,21 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 		}
 
 		policy.Status.Ancestors = append(policy.Status.Ancestors, fakeStatus)
-		err = t.TestInstallation.ClusterContext.Client.Status().Update(t.Ctx, policy)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
+		return t.TestInstallation.ClusterContext.Client.Status().Update(t.Ctx, policy)
+	})
 }
 
 func assertAncestorStatuses(t base.Test, ancestorName string, expectedControllers map[string]bool) {
 	t.Helper()
-	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		err := t.TestInstallation.ClusterContext.Client.Get(
+		if err := t.TestInstallation.ClusterContext.Client.Get(
 			t.Ctx,
 			types.NamespacedName{Name: "example-policy", Namespace: base.Namespace},
 			policy,
-		)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
+		); err != nil {
+			return err
+		}
 
 		foundControllers := make(map[string]bool)
 		for _, ancestor := range policy.Status.Ancestors {
@@ -96,11 +95,10 @@ func assertAncestorStatuses(t base.Test, ancestorName string, expectedController
 
 		for controller, shouldExist := range expectedControllers {
 			exists := foundControllers[controller]
-			if shouldExist {
-				g.Expect(exists).To(gomega.BeTrue(), "Expected controller %s to exist in status", controller)
-			} else {
-				g.Expect(exists).To(gomega.BeFalse(), "Expected controller %s to not exist in status", controller)
+			if exists != shouldExist {
+				return fmt.Errorf("controller %s exists=%v, want %v for ancestor %s", controller, exists, shouldExist, ancestorName)
 			}
 		}
-	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
+		return nil
+	})
 }

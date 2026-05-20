@@ -130,10 +130,10 @@ func testGatewayWithTransformedGRPCRoute(t base.Test) {
 	assertTransformGatewayReady(t)
 
 	const grpcRouteName = "example-route"
-	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
-	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue, transformTimeout)
-	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue, transformTimeout)
+	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyGRPCRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyHTTPRouteCondition(t, grpcRouteName, base.Namespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue)
 
 	const (
 		expectedHostname        = "example.com"
@@ -185,14 +185,12 @@ func assertTransformGatewayReady(t base.Test) {
 		base.Namespace,
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
-		transformTimeout,
 	)
 	assertions.EventuallyGatewayCondition(t,
 		"gateway",
 		base.Namespace,
 		gwv1.GatewayConditionAccepted,
 		metav1.ConditionTrue,
-		transformTimeout,
 	)
 }
 

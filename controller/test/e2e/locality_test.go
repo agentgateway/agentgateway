@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/pkg/util/sets"
@@ -158,15 +157,22 @@ spec:
 
 func waitPodIP(t base.Test, labelSelector string) string {
 	var ip string
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		pods, err := t.TestInstallation.ClusterContext.Clientset.
 			CoreV1().Pods(localityNamespace).
 			List(t.Ctx, metav1.ListOptions{LabelSelector: labelSelector})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		g.Expect(pods.Items).To(gomega.HaveLen(1))
-		g.Expect(pods.Items[0].Status.PodIP).NotTo(gomega.BeEmpty())
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) != 1 {
+			return fmt.Errorf("pod count = %d, want 1", len(pods.Items))
+		}
+		if pods.Items[0].Status.PodIP == "" {
+			return fmt.Errorf("pod %s/%s has no pod IP", pods.Items[0].Namespace, pods.Items[0].Name)
+		}
 		ip = pods.Items[0].Status.PodIP
-	}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).Should(gomega.Succeed())
+		return nil
+	})
 	return ip
 }
 

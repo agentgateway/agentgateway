@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,11 +44,13 @@ func testOTelTracing(t base.Test) {
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
 
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		t.Send("www.example.com/status/200", base.ExpectOK(), curl.WithHeader("x-header-tag", headerValue))
 
 		logs, err := getCollectorLogs(t)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
+		if err != nil {
+			return fmt.Errorf("failed to get collector pod logs: %w", err)
+		}
 
 		mustContain := []string{
 			`-> http.method: Str(GET)`,
@@ -64,15 +66,22 @@ func testOTelTracing(t base.Test) {
 				missing = append(missing, line)
 			}
 		}
-		g.Expect(missing).To(gomega.BeEmpty(), "missing required trace lines")
+		if len(missing) > 0 {
+			return fmt.Errorf("missing required trace lines: %v", missing)
+		}
 
 		hasHTTPURL := strings.Contains(logs, `-> url.scheme: Str(http)`) &&
 			strings.Contains(logs, `-> http.host: Str(www.example.com)`) &&
 			strings.Contains(logs, `-> http.path: Str(/status/200)`)
-		g.Expect(hasHTTPURL).To(gomega.BeTrue(), "missing expected URL/host/path attributes in traces")
+		if !hasHTTPURL {
+			return fmt.Errorf("missing expected URL/host/path attributes in traces")
+		}
 
-		g.Expect(strings.Contains(logs, `-> http.status: Int(200)`)).To(gomega.BeTrue(), "missing expected HTTP status attribute in traces")
-	}, collectorLogTimeout, collectorLogPoll, "should find traces in collector pod logs").Should(gomega.Succeed())
+		if !strings.Contains(logs, `-> http.status: Int(200)`) {
+			return fmt.Errorf("missing expected HTTP status attribute in traces")
+		}
+		return nil
+	}, retry.Timeout(collectorLogTimeout), retry.Delay(collectorLogPoll), retry.Message("should find traces in collector pod logs"))
 }
 
 func testOTelAccessLog(t base.Test) {
@@ -80,11 +89,13 @@ func testOTelAccessLog(t base.Test) {
 
 	assertions.EventuallyAgwPolicyCondition(t, "agw-accesslog", base.Namespace, "Accepted", metav1.ConditionTrue)
 
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		t.Send("www.example.com/status/200", base.ExpectOK())
 
 		logs, err := getCollectorLogs(t)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to get collector pod logs")
+		if err != nil {
+			return fmt.Errorf("failed to get collector pod logs: %w", err)
+		}
 
 		mustContain := []string{
 			`ScopeLogs`,
@@ -100,8 +111,11 @@ func testOTelAccessLog(t base.Test) {
 				missing = append(missing, line)
 			}
 		}
-		g.Expect(missing).To(gomega.BeEmpty(), "missing required access log lines in collector output")
-	}, collectorLogTimeout, collectorLogPoll, "should find access logs in collector pod logs").Should(gomega.Succeed())
+		if len(missing) > 0 {
+			return fmt.Errorf("missing required access log lines in collector output: %v", missing)
+		}
+		return nil
+	}, retry.Timeout(collectorLogTimeout), retry.Delay(collectorLogPoll), retry.Message("should find access logs in collector pod logs"))
 }
 
 func otelManifest(name string) string {

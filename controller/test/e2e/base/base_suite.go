@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
@@ -236,8 +235,7 @@ func (s *Test) applyManifests(manifests ...string) {
 		done := traceStep(s, "pods ready %s/%s", ns, name)
 		assertions.EventuallyPodsRunning(s, ns, metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", WellKnownAppLabel, name),
-			// Provide a longer timeout as the pod needs to be pulled and pass HCs
-		}, time.Second*60, time.Millisecond*500)
+		})
 		done()
 	}
 }

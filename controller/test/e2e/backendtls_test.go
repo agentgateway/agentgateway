@@ -3,11 +3,12 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/onsi/gomega"
 	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/retry"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
 
 func TestBackendTLSPolicyAndStatus(tt *testing.T) {
@@ -58,14 +58,16 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 
 func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, inCondition metav1.Condition) {
 	t.Helper()
-	currentTimeout, pollingInterval := helpers.GetTimeouts()
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) {
+	retry.UntilSuccessOrFail(t, func() error {
 		tlsPol := &gwv1.BackendTLSPolicy{}
 		objKey := client.ObjectKeyFromObject(policy)
-		err := t.TestInstallation.ClusterContext.Client.Get(t.Ctx, objKey, tlsPol)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "failed to get BackendTLSPolicy %s", objKey)
+		if err := t.TestInstallation.ClusterContext.Client.Get(t.Ctx, objKey, tlsPol); err != nil {
+			return err
+		}
 
-		g.Expect(tlsPol.Status.Ancestors).To(gomega.HaveLen(1), "ancestors didn't have length of 1")
+		if len(tlsPol.Status.Ancestors) != 1 {
+			return fmt.Errorf("ancestors length = %d, want 1", len(tlsPol.Status.Ancestors))
+		}
 		expectedAncestorRefs := []gwv1.ParentReference{
 			{
 				Group: ptr.To(gwv1.Group("gateway.networking.k8s.io")),
@@ -76,14 +78,23 @@ func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, in
 
 		for i, ancestor := range tlsPol.Status.Ancestors {
 			expectedRef := expectedAncestorRefs[i]
-			g.Expect(ancestor.AncestorRef).To(gomega.BeEquivalentTo(expectedRef))
+			if ancestor.AncestorRef.Group == nil || expectedRef.Group == nil || *ancestor.AncestorRef.Group != *expectedRef.Group ||
+				ancestor.AncestorRef.Kind == nil || expectedRef.Kind == nil || *ancestor.AncestorRef.Kind != *expectedRef.Kind ||
+				ancestor.AncestorRef.Name != expectedRef.Name {
+				return fmt.Errorf("ancestor ref = %+v, want %+v", ancestor.AncestorRef, expectedRef)
+			}
 
-			g.Expect(ancestor.Conditions).To(gomega.HaveLen(2), "ancestors conditions wasn't length of 2")
+			if len(ancestor.Conditions) != 2 {
+				return fmt.Errorf("ancestor conditions length = %d, want 2", len(ancestor.Conditions))
+			}
 			cond := meta.FindStatusCondition(ancestor.Conditions, inCondition.Type)
-			g.Expect(cond).NotTo(gomega.BeNil(), "policy should have condition "+inCondition.Type)
-			g.Expect(cond.Status).To(gomega.Equal(inCondition.Status), "policy accepted condition should be true")
-			g.Expect(cond.Reason).To(gomega.Equal(inCondition.Reason), "policy reason should be accepted")
-			g.Expect(cond.ObservedGeneration).To(gomega.Equal(inCondition.ObservedGeneration))
+			if cond == nil {
+				return fmt.Errorf("policy should have condition %s", inCondition.Type)
+			}
+			if cond.Status != inCondition.Status || cond.Reason != inCondition.Reason || cond.ObservedGeneration != inCondition.ObservedGeneration {
+				return fmt.Errorf("condition = %+v, want status=%s reason=%s observedGeneration=%d", cond, inCondition.Status, inCondition.Reason, inCondition.ObservedGeneration)
+			}
 		}
-	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
+		return nil
+	})
 }
