@@ -50,7 +50,7 @@ pub struct Eviction {
 #[apply(schema_ser!)]
 pub struct Policy {
 	/// CEL expression evaluated per response; `true` means this response is unhealthy (evict).
-	/// When absent, any 5xx response, or a connection failure, is treated as unhealthy.
+	/// When absent, any 5xx response, non-zero gRPC status, or a connection failure is treated as unhealthy.
 	/// This default lowers the backend's health score but does not trigger eviction on its own.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub unhealthy_expression: Option<Arc<Expression>>,

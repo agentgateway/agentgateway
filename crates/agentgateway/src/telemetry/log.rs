@@ -457,9 +457,15 @@ impl DropOnLog {
 
 	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
-	/// When no CEL expression is set, the default treats 4xx, 5xx, or connection failures as unhealthy.
+	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
+	/// gRPC status as unhealthy.
+	fn default_unhealthy(log: &RequestLog) -> bool {
+		log.status.is_none_or(|s| s.is_server_error())
+			|| log.grpc_status.load().is_some_and(|status| status != 0)
+	}
+
 	fn eviction_unhealthy(log: &RequestLog, cel_exec: &CelLoggingExecutor<'_>) -> bool {
-		let default_unhealthy = log.status.is_none_or(|s| s.is_server_error());
+		let default_unhealthy = Self::default_unhealthy(log);
 		let Some(policy) = &log.health_policy else {
 			return default_unhealthy;
 		};
@@ -1638,6 +1644,17 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	#[test]
+	fn default_health_treats_non_zero_grpc_status_as_unhealthy() {
+		let mut log = test_request_log();
+		log.status = Some(http::StatusCode::OK);
+		log.grpc_status.store(Some(13));
+		assert!(DropOnLog::default_unhealthy(&log));
+
+		log.grpc_status.store(Some(0));
+		assert!(!DropOnLog::default_unhealthy(&log));
 	}
 
 	#[test]
