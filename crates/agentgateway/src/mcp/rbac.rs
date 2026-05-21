@@ -162,15 +162,15 @@ mod tests {
 
 	#[test]
 	fn test_mcp_authorization_empty_rules_short_circuits() {
-		let authz = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
-			vec![],
-			vec![],
-			vec![],
-		))]));
-		let req = req_without_claims();
 		let res = tool_resource("server", "increment");
 
-		assert!(authz.validate(&res, &CelExecWrapper::new(req)));
+		let no_rule_sets = McpAuthorizationSet::new(RuleSets::from(vec![]));
+		assert!(no_rule_sets.validate(&res, &CelExecWrapper::new(req_without_claims())));
+
+		let empty_rule_set = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(
+			PolicySet::new(vec![], vec![], vec![]),
+		)]));
+		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
 	}
 
 	#[test]
