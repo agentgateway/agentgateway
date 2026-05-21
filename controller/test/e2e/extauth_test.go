@@ -177,7 +177,6 @@ func extAuthManifest(name string) string {
 func runExtAuthCases(t base.Test, cases []extAuthCase) {
 	t.Helper()
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t base.Test) {
 			opts := []curl.Option{}
 			for k, v := range tc.headers {

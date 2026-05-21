@@ -43,7 +43,7 @@ func TestDelegation(tt *testing.T) {
 func testBasicDelegation(t base.Test) {
 	t.Apply(delegationManifest("basic-delegation.yaml"))
 
-	assertHTTPRouteAccepted(t, "root", "infra")
+	assertHTTPRouteAccepted(t, "root")
 	t.Send("example.com/anything/team1/foo", base.ExpectOK())
 	t.Send("example.com/anything/team2/foo", base.ExpectOK())
 }
@@ -51,7 +51,7 @@ func testBasicDelegation(t base.Test) {
 func testDelegationWithHeadersAndQueryParams(t base.Test) {
 	t.Apply(delegationManifest("delegation-headers-query.yaml"))
 
-	assertHTTPRouteAccepted(t, "root", "infra")
+	assertHTTPRouteAccepted(t, "root")
 	t.Send(
 		"example.com/anything/team1/foo?query1=val1&queryX=valX",
 		base.ExpectOK(),
@@ -68,7 +68,7 @@ func testDelegationWithHeadersAndQueryParams(t base.Test) {
 func testCyclicDelegation(t base.Test) {
 	t.Apply(delegationManifest("cyclic-delegation.yaml"))
 
-	assertHTTPRouteAccepted(t, "root", "infra")
+	assertHTTPRouteAccepted(t, "root")
 	t.Send("example.com/anything/team1/foo", base.ExpectOK())
 	t.Send("example.com/anything/team2/foo", &testmatchers.HttpResponse{
 		StatusCode: http.StatusInternalServerError,
@@ -79,7 +79,7 @@ func testCyclicDelegation(t base.Test) {
 func testRecursiveDelegation(t base.Test) {
 	t.Apply(delegationManifest("recursive-delegation.yaml"))
 
-	assertHTTPRouteAccepted(t, "root", "infra")
+	assertHTTPRouteAccepted(t, "root")
 	t.Send("example.com/anything/team1/foo", base.ExpectOK())
 	t.Send("example.com/anything/team2/foo", base.ExpectOK())
 }
@@ -87,8 +87,8 @@ func testRecursiveDelegation(t base.Test) {
 func testMultipleParents(t base.Test) {
 	t.Apply(delegationManifest("multiple-parents.yaml"))
 
-	assertHTTPRouteAccepted(t, "parent1", "infra")
-	assertHTTPRouteAccepted(t, "parent2", "infra")
+	assertHTTPRouteAccepted(t, "parent1")
+	assertHTTPRouteAccepted(t, "parent2")
 	t.Send("parent1.com/anything/team2/foo", base.ExpectOK())
 	t.Send("parent2.com/anything/team2/foo", base.Expect(http.StatusNotFound))
 }
@@ -96,7 +96,7 @@ func testMultipleParents(t base.Test) {
 func testUnresolvedChild(t base.Test) {
 	t.Apply(delegationManifest("unresolved-child.yaml"))
 
-	assertHTTPRouteAccepted(t, "root", "infra")
+	assertHTTPRouteAccepted(t, "root")
 	t.Send("example.com/anything/team1/foo", base.Expect(http.StatusNotFound))
 }
 
@@ -104,11 +104,11 @@ func delegationManifest(name string) string {
 	return manifest("delegation", name)
 }
 
-func assertHTTPRouteAccepted(t base.Test, name, namespace string) {
+func assertHTTPRouteAccepted(t base.Test, name string) {
 	t.Helper()
 	assertions.EventuallyHTTPRouteCondition(t,
 		name,
-		namespace,
+		"infra",
 		gwv1.RouteConditionAccepted,
 		metav1.ConditionTrue,
 	)

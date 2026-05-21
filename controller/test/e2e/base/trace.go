@@ -14,13 +14,6 @@ func traceEnabled() bool {
 	return testutils.ShouldTraceE2E()
 }
 
-func tracef(t test.Failer, format string, args ...any) {
-	t.Helper()
-	if traceEnabled() {
-		t.Logf(format, args...)
-	}
-}
-
 func TraceStep(t test.Failer, format string, args ...any) func() {
 	t.Helper()
 	return traceStep(t, format, args...)

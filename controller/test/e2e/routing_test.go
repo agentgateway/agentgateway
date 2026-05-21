@@ -54,7 +54,7 @@ func sharedGateway(t base.Test, listenerName string, attachedRoutes int) base.Ga
 		"gateway",
 		base.Namespace,
 		gwv1.SectionName(listenerName),
-		int32(attachedRoutes),
+		int32(attachedRoutes), // nolint: gosec // testing only
 	)
 
 	name := types.NamespacedName{Name: "gateway", Namespace: base.Namespace}

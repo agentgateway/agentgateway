@@ -26,11 +26,6 @@ import (
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
-const (
-	transformTimeout       = time.Minute
-	transformRetryInterval = 50 * time.Millisecond
-)
-
 func TestTransformation(tt *testing.T) {
 	t := New(tt)
 
@@ -117,7 +112,6 @@ func testGatewayWithTransformedHTTPRoute(t base.Test) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t base.Test) {
 			t.Send(fmt.Sprintf("example-%s.com", tc.routeName), tc.resp, tc.opts...)
 		})
@@ -143,6 +137,7 @@ func testGatewayWithTransformedGRPCRoute(t base.Test) {
 	)
 
 	retry.UntilSuccessOrFail(t, func() error {
+		// nolint: bodyclose // false positive
 		resp, _, err := sendH2CGrpcRequest(
 			base.BaseGateway.Address,
 			expectedHostname,

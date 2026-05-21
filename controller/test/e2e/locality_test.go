@@ -24,6 +24,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 func TestLocality(tt *testing.T) {
@@ -54,7 +55,7 @@ func setupLocality(t base.Test) []weSpec {
 	assertions.EventuallyGatewayCondition(t, localityGatewayName, localityNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
 	assertions.EventuallyHTTPRouteCondition(t, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 
-	t.Cleanup(func() {
+	testutils.Cleanup(t, func() {
 		_ = t.TestInstallation.ClusterContext.ControllerClient.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
 	})
 	return workloadEntries

@@ -31,6 +31,7 @@ type resourceDumpSpec struct {
 // StandardAgentgatewayDumpOnFail creates a dump of the kubernetes state and certain envoy data from
 // the admin interface when a test fails.
 // Look at `KubeDumpOnFail` && `EnvoyDumpOnFail` for more details
+// nolint: forbidigo // lint is meant for controllers not e2e helpers
 func StandardAgentgatewayDumpOnFail(outLog io.Writer, kubeClient client.Client, clientset kubernetes.Interface, outDir string, namespaces []string) {
 	if testutils.ShouldSkipDump() {
 		return
@@ -56,6 +57,7 @@ func StandardAgentgatewayDumpOnFail(outLog io.Writer, kubeClient client.Client, 
 // - kubernetes state
 // - logs from all pods in the given namespaces
 // - yaml representations of all agentgateway CRs in the given namespaces
+// nolint: forbidigo // lint is meant for controllers not e2e helpers
 func KubeDumpOnFail(ctx context.Context, kubeClient client.Client, clientset kubernetes.Interface, outLog io.Writer, outDir string,
 	namespaces []string,
 ) {
@@ -69,6 +71,7 @@ func KubeDumpOnFail(ctx context.Context, kubeClient client.Client, clientset kub
 	fmt.Printf("Finished dumping kubernetes state (%v)\n", time.Since(t0))
 }
 
+// nolint: forbidigo // lint is meant for controllers not e2e helpers
 func recordKubeState(ctx context.Context, kubeClient client.Client, f *os.File, namespaces []string) {
 	defer f.Close()
 
@@ -107,6 +110,7 @@ func recordKubeState(ctx context.Context, kubeClient client.Client, f *os.File, 
 	}
 }
 
+// nolint: forbidigo // lint is meant for controllers not e2e helpers
 func recordResourceState(ctx context.Context, kubeClient client.Client, f *os.File, spec resourceDumpSpec, namespaces []string) {
 	f.WriteString("\n*** " + spec.Name + " ***\n")
 	if !spec.Namespaced {
@@ -118,6 +122,7 @@ func recordResourceState(ctx context.Context, kubeClient client.Client, f *os.Fi
 	}
 }
 
+// nolint: forbidigo // lint is meant for controllers not e2e helpers
 func recordResourceList(ctx context.Context, kubeClient client.Client, f *os.File, spec resourceDumpSpec, namespace string) {
 	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(schema.GroupVersionKind{

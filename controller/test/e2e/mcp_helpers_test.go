@@ -200,10 +200,10 @@ func notifyInitialized(t base.Test, sessionID string, extraHeaders map[string]st
 }
 
 func sendMCP(t base.Test, match *testmatchers.HttpResponse, headers map[string]string, body string) {
-	base.BaseGateway.Send(t, match, mcpCurlOptions(t, headers, body)...)
+	base.BaseGateway.Send(t, match, mcpCurlOptions(headers, body)...)
 }
 
-func mcpCurlOptions(t base.Test, headers map[string]string, body string) []curl.Option {
+func mcpCurlOptions(headers map[string]string, body string) []curl.Option {
 	opts := []curl.Option{
 		curl.WithPath("/mcp"),
 		curl.WithMethod(http.MethodPost),
@@ -432,7 +432,7 @@ func waitForMCP200(t base.Test,
 ) {
 	opts := append(
 		base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
-		mcpCurlOptions(t, headers, body)...,
+		mcpCurlOptions(headers, body)...,
 	)
 	base.BaseGateway.Send(t, &testmatchers.HttpResponse{StatusCode: httpOKCode}, opts...)
 	t.Logf("%s init ready (status=%d)", label, httpOKCode)

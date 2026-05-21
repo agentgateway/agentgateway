@@ -68,7 +68,6 @@ func testExtProcWithGatewayTargetRef(t base.Test) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t base.Test) {
 			t.Send(tc.url, tc.resp, tc.opts...)
 		})
@@ -117,7 +116,6 @@ func testExtProcWithHTTPRouteTargetRef(t base.Test) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t base.Test) {
 			t.Send(tc.url, tc.resp, tc.opts...)
 		})

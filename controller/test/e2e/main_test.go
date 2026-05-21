@@ -52,7 +52,7 @@ func New(t *testing.T, opts ...base.SuiteOption) base.Test {
 	if agwInstallation == nil {
 		t.Fatal("agentgateway e2e installation was not initialized")
 	}
-	t.Cleanup(func() {
+	testutils.Cleanup(t, func() {
 		if t.Failed() && !testutils.ShouldSkipBugReport() {
 			agwInstallation.PreFailHandler(agwCtx, t)
 		}
