@@ -27,10 +27,22 @@ struct Parser<IO> {
 	inner: IO,
 	decoder: websocket_sans_io::WebsocketFrameDecoder,
 	buf: BytesMut,
+	buffer_limit: usize,
+	disabled: bool,
 	log: AsyncLog<LLMInfo>,
 }
 
 impl<IO> Parser<IO> {
+	fn record_text_payload(&mut self, data: &[u8]) -> bool {
+		if self.buf.len() + data.len() > self.buffer_limit {
+			self.buf = Default::default();
+			self.disabled = true;
+			return false;
+		}
+		self.buf.extend_from_slice(data);
+		true
+	}
+
 	fn emit(&self, data: Bytes) {
 		let Ok(data) = str::from_utf8(&data) else {
 			return;
@@ -114,6 +126,9 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 			// EOF
 			return Poll::Ready(Ok(()));
 		}
+		if self.disabled {
+			return Poll::Ready(Ok(()));
+		}
 		let mut processed_offset = 0;
 		loop {
 			let unprocessed_part_of_buf = &buf.filled()[processed_offset..buf.filled().len()];
@@ -129,10 +144,8 @@ impl<IO: AsyncRead + Unpin + 'static> AsyncRead for Parser<IO> {
 			match ret.event {
 				Some(WebsocketFrameEvent::PayloadChunk {
 					original_opcode: Opcode::Text,
-				}) => {
-					self
-						.buf
-						.extend_from_slice(&unprocessed_part_of_buf[0..ret.consumed_bytes]);
+				}) if !self.record_text_payload(&unprocessed_part_of_buf[0..ret.consumed_bytes]) => {
+					return Poll::Ready(Ok(()));
 				},
 				Some(WebsocketFrameEvent::End {
 					frame_info: FrameInfo { fin: true, .. },
@@ -154,10 +167,49 @@ pub async fn parser<IO>(
 where
 	IO: AsyncRead + AsyncWrite + Unpin + 'static,
 {
+	parser_with_limit(body, log, crate::defaults::max_buffer_size())
+}
+
+fn parser_with_limit<IO>(
+	body: IO,
+	log: AsyncLog<LLMInfo>,
+	buffer_limit: usize,
+) -> impl AsyncRead + AsyncWrite + Unpin + 'static
+where
+	IO: AsyncRead + AsyncWrite + Unpin + 'static,
+{
 	Parser {
 		inner: body,
 		decoder: websocket_sans_io::WebsocketFrameDecoder::new(),
 		buf: Default::default(),
+		buffer_limit,
+		disabled: false,
 		log,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn record_text_payload_disables_after_limit() {
+		let (io, _) = tokio::io::duplex(1);
+		let mut parser = Parser {
+			inner: io,
+			decoder: websocket_sans_io::WebsocketFrameDecoder::new(),
+			buf: Default::default(),
+			buffer_limit: 4,
+			disabled: false,
+			log: AsyncLog::default(),
+		};
+
+		assert!(parser.record_text_payload(b"abc"));
+		assert_eq!(&parser.buf[..], b"abc");
+		parser.buf.reserve(1024);
+		assert!(!parser.record_text_payload(b"de"));
+		assert!(parser.disabled);
+		assert!(parser.buf.is_empty());
+		assert_eq!(parser.buf.capacity(), 0);
 	}
 }
