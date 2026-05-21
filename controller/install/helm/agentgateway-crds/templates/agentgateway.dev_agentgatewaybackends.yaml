@@ -137,7 +137,11 @@ spec:
                                     description: |-
                                       The Azure resource name used to construct the endpoint host.
                                       For OpenAI: {resourceName}.openai.azure.com
-                                      For Foundry: {resourceName}-resource.services.ai.azure.com
+                                      For Foundry: {resourceName}.services.ai.azure.com
+                                      Note: when the Azure portal "Foundry legacy" template was used, the
+                                      generated resource name may end in "-resource" (e.g. "myproject-resource");
+                                      that suffix is part of the resource name as the user configured it, not
+                                      part of the hostname suffix agentgateway should append.
                                     maxLength: 256
                                     minLength: 1
                                     type: string
@@ -5028,7 +5032,11 @@ spec:
                             description: |-
                               The Azure resource name used to construct the endpoint host.
                               For OpenAI: {resourceName}.openai.azure.com
-                              For Foundry: {resourceName}-resource.services.ai.azure.com
+                              For Foundry: {resourceName}.services.ai.azure.com
+                              Note: when the Azure portal "Foundry legacy" template was used, the
+                              generated resource name may end in "-resource" (e.g. "myproject-resource");
+                              that suffix is part of the resource name as the user configured it, not
+                              part of the hostname suffix agentgateway should append.
                             maxLength: 256
                             minLength: 1
                             type: string
