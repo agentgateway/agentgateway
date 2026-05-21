@@ -54,6 +54,24 @@ spec:
           spec:
             description: spec defines the desired state of AgentgatewayBackend.
             properties:
+              a2a:
+                description: a2a represents an A2A backend.
+                properties:
+                  host:
+                    description: host is the hostname or IP address of the A2A backend.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  port:
+                    description: port is the port number of the A2A backend.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - host
+                - port
+                type: object
               ai:
                 description: ai represents a LLM backend.
                 properties:
@@ -127,8 +145,8 @@ spec:
                                     description: The type of Azure endpoint. Determines
                                       the host suffix.
                                     enum:
-                                    - OpenAI
                                     - Foundry
+                                    - OpenAI
                                     type: string
                                 required:
                                 - resourceName
@@ -542,6 +560,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -907,9 +933,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -1140,6 +1166,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -1505,9 +1539,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -1734,6 +1768,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -2099,9 +2141,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -2294,11 +2336,11 @@ spec:
                                                           For example, if you specify `CreditCard`, any credit card numbers
                                                           in the request or response are matched.
                                                         enum:
-                                                        - Ssn
-                                                        - CreditCard
-                                                        - PhoneNumber
-                                                        - Email
                                                         - CaSin
+                                                        - CreditCard
+                                                        - Email
+                                                        - PhoneNumber
+                                                        - Ssn
                                                         type: string
                                                       type: array
                                                     matches:
@@ -2554,6 +2596,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -2919,9 +2969,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -3152,6 +3202,14 @@ spec:
                                                                       type: string
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
+                                                                serviceName:
+                                                                  description: |-
+                                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                                    backends may provide this automatically.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                               required:
                                                               - secretRef
                                                               type: object
@@ -3517,9 +3575,9 @@ spec:
                                                                 For example: `X25519_MLKEM768,X25519`.
                                                               items:
                                                                 enum:
-                                                                - X25519
                                                                 - P-256
                                                                 - P-384
+                                                                - X25519
                                                                 - X25519_MLKEM768
                                                                 type: string
                                                               type: array
@@ -3728,11 +3786,11 @@ spec:
                                                           For example, if you specify `CreditCard`, any credit card numbers
                                                           in the request or response are matched.
                                                         enum:
-                                                        - Ssn
-                                                        - CreditCard
-                                                        - PhoneNumber
-                                                        - Email
                                                         - CaSin
+                                                        - CreditCard
+                                                        - Email
+                                                        - PhoneNumber
+                                                        - Ssn
                                                         type: string
                                                       type: array
                                                     matches:
@@ -3945,15 +4003,15 @@ spec:
                                             RouteType specifies how the AI gateway should process incoming requests
                                             based on the URL path and the API format expected.
                                           enum:
+                                          - AnthropicTokenCount
                                           - Completions
+                                          - Detect
+                                          - Embeddings
                                           - Messages
                                           - Models
                                           - Passthrough
-                                          - Detect
-                                          - Responses
-                                          - AnthropicTokenCount
-                                          - Embeddings
                                           - Realtime
+                                          - Responses
                                           type: string
                                         description: |-
                                           `routes` defines how to identify the type of traffic to handle.
@@ -4029,6 +4087,14 @@ spec:
                                                 type: string
                                             type: object
                                             x-kubernetes-map-type: atomic
+                                          serviceName:
+                                            description: |-
+                                              `serviceName` is the AWS SigV4 signing service name (for example,
+                                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                              backends may provide this automatically.
+                                            maxLength: 256
+                                            minLength: 1
+                                            type: string
                                         required:
                                         - secretRef
                                         type: object
@@ -4429,9 +4495,9 @@ spec:
                                           For example: `X25519_MLKEM768,X25519`.
                                         items:
                                           enum:
-                                          - X25519
                                           - P-256
                                           - P-384
+                                          - X25519
                                           - X25519_MLKEM768
                                           type: string
                                         type: array
@@ -4970,8 +5036,8 @@ spec:
                             description: The type of Azure endpoint. Determines the
                               host suffix.
                             enum:
-                            - OpenAI
                             - Foundry
+                            - OpenAI
                             type: string
                         required:
                         - resourceName
@@ -5194,8 +5260,8 @@ spec:
                       continues serving from healthy ones. `FailClosed` (default) fails the
                       entire session if any target fails.
                     enum:
-                    - FailOpen
                     - FailClosed
+                    - FailOpen
                     type: string
                   sessionRouting:
                     description: |-
@@ -5401,6 +5467,14 @@ spec:
                                               type: string
                                           type: object
                                           x-kubernetes-map-type: atomic
+                                        serviceName:
+                                          description: |-
+                                            `serviceName` is the AWS SigV4 signing service name (for example,
+                                            `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                            backends may provide this automatically.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
                                       required:
                                       - secretRef
                                       type: object
@@ -5728,9 +5802,9 @@ spec:
                                         For example: `X25519_MLKEM768,X25519`.
                                       items:
                                         enum:
-                                        - X25519
                                         - P-256
                                         - P-384
+                                        - X25519
                                         - X25519_MLKEM768
                                         type: string
                                       type: array
@@ -5892,8 +5966,8 @@ spec:
                                 Protocol is the protocol to use for the connection to the MCP
                                 target.
                               enum:
-                              - StreamableHTTP
                               - SSE
+                              - StreamableHTTP
                               type: string
                           required:
                           - port
@@ -6172,6 +6246,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -6508,9 +6590,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -6725,6 +6807,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -7061,9 +7151,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -7275,6 +7365,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -7611,9 +7709,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -7794,11 +7892,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -8042,6 +8140,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -8378,9 +8484,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -8595,6 +8701,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -8931,9 +9045,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -9129,11 +9243,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -9339,15 +9453,15 @@ spec:
                             RouteType specifies how the AI gateway should process incoming requests
                             based on the URL path and the API format expected.
                           enum:
+                          - AnthropicTokenCount
                           - Completions
+                          - Detect
+                          - Embeddings
                           - Messages
                           - Models
                           - Passthrough
-                          - Detect
-                          - Responses
-                          - AnthropicTokenCount
-                          - Embeddings
                           - Realtime
+                          - Responses
                           type: string
                         description: |-
                           `routes` defines how to identify the type of traffic to handle.
@@ -9421,6 +9535,14 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          serviceName:
+                            description: |-
+                              `serviceName` is the AWS SigV4 signing service name (for example,
+                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                              backends may provide this automatically.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                         required:
                         - secretRef
                         type: object
@@ -9684,8 +9806,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -9693,13 +9815,22 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
-                            format: int32
-                            minimum: 1
-                            type: integer
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -10041,9 +10172,9 @@ spec:
                             default: Strict
                             description: '`mode` is the validation mode for JWT authentication.'
                             enum:
-                            - Strict
                             - Optional
                             - Permissive
+                            - Strict
                             type: string
                           provider:
                             description: '`provider` specifies the identity provider
@@ -10236,9 +10367,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array
@@ -10670,8 +10801,8 @@ spec:
               rule: 'has(self.policies) && has(self.policies.mcp) ? has(self.mcp)
                 : true'
             - message: exactly one of the fields in [ai static dynamicForwardProxy
-                mcp aws] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws)].filter(x,x==true).size()
+                mcp aws a2a] must be set
+              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws),has(self.a2a)].filter(x,x==true).size()
                 == 1'
           status:
             description: status defines the current state of AgentgatewayBackend.

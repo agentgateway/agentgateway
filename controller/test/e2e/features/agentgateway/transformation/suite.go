@@ -71,12 +71,9 @@ func (s *testingSuite) TestGatewayWithTransformedHTTPRoute() {
 		metav1.ConditionTrue,
 		timeout,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(
 		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		gateway,
 		timeout,
 	)
 
@@ -169,12 +166,9 @@ func (s *testingSuite) TestGatewayWithTransformedGRPCRoute() {
 		metav1.ConditionTrue,
 		timeout,
 	)
-	s.TestInstallation.Assertions.EventuallyGatewayCondition(
+	s.TestInstallation.Assertions.EventuallyAccepted(
 		s.Ctx,
-		gateway.Name,
-		gateway.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		gateway,
 		timeout,
 	)
 

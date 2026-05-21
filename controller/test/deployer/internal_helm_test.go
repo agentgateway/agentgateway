@@ -265,6 +265,19 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			},
 		},
 		{
+			Name:      "agentgateway resource requests overlay",
+			InputFile: "agentgateway-resource-requests-overlay",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "resources:\n          requests:\n            cpu: 250m\n        securityContext:",
+					"deployment overlay should override the default CPU request and unset the default memory request")
+				assert.NotContains(t, outputYaml, "cpu: 100m",
+					"default CPU request should not remain after overlay override")
+				assert.NotContains(t, outputYaml, "memory: 128Mi",
+					"default memory request should not remain after overlay unsets it")
+			},
+		},
+		{
 			Name:      "agentgateway AGWP with pod scheduling fields",
 			InputFile: "agentgateway-agwp-pod-scheduling",
 		},

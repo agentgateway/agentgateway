@@ -238,6 +238,9 @@ fn filter_keys<'a, 'rf, 'b>(
 	ident: Argument,
 	expr: Argument,
 ) -> ResolveResult<'a> {
+	if ftx.args.len() != 2 {
+		return Err(ExecutionError::invalid_argument_count(2, ftx.args.len()));
+	}
 	let this: Value<'a> = this.load_value(ftx)?;
 	let ident = ident.load_identifier(ftx)?;
 	let expr = expr.load_expression(ftx)?;

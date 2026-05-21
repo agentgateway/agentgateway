@@ -207,7 +207,10 @@ async fn apply_request_policies(
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
 	if pol.hostname_rewrite.unwrap_or(HostRedirectOverride::Auto) == HostRedirectOverride::Auto {
-		req.extensions_mut().insert(AutoHostname());
+		req.extensions_mut().insert(AutoHostname {
+			explicit: pol.hostname_rewrite == Some(HostRedirectOverride::Auto),
+			target: None,
+		});
 	}
 	pol
 		.url_rewrite
@@ -525,6 +528,7 @@ impl HTTPProxy {
 		// Setup ResponsePolicies outside of proxy_internal, so we have can unconditionally run them even on errors
 		// or direct responses
 		let mut response_policies = ResponsePolicies::default();
+		let is_grpc_request = http::is_grpc_request(&req);
 		let ret = self
 			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
@@ -544,7 +548,7 @@ impl HTTPProxy {
 			Err(e) => e.as_reason(),
 		};
 		let mut resp = ret.unwrap_or_else(|err| match err {
-			ProxyResponse::Error(e) => e.into_response(),
+			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 			ProxyResponse::DirectResponse(dr) => *dr,
 		});
 
@@ -562,7 +566,7 @@ impl HTTPProxy {
 		{
 			Ok(_) => resp,
 			Err(e) => match e {
-				ProxyResponse::Error(e) => e.into_response(),
+				ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
 				ProxyResponse::DirectResponse(dr) => *dr,
 			},
 		};
@@ -581,11 +585,11 @@ impl HTTPProxy {
 
 		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
 			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
-				return ProxyError::UpgradeFailed(None, None).into_response();
+				return ProxyError::UpgradeFailed(None, None).into_response_with_grpc(is_grpc_request);
 			};
 			handle_upgrade(req_upgrade, resp, log)
 				.await
-				.unwrap_or_else(|e| e.into_response())
+				.unwrap_or_else(|e| e.into_response_with_grpc(is_grpc_request))
 		} else {
 			resp.map(move |b| http::Body::new(LogBody::new(b, log)))
 		}
@@ -1255,7 +1259,7 @@ pub async fn build_transport(
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
-		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols)?;
+		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
@@ -1282,6 +1286,22 @@ pub async fn build_transport(
 			token,
 		};
 		return Ok(Transport::Tunnel(app_transport, tc));
+	}
+
+	// Check if we should route through a waypoint proxy (ingress_use_waypoint)
+	if let (Some(wp), Some(ca)) = (&backend_call.waypoint, &inputs.ca) {
+		if ca.get_identity().await.is_ok() {
+			tracing::debug!("using HBONE waypoint at {} for service", wp.address);
+			return Ok(Transport::HboneWaypoint {
+				waypoint_address: wp.address,
+				identities: wp.identities.clone(),
+				inner: app_transport,
+			});
+		} else {
+			return Err(ProxyError::Processing(anyhow::anyhow!(
+				"ingress_use_waypoint: wanted HBONE to waypoint but CA is not available"
+			)));
+		}
 	}
 
 	// Check if we need double hbone
@@ -1445,8 +1465,8 @@ async fn make_backend_call(
 	let hbone_source = req
 		.extensions()
 		.get::<WaypointService>()
-		.is_some()
-		.then_some(HboneSourceRole::Waypoint);
+		.map(|_| HboneSourceRole::Waypoint)
+		.or(Some(HboneSourceRole::Gateway));
 
 	// The MCP backend aggregates multiple backends into a single backend.
 	// In some cases, we want to treat this as a normal backend, so we swap it out.
@@ -1541,22 +1561,34 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 			}
 		},
-		Backend::Service(svc, port) => build_service_call(
-			&inputs,
-			policies,
-			&mut log,
-			service_override,
-			svc,
-			port,
-			req.uri().host(),
-		)?,
+		Backend::Service(svc, port) => {
+			// If user explicitly set auto hostname, we support it for Service.
+			// Otherwise, the implicit default only applies to AgentgatewayBackend.
+			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
+				&& auto.explicit
+			{
+				auto.target = Some(svc.hostname.clone());
+			}
+			build_service_call(
+				&inputs,
+				policies,
+				&mut log,
+				service_override,
+				svc,
+				port,
+				req.uri().host(),
+				hbone_source,
+			)?
+		},
 		Backend::Opaque(_, target) => BackendCall {
 			target: target.clone(),
 			http_version_override: None,
 			transport_override: None,
 			network_gateway: None,
+			waypoint: None,
 			backend_policies: policies,
 		},
 		Backend::Aws(_, config) => {
@@ -1572,13 +1604,12 @@ async fn make_backend_call(
 			req.extensions_mut().insert(llm::bedrock::AwsRegion {
 				region: config.region().to_string(),
 			});
-			req.extensions_mut().insert(llm::bedrock::AwsServiceName {
-				name: config.service_name(),
-			});
 
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {})),
+				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
+					service_name: Some(config.service_name().to_string()),
+				})),
 				..Default::default()
 			};
 			BackendCall {
@@ -1587,6 +1618,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 			}
 		},
 		Backend::Dynamic(_, _) => {
@@ -1604,6 +1636,7 @@ async fn make_backend_call(
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
+				waypoint: None,
 				backend_policies: policies,
 			}
 		},
@@ -1674,6 +1707,10 @@ async fn make_backend_call(
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings
 				| RouteType::Detect => {
+					let request_body_limit = crate::http::buffer_limit(&req);
+					let req = req.map(|b| {
+						dtrace::TracingBody::maybe_wrap("llm request before translation", b, request_body_limit)
+					});
 					let r = match route_type {
 						RouteType::Completions => Box::pin(llm.provider.process_completions_request(
 							&backend_info,
@@ -1820,6 +1857,7 @@ async fn make_backend_call(
 				None,
 			)
 		};
+	apply_auto_hostname(&mut req, &backend_call.target)?;
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(
 		backend_call.backend_policies.backend_auth.as_ref(),
@@ -1841,6 +1879,8 @@ async fn make_backend_call(
 	)
 	.await?;
 	dtrace::snapshot!(Request, "final request", &req);
+	let request_body_limit = crate::http::buffer_limit(&req);
+	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
 	let call = client::Call {
 		req,
 		target: backend_call.target,
@@ -1872,6 +1912,9 @@ async fn make_backend_call(
 		),
 	});
 	let mut resp = resp?;
+	if let Some(log) = log.as_ref() {
+		dtrace::snapshot!(Response, "raw response", log, &resp);
+	}
 	a2a::apply_to_response(
 		backend_call.backend_policies.a2a.as_ref(),
 		a2a_type,
@@ -1903,6 +1946,8 @@ async fn make_backend_call(
 	if let Some(log) = log.as_ref() {
 		dtrace::snapshot!(Response, "backend response ready", log, &resp);
 	}
+	let response_body_limit = crate::http::response_buffer_limit(&resp);
+	let resp = resp.map(|b| dtrace::TracingBody::maybe_wrap("response", b, response_body_limit));
 	Ok(resp)
 }
 
@@ -1919,6 +1964,7 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_service_call(
 	inputs: &ProxyInputs,
 	backend_policies: BackendPolicies,
@@ -1927,6 +1973,7 @@ pub fn build_service_call(
 	svc: &Arc<Service>,
 	port: &u16,
 	request_host: Option<&str>,
+	hbone_source: Option<HboneSourceRole>,
 ) -> Result<BackendCall, ProxyError> {
 	let port = *port;
 	let http_version_override = if svc.port_is_http2(port) {
@@ -1944,6 +1991,7 @@ pub fn build_service_call(
 			http_version_override,
 			transport_override: None,
 			network_gateway: None,
+			waypoint: None,
 			backend_policies,
 		});
 	}
@@ -2008,8 +2056,95 @@ pub fn build_service_call(
 		None
 	};
 
-	// For double HBONE, use hostname-based target so the gateway can resolve it
-	let target = if network_gateway.is_some() {
+	// Check if the service has ingress_use_waypoint set and a waypoint configured.
+	// When set, route traffic through the waypoint instead of directly to the workload.
+	// Skip when we are acting as a waypoint: ingress_use_waypoint should only affect
+	// ingress gateways, never waypoint-to-waypoint traffic.
+	let waypoint = if svc.ingress_use_waypoint && hbone_source != Some(HboneSourceRole::Waypoint) {
+		if let Some(wp) = &svc.waypoint {
+			let discovery = inputs.stores.read_discovery();
+			let wp_ip = match &wp.destination {
+				types::discovery::gatewayaddress::Destination::Address(net_addr) => Some(net_addr.address),
+				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
+					// Resolve hostname-based waypoint via service discovery
+					discovery
+						.services
+						.get_by_namespaced_host(&NamespacedHostname {
+							namespace: nh.namespace.clone(),
+							hostname: nh.hostname.clone(),
+						})
+						.and_then(|wp_svc| {
+							wp_svc
+								.vips
+								.iter()
+								.find(|v| v.network == inputs.cfg.network)
+								.or_else(|| wp_svc.vips.first())
+								.map(|v| v.address)
+						})
+				},
+			};
+			// Resolve the waypoint's own SPIFFE identity for mTLS verification.
+			let waypoint_info = wp_ip.and_then(|ip| {
+				let net_addr = types::discovery::NetworkAddress {
+					network: inputs.cfg.network.clone(),
+					address: ip,
+				};
+				let identity = if let Some(wp_wl) = discovery.workloads.find_address(&net_addr) {
+					// waypoint_ip is a pod IP — use the workload identity directly
+					Some(wp_wl.identity())
+				} else if let Some(wp_svc) = discovery.services.get_by_vip(&net_addr) {
+					// waypoint_ip is a service VIP — get identity from a backing workload
+					wp_svc.endpoints.iter().iter().find_map(|(ep, _)| {
+						discovery
+							.workloads
+							.find_uid(&ep.workload_uid)
+							.map(|wl| wl.identity())
+					})
+				} else {
+					None
+				};
+				identity.map(|id| (ip, id))
+			});
+			drop(discovery);
+			match waypoint_info {
+				Some((ip, identity)) => {
+					let wp_port = if wp.hbone_mtls_port > 0 {
+						wp.hbone_mtls_port
+					} else {
+						agent_hbone::DEFAULT_HBONE_PORT
+					};
+					tracing::debug!(
+						service = %svc.hostname,
+						waypoint = %ip,
+						waypoint_port = %wp_port,
+						"ingress_use_waypoint: routing through waypoint"
+					);
+					Some(WaypointTarget {
+						address: SocketAddr::new(ip, wp_port),
+						service_hostname: svc.hostname.clone(),
+						identities: vec![identity],
+					})
+				},
+				_ => {
+					tracing::warn!(
+						service = %svc.hostname,
+						"ingress_use_waypoint set but waypoint could not be resolved"
+					);
+					None
+				},
+			}
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+
+	// Waypoint: target = service hostname (becomes the inner CONNECT authority).
+	// Double HBONE: target = service hostname (resolved by the gateway).
+	let target = if let Some(wp) = &waypoint {
+		Target::Hostname(wp.service_hostname.clone(), port)
+	} else if network_gateway.is_some() {
 		tracing::debug!(
 			hostname=%svc.hostname,
 			port=%port,
@@ -2038,6 +2173,7 @@ pub fn build_service_call(
 		http_version_override,
 		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
 		network_gateway,
+		waypoint,
 		backend_policies,
 	})
 }
@@ -2112,9 +2248,56 @@ mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
 
-	use super::{hop_by_hop_headers, resolved_workload_target_hostname, select_service_target_port};
+	use super::{
+		apply_auto_hostname, hop_by_hop_headers, resolved_workload_target_hostname,
+		select_service_target_port,
+	};
 	use crate::http;
+	use crate::http::filters::AutoHostname;
+	use crate::types::agent::Target;
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+
+	#[test]
+	fn apply_auto_hostname_rewrites_authority_when_enabled() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example.com/")
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(AutoHostname {
+			explicit: false,
+			target: None,
+		});
+
+		apply_auto_hostname(
+			&mut req,
+			&Target::Hostname("backend.example.com".into(), 80),
+		)
+		.expect("auto hostname rewrite should succeed");
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("backend.example.com")
+		);
+	}
+
+	#[test]
+	fn apply_auto_hostname_preserves_authority_when_disabled() {
+		let mut req = ::http::Request::builder()
+			.uri("http://original.example.com/")
+			.body(http::Body::empty())
+			.unwrap();
+
+		apply_auto_hostname(
+			&mut req,
+			&Target::Hostname("backend.example.com".into(), 80),
+		)
+		.expect("disabled auto hostname rewrite should succeed");
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("original.example.com")
+		);
+	}
 
 	#[test]
 	fn resolved_workload_target_hostname_uses_explicit_workload_hostname() {
@@ -2169,6 +2352,7 @@ mod tests {
 			waypoint: None,
 			load_balancer: None,
 			ip_families: None,
+			ingress_use_waypoint: false,
 		}
 	}
 
@@ -2420,12 +2604,44 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	Ok(())
 }
 
+fn apply_auto_hostname(req: &mut Request, target: &Target) -> Result<(), ProxyError> {
+	let Some(auto) = req.extensions().get::<filters::AutoHostname>() else {
+		return Ok(());
+	};
+	let ext_host = auto.target.as_ref().cloned();
+	let backend_host = if let Target::Hostname(h, _) = target {
+		Some(h)
+	} else {
+		None
+	};
+	let Some(host) = ext_host.as_ref().or(backend_host) else {
+		return Ok(());
+	};
+
+	http::modify_req_uri(req, |uri| {
+		uri.authority = Some(Authority::from_str(host)?);
+		Ok(())
+	})
+	.map_err(ProxyError::Processing)
+}
+
 pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
+	pub waypoint: Option<WaypointTarget>,                    // For ingress waypoint routing
 	pub backend_policies: BackendPolicies,
+}
+
+/// Information needed to route through a waypoint proxy.
+pub struct WaypointTarget {
+	/// The socket address of the waypoint (IP:hbone_port).
+	pub address: SocketAddr,
+	/// Destination service hostname used as the inner HBONE CONNECT authority.
+	pub service_hostname: Strng,
+	/// Identities for mTLS verification (service SANs).
+	pub identities: Vec<Identity>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

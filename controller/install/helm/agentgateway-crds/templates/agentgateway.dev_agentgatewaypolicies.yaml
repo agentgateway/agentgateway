@@ -321,6 +321,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -657,9 +665,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -874,6 +882,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -1210,9 +1226,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -1424,6 +1440,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -1760,9 +1784,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -1943,11 +1967,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -2191,6 +2215,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -2527,9 +2559,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -2744,6 +2776,14 @@ spec:
                                                       type: string
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                serviceName:
+                                                  description: |-
+                                                    `serviceName` is the AWS SigV4 signing service name (for example,
+                                                    `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                                                    backends may provide this automatically.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                               required:
                                               - secretRef
                                               type: object
@@ -3080,9 +3120,9 @@ spec:
                                                 For example: `X25519_MLKEM768,X25519`.
                                               items:
                                                 enum:
-                                                - X25519
                                                 - P-256
                                                 - P-384
+                                                - X25519
                                                 - X25519_MLKEM768
                                                 type: string
                                               type: array
@@ -3278,11 +3318,11 @@ spec:
                                           For example, if you specify `CreditCard`, any credit card numbers
                                           in the request or response are matched.
                                         enum:
-                                        - Ssn
-                                        - CreditCard
-                                        - PhoneNumber
-                                        - Email
                                         - CaSin
+                                        - CreditCard
+                                        - Email
+                                        - PhoneNumber
+                                        - Ssn
                                         type: string
                                       type: array
                                     matches:
@@ -3488,15 +3528,15 @@ spec:
                             RouteType specifies how the AI gateway should process incoming requests
                             based on the URL path and the API format expected.
                           enum:
+                          - AnthropicTokenCount
                           - Completions
+                          - Detect
+                          - Embeddings
                           - Messages
                           - Models
                           - Passthrough
-                          - Detect
-                          - Responses
-                          - AnthropicTokenCount
-                          - Embeddings
                           - Realtime
+                          - Responses
                           type: string
                         description: |-
                           `routes` defines how to identify the type of traffic to handle.
@@ -3570,6 +3610,14 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          serviceName:
+                            description: |-
+                              `serviceName` is the AWS SigV4 signing service name (for example,
+                              `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+                              backends may provide this automatically.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                         required:
                         - secretRef
                         type: object
@@ -3833,8 +3881,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -3842,13 +3890,22 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
-                            format: int32
-                            minimum: 1
-                            type: integer
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -4190,9 +4247,9 @@ spec:
                             default: Strict
                             description: '`mode` is the validation mode for JWT authentication.'
                             enum:
-                            - Strict
                             - Optional
                             - Permissive
+                            - Strict
                             type: string
                           provider:
                             description: '`provider` specifies the identity provider
@@ -4385,9 +4442,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array
@@ -4939,8 +4996,8 @@ spec:
                             description: '`protocol` specifies the OTLP protocol variant
                               to use.'
                             enum:
-                            - HTTP
                             - GRPC
+                            - HTTP
                             type: string
                         required:
                         - backendRef
@@ -4976,20 +5033,39 @@ spec:
                         minimum: 1
                         type: integer
                       http2ConnectionWindowSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2ConnectionWindowSize` indicates the initial window size for
                           connection-level flow control for received data.
-                        format: int32
-                        minimum: 1
-                        type: integer
+                        maxLength: 32
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                        x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2FrameSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2FrameSize` sets the maximum frame size to use.
                           If unset, this defaults to `16kb`.
-                        format: int32
-                        maximum: 1677215
-                        minimum: 16384
-                        type: integer
+                        maxLength: 32
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                        x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: http2FrameSize must be at least 16384 bytes
+                          rule: '!quantity(string(self)).isLessThan(quantity(''16384''))'
+                        - message: http2FrameSize must be at most 1677215 bytes
+                          rule: '!quantity(string(self)).isGreaterThan(quantity(''1677215''))'
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2KeepaliveInterval:
                         type: string
                         x-kubernetes-validations:
@@ -5004,22 +5080,54 @@ spec:
                           rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                         - message: http2KeepaliveTimeout must be at least 1 second
                           rule: duration(self) >= duration('1s')
+                      http2MaxHeaderSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: |-
+                          `http2MaxHeaderSize` sets the maximum aggregate size of decoded HTTP/2
+                          request headers.
+                          If unset, this defaults to `16Ki`.
+                        maxLength: 32
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                        x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       http2WindowSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `http2WindowSize` indicates the initial window size for stream-level flow
                           control for received data.
-                        format: int32
-                        minimum: 1
-                        type: integer
+                        maxLength: 32
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                        x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       maxBufferSize:
+                        anyOf:
+                        - type: integer
+                        - type: string
                         description: |-
                           `maxBufferSize` defines the maximum HTTP body size that will be buffered
                           into memory.
                           Bodies will only be buffered for policies which require buffering.
                           If unset, this defaults to `2mb`.
-                        format: int32
-                        minimum: 1
-                        type: integer
+                        maxLength: 32
+                        minLength: 1
+                        pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                        x-kubernetes-int-or-string: true
+                        x-kubernetes-validations:
+                        - message: value must be at least 1 byte and fit within uint32
+                          rule: (self >= 1 && self <= 4294967295) || self.size() >
+                            0
                       maxConnectionDuration:
                         description: |-
                           `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
@@ -5035,9 +5143,9 @@ spec:
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
                         http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
-                        http2KeepaliveTimeout http2WindowSize maxBufferSize maxConnectionDuration]
-                        must be set
-                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
+                        maxConnectionDuration] must be set
+                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -5154,8 +5262,8 @@ spec:
 
                           If unset, this defaults to `Strict`.
                         enum:
-                        - Strict
                         - Optional
+                        - Strict
                         type: string
                       version:
                         default: V2
@@ -5164,9 +5272,9 @@ spec:
 
                           If unset, this defaults to `V2`.
                         enum:
+                        - All
                         - V1
                         - V2
-                        - All
                         type: string
                     type: object
                   tcp:
@@ -5233,14 +5341,14 @@ spec:
                           Use this in the TLS options field of a TLS listener.
                         items:
                           enum:
-                          - TLS13_AES_256_GCM_SHA384
                           - TLS13_AES_128_GCM_SHA256
+                          - TLS13_AES_256_GCM_SHA384
                           - TLS13_CHACHA20_POLY1305_SHA256
-                          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+                          - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
-                          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+                          - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
                           - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
                           type: string
                         type: array
@@ -5260,9 +5368,9 @@ spec:
                           For example: `X25519_MLKEM768,X25519`.
                         items:
                           enum:
-                          - X25519
                           - P-256
                           - P-384
+                          - X25519
                           - X25519_MLKEM768
                           type: string
                         type: array
@@ -5430,8 +5538,8 @@ spec:
                         description: '`protocol` specifies the OTLP protocol variant
                           to use.'
                         enum:
-                        - HTTP
                         - GRPC
+                        - HTTP
                         type: string
                       randomSampling:
                         description: |-
@@ -5627,6 +5735,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -5666,6 +5780,10 @@ spec:
                         type: object
                         x-kubernetes-validations:
                         - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
+                        - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
@@ -5673,8 +5791,9 @@ spec:
                         default: Strict
                         description: '`mode` is the validation mode for API key authentication.'
                         enum:
-                        - Strict
                         - Optional
+                        - Permissive
+                        - Strict
                         type: string
                       secretRef:
                         description: "`secretRef` references a Kubernetes `Secret`
@@ -5805,6 +5924,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -5844,6 +5969,10 @@ spec:
                         type: object
                         x-kubernetes-validations:
                         - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
+                        - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
@@ -5852,8 +5981,8 @@ spec:
                         description: '`mode` is the validation mode for basic auth
                           authentication.'
                         enum:
-                        - Strict
                         - Optional
+                        - Strict
                         type: string
                       realm:
                         description: |-
@@ -6484,8 +6613,8 @@ spec:
                                     unavailable or returns an error. "FailOpen" allows the request to continue.
                                     "FailClosed" (default) denies the request.
                                   enum:
-                                  - FailOpen
                                   - FailClosed
+                                  - FailOpen
                                   type: string
                                 forwardBody:
                                   description: |-
@@ -6493,13 +6622,22 @@ spec:
                                     If enabled, the request body will be buffered.
                                   properties:
                                     maxSize:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
                                       description: |-
                                         `maxSize` specifies, in bytes, the largest body that will be buffered
                                         and sent to the authorization server. If the body size is larger than
                                         `maxSize`, then the request will be rejected with a response.
-                                      format: int32
-                                      minimum: 1
-                                      type: integer
+                                      maxLength: 32
+                                      minLength: 1
+                                      pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                                      x-kubernetes-int-or-string: true
+                                      x-kubernetes-validations:
+                                      - message: value must be at least 1 byte and
+                                          fit within uint32
+                                        rule: (self >= 1 && self <= 4294967295) ||
+                                          self.size() > 0
                                   required:
                                   - maxSize
                                   type: object
@@ -6633,8 +6771,8 @@ spec:
                           unavailable or returns an error. "FailOpen" allows the request to continue.
                           "FailClosed" (default) denies the request.
                         enum:
-                        - FailOpen
                         - FailClosed
+                        - FailOpen
                         type: string
                       forwardBody:
                         description: |-
@@ -6642,13 +6780,22 @@ spec:
                           If enabled, the request body will be buffered.
                         properties:
                           maxSize:
+                            anyOf:
+                            - type: integer
+                            - type: string
                             description: |-
                               `maxSize` specifies, in bytes, the largest body that will be buffered
                               and sent to the authorization server. If the body size is larger than
                               `maxSize`, then the request will be rejected with a response.
-                            format: int32
-                            minimum: 1
-                            type: integer
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
                         required:
                         - maxSize
                         type: object
@@ -7290,6 +7437,12 @@ spec:
                             required:
                             - name
                             type: object
+                          expression:
+                            description: expression extracts the credential from the
+                              request using a CEL expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           header:
                             properties:
                               name:
@@ -7329,6 +7482,10 @@ spec:
                         type: object
                         x-kubernetes-validations:
                         - message: exactly one of the fields in [header queryParameter
+                            cookie expression] must be set
+                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                            == 1'
+                        - message: exactly one of the fields in [header queryParameter
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
@@ -7357,9 +7514,9 @@ spec:
                         default: Strict
                         description: '`mode` is the validation mode for JWT authentication.'
                         enum:
-                        - Strict
                         - Optional
                         - Permissive
+                        - Strict
                         type: string
                       providers:
                         items:
@@ -7532,8 +7689,8 @@ spec:
 
                       If unset, this defaults to `PostRouting`.
                     enum:
-                    - PreRouting
                     - PostRouting
+                    - PreRouting
                     type: string
                   rateLimit:
                     description: |-
@@ -7713,8 +7870,8 @@ spec:
                                         unavailable or returns an error. `FailOpen` allows the request to continue.
                                         `FailClosed` (default) denies the request.
                                       enum:
-                                      - FailOpen
                                       - FailClosed
+                                      - FailOpen
                                       type: string
                                   required:
                                   - backendRef
@@ -7757,9 +7914,9 @@ spec:
                                         description: '`unit` specifies the unit of
                                           time that requests are limited on.'
                                         enum:
-                                        - Seconds
-                                        - Minutes
                                         - Hours
+                                        - Minutes
+                                        - Seconds
                                         type: string
                                     required:
                                     - unit
@@ -7944,8 +8101,8 @@ spec:
                               unavailable or returns an error. `FailOpen` allows the request to continue.
                               `FailClosed` (default) denies the request.
                             enum:
-                            - FailOpen
                             - FailClosed
+                            - FailOpen
                             type: string
                         required:
                         - backendRef
@@ -7987,9 +8144,9 @@ spec:
                               description: '`unit` specifies the unit of time that
                                 requests are limited on.'
                               enum:
-                              - Seconds
-                              - Minutes
                               - Hours
+                              - Minutes
+                              - Seconds
                               type: string
                           required:
                           - unit

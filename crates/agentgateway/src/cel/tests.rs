@@ -279,6 +279,18 @@ mod headers {
 	}
 
 	#[test]
+	fn extension_functions() {
+		let req = request_with_header_modes();
+		assert_eq!(
+			serde_json::json!({"single": "z"}),
+			eval_request(r#"request.headers.filterKeys(k, k == "single")"#, req,)
+				.unwrap()
+				.json()
+				.unwrap()
+		);
+	}
+
+	#[test]
 	fn last_mode_wins() {
 		let req = request_with_header_modes();
 		assert_eq!(

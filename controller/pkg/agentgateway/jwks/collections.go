@@ -33,11 +33,11 @@ type Collections struct {
 func NewCollections(inputs CollectionInputs) Collections {
 	policyOwners := krt.NewManyCollection(inputs.AgentgatewayPolicies, func(kctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner {
 		return OwnersFromPolicy(policy)
-	}, inputs.KrtOpts.ToOptions("PolicyJwksOwners")...)
+	}, inputs.KrtOpts.ToOptions("jwks/PolicyOwners")...)
 	backendOwners := krt.NewManyCollection(inputs.Backends, func(kctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []RemoteJwksOwner {
 		return OwnersFromBackend(backend)
-	}, inputs.KrtOpts.ToOptions("BackendJwksOwners")...)
-	owners := krt.JoinCollection([]krt.Collection[RemoteJwksOwner]{policyOwners, backendOwners}, inputs.KrtOpts.ToOptions("JwksOwners")...)
+	}, inputs.KrtOpts.ToOptions("jwks/BackendOwners")...)
+	owners := krt.JoinCollection([]krt.Collection[RemoteJwksOwner]{policyOwners, backendOwners}, inputs.KrtOpts.ToOptions("jwks/Owners")...)
 
 	sources := krt.NewCollection(owners, func(kctx krt.HandlerContext, owner RemoteJwksOwner) *JwksSource {
 		resolved, err := inputs.Resolver.ResolveOwner(kctx, owner)
@@ -54,15 +54,15 @@ func NewCollections(inputs CollectionInputs) Collections {
 			ProxyTLSConfig: resolved.Target.ProxyTLSConfig,
 			TTL:            resolved.TTL,
 		}
-	}, inputs.KrtOpts.ToOptions("JwksSources")...)
+	}, inputs.KrtOpts.ToOptions("jwks/Sources")...)
 
 	sourcesByRequestKey := krt.NewIndex(sources, "jwks-request-key", func(source JwksSource) []remotehttp.FetchKey {
 		return []remotehttp.FetchKey{source.RequestKey}
 	})
-	requestGroups := sourcesByRequestKey.AsCollection(append(inputs.KrtOpts.ToOptions("JwksRequestGroups"), FetchKeyIndexCollectionFunc)...)
+	requestGroups := sourcesByRequestKey.AsCollection(append(inputs.KrtOpts.ToOptions("jwks/RequestGroups"), FetchKeyIndexCollectionFunc)...)
 	sharedRequests := krt.NewCollection(requestGroups, func(kctx krt.HandlerContext, grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
 		return CollapseJwksSources(grouped)
-	}, inputs.KrtOpts.ToOptions("JwksRequests")...)
+	}, inputs.KrtOpts.ToOptions("jwks/Requests")...)
 
 	return Collections{
 		PolicyOwners:   policyOwners,

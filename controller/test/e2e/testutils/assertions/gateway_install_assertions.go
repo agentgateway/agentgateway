@@ -12,7 +12,6 @@ const agentgatewayLabelSelector = "app.kubernetes.io/name=agentgateway"
 
 func (p *Provider) EventuallyGatewayInstallSucceeded(ctx context.Context) {
 	p.expectInstallContextDefined()
-
 	p.EventuallyPodsRunning(ctx, p.installContext.InstallNamespace,
 		metav1.ListOptions{
 			LabelSelector: agentgatewayLabelSelector,

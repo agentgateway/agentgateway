@@ -51,6 +51,8 @@ pub struct HTTP {
 	pub http2_connection_window_size: Option<u32>,
 	#[serde(default)]
 	pub http2_frame_size: Option<u32>,
+	#[serde(default)]
+	pub http2_max_header_size: Option<u32>,
 	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
@@ -80,6 +82,7 @@ impl Default for HTTP {
 			http2_window_size: None,
 			http2_connection_window_size: None,
 			http2_frame_size: None,
+			http2_max_header_size: None,
 
 			http2_keepalive_interval: None,
 			http2_keepalive_timeout: None,

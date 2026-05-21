@@ -238,7 +238,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mut session = session_manager.create_stateless_session(relay);
 	let parts = ::http::Request::<()>::builder()
 		.method(http::Method::POST)
-		.uri("http://example.test/mcp")
+		.uri("http://localhost/mcp")
 		.body(())
 		.unwrap()
 		.into_parts()
@@ -281,6 +281,123 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let response = session.delete_session(parts).await.unwrap();
 	assert_eq!(response.status(), http::StatusCode::ACCEPTED);
 	assert_eq!(mock_b.init_count().await, 0);
+}
+
+#[tokio::test]
+async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	for body in [
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"method": "notifications/initialized",
+			"params": {}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"result": {}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"error": {
+				"code": -32603,
+				"message": "client response error"
+			}
+		}),
+	] {
+		let response = mcp_json_post(&client, &url, &body).send().await.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+		assert!(
+			response.headers().get("mcp-session-id").is_none(),
+			"rejected no-session message must not create a session"
+		);
+	}
+}
+
+#[tokio::test]
+async fn streamable_http_validates_protocol_version_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let unsupported = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "1900-01-01")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(unsupported.status(), reqwest::StatusCode::BAD_REQUEST);
+
+	let mismatch = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-11-25")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(mismatch.status(), reqwest::StatusCode::BAD_REQUEST);
+
+	let init = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize response should include a session id")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let list_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {}
+	});
+	let subsequent_unsupported = mcp_json_post(&client, &url, &list_body)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "1900-01-01")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		subsequent_unsupported.status(),
+		reqwest::StatusCode::BAD_REQUEST
+	);
+}
+
+fn mcp_json_post<'a>(
+	client: &'a reqwest::Client,
+	url: &'a str,
+	body: &'a serde_json::Value,
+) -> reqwest::RequestBuilder {
+	client
+		.post(url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.json(body)
 }
 
 #[tokio::test]
@@ -506,6 +623,24 @@ async fn authorization_denied_returns_unknown_resource_error() {
 	}
 }
 
+#[tokio::test]
+async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = mcp_streamable_client(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new("memo://insights"))
+		.await
+		.unwrap();
+	client
+		.unsubscribe(rmcp::model::UnsubscribeRequestParams::new(
+			"memo://insights",
+		))
+		.await
+		.unwrap();
+}
+
 /// Test that a deny policy targeting a specific tool filters only that tool from list_tools,
 /// while leaving all other tools accessible.
 #[tokio::test]
@@ -664,6 +799,74 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		tools2.contains(&"increment".to_string()),
 		"agent-two should still see 'increment' but tools were: {:?}",
 		tools2
+	);
+}
+
+#[tokio::test]
+async fn mcp_authentication_early_response_transformation_has_request_context() {
+	let mock = mock_streamable_http_server(true).await;
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: "https://issuer.example.com".to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![],
+			crate::http::jwt::Mode::Strict,
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+		)),
+		mode: crate::types::agent::McpAuthenticationMode::Strict,
+	};
+
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+
+	t.attach_route_policy(serde_json::json!({
+		"transformations": {
+			"response": {
+				"set": {
+					"x-request-id-from-cel": "request.headers[\"x-regression-id\"]",
+					"x-request-path-from-cel": "request.path"
+				}
+			}
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let resp = reqwest::Client::new()
+		.get(format!(
+			"http://{io}/.well-known/oauth-protected-resource/mcp"
+		))
+		.header("x-regression-id", "mcp-authn-snapshot")
+		.send()
+		.await
+		.expect("metadata request should complete");
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp
+			.headers()
+			.get("x-request-id-from-cel")
+			.and_then(|v| v.to_str().ok()),
+		Some("mcp-authn-snapshot")
+	);
+	assert_eq!(
+		resp
+			.headers()
+			.get("x-request-path-from-cel")
+			.and_then(|v| v.to_str().ok()),
+		Some("/.well-known/oauth-protected-resource/mcp")
 	);
 }
 
@@ -1325,6 +1528,7 @@ mod mockserver {
 				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
+					.enable_resources_subscribe()
 					.enable_tools()
 					.build(),
 			)
@@ -1365,6 +1569,38 @@ mod mockserver {
 						memo, uri,
 					)]))
 				},
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({
+							"uri": uri
+					})),
+				)),
+			}
+		}
+
+		async fn subscribe(
+			&self,
+			SubscribeRequestParams { uri, .. }: SubscribeRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<(), McpError> {
+			match uri.as_str() {
+				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({
+							"uri": uri
+					})),
+				)),
+			}
+		}
+
+		async fn unsubscribe(
+			&self,
+			UnsubscribeRequestParams { uri, .. }: UnsubscribeRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<(), McpError> {
+			match uri.as_str() {
+				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
 					Some(json!({

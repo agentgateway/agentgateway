@@ -81,6 +81,62 @@ pub async fn handshake(
 	))
 }
 
+pub async fn handshake_waypoint(
+	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
+	target: &Target,
+	waypoint_address: SocketAddr,
+	identities: Vec<Identity>,
+) -> Result<Socket, Error> {
+	// The CONNECT URI authority is the service target so the waypoint knows
+	// which service the traffic is destined for.
+	let authority = match target {
+		Target::Hostname(host, port) => format!("{}:{}", host, port),
+		Target::Address(addr) => addr.to_string(),
+		Target::UnixSocket(_) => {
+			return Err(Error::new(
+				"Unix sockets should not reach HboneWaypoint connection path",
+			));
+		},
+	};
+	let uri = Uri::builder()
+		.scheme(Scheme::HTTPS)
+		.authority(authority)
+		.path_and_query("/")
+		.build()
+		.expect("uri build should not fail");
+	tracing::debug!(
+		"will use HBONE waypoint: connecting to waypoint {} for service target {:?}",
+		waypoint_address,
+		target
+	);
+	let req = ::http::Request::builder()
+		.uri(uri)
+		.method(hyper::Method::CONNECT)
+		.version(hyper::Version::HTTP_2)
+		.body(())
+		.expect("builder with known status code should not fail");
+
+	// Physical connection goes to the waypoint at its HBONE port.
+	let pool_key = Box::new(WorkloadKey {
+		dst_id: identities,
+		dst: waypoint_address,
+	});
+
+	let upgraded = Box::pin(hbone_pool.send_request_pooled(&pool_key, req))
+		.await
+		.map_err(crate::http::Error::new)?;
+	let rw = agent_hbone::RWStream {
+		stream: upgraded,
+		buf: Default::default(),
+		drain_tx: None,
+	};
+	Ok(Socket::from_hbone(
+		Arc::new(stream::Extension::new()),
+		pool_key.dst,
+		rw,
+	))
+}
+
 pub async fn handshake_double(
 	pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	target: &Target,

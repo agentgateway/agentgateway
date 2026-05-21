@@ -76,13 +76,17 @@ func init() {
 
 // ConvertStatusCollection converts the specific TrafficPolicy status collection
 // to the generic controllers.Object status collection expected by the interface
-func ConvertStatusCollection[T controllers.Object, S any](col krt.Collection[krt.ObjectWithStatus[T, S]]) krt.StatusCollection[controllers.Object, any] {
+func ConvertStatusCollection[T controllers.Object, S any](
+	col krt.Collection[krt.ObjectWithStatus[T, S]],
+	toOptions func(string) []krt.CollectionOption,
+	originalName string,
+) krt.StatusCollection[controllers.Object, any] {
 	return krt.MapCollection(col, func(item krt.ObjectWithStatus[T, S]) krt.ObjectWithStatus[controllers.Object, any] {
 		return krt.ObjectWithStatus[controllers.Object, any]{
 			Obj:    controllers.Object(item.Obj),
 			Status: item.Status,
 		}
-	})
+	}, toOptions(originalName+"/mapped")...)
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
@@ -96,13 +100,13 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						[]AgwPolicy,
 					) {
 						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup)
-					}, agw.KrtOpts.ToOptions("AgentgatewayPolicy")...)
-					return ConvertStatusCollection(policyStatusCol), policyCol
+					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
+					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
 					return krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
 						return BackendReferencesFromPolicy(ctx, policy, input.References)
-					}, agw.KrtOpts.ToOptions("AgentgatewayPolicyAttachments")...)
+					}, agw.KrtOpts.ToOptions("references/AgentgatewayPolicyAttachments")...)
 				},
 			},
 		},
@@ -583,7 +587,7 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
-	p.AuthorizationLocation = translateAuthorizationLocation(jwt.Location)
+	p.AuthorizationLocation = translateAuthorizationExtractionLocation(jwt.Location)
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
@@ -595,6 +599,9 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	}
 
 	errs := make([]error, 0)
+	if err := validateExtractionAuthorizationLocation(jwt.Location, "jwtAuthentication location"); err != nil {
+		errs = append(errs, err)
+	}
 	for idx, pp := range jwt.Providers {
 		jp := &api.TrafficPolicySpec_JWTProvider{
 			Issuer:    pp.Issuer,
@@ -660,7 +667,7 @@ func processBasicAuthenticationPolicy(
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_BasicAuthentication{}
 	p.Realm = ba.Realm
-	p.AuthorizationLocation = translateAuthorizationLocation(ba.Location)
+	p.AuthorizationLocation = translateAuthorizationExtractionLocation(ba.Location)
 
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
@@ -669,16 +676,19 @@ func processBasicAuthenticationPolicy(
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_STRICT
 	}
 
-	var err error
+	var errs []error
+	if err := validateExtractionAuthorizationLocation(ba.Location, "basicAuthentication location"); err != nil {
+		errs = append(errs, err)
+	}
 
 	if s := ba.SecretRef; s != nil {
 		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
 		if scrt == nil {
-			err = fmt.Errorf("basic authentication secret %v not found", s.Name)
+			errs = append(errs, fmt.Errorf("basic authentication secret %v not found", s.Name))
 		} else {
 			d, ok := scrt.Data[".htaccess"]
 			if !ok {
-				err = fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name)
+				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name))
 			}
 			p.HtpasswdContent = string(d)
 		}
@@ -701,7 +711,7 @@ func processBasicAuthenticationPolicy(
 		"policy", basePolicyName,
 		"agentgateway_policy", basicAuthPolicy.Name)
 
-	return basicAuthPolicy, err
+	return basicAuthPolicy, errors.Join(errs...)
 }
 
 type APIKeyEntry struct {
@@ -717,17 +727,22 @@ func processAPIKeyAuthenticationPolicy(
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_APIKey{}
-	p.AuthorizationLocation = translateAuthorizationLocation(ak.Location)
+	p.AuthorizationLocation = translateAuthorizationExtractionLocation(ak.Location)
 
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_APIKey_OPTIONAL
 	case agentgateway.APIKeyAuthenticationModeStrict:
 		p.Mode = api.TrafficPolicySpec_APIKey_STRICT
+	case agentgateway.APIKeyAuthenticationModePermissive:
+		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
 	}
 
 	var secrets []*corev1.Secret
 	var errs []error
+	if err := validateExtractionAuthorizationLocation(ak.Location, "apiKeyAuthentication location"); err != nil {
+		errs = append(errs, err)
+	}
 	if s := ak.SecretRef; s != nil {
 		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
 		if scrt == nil {
@@ -1066,9 +1081,12 @@ func buildExtAuthSpec(
 		}
 	}
 	if b := extAuth.ForwardBody; b != nil {
+		maxRequestBytes := uint32(8192)
+		if v := b.MaxSize.ClampedValue(); v != nil {
+			maxRequestBytes = *v
+		}
 		spec.IncludeRequestBody = &api.TrafficPolicySpec_ExternalAuth_BodyOptions{
-			// nolint:gosec // G115: kubebuilder validation ensures safe for uint32
-			MaxRequestBytes: uint32(b.MaxSize),
+			MaxRequestBytes: maxRequestBytes,
 			// Currently the default, see https://github.com/kubernetes-sigs/gateway-api/issues/4198
 			AllowPartialMessage: true,
 			// TODO: should we allow config?

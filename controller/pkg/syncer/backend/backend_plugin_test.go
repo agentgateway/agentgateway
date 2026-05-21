@@ -2,6 +2,7 @@ package agentgatewaybackend_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -14,8 +15,8 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/api"
+	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -23,10 +24,11 @@ import (
 
 func TestBuildMCP(t *testing.T) {
 	tests := []struct {
-		name        string
-		backend     *agentgateway.AgentgatewayBackend
-		expectError bool
-		inputs      []any
+		name          string
+		backend       *agentgateway.AgentgatewayBackend
+		expectError   bool
+		errorContains string
+		inputs        []any
 	}{
 		{
 			name: "Static MCPBackend target backend",
@@ -183,6 +185,58 @@ func TestBuildMCP(t *testing.T) {
 			inputs: []any{createMockMCPServiceWithBothAnnotations("test-ns", "mcp-service-both", "app=mcp-server-both", "/new/path", "/legacy/path")},
 		},
 		{
+			name: "Service selector MCPBackend backend - target name annotation",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend-target-name",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server-target-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockMCPServiceWithTargetNameAnnotation("test-ns", "mcp-service-target-name", "custom-mcp-target")},
+		},
+		{
+			name: "Service selector MCPBackend backend - invalid target name annotation",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "service-mcp-backend-invalid-target-name",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Selector: &agentgateway.McpSelector{
+									Service: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"app": "mcp-server-target-name",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `invalid Service test-ns/mcp-service-invalid-target-name annotation agentgateway.dev/mcp-target-name value "invalid_target"`,
+			inputs:        []any{createMockMCPServiceWithTargetNameAnnotation("test-ns", "mcp-service-invalid-target-name", "invalid_target")},
+		},
+		{
 			name: "Service backendRef MCPBackend backend - same namespace",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
@@ -244,6 +298,9 @@ func TestBuildMCP(t *testing.T) {
 			result, err := agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
 			if tt.expectError {
 				assert.Error(t, err)
+				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Fatalf("expected error to contain %q, got %v", tt.errorContains, err)
+				}
 				return
 			} else {
 				assert.NoError(t, err)
@@ -676,6 +733,7 @@ func TestBuildStaticIr(t *testing.T) {
 		name        string
 		backend     *agentgateway.AgentgatewayBackend
 		expectError bool
+		inputs      []any
 		validate    func(backend *api.Backend) bool
 	}{
 		{
@@ -717,11 +775,34 @@ func TestBuildStaticIr(t *testing.T) {
 					backend.GetStatic().UnixPath == "/shared/agent/agent.sock"
 			},
 		},
+		{
+			name: "Valid A2A host backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "a2a-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Host: "a2a.example.com", Port: 9090,
+					},
+				},
+			},
+			validate: func(backend *api.Backend) bool {
+				return backend != nil &&
+					backend.Key == "test-ns/a2a-backend" &&
+					backend.GetStatic().Host == "a2a.example.com" &&
+					backend.GetStatic().Port == 9090 &&
+					len(backend.InlinePolicies) == 1 &&
+					backend.InlinePolicies[0].GetA2A() != nil
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := agentgatewaybackend.BuildAgwBackend(plugins.PolicyCtx{}, tt.backend)
+			ctx := testutils.BuildMockPolicyContext(t, tt.inputs)
+			result, err := agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
 
 			if tt.expectError {
 				if err == nil {
@@ -837,6 +918,28 @@ func TestGetSecretValue(t *testing.T) {
 				t.Errorf("value = %v, expected %v", val, tt.expectedVal)
 			}
 		})
+	}
+}
+
+func createMockMCPServiceWithTargetNameAnnotation(namespace, serviceName, targetName string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels:    map[string]string{"app": "mcp-server-target-name"},
+			Annotations: map[string]string{
+				apiannotations.MCPServiceTargetName: targetName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:        "mcp",
+					Port:        8080,
+					AppProtocol: new("agentgateway.dev/mcp"),
+				},
+			},
+		},
 	}
 }
 

@@ -286,6 +286,7 @@ message AuthorizationLocation {
     Header header = 1;
     QueryParameter query_parameter = 2;
     Cookie cookie = 3;
+    string expression = 4; // CEL expression
   }
 }
 
@@ -324,6 +325,9 @@ message Aws {
     AwsExplicitConfig explicit_config = 1;
     AwsImplicit implicit = 2;
   }
+  // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+  // If unset, typed AWS backends may provide this automatically.
+  string service_name = 3;
 }
 
 // Azure-specific backend authentication.
@@ -345,7 +349,6 @@ message AwsExplicitConfig {
   string region = 3;
   // Optional session token for temporary credentials
   optional string session_token = 4;
-  // TODO: make service configurable
 }
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
@@ -551,6 +554,7 @@ message FrontendPolicySpec {
     google.protobuf.Duration http2_keepalive_interval = 7;
     google.protobuf.Duration http2_keepalive_timeout = 8;
     google.protobuf.Duration max_connection_duration = 9;
+    optional uint32 http2_max_header_size = 10;
   }
   message TLS {
     // TLS handshake timeout
@@ -866,6 +870,8 @@ message TrafficPolicySpec {
       STRICT = 0;
       // If credentials exist, validate them (default)
       OPTIONAL = 1;
+      // Requests are never rejected for missing or invalid API keys
+      PERMISSIVE = 2;
     }
 
     message User {

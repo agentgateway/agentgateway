@@ -13,6 +13,7 @@ const defaultProxyAdminPort = 15000
 type traceFlags struct {
 	namespace      string
 	proxyAdminPort int
+	traceFile      string
 	raw            bool
 	port           int
 	local          bool
@@ -37,6 +38,9 @@ func Command() flag.Command {
   agctl trace --port 80 -- http://host/some/path
   # Enable tracing and send a request to the gateway running locally.
   agctl trace --local --port 8080 -- http://host/some/path
+  # Render trace JSONL from a file or stdin instead of opening a live trace.
+  agctl trace --file trace.jsonl
+  agctl trace --file - --raw
   # Enable tracing and send a request to the gateway, with some curl arguments.
   agctl trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -59,6 +63,7 @@ func Command() flag.Command {
 func (f *traceFlags) attach(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&f.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.Flags().IntVar(&f.proxyAdminPort, "proxy-admin-port", f.proxyAdminPort, "Agentgateway admin port")
+	cmd.Flags().StringVarP(&f.traceFile, "file", "f", "", "Trace JSONL file to render, or - for stdin")
 	cmd.Flags().BoolVar(&f.raw, "raw", false, "Print trace events as JSONL instead of opening the TUI")
 	cmd.Flags().IntVar(&f.port, "port", 0, "Gateway listener port to use when triggering a request")
 	cmd.Flags().BoolVar(&f.local, "local", false, "Trace against a local agentgateway instance on 127.0.0.1")
@@ -74,6 +79,17 @@ func parseArgs(cmd *cobra.Command, args []string, flags *traceFlags) (string, []
 	}
 	if flags.local && len(resourceArgs) > 0 {
 		return "", nil, fmt.Errorf("--local does not accept a resource argument")
+	}
+	if flags.traceFile != "" {
+		if len(resourceArgs) > 0 {
+			return "", nil, fmt.Errorf("--file does not accept a resource argument")
+		}
+		if flags.local {
+			return "", nil, fmt.Errorf("at most one of --file or --local may be passed")
+		}
+		if len(requestArgs) > 0 {
+			return "", nil, fmt.Errorf("--file does not accept a request URL after --")
+		}
 	}
 	if flags.port < 0 || flags.port > 65535 {
 		return "", nil, fmt.Errorf("invalid --port %d", flags.port)

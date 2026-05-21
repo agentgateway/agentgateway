@@ -32,6 +32,7 @@ spec:
         interval: 30s
     http:
       http2FrameSize: 17000
+      http2MaxHeaderSize: 16Ki
       maxBufferSize: 1000
     accessLog:
       filter: 'response.code != 200'
@@ -75,6 +76,7 @@ output:
       frontend:
         http:
           http2FrameSize: 17000
+          http2MaxHeaderSize: 16384
           maxBufferSize: 1000
       key: frontend/default/agw:frontend-http:default/test
       name:

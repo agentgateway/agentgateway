@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
@@ -216,7 +217,7 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	if defaultTag == nil {
 		// Else, the binary is built with an explicit version
 		if version.Version != "" {
-			defaultTag = new("v" + version.Version)
+			defaultTag = new(normalizeProxyImageTag(version.Version))
 		} else {
 			// Else, detect automatically based on the build.
 			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
@@ -257,6 +258,10 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	}
 
 	return c.agwSyncer, nil
+}
+
+func normalizeProxyImageTag(tag string) string {
+	return "v" + strings.TrimPrefix(tag, "v")
 }
 
 func (c *ControllerBuilder) HasSynced() bool {

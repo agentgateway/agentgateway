@@ -720,6 +720,7 @@ pub mod typed {
 		Low,
 		Medium,
 		High,
+		Xhigh,
 		Max,
 	}
 

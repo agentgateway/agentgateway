@@ -213,8 +213,6 @@ policies:
             set:
               - - x-gateway-model-name
                 - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\nrequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\njson(request.body).model\n"
-              - - anthropic-beta
-                - "request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"
           response: {}
   - key: frontend/accessLog
     name: ~
@@ -242,9 +240,9 @@ backends:
                     provider:
                       anthropic:
                         model: claude-haiku-4-5-20251001
-                    hostOverride: "anthropic.internal:8443"
-                    pathOverride: /v1/messages
-                    pathPrefix: ~
+                    hostOverride: "anthropic.internal:443"
+                    pathOverride: ~
+                    pathPrefix: /v1
                     tokenize: true
                     inlinePolicies:
                       - backendAuth:
@@ -258,6 +256,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - backendTLS: ~
@@ -303,6 +302,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -337,6 +337,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:
@@ -367,6 +368,7 @@ backends:
                     consecutiveFailures: 0
                     timesEjected: 0
                     evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
       - requestHeaderModifier:

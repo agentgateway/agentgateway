@@ -673,7 +673,7 @@ fn rate_limit_failed_maps_to_500() {
 	use ::http::StatusCode;
 
 	let err = ProxyError::RateLimitFailed;
-	let response = err.into_response();
+	let response = err.into_response_with_grpc(false);
 	assert_eq!(
 		response.status(),
 		StatusCode::INTERNAL_SERVER_ERROR,
@@ -690,7 +690,7 @@ fn rate_limit_exceeded_maps_to_429() {
 		remaining: 0,
 		reset_seconds: 60,
 	};
-	let response = err.into_response();
+	let response = err.into_response_with_grpc(false);
 	assert_eq!(
 		response.status(),
 		StatusCode::TOO_MANY_REQUESTS,

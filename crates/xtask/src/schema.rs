@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 
 use agentgateway::cel;
@@ -65,12 +66,25 @@ pub fn generate_schema() -> Result<()> {
 				String::from_utf8_lossy(&o.stderr)
 			);
 		}
-		readme.push_str(&String::from_utf8_lossy(&o.stdout));
+		readme.push_str(&dedupe_lines(&String::from_utf8_lossy(&o.stdout)));
 
 		let mut file = fs_err::File::create(format!("{xtask_path}/../../schema/{}", schema.mdfile))?;
 		file.write_all(readme.as_bytes())?;
 	}
 	Ok(())
+}
+
+fn dedupe_lines(input: &str) -> String {
+	let mut seen = HashSet::new();
+	let mut output = input
+		.lines()
+		.filter(|line| seen.insert(*line))
+		.collect::<Vec<_>>()
+		.join("\n");
+	if !output.is_empty() {
+		output.push('\n');
+	}
+	output
 }
 
 pub fn make<T: JsonSchema>(inline_subschemas: bool) -> anyhow::Result<String> {

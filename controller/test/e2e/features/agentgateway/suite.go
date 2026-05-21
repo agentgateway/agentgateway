@@ -4,6 +4,7 @@ package agentgateway
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/stretchr/testify/suite"
@@ -16,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/common"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 type testingSuite struct {
@@ -37,12 +39,9 @@ func (s *testingSuite) TestAgentgatewayTCPRoute() {
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(
 		s.Ctx,
-		sharedGatewayObjectMeta.Name,
-		sharedGatewayObjectMeta.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		&gwv1.Gateway{ObjectMeta: sharedGatewayObjectMeta},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,
@@ -83,12 +82,9 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 		gwv1.GatewayConditionProgrammed,
 		metav1.ConditionTrue,
 	)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(
 		s.Ctx,
-		sharedGatewayObjectMeta.Name,
-		sharedGatewayObjectMeta.Namespace,
-		gwv1.GatewayConditionAccepted,
-		metav1.ConditionTrue,
+		&gwv1.Gateway{ObjectMeta: sharedGatewayObjectMeta},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayListenerAttachedRoutes(
 		s.Ctx,
@@ -120,4 +116,66 @@ func (s *testingSuite) TestAgentgatewayHTTPRoute() {
 		curl.WithHostHeader("www.example.com"),
 		curl.WithPath("/status/200"),
 	)
+}
+
+func (s *testingSuite) TestAgentgatewayPolicyQuantityApply() {
+	tests := []struct {
+		name      string
+		quantity  string
+		wantApply bool
+	}{
+		{
+			name:      "invalid-int",
+			quantity:  "0",
+			wantApply: false,
+		},
+		{
+			name:      "invalid-string",
+			quantity:  "not-a-quantity",
+			wantApply: false,
+		},
+		{
+			name:      "valid-int",
+			quantity:  "1024",
+			wantApply: true,
+		},
+		{
+			name:      "valid-string",
+			quantity:  "64Ki",
+			wantApply: true,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			manifest := quantityPolicyManifest(tt.name, tt.quantity)
+			err := s.TestInstallation.Actions.Kubectl().Apply(s.Ctx, []byte(manifest))
+			if tt.wantApply {
+				s.Require().NoError(err)
+
+				testutils.Cleanup(s.T(), func() {
+					_ = s.TestInstallation.Actions.Kubectl().Delete(s.Ctx, []byte(manifest))
+				})
+				return
+			}
+			s.Require().Error(err)
+		})
+	}
+}
+
+func quantityPolicyManifest(name, quantity string) string {
+	return fmt.Sprintf(`apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: quantity-%s
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+  frontend:
+    http:
+      maxBufferSize: %s
+`, name, quantity)
 }

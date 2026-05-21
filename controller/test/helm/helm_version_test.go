@@ -294,6 +294,51 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 			expectedError: "controller.extraEnv.BAD_ENV must set either value or valueFrom",
 		},
+		{
+			name: "monitoring-enabled",
+			valuesYAML: `monitoring:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    extraLabels:
+      release: prometheus
+  proxy:
+    namespaceSelector:
+      matchNames:
+      - default
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-enabled-no-dashboard",
+			valuesYAML: `monitoring:
+  enabled: true
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-enabled-no-service-monitor",
+			valuesYAML: `monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-custom-proxy-namespace-selector",
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    namespaceSelector:
+      any: true
+  grafanaDashboard:
+    enabled: false
+`,
+		},
 	}
 
 	for _, chart := range charts {

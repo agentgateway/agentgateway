@@ -2040,6 +2040,28 @@
             "cookie"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "CEL expression that evaluates to the credential string.\nOnly supported for credential extraction.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          "required": [
+            "expression"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -2819,6 +2841,13 @@
                 "string",
                 "null"
               ]
+            },
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "additionalProperties": false,
@@ -2830,6 +2859,15 @@
         {
           "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
           "type": "object",
+          "properties": {
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
           "additionalProperties": false
         }
       ]
@@ -4138,6 +4176,11 @@
           "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
           "type": "string",
           "const": "optional"
+        },
+        {
+          "description": "Requests are never rejected for missing or invalid API keys.\nWarning: this allows requests without a valid API key!",
+          "type": "string",
+          "const": "permissive"
         }
       ]
     },
@@ -6480,6 +6523,15 @@
           "minimum": 0,
           "default": null
         },
+        "http2MaxHeaderSize": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0,
+          "default": null
+        },
         "http2KeepaliveInterval": {
           "type": [
             "string",
@@ -7323,8 +7375,8 @@
           ],
           "default": null
         },
-        "backendTLS": {
-          "description": "backendTLS configures TLS when connecting to the LLM provider.",
+        "tls": {
+          "description": "tls configures TLS when connecting to the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -7333,6 +7385,18 @@
               "type": "null"
             }
           ]
+        },
+        "auth": {
+          "description": "auth configures authentication when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "health": {
           "description": "health configures outlier detection for this model backend.",
@@ -7454,12 +7518,21 @@
             "null"
           ]
         },
+        "baseUrl": {
+          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "hostOverride": {
           "description": "Override the upstream host for this provider.",
           "type": [
             "string",
             "null"
           ],
+          "deprecated": true,
           "default": null
         },
         "pathOverride": {
@@ -7468,6 +7541,7 @@
             "string",
             "null"
           ],
+          "deprecated": true,
           "default": null
         },
         "pathPrefix": {
@@ -7476,6 +7550,7 @@
             "string",
             "null"
           ],
+          "deprecated": true,
           "default": null
         },
         "tokenize": {

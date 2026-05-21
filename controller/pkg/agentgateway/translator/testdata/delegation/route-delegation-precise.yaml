@@ -66,7 +66,7 @@ output:
   resource:
     route:
       backends:
-      - routeGroupKey: team1/child-team1-primary
+      - routeGroupKey: default/parent/team1/child-team1-primary
         weight: 1
       hostnames:
       - delegation.example
@@ -91,7 +91,7 @@ output:
             hostname: httpbin.team1.svc.cluster.local
             namespace: team1
         weight: 1
-      key: team1/child-team1-primary.00.routegroup.team1.child-team1-primary
+      key: team1/child-team1-primary.00.routegroup.default.parent.team1.child-team1-primary
       matches:
       - path:
           pathPrefix: /anything/team1/primary
@@ -99,7 +99,7 @@ output:
         kind: HTTPRoute
         name: child-team1-primary
         namespace: team1
-      routeGroupKey: team1/child-team1-primary
+      routeGroupKey: default/parent/team1/child-team1-primary
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute

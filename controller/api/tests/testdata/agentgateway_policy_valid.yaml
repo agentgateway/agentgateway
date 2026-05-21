@@ -170,7 +170,7 @@ spec:
       name: dummy
   frontend:
     http:
-      maxBufferSize: 5242880
+      maxBufferSize: 5Mi
       http1MaxHeaders: 150
       http1IdleTimeout: 5m
 ---
@@ -185,9 +185,10 @@ spec:
       name: dummy
   frontend:
     http:
-      http2WindowSize: 65536
+      http2WindowSize: 64Ki
       http2ConnectionWindowSize: 131072
-      http2FrameSize: 32768
+      http2FrameSize: 32Ki
+      http2MaxHeaderSize: 16Ki
       http2KeepaliveInterval: 30s
       http2KeepaliveTimeout: 10s
 ---

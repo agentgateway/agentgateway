@@ -23,6 +23,10 @@ fn main() -> Result<(), anyhow::Error> {
 			".istio.workload.Service",
 			".istio.workload.GatewayAddress",
 			".istio.workload.Address",
+			".envoy.service.auth.v3.AttributeContext.HttpRequest.raw_body",
+			".envoy.service.ext_proc.v3.HttpBody.body",
+			".envoy.service.ext_proc.v3.BodyMutation.body",
+			".envoy.service.ext_proc.v3.StreamedBodyResponse.body",
 		]);
 		c.extern_path(".google.protobuf.Value", "::prost_wkt_types::Value");
 		c.extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct");

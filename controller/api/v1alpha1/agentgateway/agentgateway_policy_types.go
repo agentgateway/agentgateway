@@ -2,9 +2,12 @@ package agentgateway
 
 import (
 	"iter"
+	"log/slog"
+	"math"
 
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -279,6 +282,60 @@ type LongString = string
 // +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 type SNI = string
 
+// ByteSize is a byte quantity that must fit in a uint32 dataplane field.
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:MaxLength=32
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:Pattern=`^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$`
+// +kubebuilder:validation:XValidation:rule="(self >= 1 && self <= 4294967295) || self.size() > 0",message="value must be at least 1 byte and fit within uint32"
+type ByteSize struct {
+	Value *resource.Quantity `json:"-"`
+}
+
+// ClampedValue returns the quantity as a uint32, clamping values to 0..MaxUint32.
+func (b *ByteSize) ClampedValue() *uint32 {
+	if b == nil || b.Value == nil {
+		return nil
+	}
+	v := b.Value.Value()
+	if v < 0 {
+		return new(uint32(0))
+	}
+	if v > math.MaxUint32 {
+		return new(uint32(math.MaxUint32))
+	}
+	return new(uint32(v))
+}
+
+func (b ByteSize) MarshalJSON() ([]byte, error) {
+	if b.Value == nil {
+		return []byte("null"), nil
+	}
+	return b.Value.MarshalJSON()
+}
+
+func (b *ByteSize) UnmarshalJSON(data []byte) error {
+	var q resource.Quantity
+	if err := q.UnmarshalJSON(data); err != nil {
+		// Invalid byte sizes must not block informer decoding. CEL cannot validate
+		// this safely until the quantity cost bug is fixed, so treat it as unset.
+		slog.Warn("failed to unmarshal quantity, ignoring", "value", string(data), "error", err)
+		b.Value = nil
+		return nil
+	}
+	b.Value = &q
+	return nil
+}
+
+func (b ByteSize) DeepCopy() ByteSize {
+	if b.Value == nil {
+		return ByteSize{}
+	}
+	q := b.Value.DeepCopy()
+	return ByteSize{Value: &q}
+}
+
+// +k8s:enum
 type InsecureTLSMode string
 
 const (
@@ -326,7 +383,6 @@ type BackendTLS struct {
 	//   prefer setting `verifySubjectAltNames` to customize the valid hostnames
 	//   if possible.
 	//
-	// +kubebuilder:validation:Enum=All;Hostname
 	// +optional
 	InsecureSkipVerify *InsecureTLSMode `json:"insecureSkipVerify,omitempty"`
 
@@ -402,7 +458,7 @@ type Frontend struct {
 	Metrics *MetricLabels `json:"metrics,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=V1;V2;All
+// +k8s:enum
 type ProxyProtocolVersion string
 
 const (
@@ -411,7 +467,7 @@ const (
 	ProxyProtocolVersionAll ProxyProtocolVersion = "All"
 )
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +k8s:enum
 type ProxyProtocolMode string
 
 const (
@@ -443,9 +499,8 @@ type FrontendHTTP struct {
 	// into memory.
 	// Bodies will only be buffered for policies which require buffering.
 	// If unset, this defaults to `2mb`.
-	// +kubebuilder:validation:Minimum=1
 	// +optional
-	MaxBufferSize *int32 `json:"maxBufferSize,omitempty"`
+	MaxBufferSize *ByteSize `json:"maxBufferSize,omitempty"`
 
 	// `http1MaxHeaders` defines the maximum number of headers that are allowed
 	// in `HTTP/1.1` requests.
@@ -464,20 +519,23 @@ type FrontendHTTP struct {
 
 	// `http2WindowSize` indicates the initial window size for stream-level flow
 	// control for received data.
-	// +kubebuilder:validation:Minimum=1
 	// +optional
-	HTTP2WindowSize *int32 `json:"http2WindowSize,omitempty"`
+	HTTP2WindowSize *ByteSize `json:"http2WindowSize,omitempty"`
 	// `http2ConnectionWindowSize` indicates the initial window size for
 	// connection-level flow control for received data.
-	// +kubebuilder:validation:Minimum=1
 	// +optional
-	HTTP2ConnectionWindowSize *int32 `json:"http2ConnectionWindowSize,omitempty"`
+	HTTP2ConnectionWindowSize *ByteSize `json:"http2ConnectionWindowSize,omitempty"`
 	// `http2FrameSize` sets the maximum frame size to use.
 	// If unset, this defaults to `16kb`.
-	// +kubebuilder:validation:Minimum=16384
-	// +kubebuilder:validation:Maximum=1677215
+	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isLessThan(quantity('16384'))",message="http2FrameSize must be at least 16384 bytes"
+	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isGreaterThan(quantity('1677215'))",message="http2FrameSize must be at most 1677215 bytes"
 	// +optional
-	HTTP2FrameSize *int32 `json:"http2FrameSize,omitempty"`
+	HTTP2FrameSize *ByteSize `json:"http2FrameSize,omitempty"`
+	// `http2MaxHeaderSize` sets the maximum aggregate size of decoded HTTP/2
+	// request headers.
+	// If unset, this defaults to `16Ki`.
+	// +optional
+	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
@@ -537,7 +595,7 @@ type FrontendTLS struct {
 	// TODO: mirror the tuneables on BackendTLS
 }
 
-// +kubebuilder:validation:Enum="1.2";"1.3"
+// +k8s:enum
 type TLSVersion string
 
 const (
@@ -546,7 +604,7 @@ const (
 	TLSVersion1_3 TLSVersion = "1.3"
 )
 
-// +kubebuilder:validation:Enum=TLS13_AES_256_GCM_SHA384;TLS13_AES_128_GCM_SHA256;TLS13_CHACHA20_POLY1305_SHA256;TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+// +k8s:enum
 type CipherSuite string
 
 const (
@@ -565,7 +623,7 @@ const (
 	CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 CipherSuite = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
 )
 
-// +kubebuilder:validation:Enum=X25519;P-256;P-384;X25519_MLKEM768
+// +k8s:enum
 type KeyExchangeGroup string
 
 const (
@@ -606,7 +664,7 @@ type Keepalive struct {
 	Interval *metav1.Duration `json:"interval,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=PreRouting;PostRouting
+// +k8s:enum
 type PolicyPhase string
 
 const (
@@ -775,7 +833,7 @@ func (d *DirectResponseOrConditional) ConditionalPolicy() (*DirectResponse, iter
 	return &d.DirectResponse, seq
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional;Permissive
+// +k8s:enum
 type JWTAuthenticationMode string
 
 const (
@@ -798,6 +856,15 @@ type AuthorizationLocation struct {
 	QueryParameter *AuthorizationQueryParameterLocation `json:"queryParameter,omitempty"`
 	// +optional
 	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
+}
+
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie;expression
+type AuthorizationExtractionLocation struct {
+	AuthorizationLocation `json:",inline"`
+
+	// expression extracts the credential from the request using a CEL expression.
+	// +optional
+	Expression *shared.CELExpression `json:"expression,omitempty"`
 }
 
 type AuthorizationHeaderLocation struct {
@@ -839,7 +906,7 @@ type JWTAuthentication struct {
 	// `location` controls where JWT credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 
 	// `mcp` optionally enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
@@ -920,7 +987,7 @@ type RemoteJWKS struct {
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +k8s:enum
 type BasicAuthenticationMode string
 
 const (
@@ -986,10 +1053,10 @@ type BasicAuthentication struct {
 	// `location` controls where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +k8s:enum
 type APIKeyAuthenticationMode string
 
 const (
@@ -999,6 +1066,9 @@ const (
 	// If an API Key exists, validate it.
 	// Warning: this allows requests without an API Key!
 	APIKeyAuthenticationModeOptional APIKeyAuthenticationMode = "Optional"
+	// Requests are never rejected for missing or invalid API keys.
+	// Warning: this allows requests without a valid API key!
+	APIKeyAuthenticationModePermissive APIKeyAuthenticationMode = "Permissive"
 )
 
 // +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector
@@ -1072,7 +1142,7 @@ type APIKeyAuthentication struct {
 	// `location` controls where API keys are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
-	Location *AuthorizationLocation `json:"location,omitempty"`
+	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
 type SecretSelector struct {
@@ -1081,6 +1151,7 @@ type SecretSelector struct {
 	MatchLabels map[string]string `json:"matchLabels"`
 }
 
+// +k8s:enum
 type HostnameRewriteMode string
 
 const (
@@ -1135,7 +1206,7 @@ type BackendAuth struct {
 	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=AccessToken;IdToken
+// +k8s:enum
 type GcpAuthType string
 
 const (
@@ -1173,6 +1244,13 @@ type AwsAuth struct {
 	// optionally `sessionToken`.
 	// +required
 	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+
+	// `serviceName` is the AWS SigV4 signing service name (for example,
+	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
+	// backends may provide this automatically.
+	//
+	// +optional
+	ServiceName *ShortString `json:"serviceName,omitempty"`
 }
 
 type AzureAuth struct {
@@ -1256,7 +1334,7 @@ type BackendAI struct {
 
 // RouteType specifies how the AI gateway should process incoming requests
 // based on the URL path and the API format expected.
-// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Detect;Responses;AnthropicTokenCount;Embeddings;Realtime
+// +k8s:enum
 type RouteType string
 
 const (
@@ -1352,6 +1430,7 @@ type MCPAuthentication struct {
 	ClientID *string `json:"clientId,omitempty"`
 }
 
+// +k8s:enum
 type McpIDP string
 
 const (
@@ -1379,7 +1458,6 @@ type BackendHTTP struct {
 	// * If the incoming traffic was HTTPS, `HTTP1` will be used. This is
 	//   because most clients will transparently upgrade HTTPS traffic to
 	//   `HTTP2`, even if the backend doesn't support it.
-	// +kubebuilder:validation:Enum=HTTP1;HTTP2
 	// +optional
 	Version *HTTPVersion `json:"version,omitempty"`
 
@@ -1390,6 +1468,7 @@ type BackendHTTP struct {
 	RequestTimeout *metav1.Duration `json:"requestTimeout,omitempty"`
 }
 
+// +k8s:enum
 type HTTPVersion string
 
 const (
@@ -1741,9 +1820,8 @@ type ExtAuthBody struct {
 	// and sent to the authorization server. If the body size is larger than
 	// `maxSize`, then the request will be rejected with a response.
 	//
-	// +kubebuilder:validation:Minimum=1
 	// +required
-	MaxSize int32 `json:"maxSize"`
+	MaxSize ByteSize `json:"maxSize"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1833,6 +1911,7 @@ type GlobalRateLimit struct {
 	Descriptors []RateLimitDescriptor `json:"descriptors"`
 }
 
+// +k8s:enum
 type RateLimitUnit string
 
 const (
@@ -1849,7 +1928,6 @@ type RateLimitDescriptor struct {
 	Entries []RateLimitDescriptorEntry `json:"entries"`
 	// `unit` defines what to use as the cost function. If unspecified,
 	// `Requests` is used.
-	// +kubebuilder:validation:Enum=Requests;Tokens
 	// +optional
 	Unit *RateLimitUnit `json:"unit,omitempty"`
 	// `cost` is a Common Expression Language (`CEL`) expression that determines
@@ -1880,6 +1958,7 @@ type RateLimitDescriptorEntry struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
+// +k8s:enum
 type LocalRateLimitUnit string
 
 const (
@@ -1911,7 +1990,6 @@ type LocalRateLimit struct {
 
 	// `unit` specifies the unit of time that requests are limited on.
 	//
-	// +kubebuilder:validation:Enum=Seconds;Minutes;Hours
 	// +required
 	Unit LocalRateLimitUnit `json:"unit"`
 
@@ -1949,7 +2027,6 @@ type HostnameRewrite struct {
 	// This setting defaults to `Auto` when connecting to hostname-based
 	// `Backend` types, and `None` otherwise, for `Service` or IP-based
 	// backends.
-	// +kubebuilder:validation:Enum=Auto;None
 	// +required
 	Mode HostnameRewriteMode `json:"mode"`
 }
@@ -1998,7 +2075,6 @@ type OtlpAccessLog struct {
 
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
-	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
@@ -2059,6 +2135,7 @@ type MetricAttributes struct {
 	Add []AttributeAdd `json:"add,omitempty"`
 }
 
+// +k8s:enum
 type OTLPProtocol string
 
 const (
@@ -2075,7 +2152,6 @@ type Tracing struct {
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
-	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 

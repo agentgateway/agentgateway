@@ -84,12 +84,14 @@ pub struct TunnelConfig {
 #[non_exhaustive]
 pub enum HboneSourceRole {
 	Waypoint,
+	Gateway,
 }
 
 impl HboneSourceRole {
 	pub fn as_header_value(self) -> &'static str {
 		match self {
 			HboneSourceRole::Waypoint => "waypoint",
+			HboneSourceRole::Gateway => "gateway",
 		}
 	}
 
@@ -99,7 +101,8 @@ impl HboneSourceRole {
 		use types::agent::TunnelProtocol;
 		match tp {
 			TunnelProtocol::HboneWaypoint => Some(HboneSourceRole::Waypoint),
-			TunnelProtocol::Direct | TunnelProtocol::HboneGateway | TunnelProtocol::Proxy => None,
+			TunnelProtocol::HboneGateway => Some(HboneSourceRole::Gateway),
+			TunnelProtocol::Direct | TunnelProtocol::Proxy => None,
 		}
 	}
 }
@@ -127,6 +130,14 @@ pub enum Transport {
 		inner: ApplicationTransport,
 		headers: HboneHeaders,
 	},
+	/// HBONE tunnel to a waypoint proxy. The CONNECT URI uses the service target
+	/// (VIP or hostname) so the waypoint can route, while the physical connection
+	/// goes to the waypoint address.
+	HboneWaypoint {
+		waypoint_address: SocketAddr, // Physical address of waypoint (IP:hbone_port)
+		identities: Vec<Identity>,    // Service SANs for mTLS verification
+		inner: ApplicationTransport,
+	},
 }
 
 impl From<ApplicationTransport> for Transport {
@@ -148,16 +159,17 @@ impl Transport {
 			Transport::Tunnel(inner, _) => inner,
 			Transport::Hbone(inner, _, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
+			Transport::HboneWaypoint { inner, .. } => inner,
 		}
 	}
 
 	pub fn skip_dns_resolution(&self) -> bool {
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// Same with Tunnel
+		// Same with Tunnel and HboneWaypoint (we connect to the waypoint address directly).
 		matches!(
 			self,
-			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _)
+			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _) | Transport::HboneWaypoint { .. }
 		)
 	}
 
@@ -177,6 +189,14 @@ impl Transport {
 				inner: ApplicationTransport::Tls(_),
 				..
 			} => "doublehbone-tls",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Plaintext,
+				..
+			} => "hbone-waypoint",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Tls(_),
+				..
+			} => "hbone-waypoint-tls",
 		}
 	}
 }
@@ -348,6 +368,18 @@ impl Connector {
 					headers,
 				)
 				.await?
+			},
+
+			Transport::HboneWaypoint {
+				waypoint_address,
+				identities,
+				inner: _,
+			} => {
+				let pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				hbone_tunnel::handshake_waypoint(pool, &target, waypoint_address, identities).await?
 			},
 		};
 
@@ -567,7 +599,6 @@ impl Client {
 			.connector
 			.resolve_target(transport.skip_dns_resolution(), &target)
 			.await?;
-		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
 		http::modify_req_uri(&mut req, |uri| {
 			let scheme = transport.scheme();
 			// Strip the port from the hostname if its the default already
@@ -580,15 +611,12 @@ impl Client {
 			}
 			uri.scheme = Some(scheme);
 
-			if let Target::Hostname(h, _) = &target
-				&& auto_host
-				&& let Some(a) = uri.authority.as_mut()
-			{
-				*a = Authority::from_str(h)?
-			}
 			Ok(())
 		})
 		.map_err(ProxyError::Processing)?;
+		if req.extensions().get::<filters::AutoHostname>().is_some() {
+			req.headers_mut().remove(::http::header::HOST);
+		}
 		let version = req.version();
 		let transport_name = transport.name();
 		// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
@@ -680,12 +708,16 @@ mod tests {
 	}
 
 	#[test]
-	fn non_waypoint_tunnel_protocols_have_no_source_role() {
-		for tp in [
-			TunnelProtocol::Direct,
-			TunnelProtocol::HboneGateway,
-			TunnelProtocol::Proxy,
-		] {
+	fn gateway_bind_renders_as_gateway() {
+		assert_eq!(
+			HboneSourceRole::from_tunnel(TunnelProtocol::HboneGateway).map(|r| r.as_header_value()),
+			Some("gateway"),
+		);
+	}
+
+	#[test]
+	fn non_role_tunnel_protocols_have_no_source_role() {
+		for tp in [TunnelProtocol::Direct, TunnelProtocol::Proxy] {
 			assert_eq!(
 				HboneSourceRole::from_tunnel(tp),
 				None,

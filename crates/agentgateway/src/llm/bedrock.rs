@@ -8,15 +8,6 @@ pub struct AwsRegion {
 	pub region: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct AwsServiceName {
-	pub name: &'static str,
-}
-
-pub const SERVICE_BEDROCK_AGENTCORE: AwsServiceName = AwsServiceName {
-	name: "bedrock-agentcore",
-};
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -52,6 +43,9 @@ impl Provider {
 		model: &str,
 	) -> Strng {
 		let model = self.model.as_deref().unwrap_or(model);
+		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
+			&percent_encoding::CONTROLS.add(b'/').add(b'%');
+		let model = percent_encoding::utf8_percent_encode(model, MODEL_SEGMENT);
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),

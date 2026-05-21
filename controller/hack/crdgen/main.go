@@ -80,7 +80,7 @@ type OverrideXValidation struct {
 	OptionalOldSelf   *bool  `marker:"optionalOldSelf,optional"`
 }
 
-func (m AtLeastOneFieldSet) ApplyToSchema(schema *apiextensionsv1.JSONSchemaProps) error {
+func (m AtLeastOneFieldSet) ApplyToSchema(_ *crdmarkers.SchemaContext, schema *apiextensionsv1.JSONSchemaProps) error {
 	allFields := sortedPropertyNames(schema)
 	if len(m.Fields) > 0 {
 		allFields = dedupeAndSort(append(allFields, m.Fields...))
@@ -181,6 +181,7 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 		if !ok {
 			return fmt.Errorf("unexpected converted type %T", converted)
 		}
+		fixIntOrStringSchemas(crdV1)
 		removeDescriptionFromMetadata(crdV1)
 
 		out, err := marshalCRD(crdV1)
@@ -201,6 +202,48 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 	}
 
 	return nil
+}
+
+func fixIntOrStringSchemas(crdObj *apiextensionsv1.CustomResourceDefinition) {
+	for i := range crdObj.Spec.Versions {
+		version := &crdObj.Spec.Versions[i]
+		if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+		crd.EditSchema(version.Schema.OpenAPIV3Schema, intOrStringSchemaFixer{})
+	}
+}
+
+type intOrStringSchemaFixer struct{}
+
+func (intOrStringSchemaFixer) Visit(schema *apiextensionsv1.JSONSchemaProps) crd.SchemaVisitor {
+	if schema == nil {
+		return nil
+	}
+	if schema.XIntOrString && schema.Type == "object" {
+		schema.Type = ""
+		if !hasIntegerAndStringAnyOf(schema.AnyOf) {
+			schema.AnyOf = append(schema.AnyOf,
+				apiextensionsv1.JSONSchemaProps{Type: "integer"},
+				apiextensionsv1.JSONSchemaProps{Type: "string"},
+			)
+		}
+	}
+	return intOrStringSchemaFixer{}
+}
+
+func hasIntegerAndStringAnyOf(anyOf []apiextensionsv1.JSONSchemaProps) bool {
+	hasInteger := false
+	hasString := false
+	for _, schema := range anyOf {
+		switch schema.Type {
+		case "integer":
+			hasInteger = true
+		case "string":
+			hasString = true
+		}
+	}
+	return hasInteger && hasString
 }
 
 func registerCustomMarkers(registry *markers.Registry) error {
@@ -345,7 +388,7 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 	if err := (crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalRule),
 		Message: "conditional cannot be set with any other field",
-	}).ApplyToSchema(schema); err != nil {
+	}).ApplyToSchema(nil, schema); err != nil {
 		return err
 	}
 
@@ -369,7 +412,7 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("has(self.%s) ? true : %s", conditionalField, requiredRule),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker AtLeastOneFieldSet) error {
@@ -389,7 +432,7 @@ func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields 
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s >= 1", fieldsToOneOfCelRuleStr(fields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker IfThenOnlyFields) error {
@@ -428,7 +471,7 @@ func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s ? %s == 0 : true", marker.If, fieldsToOneOfCelRuleStr(disallowedFields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyOverrideXValidation(schema *apiextensionsv1.JSONSchemaProps, override OverrideXValidation) error {

@@ -22,7 +22,7 @@ func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, krtopts krtuti
 		}
 	}
 
-	allRefsCol := krt.JoinCollection(allReferences, krtopts.ToOptions("BackendReferences")...)
+	allRefsCol := krt.JoinCollection(allReferences, krtopts.ToOptions("references/BackendReferences")...)
 	return allRefsCol
 }
 
@@ -40,7 +40,7 @@ func AgwBackendCollection(agwPlugins plugins.AgwPlugin, references plugins.Refer
 			policyStatusMap[gvk] = policyStatus
 		}
 	}
-	joinPolicies := krt.JoinCollection(allBackends, krtopts.ToOptions("JoinBackends")...)
+	joinPolicies := krt.JoinCollection(allBackends, krtopts.ToOptions("resources/Backends")...)
 
 	return joinPolicies, policyStatusMap
 }

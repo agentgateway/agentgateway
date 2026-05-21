@@ -1,0 +1,67 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: tcp-mixed-protocol-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - allowedRoutes:
+        kinds:
+          - group: gateway.networking.k8s.io
+            kind: HTTPRoute
+        namespaces:
+          from: Same
+      name: only-allow-http-routes
+      port: 5300
+      protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: tcp-route
+  namespace: default
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: tcp-mixed-protocol-gateway
+      sectionName: only-allow-http-routes
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: infra-backend-v1
+          port: 8080
+          weight: 1
+
+---
+# Output
+output: []
+status:
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TCPRoute
+  metadata:
+    name: tcp-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: kind gateway.networking.k8s.io/v1alpha2, Kind=TCPRoute is not allowed
+        reason: NotAllowedByListeners
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tcp-mixed-protocol-gateway
+        namespace: default
+        sectionName: only-allow-http-routes

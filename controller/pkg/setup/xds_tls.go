@@ -173,6 +173,9 @@ func (m *xdsTLSMaterial) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificat
 }
 
 func (m *xdsTLSMaterial) RegisterCallback(callback func(tls.Certificate)) {
+	if m == nil { // as this fulfills CertificateWatcher via pointers it is possible and even probable that this might be hit given a higher order nil versus typed nil check
+		return
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.currentCert != nil {

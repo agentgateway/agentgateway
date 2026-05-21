@@ -370,6 +370,10 @@ func castUint32[T ~int32](ka *T) *uint32 {
 	return new((uint32)(*ka))
 }
 
+func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
+	return ka.ClampedValue()
+}
+
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	tls := policy.Spec.Frontend.TLS
 	spec := &api.FrontendPolicySpec_TLS{}
@@ -479,7 +483,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	http := policy.Spec.Frontend.HTTP
 	spec := &api.FrontendPolicySpec_HTTP{}
 	if v := http.MaxBufferSize; v != nil {
-		spec.MaxBufferSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.MaxBufferSize = quantityUint32(v)
 	}
 	if v := http.HTTP1MaxHeaders; v != nil {
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -488,13 +492,16 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
 	}
 	if v := http.HTTP2WindowSize; v != nil {
-		spec.Http2WindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2WindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2ConnectionWindowSize; v != nil {
-		spec.Http2ConnectionWindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2ConnectionWindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2FrameSize; v != nil {
-		spec.Http2FrameSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2FrameSize = quantityUint32(v)
+	}
+	if v := http.HTTP2MaxHeaderSize; v != nil {
+		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
 	if v := http.HTTP2KeepaliveInterval; v != nil {
 		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)

@@ -1362,33 +1362,38 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
-		if name == "cookie" {
-			if ftx.args.len() != 1 {
-				return Some(Err(ExecutionError::invalid_argument_count(
-					1,
-					ftx.args.len(),
-				)));
-			}
-			let name = match ftx.arg::<StringValue>(0) {
-				Ok(name) => name,
-				Err(err) => return Some(Err(err)),
-			};
-			return Some(self.cookie_value(name.as_ref()));
+		match name {
+			"cookie" => {
+				if ftx.args.len() != 1 {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						1,
+						ftx.args.len(),
+					)));
+				}
+				let name = match ftx.arg::<StringValue>(0) {
+					Ok(name) => name,
+					Err(err) => return Some(Err(err)),
+				};
+				Some(self.cookie_value(name.as_ref()))
+			},
+			"redacted" | "join" | "raw" | "split" => {
+				if !ftx.args.is_empty() {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						0,
+						ftx.args.len(),
+					)));
+				}
+				let next = match name {
+					"redacted" => self.clone().redacted(),
+					"join" => self.clone().join(),
+					"raw" => self.clone().raw(),
+					"split" => self.clone().split(),
+					_ => unreachable!(),
+				};
+				Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
+			},
+			_ => None,
 		}
-		if !ftx.args.is_empty() {
-			return Some(Err(ExecutionError::invalid_argument_count(
-				0,
-				ftx.args.len(),
-			)));
-		}
-		let next = match name {
-			"redacted" => self.clone().redacted(),
-			"join" => self.clone().join(),
-			"raw" => self.clone().raw(),
-			"split" => self.clone().split(),
-			_ => return None,
-		};
-		Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
 	}
 }
 

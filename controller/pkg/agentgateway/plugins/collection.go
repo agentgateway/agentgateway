@@ -120,7 +120,7 @@ func NewAgwCollections(
 		Client:              client,
 		KrtOpts:             krtOptions,
 		Settings:            settings,
-		GatewaysForDeployer: krt.NewCollection(gateways, collections.GatewaysForDeployerTransformationFunc(gatewayClasses, listenerSets, byParentRefIndex, agwControllerName)),
+		GatewaysForDeployer: krt.NewCollection(gateways, collections.GatewaysForDeployerTransformationFunc(gatewayClasses, listenerSets, byParentRefIndex, agwControllerName), krtOptions.ToOptions("deployer/Gateways")...),
 		ControllerName:      agwControllerName,
 		SystemNamespace:     systemNamespace,
 		IstioNamespace:      settings.IstioNamespace,
@@ -142,6 +142,7 @@ func NewAgwCollections(
 				FieldSelector: apiclient.SecretsFieldSelector,
 				ObjectFilter:  client.ObjectFilter(),
 			}),
+			krtOptions.ToOptions("informer/Secrets")...,
 		),
 		ConfigMaps: krt.WrapClient(
 			kclient.NewFiltered[*corev1.ConfigMap](client, kubetypes.Filter{
@@ -182,8 +183,8 @@ func NewAgwCollections(
 		InferencePools: krt.NewStaticCollection[*inf.InferencePool](nil, nil, krtOptions.ToOptions("disable/inferencepools")...),
 
 		// agentgateway-specific CRDs
-		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client),
-		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client),
+		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
+		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
 	}
 
 	if settings.EnableInferExt {

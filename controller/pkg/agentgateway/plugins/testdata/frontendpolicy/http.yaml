@@ -23,7 +23,8 @@ spec:
   frontend:
     http:
       http2FrameSize: 16384
-      maxBufferSize: 2048
+      http2MaxHeaderSize: 16Ki
+      maxBufferSize: 2Ki
 ---
 # Output
 output:
@@ -35,6 +36,7 @@ output:
       frontend:
         http:
           http2FrameSize: 16384
+          http2MaxHeaderSize: 16384
           maxBufferSize: 2048
       key: frontend/default/http-policy:frontend-http:default/test
       name:

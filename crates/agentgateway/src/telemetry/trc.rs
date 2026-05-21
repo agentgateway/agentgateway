@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use agent_core::telemetry::ValueBag;
 use http::Version;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
-use opentelemetry::trace::{
-	Span, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer as _, TracerProvider,
-};
-use opentelemetry::{Context, Key, KeyValue, TraceFlags};
+use opentelemetry::trace::{SpanContext, SpanId, SpanKind, Status, TraceId, TraceState};
+use opentelemetry::{InstrumentationScope, Key, KeyValue, TraceFlags};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
-use opentelemetry_sdk::trace::SdkTracerProvider;
+use opentelemetry_sdk::trace::{
+	BatchSpanProcessor, SdkTracerProvider, SpanData, SpanEvents, SpanExporter, SpanLinks,
+	SpanProcessor,
+};
 pub use traceparent::TraceParent;
 
 use crate::cel;
@@ -20,9 +22,103 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingC
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
-	pub tracer: Arc<opentelemetry_sdk::trace::SdkTracer>,
 	pub provider: SdkTracerProvider,
+	pub processor: SharedSpanProcessor,
 	pub fields: Arc<LoggingFields>,
+}
+
+#[derive(Clone)]
+pub struct SharedSpanProcessor {
+	inner: Arc<dyn SpanProcessor>,
+}
+
+impl std::fmt::Debug for SharedSpanProcessor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SharedSpanProcessor").finish()
+	}
+}
+
+impl SharedSpanProcessor {
+	pub fn new(processor: impl SpanProcessor + 'static) -> Self {
+		Self {
+			inner: Arc::new(processor),
+		}
+	}
+
+	pub fn emit(&self, span: SpanData) {
+		SpanProcessor::on_end(self, span);
+	}
+}
+
+impl SpanProcessor for SharedSpanProcessor {
+	fn on_start(&self, span: &mut opentelemetry_sdk::trace::Span, cx: &opentelemetry::Context) {
+		self.inner.on_start(span, cx);
+	}
+
+	fn on_end(&self, span: SpanData) {
+		self.inner.on_end(span);
+	}
+
+	fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+		self.inner.force_flush()
+	}
+
+	fn shutdown_with_timeout(
+		&self,
+		timeout: std::time::Duration,
+	) -> opentelemetry_sdk::error::OTelSdkResult {
+		self.inner.shutdown_with_timeout(timeout)
+	}
+
+	fn set_resource(&mut self, _resource: &Resource) {
+		// Production processors are given their resource before they are wrapped in Arc by
+		// `new_trace_processor`. The provider may call this later on a cloned wrapper,
+		// where the inner processor is intentionally no longer uniquely owned.
+	}
+}
+
+pub fn new_trace_processor(
+	resource: &Resource,
+	exporter: impl SpanExporter + 'static,
+) -> SharedSpanProcessor {
+	let mut processor = BatchSpanProcessor::builder(exporter).build();
+	processor.set_resource(resource);
+	SharedSpanProcessor::new(processor)
+}
+
+pub fn trace_span_data(
+	name: impl Into<std::borrow::Cow<'static, str>>,
+	span_kind: SpanKind,
+	span: &TraceParent,
+	parent: Option<&TraceParent>,
+	start_time: std::time::SystemTime,
+	end_time: std::time::SystemTime,
+	attributes: Vec<KeyValue>,
+) -> SpanData {
+	let parent_span_id = parent
+		.map(|parent| SpanId::from(parent.span_id))
+		.unwrap_or(SpanId::INVALID);
+	SpanData {
+		span_context: SpanContext::new(
+			TraceId::from(span.trace_id),
+			SpanId::from(span.span_id),
+			TraceFlags::new(span.flags),
+			false,
+			TraceState::default(),
+		),
+		parent_span_id,
+		parent_span_is_remote: parent.is_some(),
+		span_kind,
+		name: name.into(),
+		start_time,
+		end_time,
+		attributes,
+		dropped_attributes_count: 0,
+		events: SpanEvents::default(),
+		links: SpanLinks::default(),
+		status: Status::default(),
+		instrumentation_scope: InstrumentationScope::builder("agentgateway").build(),
+	}
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
@@ -119,7 +215,7 @@ impl Tracer {
 		// Choose exporter based on per-policy protocol:
 		// - gRPC when protocol is "grpc"
 		// - otherwise HTTP (fall back to gRPC if no HTTP path is available)
-		let provider = if config.protocol == crate::types::agent::TracingProtocol::Grpc {
+		let (provider, processor) = if config.protocol == crate::types::agent::TracingProtocol::Grpc {
 			// Use gRPC exporter that routes via PolicyClient/GrpcReferenceChannel
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
@@ -127,10 +223,12 @@ impl Tracer {
 				config.policies.clone(),
 				exporter_runtime.clone(),
 			);
-			opentelemetry_sdk::trace::SdkTracerProvider::builder()
+			let processor = new_trace_processor(&resource, exporter);
+			let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
 				.with_resource(resource.clone())
-				.with_batch_exporter(exporter)
-				.build()
+				.with_span_processor(processor.clone())
+				.build();
+			(provider, processor)
 		} else {
 			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
@@ -139,21 +237,21 @@ impl Tracer {
 				policies: config.policies.clone(),
 				runtime: exporter_runtime,
 			};
-			opentelemetry_sdk::trace::SdkTracerProvider::builder()
+			let exporter = opentelemetry_otlp::SpanExporter::builder()
+				.with_http()
+				.with_http_client(http_client)
+				.with_endpoint(path)
+				.build()?;
+			let processor = new_trace_processor(&resource, exporter);
+			let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
 				.with_resource(resource.clone())
-				.with_batch_exporter(
-					opentelemetry_otlp::SpanExporter::builder()
-						.with_http()
-						.with_http_client(http_client)
-						.with_endpoint(path)
-						.build()?,
-				)
-				.build()
+				.with_span_processor(processor.clone())
+				.build();
+			(provider, processor)
 		};
-		let tracer = provider.tracer("agentgateway");
 		Ok(Tracer {
-			tracer: Arc::new(tracer),
 			provider,
+			processor,
 			fields,
 		})
 	}
@@ -219,28 +317,15 @@ impl Tracer {
 		});
 
 		let out_span = request.outgoing_span.as_ref().unwrap();
-		let sb = self
-			.tracer
-			.span_builder(span_name)
-			.with_start_time(start)
-			.with_end_time(end)
-			.with_kind(SpanKind::Server)
-			.with_attributes(attributes)
-			.with_trace_id(out_span.trace_id.into())
-			.with_span_id(out_span.span_id.into());
-
-		let mut context = Context::new();
-		if let Some(in_span) = &request.incoming_span {
-			let parent = SpanContext::new(
-				in_span.trace_id.into(),
-				in_span.span_id.into(),
-				TraceFlags::new(in_span.flags),
-				true,
-				TraceState::default(),
-			);
-			context = context.with_remote_span_context(parent);
-		}
-		sb.start_with_context(self.tracer.as_ref(), &context).end()
+		self.processor.emit(trace_span_data(
+			span_name,
+			SpanKind::Server,
+			out_span,
+			request.incoming_span.as_ref(),
+			start,
+			end,
+			attributes,
+		));
 	}
 }
 
@@ -253,7 +338,7 @@ struct PolicyGrpcSpanExporter {
 		opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient<
 			crate::http::ext_proc::GrpcReferenceChannel,
 		>,
-	is_shutdown: Arc<bool>,
+	is_shutdown: Arc<AtomicBool>,
 	resource: Resource,
 	runtime: tokio::runtime::Handle,
 }
@@ -282,7 +367,7 @@ impl PolicyGrpcSpanExporter {
 		);
 		Self {
 			tonic_client,
-			is_shutdown: Arc::new(false),
+			is_shutdown: Arc::new(AtomicBool::new(false)),
 			resource: Resource::builder().build(),
 			runtime,
 		}
@@ -301,7 +386,7 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 		let resource = self.resource.clone();
 		let handle = self.runtime.clone();
 		async move {
-			if *is_shutdown {
+			if is_shutdown.load(Ordering::Relaxed) {
 				return Err(OTelSdkError::AlreadyShutdown);
 			}
 			// Reuse OTLP transform to convert SDK spans to ResourceSpans
@@ -325,8 +410,8 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 		}
 	}
 
-	fn shutdown(&mut self) -> opentelemetry_sdk::error::OTelSdkResult {
-		self.is_shutdown = Arc::new(true);
+	fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+		self.is_shutdown.store(true, Ordering::Relaxed);
 		Ok(())
 	}
 
@@ -672,14 +757,14 @@ mod tests {
 
 	fn test_tracer() -> (Tracer, RecordingSpanExporter) {
 		let exporter = RecordingSpanExporter::default();
+		let processor = SharedSpanProcessor::new(SimpleSpanProcessor::new(exporter.clone()));
 		let provider = SdkTracerProvider::builder()
-			.with_span_processor(SimpleSpanProcessor::new(exporter.clone()))
+			.with_span_processor(processor.clone())
 			.build();
-		let tracer = provider.tracer("test-tracer");
 		(
 			Tracer {
-				tracer: Arc::new(tracer),
 				provider,
+				processor,
 				fields: Arc::new(LoggingFields::default()),
 			},
 			exporter,

@@ -1,4 +1,6 @@
 .cursor
+.claude
+.codex
 /target
 .vscode
 .idea
