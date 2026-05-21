@@ -13,7 +13,7 @@ spec:
       global:
         backendRef:
           name: ratelimit
-          namespace: kgateway-test-extensions
+          namespace: agentgateway-base
           port: 8081
         domain: "api-gateway"
         descriptors:

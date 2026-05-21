@@ -17,10 +17,8 @@ const rlBurstTries = 3
 
 func TestGlobalRateLimit(tt *testing.T) {
 	t := New(tt)
-	t.Apply(
-		globalRateLimitManifest("rate-limit-server.yaml"),
-		globalRateLimitManifest("routes.yaml"),
-	)
+	t.ApplyPersistent(globalRateLimitManifest("rate-limit-server.yaml"))
+	t.Apply(globalRateLimitManifest("routes.yaml"))
 
 	t.Run("ByRemoteAddress", func(t base.Test) {
 		testGlobalRateLimitByRemoteAddress(t)

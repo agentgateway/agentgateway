@@ -17,7 +17,7 @@ spec:
       global:
         backendRef:
           name: ratelimit
-          namespace: kgateway-test-extensions
+          namespace: agentgateway-base
           port: 8081
         domain: "api-gateway"
 #        timeout: "100ms" # TODO: support timeout

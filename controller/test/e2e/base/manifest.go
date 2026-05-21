@@ -87,6 +87,21 @@ func (s *Test) Apply(manifests ...string) {
 	})
 }
 
+func (s *Test) ApplyPersistent(manifests ...string) {
+	s.Helper()
+	if s.ShouldSkip() {
+		s.Skip("Skipping test due to gateway API version requirements")
+	}
+
+	s.applyManifests(manifests...)
+	s.Cleanup(func() {
+		if testutils.ShouldSkipCleanup(s) || testutils.ShouldPersistInstall() {
+			return
+		}
+		s.deleteManifests(manifests...)
+	})
+}
+
 func (s *Test) Delete(manifests ...string) {
 	s.Helper()
 	s.deleteManifests(manifests...)
