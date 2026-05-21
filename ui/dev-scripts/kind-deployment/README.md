@@ -54,7 +54,7 @@ swap in locally-built proxy/controller images.
 ## Run
 
 ```sh
-./scripts/kind-deployment/setup.sh
+./ui/dev-scripts/kind-deployment/setup.sh
 ```
 
 When complete, the script prints a `kubectl port-forward` command for the
