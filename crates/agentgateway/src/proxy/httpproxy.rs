@@ -1996,7 +1996,8 @@ pub fn build_service_call(
 		});
 	}
 
-	let workloads = &inputs.stores.read_discovery().workloads;
+	let discovery = inputs.stores.read_discovery();
+	let workloads = &discovery.workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
 		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
@@ -2016,33 +2017,78 @@ pub fn build_service_call(
 	// Check if we need double hbone (workload on remote network with gateway)
 	let network_gateway = if wl.network != inputs.cfg.network {
 		if let Some(gw_addr) = &wl.network_gateway {
-			// Look up the gateway workload to get its identity
-			let gateway_workload = match &gw_addr.destination {
+			match &gw_addr.destination {
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => {
-					workloads.find_address(net_addr)
+					if let Some(gw_wl) = workloads.find_address(net_addr) {
+						let resolved_gw_addr = gw_addr.clone();
+						tracing::debug!(
+							source_network = %inputs.cfg.network,
+							dest_network = %wl.network,
+							gateway = ?resolved_gw_addr,
+							"picked workload on remote network, using double hbone"
+						);
+						Some((resolved_gw_addr, gw_wl.identity()))
+					} else {
+						tracing::warn!(
+							gateway_address = ?net_addr,
+							"network gateway address not found in workload store for remote workload"
+						);
+						None
+					}
 				},
-				types::discovery::gatewayaddress::Destination::Hostname(_hostname) => {
-					// TODO: Implement hostname resolution for gateway
-					// For now, we don't support hostname-based gateways
-					tracing::warn!("hostname-based network gateways not yet supported");
-					None
+				types::discovery::gatewayaddress::Destination::Hostname(hostname) => {
+					// TODO we could support looking up workloads by hostname too
+					let resolved = discovery
+						.services
+						.get_by_namespaced_host(&NamespacedHostname {
+							namespace: hostname.namespace.clone(),
+							hostname: hostname.hostname.clone(),
+						})
+						.and_then(|gw_svc| {
+							let (gw_ep, _gw_handle, gw_wl) = gw_svc.endpoints.select_endpoint(
+								&discovery.workloads,
+								gw_svc.as_ref(),
+								gw_addr.hbone_mtls_port,
+								None,
+							)?;
+							let resolved_port = select_service_target_port(
+								gw_ep.as_ref(),
+								gw_svc.as_ref(),
+								gw_addr.hbone_mtls_port,
+								None,
+								false,
+							)?;
+							let ip = *gw_wl.workload_ips.first()?;
+							Some((
+								GatewayAddress {
+									destination: types::discovery::gatewayaddress::Destination::Address(
+										NetworkAddress {
+											network: gw_wl.network.clone(),
+											address: ip,
+										},
+									),
+									hbone_mtls_port: resolved_port,
+								},
+								gw_wl.identity(),
+							))
+						});
+					if let Some((resolved_gw_addr, gw_identity)) = resolved {
+						tracing::debug!(
+							source_network = %inputs.cfg.network,
+							dest_network = %wl.network,
+							gateway = ?resolved_gw_addr,
+							"picked workload on remote network, using double hbone"
+						);
+						// TODO:wire the gw_handle through to handshake_double to track per-conn health/latency
+						Some((resolved_gw_addr, gw_identity))
+					} else {
+						tracing::warn!(
+							gateway_hostname = ?hostname,
+							"no service / endpoint / IP for hostname-based network gateway"
+						);
+						None
+					}
 				},
-			};
-
-			if let Some(gw_wl) = gateway_workload {
-				tracing::debug!(
-					source_network = % inputs.cfg.network,
-					dest_network = % wl.network,
-					gateway = ? gw_addr,
-					"picked workload on remote network, using double hbone"
-				);
-				Some((gw_addr.clone(), gw_wl.identity()))
-			} else {
-				tracing::warn!(
-					"network gateway {:?} not found for remote workload",
-					gw_addr
-				);
-				None
 			}
 		} else {
 			tracing::warn ! (
@@ -2062,7 +2108,6 @@ pub fn build_service_call(
 	// ingress gateways, never waypoint-to-waypoint traffic.
 	let waypoint = if svc.ingress_use_waypoint && hbone_source != Some(HboneSourceRole::Waypoint) {
 		if let Some(wp) = &svc.waypoint {
-			let discovery = inputs.stores.read_discovery();
 			let wp_ip = match &wp.destination {
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => Some(net_addr.address),
 				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
@@ -2105,7 +2150,6 @@ pub fn build_service_call(
 				};
 				identity.map(|id| (ip, id))
 			});
-			drop(discovery);
 			match waypoint_info {
 				Some((ip, identity)) => {
 					let wp_port = if wp.hbone_mtls_port > 0 {

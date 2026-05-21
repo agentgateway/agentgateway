@@ -3256,3 +3256,136 @@ async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
 	// Without CA, it falls back to Plain
 	assert_eq!(transport.name(), "plaintext");
 }
+
+#[tokio::test]
+async fn network_gateway_hostname_resolves_via_service_endpoint() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::gatewayaddress::Destination;
+	use crate::types::discovery::{
+		GatewayAddress, Identity, NamespacedHostname, NetworkAddress, Service, Workload,
+	};
+
+	let mock = simple_mock().await;
+	let gw_ip: std::net::IpAddr = "192.168.1.10".parse().unwrap();
+	let remote_network = strng::literal!("network-3");
+	let gateway_namespace = strng::literal!("gateway-ns");
+	let gateway_hostname = strng::literal!("gateway.example.internal");
+	let svc_port: u16 = 15008;
+	let gw_target_port: u16 = 31234;
+
+	let t = setup_proxy_test("{}").unwrap();
+
+	let app_svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		..Default::default()
+	};
+	let remote_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("remote-wl-uid"),
+			name: strng::literal!("remote-wl"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("remote-sa"),
+			network: remote_network.clone(),
+			workload_ips: vec!["10.244.0.5".parse().unwrap()],
+			network_gateway: Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: gateway_namespace.clone(),
+					hostname: gateway_hostname.clone(),
+				}),
+				hbone_mtls_port: svc_port,
+			}),
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+
+	// gateway service with port mapping
+	let gw_svc = Service {
+		name: strng::literal!("gateway-svc"),
+		namespace: gateway_namespace.clone(),
+		hostname: gateway_hostname.clone(),
+		vips: vec![],
+		ports: std::collections::HashMap::from([(svc_port, gw_target_port)]),
+		..Default::default()
+	};
+	let gw_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("gw-wl-uid"),
+			name: strng::literal!("gw-1"),
+			namespace: gateway_namespace.clone(),
+			service_account: strng::literal!("gateway-sa"),
+			network: remote_network.clone(),
+			workload_ips: vec![gw_ip],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			format!("{}/{}", gateway_namespace, gateway_hostname),
+			std::collections::HashMap::from([(svc_port, gw_target_port)]),
+		)]),
+	};
+
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![app_svc, gw_svc],
+			vec![remote_wl, gw_wl],
+			Default::default(),
+		)
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("app service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		Default::default(),
+		&svc,
+		&80,
+		None,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	let (resolved_gw, gw_identity) = backend_call
+		.network_gateway
+		.expect("network_gateway must be resolved for hostname-form destination");
+
+	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+		assert_eq!(addr.address, gw_ip, "should resolve to the gateway endpoint IP");
+		assert_eq!(addr.network, remote_network, "network should be the gateway workload's network");
+	});
+	assert_eq!(
+		resolved_gw.hbone_mtls_port, gw_target_port,
+		"port should be the endpoint target port, not the service port"
+	);
+	assert_eq!(
+		gw_identity,
+		Identity::Spiffe {
+			trust_domain: strng::EMPTY,
+			namespace: gateway_namespace.clone(),
+			service_account: strng::literal!("gateway-sa"),
+		},
+	);
+}
