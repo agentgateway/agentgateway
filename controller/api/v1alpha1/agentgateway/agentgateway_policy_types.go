@@ -1777,6 +1777,13 @@ type ExtAuthCache struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1s."
 	// +required
 	TTL metav1.Duration `json:"ttl"`
+
+	// `maxEntries` is the maximum number of authorization results to keep in
+	// the cache. If unset, this defaults to 10000.
+	//
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 }
 
 type AgentExtAuthHTTP struct {

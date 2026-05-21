@@ -9710,6 +9710,7 @@ type TrafficPolicySpec_ExternalAuth_Cache struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           []string               `protobuf:"bytes,1,rep,name=key,proto3" json:"key,omitempty"`
 	Ttl           *durationpb.Duration   `protobuf:"bytes,2,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	MaxEntries    uint32                 `protobuf:"varint,3,opt,name=max_entries,json=maxEntries,proto3" json:"max_entries,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9756,6 +9757,13 @@ func (x *TrafficPolicySpec_ExternalAuth_Cache) GetTtl() *durationpb.Duration {
 		return x.Ttl
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_ExternalAuth_Cache) GetMaxEntries() uint32 {
+	if x != nil {
+		return x.MaxEntries
+	}
+	return 0
 }
 
 type TrafficPolicySpec_ExternalAuth_GRPCProtocol struct {
@@ -13216,7 +13224,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xbcC\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xddC\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -13274,7 +13282,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\"\x1e\n" +
 	"\x04Type\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\t\n" +
-	"\x05TOKEN\x10\x01\x1a\xf8\x0e\n" +
+	"\x05TOKEN\x10\x01\x1a\x99\x0f\n" +
 	"\fExternalAuth\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12\\\n" +
 	"\x04grpc\x18\x02 \x01(\v2F.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocolH\x00R\x04grpc\x12\\\n" +
@@ -13287,10 +13295,12 @@ const file_resource_proto_rawDesc = "" +
 	"\vBodyOptions\x12*\n" +
 	"\x11max_request_bytes\x18\x01 \x01(\rR\x0fmaxRequestBytes\x122\n" +
 	"\x15allow_partial_message\x18\x02 \x01(\bR\x13allowPartialMessage\x12\"\n" +
-	"\rpack_as_bytes\x18\x03 \x01(\bR\vpackAsBytes\x1aF\n" +
+	"\rpack_as_bytes\x18\x03 \x01(\bR\vpackAsBytes\x1ag\n" +
 	"\x05Cache\x12\x10\n" +
 	"\x03key\x18\x01 \x03(\tR\x03key\x12+\n" +
-	"\x03ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x1a\xe8\x02\n" +
+	"\x03ttl\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x12\x1f\n" +
+	"\vmax_entries\x18\x03 \x01(\rR\n" +
+	"maxEntries\x1a\xe8\x02\n" +
 	"\fGRPCProtocol\x12m\n" +
 	"\acontext\x18\x01 \x03(\v2S.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntryR\acontext\x12p\n" +
 	"\bmetadata\x18\x02 \x03(\v2T.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntryR\bmetadata\x1a:\n" +

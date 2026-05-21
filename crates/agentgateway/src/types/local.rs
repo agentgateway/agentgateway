@@ -386,6 +386,25 @@ impl<T> LocalExplicitOrConditional<T> {
 	}
 }
 
+fn configure_ext_authz_cache_store(policy: LocalExtAuthzPolicy) -> LocalExtAuthzPolicy {
+	match policy {
+		LocalExplicitOrConditional::Explicit(policy) => {
+			LocalExplicitOrConditional::Explicit(policy.with_configured_cache_store())
+		},
+		LocalExplicitOrConditional::Conditional(mut policies) => {
+			policies.conditional = policies
+				.conditional
+				.into_iter()
+				.map(|entry| LocalConditionalPolicy {
+					condition: entry.condition,
+					policy: entry.policy.with_configured_cache_store(),
+				})
+				.collect();
+			LocalExplicitOrConditional::Conditional(policies)
+		},
+	}
+}
+
 fn validate_local_conditional_policies<T>(
 	policies: &LocalConditionalPolicies<T>,
 ) -> anyhow::Result<()> {
@@ -1602,7 +1621,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::BackendAuth(p))
 		}
 		if let Some(p) = ext_authz {
-			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(p)))
+			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
+				p.with_configured_cache_store(),
+			)))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
@@ -2976,7 +2997,9 @@ pub(crate) async fn split_policies(
 		route_policies.push(TrafficPolicy::Authorization(p))
 	}
 	if let Some(p) = ext_authz {
-		route_policies.push(TrafficPolicy::ExtAuthz(p.into_policy()?))
+		route_policies.push(TrafficPolicy::ExtAuthz(
+			configure_ext_authz_cache_store(p).into_policy()?,
+		))
 	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))

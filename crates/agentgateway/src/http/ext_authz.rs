@@ -134,6 +134,9 @@ pub struct CacheConfig {
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub ttl: Duration,
+	/// Maximum number of authorization results to keep in the cache.
+	#[serde(default = "default_cache_entries")]
+	pub max_entries: usize,
 }
 
 #[apply(schema!)]
@@ -174,6 +177,15 @@ pub struct ExtAuthz {
 }
 
 impl ExtAuthz {
+	pub fn with_configured_cache_store(mut self) -> Self {
+		self.cache_store = self
+			.cache
+			.as_ref()
+			.map(|cache| cache_store(effective_cache_entries(cache.max_entries)))
+			.unwrap_or_else(default_cache_store);
+		self
+	}
+
 	fn cache_key(&self, req: &Request) -> Option<CacheKey> {
 		let Some(cache) = &self.cache else {
 			return None;
@@ -1053,8 +1065,23 @@ fn insert_dynamic_metadata(
 	}
 }
 
+pub(crate) fn default_cache_entries() -> usize {
+	DEFAULT_CACHE_ENTRIES
+}
+
+pub(crate) fn effective_cache_entries(max_entries: usize) -> usize {
+	match max_entries {
+		0 => DEFAULT_CACHE_ENTRIES,
+		max_entries => max_entries,
+	}
+}
+
+pub(crate) fn cache_store(max_entries: usize) -> Arc<Cache<CacheKey, CachedGrpcResponse>> {
+	Arc::new(Cache::new(max_entries))
+}
+
 pub(crate) fn default_cache_store() -> Arc<Cache<CacheKey, CachedGrpcResponse>> {
-	Arc::new(Cache::new(DEFAULT_CACHE_ENTRIES))
+	cache_store(DEFAULT_CACHE_ENTRIES)
 }
 
 struct BufferedRequestBody {

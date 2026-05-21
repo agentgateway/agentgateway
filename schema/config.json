@@ -4502,6 +4502,13 @@
         "ttl": {
           "description": "How long cached authorization results are reused.",
           "type": "string"
+        },
+        "maxEntries": {
+          "description": "Maximum number of authorization results to keep in the cache.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 10000
         }
       },
       "additionalProperties": false,

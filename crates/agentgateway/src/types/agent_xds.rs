@@ -2040,7 +2040,12 @@ fn external_auth_from_proto(
 				.as_ref()
 				.ok_or(ProtoError::MissingRequiredField)
 				.map(|ttl| convert_duration(*ttl))?;
-			Ok::<_, ProtoError>(http::ext_authz::CacheConfig { key, ttl })
+			let max_entries = http::ext_authz::effective_cache_entries(cache.max_entries as usize);
+			Ok::<_, ProtoError>(http::ext_authz::CacheConfig {
+				key,
+				ttl,
+				max_entries,
+			})
 		})
 		.transpose()?;
 	let protocol = match ea
@@ -2111,6 +2116,10 @@ fn external_auth_from_proto(
 				.collect::<Result<_, _>>()?,
 		},
 	};
+	let cache_store = cache
+		.as_ref()
+		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
+		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
 		target: Arc::new(target),
@@ -2133,7 +2142,7 @@ fn external_auth_from_proto(
 			.collect(),
 		include_request_body,
 		cache,
-		cache_store: crate::http::ext_authz::default_cache_store(),
+		cache_store,
 	})
 }
 

@@ -9836,6 +9836,13 @@ spec:
                             maxItems: 16
                             minItems: 1
                             type: array
+                          maxEntries:
+                            description: |-
+                              `maxEntries` is the maximum number of authorization results to keep in
+                              the cache. If unset, this defaults to 10000.
+                            format: int32
+                            minimum: 1
+                            type: integer
                           ttl:
                             description: '`ttl` is the duration that cached authorization
                               results may be reused.'

@@ -774,6 +774,7 @@ message TrafficPolicySpec {
     message Cache {
       repeated string key = 1;
       google.protobuf.Duration ttl = 2;
+      uint32 max_entries = 3;
     }
     message GRPCProtocol {
       map<string, string> context = 1;

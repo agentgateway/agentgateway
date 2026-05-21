@@ -184,6 +184,7 @@ fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
 				Arc::new(cel::Expression::new_strict("request.path").unwrap()),
 			],
 			ttl: std::time::Duration::from_secs(300),
+			max_entries: super::default_cache_entries(),
 		}),
 		..Default::default()
 	};
@@ -201,6 +202,43 @@ fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
 			super::CacheKeyValue::String(Arc::from("Bearer token")),
 			super::CacheKeyValue::String(Arc::from("/admin")),
 		]
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_store_uses_configured_capacity() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![Arc::new(
+				cel::Expression::new_strict("request.path").unwrap(),
+			)],
+			ttl: std::time::Duration::from_secs(300),
+			max_entries: 7,
+		}),
+		..Default::default()
+	}
+	.with_configured_cache_store();
+
+	assert_eq!(extauthz.cache_store.capacity(), 7);
+}
+
+#[test]
+fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![Arc::new(
+				cel::Expression::new_strict("request.path").unwrap(),
+			)],
+			ttl: std::time::Duration::from_secs(300),
+			max_entries: 0,
+		}),
+		..Default::default()
+	}
+	.with_configured_cache_store();
+
+	assert_eq!(
+		extauthz.cache_store.capacity(),
+		super::default_cache_store().capacity()
 	);
 }
 
