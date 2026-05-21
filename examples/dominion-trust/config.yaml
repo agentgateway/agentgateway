@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Dominion Observatory Trust Verification Example
+#
+# This example shows how to use agentgateway's extAuthz policy to verify
+# MCP server trust scores via Dominion Observatory before allowing tool calls.
+#
+# The ext_authz sidecar (trust-authz-server.py) checks trust scores against
+# https://dominion-observatory.sgdata.workers.dev and caches results for 5 minutes.
+#
+# Setup:
+#   1. Start the trust verification sidecar:
+#      python trust-authz-server.py
+#   2. Start your MCP server on localhost:3001
+#   3. Start agentgateway:
+#      agentgateway --config examples/dominion-trust/config.yaml
+
+binds:
+- port: 3000
+  listeners:
+  - name: mcp-with-trust-verification
+    routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: my-mcp-server
+            mcp:
+              host: http://localhost:3001/mcp
+      policies:
+        extAuthz:
+          host: localhost:8990
+          protocol:
+            http:
+              # The sidecar expects the MCP server name as a query parameter.
+              # It returns 200 (allow) or 403 (deny) based on trust score.
+              path: '"/check-trust?server=" + mcp.target'
+          # Block requests when the trust verification service is unavailable
+          failureMode: Deny
