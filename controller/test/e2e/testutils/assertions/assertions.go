@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"github.com/onsi/gomega/types"
+	"istio.io/istio/pkg/test"
+	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -16,8 +18,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/cluster"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
-	"istio.io/istio/pkg/test"
-	"istio.io/istio/pkg/test/util/retry"
 )
 
 const agentgatewayLabelSelector = "app.kubernetes.io/name=agentgateway"

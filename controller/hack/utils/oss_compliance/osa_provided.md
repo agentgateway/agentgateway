@@ -1,7 +1,6 @@
 Name|Version|License
 ---|---|---
 [semver/v3](https://github.com/Masterminds/semver)|v3.5.0|MIT License
-[anthropics/anthropic-sdk-go](https://github.com/anthropics/anthropic-sdk-go)|v1.44.1|MIT License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
 [go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260515010941-d9e0f651b1a5|Apache License 2.0
@@ -15,12 +14,9 @@ Name|Version|License
 [google/go-cmp](https://github.com/google/go-cmp)|v0.7.0|BSD 3-clause "New" or "Revised" License
 [google/uuid](https://github.com/google/uuid)|v1.6.0|BSD 3-clause "New" or "Revised" License
 [grpc-ecosystem/go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)|v1.4.0|Apache License 2.0
-[kagent-dev/mockllm](https://github.com/kagent-dev/mockllm)|v0.0.5|Apache License 2.0
 [kelseyhightower/envconfig](https://github.com/kelseyhightower/envconfig)|v1.4.0|MIT License
 [modelcontextprotocol/go-sdk](https://github.com/modelcontextprotocol/go-sdk)|v1.6.0|Apache License 2.0
-[ginkgo/v2](https://github.com/onsi/ginkgo)|v2.29.0|MIT License
 [onsi/gomega](https://github.com/onsi/gomega)|v1.41.0|MIT License
-[openai-go/v3](https://github.com/openai/openai-go)|v3.36.0|Apache License 2.0
 [pmezard/go-difflib](https://github.com/pmezard/go-difflib)|v1.0.1-0.20181226105442-5d4384ee4fb2|BSD 3-clause "New" or "Revised" License
 [prometheus/client_golang](https://github.com/prometheus/client_golang)|v1.23.2|Apache License 2.0
 [prometheus/client_model](https://github.com/prometheus/client_model)|v0.6.2|Apache License 2.0

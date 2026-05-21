@@ -4186,6 +4186,11 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           issuer:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
@@ -4306,6 +4311,7 @@ spec:
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:
@@ -7786,12 +7792,18 @@ spec:
                           and MCP-specific authentication behavior on top of standard JWT validation.
                           When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
                         properties:
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           provider:
                             description: '`provider` specifies the identity provider
                               to use for MCP authentication flows.'
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:

@@ -10119,6 +10119,11 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           issuer:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
@@ -10239,6 +10244,7 @@ spec:
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:
