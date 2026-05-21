@@ -40,6 +40,7 @@ mod types;
 pub use types::SimpleChatCompletionMessage;
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
+use crate::proxy::dtrace;
 use crate::store;
 
 #[cfg(test)]
@@ -336,7 +337,7 @@ impl AIProvider {
 			AIProvider::Bedrock(p) => {
 				let bp = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {})),
+					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit { service_name: None })),
 					..Default::default()
 				};
 				(Target::Hostname(p.get_host(), 443), bp)
@@ -969,6 +970,7 @@ impl AIProvider {
 		// Buffer the body
 		let buffer_limit = http::response_buffer_limit(&resp);
 		let (mut parts, body) = resp.into_parts();
+		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer_limit);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (encoding, bytes) =
 			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
@@ -1119,14 +1121,8 @@ impl AIProvider {
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
-				let resp: types::embeddings::Response = serde_json::from_slice(&bytes).map_err(|e| {
-					warn!(
-						error = %e,
-						body = %String::from_utf8_lossy(&bytes),
-						"failed to parse embeddings response"
-					);
-					AIError::ResponseParsing(e)
-				})?;
+				let resp: types::embeddings::Response =
+					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
 				Ok((resp.to_llm_response(false), bytes))
 			},
 		}
@@ -1150,35 +1146,23 @@ impl AIProvider {
 				| AIProvider::Azure(_),
 				InputFormat::Completions,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::completions::Response>(bytes).map_err(|e| {
-					warn!(
-						error = %e,
-						body = %String::from_utf8_lossy(bytes),
-						"failed to parse completions response"
-					);
-					AIError::ResponseParsing(e)
-				})?,
+				serde_json::from_slice::<types::completions::Response>(bytes)
+					.map_err(logged_response_parsing(bytes))?,
 			)),
 			// Responses with OpenAI/Azure: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
 				InputFormat::Responses,
 			) => Ok(Box::new(
-				serde_json::from_slice::<types::responses::Response>(bytes).map_err(|e| {
-					warn!(
-						error = %e,
-						body = %String::from_utf8_lossy(bytes),
-						"failed to parse responses response"
-					);
-					AIError::ResponseParsing(e)
-				})?,
+				serde_json::from_slice::<types::responses::Response>(bytes)
+					.map_err(logged_response_parsing(bytes))?,
 			)),
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
 			(AIProvider::Vertex(p), InputFormat::Messages) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {
 					Ok(Box::new(
 						serde_json::from_slice::<types::messages::Response>(bytes)
-							.map_err(AIError::ResponseParsing)?,
+							.map_err(logged_response_parsing(bytes))?,
 					))
 				} else {
 					conversion::completions::from_messages::translate_response(bytes)
@@ -1187,7 +1171,7 @@ impl AIProvider {
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages) => Ok(Box::new(
 				serde_json::from_slice::<types::messages::Response>(bytes)
-					.map_err(AIError::ResponseParsing)?,
+					.map_err(logged_response_parsing(bytes))?,
 			)),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
@@ -1216,7 +1200,7 @@ impl AIProvider {
 				} else {
 					Ok(Box::new(
 						serde_json::from_slice::<types::completions::Response>(bytes)
-							.map_err(AIError::ResponseParsing)?,
+							.map_err(logged_response_parsing(bytes))?,
 					))
 				}
 			},
@@ -1444,8 +1428,7 @@ impl AIProvider {
 				}
 			},
 			(AIProvider::Anthropic(_), InputFormat::Messages) => {
-				// Passthrough; nothing needed
-				Ok(bytes.clone())
+				conversion::messages::translate_anthropic_error(bytes, status)
 			},
 			(_, InputFormat::Detect) => {
 				// Passthrough; nothing needed
@@ -1534,6 +1517,22 @@ pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
 		Tokenizer::Gpt2 => tiktoken_rs::r50k_base_singleton(),
 	}
 }
+
+pub(crate) fn logged_response_parsing(
+	bytes: &[u8],
+) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
+	|e| {
+		const LOGGED_BODY_LIMIT: usize = 1024;
+		let body = &bytes[..bytes.len().min(LOGGED_BODY_LIMIT)];
+		warn!(
+			error = %e,
+			body = %String::from_utf8_lossy(body),
+			"failed to parse response"
+		);
+		AIError::ResponseParsing(e)
+	}
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum AIError {
 	#[error("missing field: {0}")]

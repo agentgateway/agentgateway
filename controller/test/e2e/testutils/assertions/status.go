@@ -12,6 +12,7 @@ import (
 	"github.com/onsi/gomega/gstruct"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
@@ -20,6 +21,18 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/helpers"
 )
+
+// ConditionHandler lets callers teach EventuallyCondition about types defined
+// outside this package. Return handled=true when obj's type matched even if
+// the assertion failed — failures must go through g so polling can retry.
+type ConditionHandler func(g gomega.Gomega, obj client.Object, condType string) (handled bool)
+
+// WithConditionHandlers registers handlers consulted by EventuallyCondition
+// before its built-in type switch.
+func (p *Provider) WithConditionHandlers(h ...ConditionHandler) *Provider {
+	p.conditionHandlers = append(p.conditionHandlers, h...)
+	return p
+}
 
 // EventuallyGatewayAddress asserts that eventually at least one of the HTTPRoute's route parent statuses contains
 // the given message substring.
@@ -429,5 +442,87 @@ func (p *Provider) EventuallyAgwPolicyCondition(
 		err := p.clusterContext.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, policy)
 		g.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("failed to get AgentgatewayPolicy %s/%s", namespace, name))
 		g.Expect(extractAgwPolicyAncestorConditions(policy.Status.Ancestors)).To(matchers.HaveAnyAncestorCondition(condType, expect))
+	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
+}
+
+// EventuallyAccepted polls until obj reports Accepted=True.
+func (p *Provider) EventuallyAccepted(
+	ctx context.Context,
+	obj client.Object,
+	timeout ...time.Duration,
+) {
+	ginkgo.GinkgoHelper()
+	p.EventuallyCondition(ctx, obj, "Accepted", timeout...)
+}
+
+// EventuallyAllAccepted runs EventuallyAccepted for each object in order.
+func (p *Provider) EventuallyAllAccepted(
+	ctx context.Context,
+	objs []client.Object,
+	timeout ...time.Duration,
+) {
+	ginkgo.GinkgoHelper()
+	for _, obj := range objs {
+		p.EventuallyAccepted(ctx, obj, timeout...)
+	}
+}
+
+// EventuallyCondition polls until obj reports condType=True. Dispatches on the
+// Go type of obj to know where conditions live (top-level vs parents vs ancestors).
+func (p *Provider) EventuallyCondition(
+	ctx context.Context,
+	obj client.Object,
+	condType string,
+	timeout ...time.Duration,
+) {
+	ginkgo.GinkgoHelper()
+	currentTimeout, pollingInterval := helpers.GetTimeouts(timeout...)
+	key := client.ObjectKeyFromObject(obj)
+	kind := fmt.Sprintf("%T", obj)
+
+	p.Gomega.Eventually(func(g gomega.Gomega) {
+		err := p.clusterContext.Client.Get(ctx, key, obj)
+		g.Expect(err).NotTo(gomega.HaveOccurred(), fmt.Sprintf("failed to get %s %s/%s", kind, key.Namespace, key.Name))
+
+		for _, h := range p.conditionHandlers {
+			if h(g, obj, condType) {
+				return
+			}
+		}
+
+		switch o := obj.(type) {
+		case *gwv1.Gateway:
+			g.Expect(o.Status.Conditions).To(matchers.HaveCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("Gateway %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *gwv1.HTTPRoute:
+			g.Expect(extractParentConditions(o.Status.Parents)).To(matchers.HaveAnyParentCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("HTTPRoute %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *gwv1a2.TCPRoute:
+			g.Expect(extractParentConditions(o.Status.Parents)).To(matchers.HaveAnyParentCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("TCPRoute %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *gwv1.TLSRoute:
+			g.Expect(extractParentConditions(o.Status.Parents)).To(matchers.HaveAnyParentCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("TLSRoute %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *gwv1.GRPCRoute:
+			g.Expect(extractParentConditions(o.Status.Parents)).To(matchers.HaveAnyParentCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("GRPCRoute %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *gwv1.ListenerSet:
+			g.Expect(o.Status.Conditions).To(matchers.HaveCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("ListenerSet %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *agentgateway.AgentgatewayBackend:
+			g.Expect(o.Status.Conditions).To(matchers.HaveCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("AgentgatewayBackend %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *agentgateway.AgentgatewayPolicy:
+			g.Expect(extractAgwPolicyAncestorConditions(o.Status.Ancestors)).To(matchers.HaveAnyAncestorCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("AgentgatewayPolicy %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		case *inf.InferencePool:
+			g.Expect(extractInferencePoolParentConditions(o.Status.Parents)).To(matchers.HaveAnyParentCondition(condType, metav1.ConditionTrue),
+				fmt.Sprintf("InferencePool %s/%s status: %+v", key.Namespace, key.Name, o.Status))
+		default:
+			gomega.StopTrying(fmt.Sprintf(
+				"EventuallyCondition: unsupported type %s — add a case here or register a ConditionHandler",
+				kind,
+			)).Now()
+		}
 	}, currentTimeout, pollingInterval).Should(gomega.Succeed())
 }

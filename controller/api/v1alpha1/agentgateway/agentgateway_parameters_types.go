@@ -55,7 +55,7 @@ type AgentgatewayParametersSpec struct {
 }
 
 // The default logging format is text.
-// +kubebuilder:validation:Enum=json;text
+// +k8s:enum
 type AgentgatewayParametersLoggingFormat string
 
 const (

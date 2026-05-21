@@ -284,6 +284,123 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 }
 
 #[tokio::test]
+async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	for body in [
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"method": "notifications/initialized",
+			"params": {}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"result": {}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"error": {
+				"code": -32603,
+				"message": "client response error"
+			}
+		}),
+	] {
+		let response = mcp_json_post(&client, &url, &body).send().await.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+		assert!(
+			response.headers().get("mcp-session-id").is_none(),
+			"rejected no-session message must not create a session"
+		);
+	}
+}
+
+#[tokio::test]
+async fn streamable_http_validates_protocol_version_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let unsupported = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "1900-01-01")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(unsupported.status(), reqwest::StatusCode::BAD_REQUEST);
+
+	let mismatch = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-11-25")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(mismatch.status(), reqwest::StatusCode::BAD_REQUEST);
+
+	let init = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize response should include a session id")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let list_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {}
+	});
+	let subsequent_unsupported = mcp_json_post(&client, &url, &list_body)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "1900-01-01")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		subsequent_unsupported.status(),
+		reqwest::StatusCode::BAD_REQUEST
+	);
+}
+
+fn mcp_json_post<'a>(
+	client: &'a reqwest::Client,
+	url: &'a str,
+	body: &'a serde_json::Value,
+) -> reqwest::RequestBuilder {
+	client
+		.post(url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.json(body)
+}
+
+#[tokio::test]
 async fn stateless_to_stateful() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, false, false).await;

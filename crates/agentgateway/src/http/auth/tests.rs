@@ -226,6 +226,7 @@ async fn test_aws_sign_request_explicit_region() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: Some("us-west-2".to_string()),
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -282,6 +283,7 @@ async fn test_aws_sign_requestallback() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// Insert default AwsRegion into request extensions
@@ -314,6 +316,7 @@ async fn test_aws_sign_request_no_region_error() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -353,7 +356,7 @@ async fn test_aws_sign_request_implicit_with_extension() {
 		region: "ap-southeast-1".to_string(),
 	});
 
-	let aws_auth = AwsAuth::Implicit {};
+	let aws_auth = AwsAuth::Implicit { service_name: None };
 
 	// Should use region from request extensions
 	let result = aws::sign_request(&mut req, &aws_auth).await;

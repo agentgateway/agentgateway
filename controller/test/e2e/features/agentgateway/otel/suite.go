@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
@@ -72,7 +73,9 @@ func (s *testingSuite) TestOTelAccessLog() {
 // testOTelTracing makes a request to the httpbin service
 // and checks if the collector pod logs contain the expected trace lines.
 func (s *testingSuite) testOTelTracing() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(s.Ctx, "agw", "agentgateway-base", "Accepted", metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(s.Ctx, &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "agw", Namespace: "agentgateway-base"},
+	})
 
 	headerValue := fmt.Sprintf("%v", rand.Intn(10000)) //nolint:gosec // G404: Using math/rand for test trace identification
 	collectorPod, err := s.getCollectorPod()
@@ -120,7 +123,9 @@ func (s *testingSuite) testOTelTracing() {
 // testOTelAccessLog makes a request and checks the collector pod logs
 // for OTLP access log records.
 func (s *testingSuite) testOTelAccessLog() {
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwPolicyCondition(s.Ctx, "agw-accesslog", "agentgateway-base", "Accepted", metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAccepted(s.Ctx, &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "agw-accesslog", Namespace: "agentgateway-base"},
+	})
 
 	collectorPod, err := s.getCollectorPod()
 	s.Require().NoError(err, "Failed to resolve collector pod")

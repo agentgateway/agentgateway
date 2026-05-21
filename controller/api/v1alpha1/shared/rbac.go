@@ -17,7 +17,6 @@ type Authorization struct {
 	// `action` defines whether the rule allows, denies, or requires the request if
 	// matched. If unspecified, the default is `Allow`.
 	// Require policies are conjunctive across merged policies: all require policies must match.
-	// +kubebuilder:validation:Enum=Allow;Deny;Require
 	// +kubebuilder:default=Allow
 	// +optional
 	Action AuthorizationPolicyAction `json:"action,omitempty"`
@@ -43,6 +42,7 @@ type AuthorizationPolicy struct {
 
 // AuthorizationPolicyAction defines the action to take when the
 // `RBACPolicies` matches.
+// +k8s:enum
 type AuthorizationPolicyAction string
 
 const (

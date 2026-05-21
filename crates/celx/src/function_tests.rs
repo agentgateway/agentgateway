@@ -237,6 +237,37 @@ fn math() {
 	assert(json!(-7), "math.bitAnd(-3, -5)");
 	assert(json!(6u64), "math.bitXor(3u, 5u)");
 	assert(json!(2), "math.bitXor(1, 3)");
+	assert(
+		json!("AQ=="),
+		r#"base64.encode(math.bitAnd(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("Bw=="),
+		r#"base64.encode(math.bitOr(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("Bg=="),
+		r#"base64.encode(math.bitXor(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("AAE="),
+		r#"base64.encode(math.bitAnd(base64.decode("AAE="), base64.decode("AQ==")))"#,
+	);
+	assert(json!(4), r#"math.bitAnd(0x4, base64.decode("BQ=="))"#);
+	assert(json!(0), r#"math.bitAnd(0x2, base64.decode("BQ=="))"#);
+	assert(json!(4), r#"math.bitAnd(base64.decode("BQ=="), 0x4)"#);
+	assert(json!(4u64), r#"math.bitAnd(0x4u, base64.decode("BQ=="))"#);
+	assert(json!(4), r#"math.bitAnd(0x4, base64.decode("AQAF"))"#);
+	assert(
+		json!(true),
+		r#"base64.decode("BQ==").with(user, {
+			"read": 0x4,
+			"rwx": 0x5,
+			"rw": 0x7,
+		}.with(tools, tools.filter(x, math.bitAnd(tools[x], user) == tools[x]).with(allowed,
+			allowed.size() == 2 && allowed.contains("read") && allowed.contains("rwx")
+		)))"#,
+	);
 	assert(json!(-2), "math.bitNot(1)");
 	assert(json!(u64::MAX), "math.bitNot(0u)");
 	assert(json!(4), "math.bitShiftLeft(1, 2)");
@@ -251,6 +282,11 @@ fn math() {
 	assert(json!(0), "math.bitShiftRight(-1024, 64)");
 	assert_fails("math.bitShiftLeft(1, -1)");
 	assert_fails("math.bitAnd(1, 2u)");
+	assert_fails(&format!(
+		r#"math.bitAnd(base64.decode("{}"), b"\x01")"#,
+		base64::Engine::encode(&base64::prelude::BASE64_STANDARD, vec![0u8; 33])
+	));
+	assert_fails(r#"math.bitAnd(-1, base64.decode("BQ=="))"#);
 }
 
 #[test]

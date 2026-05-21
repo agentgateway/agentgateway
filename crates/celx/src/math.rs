@@ -1,8 +1,10 @@
 use std::cmp::Ordering;
 
 use cel::extractors::Argument;
-use cel::objects::{ListValue, ValueType};
+use cel::objects::{BytesValue, ListValue, ValueType};
 use cel::{Context, ExecutionError, FunctionContext, ResolveResult, Value};
+
+const MAX_BYTES_BIT_OP_LEN: usize = 32;
 
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_qualified_function("math", "least", least);
@@ -178,7 +180,7 @@ fn bit_and<'a>(
 	left: Argument,
 	right: Argument,
 ) -> ResolveResult<'a> {
-	bit_pair(ftx, left, right, |l, r| l & r, |l, r| l & r)
+	bit_pair(ftx, left, right, |l, r| l & r)
 }
 
 fn bit_or<'a>(
@@ -186,7 +188,7 @@ fn bit_or<'a>(
 	left: Argument,
 	right: Argument,
 ) -> ResolveResult<'a> {
-	bit_pair(ftx, left, right, |l, r| l | r, |l, r| l | r)
+	bit_pair(ftx, left, right, |l, r| l | r)
 }
 
 fn bit_xor<'a>(
@@ -194,21 +196,109 @@ fn bit_xor<'a>(
 	left: Argument,
 	right: Argument,
 ) -> ResolveResult<'a> {
-	bit_pair(ftx, left, right, |l, r| l ^ r, |l, r| l ^ r)
+	bit_pair(ftx, left, right, |l, r| l ^ r)
 }
 
 fn bit_pair<'a>(
 	ftx: &mut FunctionContext<'a, '_>,
 	left: Argument,
 	right: Argument,
-	int_op: impl FnOnce(i64, i64) -> i64,
-	uint_op: impl FnOnce(u64, u64) -> u64,
+	op: impl Fn(u64, u64) -> u64 + Copy,
 ) -> ResolveResult<'a> {
-	match (left.load(ftx)?, right.load(ftx)?) {
-		(Value::Int(left), Value::Int(right)) => Ok(Value::Int(int_op(left, right))),
-		(Value::UInt(left), Value::UInt(right)) => Ok(Value::UInt(uint_op(left, right))),
+	let left = BitValue::try_from_value(left.load(ftx)?)?;
+	let right = BitValue::try_from_value(right.load(ftx)?)?;
+	match (left, right) {
+		(BitValue::Int(left), BitValue::Int(right)) => {
+			Ok(Value::Int(op(left as u64, right as u64) as i64))
+		},
+		(BitValue::UInt(left), BitValue::UInt(right)) => Ok(Value::UInt(op(left, right))),
+		(BitValue::Bytes(left), BitValue::Bytes(right)) => {
+			bit_pair_bytes(ftx, left.as_ref(), right.as_ref(), op)
+		},
+		(BitValue::Int(left), BitValue::Bytes(right))
+		| (BitValue::Bytes(right), BitValue::Int(left)) => Ok(Value::Int(op(
+			non_negative_i64(ftx, left)?,
+			bytes_low_u64(right.as_ref()),
+		) as i64)),
+		(BitValue::UInt(left), BitValue::Bytes(right))
+		| (BitValue::Bytes(right), BitValue::UInt(left)) => {
+			Ok(Value::UInt(op(left, bytes_low_u64(right.as_ref()))))
+		},
 		_ => Err(ExecutionError::NoSuchOverload),
 	}
+}
+
+enum BitValue<'a> {
+	Int(i64),
+	UInt(u64),
+	Bytes(BytesValue<'a>),
+}
+
+impl<'a> BitValue<'a> {
+	fn try_from_value(value: Value<'a>) -> Result<Self, ExecutionError> {
+		Ok(match value {
+			Value::Int(value) => Self::Int(value),
+			Value::UInt(value) => Self::UInt(value),
+			Value::Bytes(value) => Self::Bytes(value),
+			_ => return Err(ExecutionError::NoSuchOverload),
+		})
+	}
+}
+
+fn bit_pair_bytes<'a>(
+	ftx: &FunctionContext<'a, '_>,
+	left: &[u8],
+	right: &[u8],
+	op: impl Fn(u64, u64) -> u64,
+) -> ResolveResult<'a> {
+	check_bytes_bit_op_len(ftx, left)?;
+	check_bytes_bit_op_len(ftx, right)?;
+
+	let len = left.len().max(right.len());
+	let mut result = Vec::with_capacity(len);
+	for i in 0..len {
+		let left = byte_from_right(left, len, i);
+		let right = byte_from_right(right, len, i);
+		result.push(op(left as u64, right as u64) as u8);
+	}
+	Ok(result.into())
+}
+
+fn non_negative_i64(ftx: &FunctionContext<'_, '_>, value: i64) -> Result<u64, ExecutionError> {
+	if value < 0 {
+		return Err(ftx.error("bytes bit operations require non-negative integer operands"));
+	}
+	Ok(value as u64)
+}
+
+fn byte_from_right(bytes: &[u8], padded_len: usize, index: usize) -> u8 {
+	let offset = padded_len - bytes.len();
+	index
+		.checked_sub(offset)
+		.and_then(|i| bytes.get(i))
+		.copied()
+		.unwrap_or(0)
+}
+
+fn bytes_low_u64(bytes: &[u8]) -> u64 {
+	bytes
+		.iter()
+		.rev()
+		.take(8)
+		.enumerate()
+		.fold(0, |acc, (i, b)| acc | ((*b as u64) << (i * 8)))
+}
+
+fn check_bytes_bit_op_len(
+	ftx: &FunctionContext<'_, '_>,
+	bytes: &[u8],
+) -> Result<(), ExecutionError> {
+	if bytes.len() > MAX_BYTES_BIT_OP_LEN {
+		return Err(ftx.error(format!(
+			"bytes bit operations support at most {MAX_BYTES_BIT_OP_LEN} bytes"
+		)));
+	}
+	Ok(())
 }
 
 fn bit_not<'a>(ftx: &mut FunctionContext<'a, '_>, value: Argument) -> ResolveResult<'a> {

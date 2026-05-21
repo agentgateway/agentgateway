@@ -11,8 +11,10 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/tests/base"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
@@ -284,12 +286,11 @@ func (s *testingSuite) waitDynamicReady() {
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "admin-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "user-mcp-backend", "default", "Accepted", metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(
-		s.Ctx, "dynamic-mcp-route", "default",
-		gwv1.RouteConditionAccepted, metav1.ConditionTrue,
-	)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAllAccepted(s.Ctx, []client.Object{
+		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "admin-mcp-backend", Namespace: "default"}},
+		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "user-mcp-backend", Namespace: "default"}},
+		&gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "dynamic-mcp-route", Namespace: "default"}},
+	})
 }
 
 func (s *testingSuite) waitStaticReady() {
@@ -298,8 +299,10 @@ func (s *testingSuite) waitStaticReady() {
 		metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=testbox"},
 	)
 	s.TestInstallation.AssertionsT(s.T()).EventuallyGatewayCondition(s.Ctx, gatewayName, gatewayNamespace, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyAgwBackendCondition(s.Ctx, "mcp-backend", "default", "Accepted", metav1.ConditionTrue)
-	s.TestInstallation.AssertionsT(s.T()).EventuallyHTTPRouteCondition(s.Ctx, "mcp-route", "default", gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	s.TestInstallation.AssertionsT(s.T()).EventuallyAllAccepted(s.Ctx, []client.Object{
+		&agentgateway.AgentgatewayBackend{ObjectMeta: metav1.ObjectMeta{Name: "mcp-backend", Namespace: "default"}},
+		&gwv1.HTTPRoute{ObjectMeta: metav1.ObjectMeta{Name: "mcp-route", Namespace: "default"}},
+	})
 }
 
 func (s *testingSuite) waitAuth0Ready() {

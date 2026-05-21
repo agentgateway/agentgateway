@@ -859,6 +859,10 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 
 	var accessKeyId, secretAccessKey string
 	var sessionToken *string
+	var serviceName string
+	if auth.ServiceName != nil {
+		serviceName = string(*auth.ServiceName)
+	}
 
 	// Get secret using the SecretIndex
 	secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
@@ -898,6 +902,7 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 						Region:          "",
 					},
 				},
+				ServiceName: serviceName,
 			},
 		},
 	}, errors.Join(errs...)
