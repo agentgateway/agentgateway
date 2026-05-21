@@ -29,13 +29,14 @@ use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
+use crate::llm::{AIProvider, custom, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
 	Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
+	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch,
+	SimpleBackendReference, Target,
 };
 use crate::types::backend;
 use crate::{read_body, *};
@@ -1116,6 +1117,82 @@ async fn llm_openai_tokenize() {
 		want,
 	)
 	.await;
+}
+
+fn setup_custom_llm_provider_backend_mock(
+	mock: MockServer,
+	supported_formats: Vec<custom::ProviderFormat>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let backend_name = "custom-ai";
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend(
+			backend_name,
+			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			supported_formats,
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	let io = t.serve_http(BIND_KEY);
+	(mock, t, io)
+}
+
+#[tokio::test]
+async fn llm_custom_provider_routes_to_provider_backend() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/chat/completions"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 503);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 0);
 }
 
 #[derive(Clone)]

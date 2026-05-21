@@ -24,12 +24,17 @@ use crate::http::ext_proc::proto::{
 };
 use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
+use crate::llm::custom;
 use crate::test_helpers::MockInstance;
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
 	response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
+use crate::types::agent::{
+	BackendTarget, BackendTrafficPolicy, PolicyTarget, SimpleBackendReference, Target, TargetedPolicy,
+};
+use crate::types::discovery::NamespacedHostname;
 use crate::*;
 
 // Processing-option decoding and default behavior.
@@ -2281,6 +2286,86 @@ mod standalone_inference_routing {
 			"gateway should consult EPP before rejecting the request",
 		);
 	}
+}
+
+#[tokio::test]
+async fn custom_llm_provider_service_backend_runs_inference_routing() {
+	let backend = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let backend_addr = *backend.address();
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let ext_proc = ExtProcMock::new({
+		let request_headers_seen = request_headers_seen.clone();
+		move || StandaloneInferenceRouter {
+			target: Some(backend_addr),
+			request_headers_seen: request_headers_seen.clone(),
+		}
+	})
+	.spawn()
+	.await;
+
+	let backend_name = "custom-ai";
+	let service = NamespacedHostname {
+		namespace: "default".into(),
+		hostname: STANDALONE_SERVICE_NAME.into(),
+	};
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend(
+			backend_name,
+			SimpleBackendReference::Service {
+				name: service.clone(),
+				port: STANDALONE_SERVICE_PORT,
+			},
+			vec![custom::ProviderFormat::Completions],
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	configure_standalone_service(&t);
+	t.with_policy(TargetedPolicy {
+		key: "custom-provider-epp".into(),
+		name: None,
+		target: PolicyTarget::Backend(BackendTarget::Service {
+			hostname: service.hostname.clone(),
+			namespace: service.namespace.clone(),
+			port: Some(STANDALONE_SERVICE_PORT),
+		}),
+		policy: BackendTrafficPolicy::InferenceRouting(ext_proc::InferenceRouting {
+			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+				ext_proc.address,
+			))),
+			destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+			failure_mode: ext_proc::FailureMode::FailClosed,
+		})
+		.into(),
+	});
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = read_body_raw(res.into_body()).await;
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"provider service backend should consult EPP",
+	);
+	assert_eq!(
+		backend
+			.received_requests()
+			.await
+			.expect("backend recording should be enabled")
+			.len(),
+		1,
+		"EPP-selected backend should receive the LLM request",
+	);
 }
 
 // Shared ext_proc mock handlers used by the end-to-end tests above and below.
