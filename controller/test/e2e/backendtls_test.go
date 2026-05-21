@@ -32,7 +32,7 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 			Namespace: base.Namespace,
 		},
 	}
-	err := t.TestInstallation.ClusterContext.CachedClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
+	err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
 	assert.NoError(t, err)
 
 	t.Send("example.com", base.ExpectOK())
@@ -61,7 +61,7 @@ func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, in
 	retry.UntilSuccessOrFail(t, func() error {
 		tlsPol := &gwv1.BackendTLSPolicy{}
 		objKey := client.ObjectKeyFromObject(policy)
-		if err := t.TestInstallation.ClusterContext.CachedClient.Get(t.Ctx, objKey, tlsPol); err != nil {
+		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, objKey, tlsPol); err != nil {
 			return err
 		}
 

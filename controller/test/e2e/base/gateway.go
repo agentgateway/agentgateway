@@ -127,7 +127,7 @@ func shouldUsePortForward() bool {
 
 func setupGatewayPortForwards(ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) (string, map[int]int, error) {
 	svc := &corev1.Service{}
-	if err := installation.ClusterContext.CachedClient.Get(ctx, name, svc); err != nil {
+	if err := installation.ClusterContext.ControllerClient.Get(ctx, name, svc); err != nil {
 		return "", nil, fmt.Errorf("failed to get gateway service %s/%s: %w", name.Namespace, name.Name, err)
 	}
 	if len(svc.Spec.Ports) == 0 {

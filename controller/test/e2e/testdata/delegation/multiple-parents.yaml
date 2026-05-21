@@ -73,5 +73,6 @@ spec:
         type: Exact
         value: /anything/team2/foo
     backendRefs:
-    - name: svc2
-      port: 8000
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: svc2

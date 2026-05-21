@@ -84,8 +84,9 @@ spec:
         name: queryX
         value: valX
     backendRefs:
-    - name: svc1
-      port: 8000
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: svc1
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -112,5 +113,6 @@ spec:
         name: queryX
         value: valX
     backendRefs:
-    - name: svc2
-      port: 8000
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: svc2

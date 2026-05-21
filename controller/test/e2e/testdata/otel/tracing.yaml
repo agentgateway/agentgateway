@@ -12,7 +12,7 @@ spec:
     tracing:
       backendRef:
         name: opentelemetry-collector
-        namespace: default
+        namespace: agentgateway-base
         port: 4317
       protocol: GRPC
       clientSampling: "true"

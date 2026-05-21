@@ -27,8 +27,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
-const selfManagedGatewayAnnotation = "e2e.agentgateway.dev/self-managed"
-
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
 func (s *Test) applyManifests(manifests ...string) {
@@ -41,13 +39,7 @@ func (s *Test) applyManifests(manifests ...string) {
 	done()
 
 	manifestResources := s.loadManifestResources(manifests...)
-	done = traceStep(s, "manifest resources ready")
-	assertions.EventuallyObjectsExist(s, manifestResources...)
-	done()
 	dynamicResources := s.loadDynamicResources(manifestResources)
-	done = traceStep(s, "dynamic resources ready")
-	assertions.EventuallyObjectsExist(s, dynamicResources...)
-	done()
 
 	allResources := slices.Concat(manifestResources, dynamicResources)
 	for _, resource := range allResources {
@@ -160,7 +152,7 @@ func (s *Test) setupHelpers() {
 func (s *Test) loadManifestResources(manifests ...string) []client.Object {
 	var resources []client.Object
 	for _, manifest := range manifests {
-		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.CachedClient.Scheme(), s.validator)
+		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.ControllerClient.Scheme(), s.validator)
 		istioassert.NoError(s, err)
 		resources = append(resources, objs...)
 	}
@@ -171,23 +163,16 @@ func (s *Test) loadDynamicResources(manifestResources []client.Object) []client.
 	var dynamicResources []client.Object
 	for _, obj := range manifestResources {
 		if gw, ok := obj.(*gwv1.Gateway); ok {
-			if !IsSelfManagedGateway(gw) {
-				proxyObjectMeta := metav1.ObjectMeta{
-					Name:      gw.GetName(),
-					Namespace: gw.GetNamespace(),
-				}
-				proxyResources := []client.Object{
-					&appsv1.Deployment{ObjectMeta: proxyObjectMeta},
-					&corev1.Service{ObjectMeta: proxyObjectMeta},
-				}
-				dynamicResources = append(dynamicResources, proxyResources...)
+			proxyObjectMeta := metav1.ObjectMeta{
+				Name:      gw.GetName(),
+				Namespace: gw.GetNamespace(),
 			}
+			proxyResources := []client.Object{
+				&appsv1.Deployment{ObjectMeta: proxyObjectMeta},
+				&corev1.Service{ObjectMeta: proxyObjectMeta},
+			}
+			dynamicResources = append(dynamicResources, proxyResources...)
 		}
 	}
 	return dynamicResources
-}
-
-func IsSelfManagedGateway(gw *gwv1.Gateway) bool {
-	val, ok := gw.Annotations[selfManagedGatewayAnnotation]
-	return ok && strings.EqualFold(val, "true")
 }

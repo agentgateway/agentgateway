@@ -50,9 +50,9 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 	istio.SetDefaultApplyNamespace("default")
 
 	return &Context{
-		Name:         clusterName,
-		KubeContext:  kubeCtx,
-		CachedClient: clt,
-		Client:       istio,
+		Name:             clusterName,
+		KubeContext:      kubeCtx,
+		ControllerClient: clt,
+		Client:           istio,
 	}
 }

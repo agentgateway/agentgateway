@@ -18,7 +18,7 @@ type Context struct {
 	KubeContext string
 
 	// A client to perform CRUD operations on the Kubernetes Cluster
-	CachedClient client.Client
+	ControllerClient client.Client
 
 	// A client to perform CRUD operations on the Kubernetes Cluster
 	Client kubelib.CLIClient

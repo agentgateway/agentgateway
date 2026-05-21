@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: otel-collector-config
-  namespace: default
+  namespace: agentgateway-base
 data:
   otel-collector-config: |
     receivers:
@@ -37,7 +37,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: opentelemetry-collector
-  namespace: default
+  namespace: agentgateway-base
   labels:
     app.kubernetes.io/name: opentelemetry-collector
     app.kubernetes.io/component: standalone-collector
@@ -80,7 +80,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: opentelemetry-collector
-  namespace: default
+  namespace: agentgateway-base
   labels:
     app.kubernetes.io/name: opentelemetry-collector
 spec:

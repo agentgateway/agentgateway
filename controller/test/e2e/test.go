@@ -283,12 +283,12 @@ func (i *TestInstallation) preFailHandler(ctx context.Context, t *testing.T, dir
 	})
 
 	// Dump the logs and state of the cluster
-	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.ClusterContext.CachedClient, i.ClusterContext.Client.Kube(), dir, namespaces)
+	helpers.StandardAgentgatewayDumpOnFail(os.Stdout, i.ClusterContext.ControllerClient, i.ClusterContext.Client.Kube(), dir, namespaces)
 }
 
 func (i *TestInstallation) releaseExists(ctx context.Context, releaseName, namespace string) bool {
 	l := &corev1.SecretList{}
-	if err := i.ClusterContext.CachedClient.List(ctx, l, &client.ListOptions{
+	if err := i.ClusterContext.ControllerClient.List(ctx, l, &client.ListOptions{
 		Namespace: namespace,
 		LabelSelector: labels.SelectorFromSet(map[string]string{
 			"owner": "helm",

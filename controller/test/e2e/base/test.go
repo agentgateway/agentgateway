@@ -12,6 +12,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/onsi/gomega"
 	"istio.io/istio/pkg/config/crd"
+	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -77,6 +78,12 @@ func (s *Test) Run(name string, f func(t Test)) bool {
 		child.T = t
 		f(child)
 	})
+}
+func init() {
+	for _, s := range istiolog.Scopes() {
+		s.SetOutputLevel(istiolog.DebugLevel)
+	}
+	istiolog.EnableKlogWithVerbosity(6)
 }
 
 func (s *Test) Setup() {

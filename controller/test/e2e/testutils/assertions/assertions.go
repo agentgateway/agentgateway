@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -22,20 +21,6 @@ import (
 )
 
 const agentgatewayLabelSelector = "app.kubernetes.io/name=agentgateway"
-
-func EventuallyObjectsExist(t Test, objects ...client.Object) {
-	t.Helper()
-	ctx := t.E2EContext()
-	c := t.E2EClusterContext().CachedClient
-	for _, o := range objects {
-		retry.UntilSuccessOrFail(t, func() error {
-			if err := c.Get(ctx, client.ObjectKeyFromObject(o), o); err != nil {
-				return fmt.Errorf("object %s %s should be available in cluster: %w", o.GetObjectKind().GroupVersionKind().String(), client.ObjectKeyFromObject(o).String(), err)
-			}
-			return nil
-		})
-	}
-}
 
 func EventuallyPodsRunning(t Test, podNamespace string, listOpt metav1.ListOptions) {
 	t.Helper()
@@ -69,7 +54,7 @@ func EventuallyGatewayCondition(t Test, gatewayName string, gatewayNamespace str
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		gw := &gwv1.Gateway{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
 			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
 		}
 		return expectMatch(gw.Status.Conditions, matchers.HaveCondition(string(cond), expect), "Gateway %s/%s condition %s=%s", gatewayNamespace, gatewayName, cond, expect)
@@ -80,7 +65,7 @@ func EventuallyGatewayListenerAttachedRoutes(t Test, gatewayName string, gateway
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		gw := &gwv1.Gateway{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
 			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
 		}
 		for _, l := range gw.Status.Listeners {
@@ -99,7 +84,7 @@ func EventuallyHTTPRouteCondition(t Test, routeName string, routeNamespace strin
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		route := &gwv1.HTTPRoute{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: routeName, Namespace: routeNamespace}, route); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: routeName, Namespace: routeNamespace}, route); err != nil {
 			return fmt.Errorf("failed to get HTTPRoute %s/%s: %w", routeNamespace, routeName, err)
 		}
 		return expectMatch(extractParentConditions(route.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "HTTPRoute %s/%s parent condition %s=%s", routeNamespace, routeName, cond, expect)
@@ -110,7 +95,7 @@ func EventuallyGRPCRouteCondition(t Test, routeName string, routeNamespace strin
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		route := &gwv1.GRPCRoute{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: routeName, Namespace: routeNamespace}, route); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: routeName, Namespace: routeNamespace}, route); err != nil {
 			return fmt.Errorf("failed to get GRPCRoute %s/%s: %w", routeNamespace, routeName, err)
 		}
 		return expectMatch(extractParentConditions(route.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "GRPCRoute %s/%s parent condition %s=%s", routeNamespace, routeName, cond, expect)
@@ -121,7 +106,7 @@ func EventuallyInferencePoolCondition(t Test, poolName string, poolNamespace str
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		pool := &inf.InferencePool{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: poolName, Namespace: poolNamespace}, pool); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: poolName, Namespace: poolNamespace}, pool); err != nil {
 			return fmt.Errorf("failed to get InferencePool %s/%s: %w", poolNamespace, poolName, err)
 		}
 		return expectMatch(extractInferencePoolParentConditions(pool.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "InferencePool %s/%s parent condition %s=%s", poolNamespace, poolName, cond, expect)
@@ -132,7 +117,7 @@ func EventuallyAgwBackendCondition(t Test, name string, namespace string, condit
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		backend := &agentgateway.AgentgatewayBackend{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, backend); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, backend); err != nil {
 			return fmt.Errorf("failed to get AgentgatewayBackend %s/%s: %w", namespace, name, err)
 		}
 		return expectMatch(backend.Status.Conditions, matchers.HaveCondition(condition, expect), "AgentgatewayBackend %s/%s condition %s=%s", namespace, name, condition, expect)
@@ -143,7 +128,7 @@ func EventuallyAgwPolicyCondition(t Test, name string, namespace string, condTyp
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
 		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.E2EClusterContext().CachedClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, policy); err != nil {
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, policy); err != nil {
 			return fmt.Errorf("failed to get AgentgatewayPolicy %s/%s: %w", namespace, name, err)
 		}
 		return expectMatch(extractAgwPolicyAncestorConditions(policy.Status.Ancestors), matchers.HaveAnyAncestorCondition(condType, expect), "AgentgatewayPolicy %s/%s ancestor condition %s=%s", namespace, name, condType, expect)
@@ -155,7 +140,7 @@ func EventuallyGatewayAddress(t test.Failer, ctx context.Context, clusterContext
 	var addr string
 	retry.UntilSuccessOrFail(t, func() error {
 		gw := &gwv1.Gateway{}
-		if err := clusterContext.CachedClient.Get(ctx, ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+		if err := clusterContext.ControllerClient.Get(ctx, ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
 			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
 		}
 		if len(gw.Status.Addresses) == 0 {

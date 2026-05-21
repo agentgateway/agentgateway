@@ -53,8 +53,9 @@ spec:
         type: PathPrefix
         value: /anything/team1/foo
     backendRefs:
-    - name: svc1
-      port: 8000
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: svc1
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -73,5 +74,6 @@ spec:
         type: Exact
         value: /anything/team2/foo
     backendRefs:
-    - name: svc2
-      port: 8000
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: svc2

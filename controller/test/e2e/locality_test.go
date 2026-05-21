@@ -55,7 +55,7 @@ func setupLocality(t base.Test) []weSpec {
 	assertions.EventuallyHTTPRouteCondition(t, localityRouteName, localityNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
 
 	t.Cleanup(func() {
-		_ = t.TestInstallation.ClusterContext.CachedClient.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
+		_ = t.TestInstallation.ClusterContext.ControllerClient.DeleteAllOf(t.Ctx, workloadEntry(), client.InNamespace(localityNamespace))
 	})
 	return workloadEntries
 }
@@ -130,7 +130,7 @@ func deleteWorkloadEntry(t base.Test, name string) {
 	we := workloadEntry()
 	we.SetName(name)
 	we.SetNamespace(localityNamespace)
-	err := t.TestInstallation.ClusterContext.CachedClient.Delete(t.Ctx, we)
+	err := t.TestInstallation.ClusterContext.ControllerClient.Delete(t.Ctx, we)
 	err = client.IgnoreNotFound(err)
 	assert.NoError(t, err)
 }

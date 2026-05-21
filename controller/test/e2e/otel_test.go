@@ -27,7 +27,7 @@ const (
 
 func TestOTel(tt *testing.T) {
 	t := New(tt)
-	t.Apply(otelManifest("setup.yaml"))
+	t.ApplyPersistent(otelManifest("setup.yaml"))
 
 	t.Run("Tracing", func(t base.Test) {
 		testOTelTracing(t)
@@ -124,10 +124,10 @@ func otelManifest(name string) string {
 
 func getCollectorPod(t base.Test) (string, error) {
 	pods := &corev1.PodList{}
-	err := t.TestInstallation.ClusterContext.CachedClient.List(
+	err := t.TestInstallation.ClusterContext.ControllerClient.List(
 		t.Ctx,
 		pods,
-		client.InNamespace("default"),
+		client.InNamespace(base.Namespace),
 		client.MatchingLabels{"app.kubernetes.io/name": "opentelemetry-collector"},
 	)
 	if err != nil {
@@ -160,7 +160,7 @@ func getCollectorLogs(t base.Test) (string, error) {
 		return "", err
 	}
 	stream, err := t.TestInstallation.ClusterContext.Client.Kube().CoreV1().
-		Pods("default").
+		Pods(base.Namespace).
 		GetLogs(pod, &corev1.PodLogOptions{}).
 		Stream(t.Ctx)
 	if err != nil {

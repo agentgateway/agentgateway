@@ -13,7 +13,7 @@ spec:
       otlp:
         backendRef:
           name: opentelemetry-collector
-          namespace: default
+          namespace: agentgateway-base
           port: 4317
         protocol: GRPC
 ---

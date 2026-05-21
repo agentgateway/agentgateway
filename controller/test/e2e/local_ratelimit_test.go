@@ -6,12 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 func TestLocalRateLimit(tt *testing.T) {
@@ -37,12 +32,6 @@ func testLocalRateLimitForRoute(t base.Test) {
 		manifest("rate-limit", "local", "route-local-rate-limit.yaml"),
 	)
 
-	assertions.EventuallyObjectsExist(t,
-		httpRoute("svc-route"),
-		httpRoute("svc-route-2"),
-		agwPolicy("route-rl-policy"),
-	)
-
 	t.Send("example.com/path1", base.ExpectOK())
 	t.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
 	t.Send("example.com/path2", base.ExpectOK())
@@ -53,31 +42,7 @@ func testLocalRateLimitForGateway(t base.Test) {
 		manifest("rate-limit", "local", "gw-local-rate-limit.yaml"),
 	)
 
-	assertions.EventuallyObjectsExist(t,
-		httpRoute("svc-route"),
-		httpRoute("svc-route-2"),
-		agwPolicy("gw-rl-policy"),
-	)
-
 	t.Send("example.com/path1", base.ExpectOK())
 	t.Send("example.com/path1", base.Expect(http.StatusTooManyRequests))
 	t.Send("example.com/path2", base.Expect(http.StatusTooManyRequests))
-}
-
-func httpRoute(name string) *gwv1.HTTPRoute {
-	return &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: base.Namespace,
-		},
-	}
-}
-
-func agwPolicy(name string) *agentgateway.AgentgatewayPolicy {
-	return &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: base.Namespace,
-		},
-	}
 }
