@@ -2030,11 +2030,16 @@ fn external_auth_from_proto(
 		.cache
 		.as_ref()
 		.map(|cache| {
-			let key = cache
+			let key: Vec<_> = cache
 				.key
 				.iter()
 				.map(|expr| permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.cache.key", expr))
 				.collect();
+			if key.is_empty() {
+				return Err(ProtoError::Generic(
+					"traffic.extAuthz.cache.key must contain at least one expression".to_string(),
+				));
+			}
 			let ttl = cache
 				.ttl
 				.as_ref()

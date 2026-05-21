@@ -1509,7 +1509,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
@@ -1637,7 +1637,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
@@ -2318,7 +2318,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -3422,7 +3422,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -4501,7 +4501,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -5543,7 +5543,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extAuthz.service`|object||
@@ -5671,7 +5671,7 @@
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`binds[].listeners[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`binds[].listeners[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`binds[].listeners[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extProc`|object|Extend agentgateway with an external processor|
@@ -7652,7 +7652,7 @@
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`policies[].policy.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`policies[].policy.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extAuthz.service`|object||
@@ -7780,7 +7780,7 @@
 |`policies[].policy.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`policies[].policy.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`policies[].policy.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`policies[].policy.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extProc`|object|Extend agentgateway with an external processor|
@@ -8456,7 +8456,7 @@
 |`backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`backends[].ai.policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -9560,7 +9560,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -10638,7 +10638,7 @@
 |`backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`backends[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -12894,7 +12894,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extAuthz.service`|object||
@@ -13022,7 +13022,7 @@
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
@@ -13703,7 +13703,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -14807,7 +14807,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -15886,7 +15886,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
@@ -17789,7 +17789,7 @@
 |`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`llm.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`llm.policies.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extAuthz.service`|object||
@@ -17917,7 +17917,7 @@
 |`llm.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`llm.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`llm.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`llm.policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extProc`|object|Extend agentgateway with an external processor|
@@ -19865,7 +19865,7 @@
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`mcp.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`mcp.policies.extAuthz.conditional[].cache.ttl`|string|How long cached authorization results are reused.|
 |`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extAuthz.service`|object||
@@ -19993,7 +19993,7 @@
 |`mcp.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
 |`mcp.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
-|`mcp.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
 |`mcp.policies.extAuthz.cache.ttl`|string|How long cached authorization results are reused.|
 |`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extProc`|object|Extend agentgateway with an external processor|

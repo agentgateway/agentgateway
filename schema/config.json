@@ -4492,12 +4492,12 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "CEL expressions that make up the cache key.",
+          "description": "Non-empty list of CEL expressions that make up the cache key.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Expression"
           },
-          "default": []
+          "minItems": 1
         },
         "ttl": {
           "description": "How long cached authorization results are reused.",
@@ -4513,6 +4513,7 @@
       },
       "additionalProperties": false,
       "required": [
+        "key",
         "ttl"
       ]
     },

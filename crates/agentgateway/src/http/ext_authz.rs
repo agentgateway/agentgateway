@@ -127,8 +127,8 @@ impl Default for Protocol {
 
 #[apply(schema!)]
 pub struct CacheConfig {
-	/// CEL expressions that make up the cache key.
-	#[serde(default)]
+	/// Non-empty list of CEL expressions that make up the cache key.
+	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
 	pub key: Vec<Arc<cel::Expression>>,
 	/// How long cached authorization results are reused.
 	#[serde(with = "serde_dur")]
@@ -190,6 +190,9 @@ impl ExtAuthz {
 		let Some(cache) = &self.cache else {
 			return None;
 		};
+		if cache.key.is_empty() {
+			return None;
+		}
 		let exec = cel::Executor::new_request(req);
 		let values = cache
 			.key
@@ -599,10 +602,17 @@ impl ExtAuthz {
 		let Some(cache) = &self.cache else {
 			return;
 		};
+		let Some(expires_at) = Instant::now().checked_add(cache.ttl) else {
+			warn!(
+				ttl = ?cache.ttl,
+				"skipping ext_authz cache insert because ttl overflows Instant"
+			);
+			return;
+		};
 		self.cache_store.insert(
 			key,
 			CachedGrpcResponse {
-				expires_at: Instant::now() + cache.ttl,
+				expires_at,
 				response,
 			},
 		);
