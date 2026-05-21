@@ -106,26 +106,21 @@ impl Relay {
 
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
 	/// multiplexed URI of the form `service+scheme://rest`.
-	pub fn parse_resource_uri<'a>(
-		&'a self,
-		uri: &str,
-	) -> Result<(&'a str, String), UpstreamError> {
+	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
 		} else {
 			// URI format: "service+scheme://rest"
-			let plus_pos = uri.find('+').ok_or_else(|| {
-				UpstreamError::InvalidRequest("invalid resource URI".to_string())
-			})?;
+			let plus_pos = uri
+				.find('+')
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
 			let service_name = &uri[..plus_pos];
 			let original_uri = &uri[plus_pos + 1..];
 			// Validate that the extracted service name corresponds to a known upstream
 			let validated_name = self
 				.upstreams
 				.get_name(service_name)
-				.ok_or_else(|| {
-					UpstreamError::InvalidRequest(format!("unknown service {service_name}"))
-				})?;
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
 			Ok((validated_name, original_uri.to_string()))
 		}
 	}

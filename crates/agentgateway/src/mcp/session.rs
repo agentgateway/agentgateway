@@ -465,10 +465,7 @@ impl Session {
 							&cel,
 						)?;
 						rrr.params.uri = original_uri;
-						self
-							.relay
-							.send_single(r, ctx, service_name, None)
-							.await
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::SubscribeRequest(sr) => {
 						let uri = sr.params.uri.clone();
@@ -482,10 +479,7 @@ impl Session {
 							&cel,
 						)?;
 						sr.params.uri = original_uri;
-						self
-							.relay
-							.send_single(r, ctx, service_name, None)
-							.await
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
 						let uri = ur.params.uri.clone();
@@ -499,10 +493,7 @@ impl Session {
 							&cel,
 						)?;
 						ur.params.uri = original_uri;
-						self
-							.relay
-							.send_single(r, ctx, service_name, None)
-							.await
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 
 					ClientRequest::ListTasksRequest(_)
@@ -513,31 +504,28 @@ impl Session {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
-					ClientRequest::CompleteRequest(cr) => {
-						match &cr.params.r#ref {
-							Reference::Prompt(prompt) => {
-								let name = prompt.name.clone();
-								let (service_name, prompt_name) =
-									self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
-								cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
-								self.relay.send_single(r, ctx, service_name, None).await
-							},
-							Reference::Resource(resource) => {
-								let uri = resource.uri.clone();
-								let (service_name, original_uri) =
-									self.relay.parse_resource_uri(&uri)?;
-								self.authorize_resource_request(
-									service_name,
-									&original_uri,
-									&method,
-									&mut span,
-									&log,
-									&cel,
-								)?;
-								cr.params.r#ref = Reference::for_resource(original_uri);
-								self.relay.send_single(r, ctx, service_name, None).await
-							},
-						}
+					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
+						Reference::Prompt(prompt) => {
+							let name = prompt.name.clone();
+							let (service_name, prompt_name) =
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
+						Reference::Resource(resource) => {
+							let uri = resource.uri.clone();
+							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+							self.authorize_resource_request(
+								service_name,
+								&original_uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							cr.params.r#ref = Reference::for_resource(original_uri);
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
 					},
 				}
 			},
