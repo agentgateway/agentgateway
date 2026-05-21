@@ -212,8 +212,17 @@ export type AwsAuth =
       secretAccessKey: string;
       region?: string | null;
       sessionToken?: string | null;
+      /**
+       * AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+       */
+      serviceName?: string | null;
     }
-  | {};
+  | {
+      /**
+       * AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+       */
+      serviceName?: string | null;
+    };
 export type AzureAuth =
   | {
       explicitConfig:
@@ -1956,7 +1965,7 @@ export interface LocalAPIKeys {
   /**
    * Validation mode for API keys
    */
-  mode?: "strict" | "optional";
+  mode?: "strict" | "optional" | "permissive";
   location?:
     | {
         header: {
@@ -2473,9 +2482,13 @@ export interface LocalLLMModels {
    */
   responseHeaders?: HeaderModifier | null;
   /**
-   * backendTLS configures TLS when connecting to the LLM provider.
+   * tls configures TLS when connecting to the LLM provider.
    */
-  backendTLS?: LocalBackendTLS | null;
+  tls?: LocalBackendTLS | null;
+  /**
+   * auth configures authentication when connecting to the LLM provider.
+   */
+  auth?: BackendAuth | null;
   /**
    * health configures outlier detection for this model backend.
    */
@@ -2527,14 +2540,21 @@ export interface LocalLLMParams {
    */
   azureProjectName?: string | null;
   /**
+   * Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
+   */
+  baseUrl?: string | null;
+  /**
+   * @deprecated
    * Override the upstream host for this provider.
    */
   hostOverride?: string | null;
   /**
+   * @deprecated
    * Override the upstream path for this provider.
    */
   pathOverride?: string | null;
   /**
+   * @deprecated
    * Override the default base path prefix for this provider.
    */
   pathPrefix?: string | null;
