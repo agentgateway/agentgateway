@@ -228,8 +228,68 @@ impl ProxyError {
 			_ => false,
 		}
 	}
+
+	pub fn external_message(&self) -> &'static str {
+		match self {
+			ProxyError::BindNotFound => "bind not found",
+			ProxyError::ListenerNotFound => "listener not found",
+			ProxyError::RouteNotFound => "route not found",
+			ProxyError::RouteCycleDetected => "route cycle detected",
+			ProxyError::MisdirectedRequest => "misdirected request",
+			ProxyError::NoValidBackends
+			| ProxyError::NoHealthyEndpoints
+			| ProxyError::BackendDoesNotExist
+			| ProxyError::ServiceNotFound
+			| ProxyError::InvalidBackendType
+			| ProxyError::MCP(mcp::Error::NoBackends) => "no backends available",
+			ProxyError::DnsResolution => "dns resolution failed",
+			ProxyError::FilterError(_) => "filter failed",
+			ProxyError::BackendUnsupportedMirror | ProxyError::Processing(_) | ProxyError::ProcessingString(_) => "internal error",
+			ProxyError::APIKeyAuthenticationFailure(_)
+			| ProxyError::BasicAuthenticationFailure(_)
+			| ProxyError::OidcFailure(_)
+			| ProxyError::JwtAuthenticationFailure(_)
+			| ProxyError::McpJwtAuthenticationFailure(_, _) => "authentication failed",
+			ProxyError::CsrfValidationFailed => "csrf validation failed",
+			ProxyError::ExternalAuthorizationFailed(_) | ProxyError::AuthorizationFailed => "authorization failed",
+			ProxyError::BackendAuthenticationFailed(_) => "backend authentication failed",
+			ProxyError::Body(_) => "request body error",
+			ProxyError::UpstreamCallFailed(e) => external_upstream_message(e),
+			ProxyError::UpstreamCallTimeout | ProxyError::RequestTimeout => "request timeout",
+			ProxyError::UpstreamTCPCallFailed(e) => external_upstream_message(e),
+			ProxyError::UpstreamTCPProxy(_) => "upstream connection failed",
+			ProxyError::Http(_) => "invalid http",
+			ProxyError::ExtProc(_) => "external processing failed",
+			ProxyError::RateLimitExceeded { .. } => "rate limit exceeded",
+			ProxyError::RateLimitFailed => "rate limit failed",
+			ProxyError::InvalidRequest => "invalid request",
+			ProxyError::UpgradeFailed(_, _) => "request upgrade failed",
+			ProxyError::MethodNotAllowed => "method not allowed",
+			ProxyError::MCP(mcp::Error::MethodNotAllowed) => "method not allowed",
+			ProxyError::MCP(mcp::Error::InvalidAccept) => "invalid accept header",
+			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => "invalid accept header",
+			ProxyError::MCP(mcp::Error::InvalidContentType) => "invalid content type",
+			ProxyError::MCP(mcp::Error::Deserialize(_)) => "invalid request body",
+			ProxyError::MCP(mcp::Error::StartSession(_)) => "failed to create session",
+			ProxyError::MCP(mcp::Error::UnknownSession) => "session not found",
+			ProxyError::MCP(mcp::Error::MissingSessionHeader) => "session header is required",
+			ProxyError::MCP(mcp::Error::SessionIdRequired) => "session id is required",
+			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => "invalid session id header",
+			ProxyError::MCP(mcp::Error::InvalidProtocolVersion) => "invalid protocol version",
+			ProxyError::MCP(mcp::Error::Stdio(_)) => "failed to start stdio server",
+			ProxyError::MCP(mcp::Error::SendError(_, _)) => "failed to send message",
+			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => "unknown resource",
+			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) => "invalid session id query",
+			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => "failed to establish stream",
+			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => "failed to forward message",
+			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => "failed to create sse url",
+			ProxyError::MCP(mcp::Error::OpenAPI(_)) => "failed to parse openapi",
+			ProxyError::MCP(mcp::Error::UpstreamError(_)) => "upstream error",
+		}
+	}
+
 	pub fn into_response_with_grpc(self, is_grpc_request: bool) -> Response {
-		let msg = self.to_string();
+		let msg = self.external_message();
 		let code = match self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
@@ -376,14 +436,14 @@ impl ProxyError {
 				)))
 				.unwrap();
 		}
-		if let ProxyError::MCP(ref e @ mcp::Error::SendError(ref id, _)) = self {
+		if let ProxyError::MCP(mcp::Error::SendError(ref id, _)) = self {
 			let err = if let Some(req_id) = id {
 				serde_json::to_string(&JsonRpcError {
 					jsonrpc: Default::default(),
 					id: req_id.clone(),
 					error: ErrorData {
 						code: ErrorCode::INTERNAL_ERROR,
-						message: format!("failed to send message: {e}",).into(),
+						message: msg.into(),
 						data: None,
 					},
 				})
@@ -391,19 +451,19 @@ impl ProxyError {
 			} else {
 				None
 			};
-			let msg = err.unwrap_or_else(|| format!("failed to send message: {e}"));
+			let msg = err.unwrap_or_else(|| msg.to_string());
 			return rb
 				.header("content-type", "application/json")
 				.body(http::Body::from(msg))
 				.unwrap();
 		}
-		if let ProxyError::MCP(ref e @ mcp::Error::Authorization(ref req_id, _, _)) = self {
+		if let ProxyError::MCP(mcp::Error::Authorization(ref req_id, _, _)) = self {
 			let msg = serde_json::to_string(&JsonRpcError {
 				jsonrpc: Default::default(),
 				id: req_id.clone(),
 				error: ErrorData {
 					code: ErrorCode::INVALID_PARAMS,
-					message: e.to_string().into(),
+					message: msg.into(),
 					data: None,
 				},
 			})
@@ -418,6 +478,23 @@ impl ProxyError {
 			.body(http::Body::from(msg))
 			.unwrap()
 	}
+}
+
+fn external_upstream_message(error: &(dyn std::error::Error + 'static)) -> &'static str {
+	let mut current = Some(error);
+	while let Some(error) = current {
+		if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+			return match io_error.kind() {
+				std::io::ErrorKind::ConnectionRefused => "connection refused",
+				std::io::ErrorKind::ConnectionReset => "connection reset",
+				std::io::ErrorKind::ConnectionAborted => "connection aborted",
+				std::io::ErrorKind::TimedOut => "connection timed out",
+				_ => "upstream connection failed",
+			};
+		}
+		current = error.source();
+	}
+	"upstream call failed"
 }
 
 fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Code {
@@ -559,7 +636,7 @@ mod tests {
 		);
 		assert_eq!(
 			response.headers().get("grpc-message").unwrap(),
-			"no%20healthy%20backends"
+			"no%20backends%20available"
 		);
 	}
 
@@ -602,5 +679,47 @@ mod tests {
 			grpc.headers().get("grpc-status").unwrap(),
 			&i32::from(Code::Unavailable).to_string()
 		);
+	}
+
+	#[test]
+	fn display_keeps_internal_error_detail() {
+		let err = ProxyError::ProcessingString("secret backend detail".to_string());
+
+		assert_eq!(err.to_string(), "processing failed: secret backend detail");
+		assert_eq!(err.external_message(), "processing failed");
+	}
+
+	#[tokio::test]
+	async fn http_error_response_uses_external_message() {
+		let response = ProxyError::ProcessingString("secret backend detail".to_string())
+			.into_response_with_grpc(false);
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		let body = crate::http::read_body_with_limit(response.into_body(), 100)
+			.await
+			.unwrap();
+		assert_eq!(body.as_ref(), b"processing failed");
+	}
+
+	#[test]
+	fn grpc_error_response_uses_external_message() {
+		let response = ProxyError::ProcessingString("secret backend detail".to_string())
+			.into_response_with_grpc(true);
+
+		assert_eq!(response.status(), StatusCode::OK);
+		assert_eq!(
+			response.headers().get("grpc-message").unwrap(),
+			"processing%20failed"
+		);
+	}
+
+	#[test]
+	fn external_message_preserves_safe_io_error_kind() {
+		let err = ProxyError::UpstreamTCPCallFailed(crate::http::Error::new(std::io::Error::from(
+			std::io::ErrorKind::ConnectionRefused,
+		)));
+
+		assert_eq!(err.external_message(), "connection refused");
+		assert!(err.to_string().contains("connection refused"));
 	}
 }
