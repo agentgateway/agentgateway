@@ -682,13 +682,6 @@ func buildAgwDestination(
 	return rb, nil
 }
 
-var allowedParentReferences = sets.New(
-	wellknown.GatewayGVK.GroupKind(),
-	wellknown.ListenerSetGVK.GroupKind(),
-	wellknown.ServiceGVK.GroupKind(),
-	wellknown.ServiceEntryGVK.GroupKind(),
-)
-
 // NormalizeReference applies Gateway API group/kind defaulting.
 // If group or kind are nil/empty, it uses the default GroupKind's group/kind.
 // Empty group is treated as "core" API group.
@@ -713,9 +706,9 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGK schema.Gro
 }
 
 // ToInternalParentReference converts a gwv1.ParentReference to a TypedNamespacedName.
-func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (utils.TypedNamespacedName, error) {
+func ToInternalParentReference(p gwv1.ParentReference, localNamespace string, allowed sets.Set[schema.GroupKind]) (utils.TypedNamespacedName, error) {
 	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK.GroupKind())
-	if !allowedParentReferences.Contains(ref) {
+	if !allowed.Contains(ref) {
 		return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
 	return utils.TypedNamespacedName{
@@ -847,9 +840,10 @@ func ReferenceAllowed(
 func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
+	allowed := ctx.References.AllowedParentReferences
 	var parentRefs []RouteParentReference
 	for _, ref := range routeRefs {
-		ir, err := ToInternalParentReference(ref, localNamespace)
+		ir, err := ToInternalParentReference(ref, localNamespace, allowed)
 		if err != nil {
 			continue
 		}
