@@ -189,11 +189,15 @@ type Gateway struct {
 
 var BaseGateway Gateway
 
+// Send sends a request through this Gateway and retries until the response matches.
+// Most tests should use Test.Send, which also parses a target string into host/path options.
 func (g *Gateway) Send(t test.Failer, match *matchers.HttpResponse, opts ...curl.Option) {
 	resp := g.SendWithResponse(t, match, opts...)
 	_ = resp.Body.Close()
 }
 
+// SendWithResponse is Send plus access to the successful http.Response.
+// The caller owns the response body and must close it.
 func (g *Gateway) SendWithResponse(t test.Failer, match *matchers.HttpResponse, opts ...curl.Option) http.Response {
 	t.Helper()
 

@@ -48,13 +48,9 @@ func TestAIBackend(tt *testing.T) {
 }
 
 func testAIBackendRouting(t base.Test) {
-	base.BaseGateway.Send(
-		t,
-		&testmatchers.HttpResponse{
-			StatusCode: http.StatusOK,
-			Body:       gomega.ContainSubstring(`The name of this project is agentgateway`),
-		},
-		curl.WithPath("/v1/chat/completions"),
+	t.Send(
+		"/v1/chat/completions",
+		base.ExpectBody(gomega.ContainSubstring(`The name of this project is agentgateway`)),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 	)
@@ -62,25 +58,17 @@ func testAIBackendRouting(t base.Test) {
 
 func testAIBackendPromptGuard(t base.Test) {
 	// Test request guard
-	base.BaseGateway.Send(
-		t,
-		&testmatchers.HttpResponse{
-			StatusCode: http.StatusForbidden,
-			Body:       gomega.ContainSubstring(`request rejected`),
-		},
-		curl.WithPath("/v1/chat/completions"),
+	t.Send(
+		"/v1/chat/completions",
+		base.ExpectForbidden(gomega.ContainSubstring(`request rejected`)),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "Return an example credit card number"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 	)
 
 	// Test response guard
-	base.BaseGateway.Send(
-		t,
-		&testmatchers.HttpResponse{
-			StatusCode: http.StatusForbidden,
-			Body:       gomega.ContainSubstring(agwDefaultPromptGuardResponse),
-		},
-		curl.WithPath("/v1/chat/completions"),
+	t.Send(
+		"/v1/chat/completions",
+		base.ExpectForbidden(gomega.ContainSubstring(agwDefaultPromptGuardResponse)),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "Return an example SSN"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 	)
@@ -88,13 +76,9 @@ func testAIBackendPromptGuard(t base.Test) {
 
 func testAIBackendWebhook(t base.Test) {
 	// Test request webhook
-	base.BaseGateway.Send(
-		t,
-		&testmatchers.HttpResponse{
-			StatusCode: http.StatusForbidden,
-			Body:       gomega.ContainSubstring(guardrailsWebhookBlockResponse),
-		},
-		curl.WithPath("/v1/messages"),
+	t.Send(
+		"/v1/messages",
+		base.ExpectForbidden(gomega.ContainSubstring(guardrailsWebhookBlockResponse)),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "return blocked content"}]}`),
 		curl.WithHeaders(map[string]string{
 			"Content-Type": "application/json",
@@ -106,13 +90,12 @@ func testAIBackendWebhook(t base.Test) {
 	)
 
 	// Test response webhook
-	base.BaseGateway.Send(
-		t,
+	t.Send(
+		"/v1/messages",
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(maskedPatternResponse),
 		},
-		curl.WithPath("/v1/messages"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "Explain data masking"}]}`),
 		curl.WithHeaders(map[string]string{
 			"Content-Type": "application/json",
@@ -133,14 +116,13 @@ func testAIBackendFailover(t base.Test) {
 	//
 	// The health policy evicts the primary after 3 consecutive unhealthy responses (threshold: 3).
 	// Send will retry until the primary is evicted and the fallback returns the expected response.
-	base.BaseGateway.Send(
-		t,
+	t.Send(
+		"/v1/chat/completions",
 		&testmatchers.HttpResponse{
 			StatusCode: http.StatusOK,
 			Body:       gomega.ContainSubstring(expectedResponse),
 			Headers:    map[string]any{"x-backend-model": "gpt-4o-mini", "x-model-swapped": "true"},
 		},
-		curl.WithPath("/v1/chat/completions"),
 		curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
 		curl.WithHeader("Content-Type", "application/json"),
 		curl.WithHeader("x-test-failover", "1"),

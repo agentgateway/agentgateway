@@ -64,6 +64,8 @@ func (s *Test) applyManifests(manifests ...string) {
 	}
 }
 
+// Apply applies YAML manifests, waits for any declared Pods/Deployments to become ready,
+// and registers cleanup for the end of the test. This is the common path for per-test config.
 func (s *Test) Apply(manifests ...string) {
 	s.Helper()
 	if s.ShouldSkip() {
@@ -79,6 +81,8 @@ func (s *Test) Apply(manifests ...string) {
 	})
 }
 
+// ApplyPersistent is like Apply, but leaves resources behind when -agw.persist/PERSIST_INSTALL is set.
+// Use it for expensive shared dependencies that should be reused across local test reruns.
 func (s *Test) ApplyPersistent(manifests ...string) {
 	s.Helper()
 	if s.ShouldSkip() {
@@ -94,11 +98,15 @@ func (s *Test) ApplyPersistent(manifests ...string) {
 	})
 }
 
+// Delete removes resources from YAML manifests immediately.
+// Most tests should rely on Apply cleanup; call Delete only when the test behavior needs removal mid-test.
 func (s *Test) Delete(manifests ...string) {
 	s.Helper()
 	s.deleteManifests(manifests...)
 }
 
+// Manifest resolves a file under the caller package's testdata directory.
+// For example, Manifest("rbac", "policy.yaml") resolves testdata/rbac/policy.yaml.
 func Manifest(pathParts ...string) string {
 	_, file, _, ok := goruntime.Caller(1)
 	if !ok {
