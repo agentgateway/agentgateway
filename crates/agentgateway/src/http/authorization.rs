@@ -208,9 +208,12 @@ impl RuleSets {
 				.map(|rule| rule.as_ref())
 		})
 	}
+	pub(crate) fn has_rules(&self) -> bool {
+		self.0.iter().any(|r| r.has_rules())
+	}
 	pub fn validate(&self, exec: &Executor) -> bool {
 		let rule_sets = &self.0;
-		let has_rules = rule_sets.iter().any(|r| r.has_rules());
+		let has_rules = self.has_rules();
 		// If there are no rule sets, everyone has access
 		#[allow(clippy::if_same_then_else)] // This is intentional to make things explicit.
 		let allowed = if !has_rules {
