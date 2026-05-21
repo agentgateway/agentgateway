@@ -564,12 +564,16 @@ func toMCPProtocol(appProtocol string) api.MCPTarget_Protocol {
 
 // parseAzureEndpoint extracts the resource name and resource type from a full
 // Azure endpoint host string (e.g. "my-resource.openai.azure.com").
+//
+// For Foundry endpoints the host is "{resourceName}.services.ai.azure.com".
+// The Azure portal's legacy template generates resource names that end in
+// "-resource" (e.g. "myproject-resource"), which is part of the user's
+// resource name — NOT part of the hostname suffix. This parser must not
+// strip "-resource", or round-trip parsing would lose the suffix the user
+// configured.
 func parseAzureEndpoint(endpoint string) (string, api.AIBackend_AzureResourceType) {
 	if name, ok := strings.CutSuffix(endpoint, ".openai.azure.com"); ok {
 		return name, api.AIBackend_OPEN_AI
-	}
-	if name, ok := strings.CutSuffix(endpoint, "-resource.services.ai.azure.com"); ok {
-		return name, api.AIBackend_FOUNDRY
 	}
 	if name, ok := strings.CutSuffix(endpoint, ".services.ai.azure.com"); ok {
 		return name, api.AIBackend_FOUNDRY

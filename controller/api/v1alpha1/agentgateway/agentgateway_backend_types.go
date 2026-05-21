@@ -307,7 +307,7 @@ type AzureResourceType string
 const (
 	// AzureResourceTypeOpenAI uses the Azure OpenAI endpoint: {resourceName}.openai.azure.com
 	AzureResourceTypeOpenAI AzureResourceType = "OpenAI"
-	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}-resource.services.ai.azure.com
+	// AzureResourceTypeFoundry uses the Azure AI Foundry endpoint: {resourceName}.services.ai.azure.com
 	AzureResourceTypeFoundry AzureResourceType = "Foundry"
 )
 
@@ -316,7 +316,11 @@ const (
 type AzureConfig struct {
 	// The Azure resource name used to construct the endpoint host.
 	// For OpenAI: {resourceName}.openai.azure.com
-	// For Foundry: {resourceName}-resource.services.ai.azure.com
+	// For Foundry: {resourceName}.services.ai.azure.com
+	// Note: when the Azure portal "Foundry legacy" template was used, the
+	// generated resource name may end in "-resource" (e.g. "myproject-resource");
+	// that suffix is part of the resource name as the user configured it, not
+	// part of the hostname suffix agentgateway should append.
 	// +required
 	ResourceName ShortString `json:"resourceName"`
 
