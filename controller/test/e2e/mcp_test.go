@@ -4,12 +4,15 @@ package e2e_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/onsi/gomega"
 	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -271,15 +274,8 @@ func runDynamicRoutingCase(t base.Test, clientName string, routeHeaders map[stri
 	initBody := buildInitializeRequest(clientName, 0)
 	headers := withRouteHeaders(mcpHeaders(nil), routeHeaders)
 
-	// Deterministic 200 with retry/backoff
-	waitForMCP200(t, headers, initBody, label)
-
-	// Get full response for logging + session extraction
 	// nolint: bodyclose // false positive
-	resp, body, err := execCurlMCP(t, headers, initBody)
-	if err != nil {
-		t.Fatalf("%s initialize failed: %v", label, err)
-	}
+	resp, body, payload, initResp := waitForDynamicInitialize(t, headers, initBody, routeHeaders, label)
 	t.Logf("%s initialize body: %s", label, body)
 
 	sid := ExtractMCPSessionID(resp)
@@ -288,15 +284,6 @@ func runDynamicRoutingCase(t base.Test, clientName string, routeHeaders map[stri
 	}
 	notifyInitializedWithHeaders(t, sid, routeHeaders)
 
-	payload, ok := FirstSSEDataPayload(body)
-	if !ok {
-		t.Fatalf("%s initialize must return SSE payload", label)
-	}
-
-	var initResp InitializeResponse
-	if err := json.Unmarshal([]byte(payload), &initResp); err != nil {
-		t.Fatalf("%s initialize payload must be JSON: %v", label, err)
-	}
 	if initResp.Error != nil {
 		t.Fatalf("%s initialize returned error: %+v", label, initResp.Error)
 	}
@@ -315,6 +302,72 @@ func runDynamicRoutingCase(t base.Test, clientName string, routeHeaders map[stri
 
 	tools := mustListTools(t, sid, label+" tools/list", routeHeaders)
 	return tools
+}
+
+func waitForDynamicInitialize(
+	t base.Test,
+	headers map[string]string,
+	initBody string,
+	routeHeaders map[string]string,
+	label string,
+) (*http.Response, string, string, InitializeResponse) {
+	t.Helper()
+
+	var (
+		resp     *http.Response
+		body     string
+		payload  string
+		initResp InitializeResponse
+	)
+	expectedServer := expectedDynamicServer(routeHeaders)
+
+	retry.UntilSuccessOrFail(t, func() error {
+		// nolint: bodyclose // execCurlMCP closes the response body.
+		gotResp, gotBody, err := execCurlMCP(t, headers, initBody)
+		if err != nil {
+			return fmt.Errorf("%s initialize failed: %w", label, err)
+		}
+		if gotResp.StatusCode != httpOKCode {
+			return fmt.Errorf("%s initialize status=%d, want %d", label, gotResp.StatusCode, httpOKCode)
+		}
+
+		gotPayload, ok := FirstSSEDataPayload(gotBody)
+		if !ok {
+			return fmt.Errorf("%s initialize must return SSE payload", label)
+		}
+
+		var gotInitResp InitializeResponse
+		if err := json.Unmarshal([]byte(gotPayload), &gotInitResp); err != nil {
+			return fmt.Errorf("%s initialize payload must be JSON: %w", label, err)
+		}
+		if gotInitResp.Error != nil {
+			return fmt.Errorf("%s initialize returned error: %+v", label, gotInitResp.Error)
+		}
+		if gotInitResp.Result == nil {
+			return fmt.Errorf("%s initialize missing result", label)
+		}
+		if expectedServer != "" && gotInitResp.Result.ServerInfo.Name != expectedServer {
+			return fmt.Errorf("%s dynamic route reached %q, want %q", label, gotInitResp.Result.ServerInfo.Name, expectedServer)
+		}
+		if ExtractMCPSessionID(gotResp) == "" {
+			return fmt.Errorf("%s initialize must return mcp-session-id header", label)
+		}
+
+		resp = gotResp
+		body = gotBody
+		payload = gotPayload
+		initResp = gotInitResp
+		return nil
+	}, retry.Timeout(10*time.Second), retry.Delay(100*time.Millisecond), retry.Message(fmt.Sprintf("%s initialize should reach expected backend", label)))
+
+	return resp, body, payload, initResp
+}
+
+func expectedDynamicServer(routeHeaders map[string]string) string {
+	if routeHeaders["user-type"] == "admin" {
+		return "mcp-admin-server"
+	}
+	return "mcp-website-fetcher"
 }
 
 func waitDynamicReady(t base.Test) {
