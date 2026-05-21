@@ -633,7 +633,7 @@ func buildAgwDestination(
 	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK.GroupKind())
 	// check if the reference is allowed
 	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
-		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
+		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref, ctx.BackendRefGrantMode) {
 			return rb, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionResolvedRefs,
 				Status:  metav1.ConditionFalse,
