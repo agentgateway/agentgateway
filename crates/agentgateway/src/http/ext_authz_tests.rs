@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ::http::HeaderMap;
+use ::http::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::http::HeaderOrPseudo;
 use crate::http::ext_authz::proto::{
@@ -18,6 +18,8 @@ impl Default for ExtAuthz {
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
+			cache: None,
+			cache_store: super::default_cache_store(),
 			protocol: http::ext_authz::Protocol::Grpc {
 				context: None,
 				metadata: None,
@@ -171,6 +173,96 @@ fn test_process_headers_request_append_action() {
 	assert_eq!(append_values.len(), 2);
 	assert_eq!(append_values[0], "value1");
 	assert_eq!(append_values[1], "value2");
+}
+
+#[test]
+fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![
+				Arc::new(cel::Expression::new_strict(r#"request.headers["authorization"]"#).unwrap()),
+				Arc::new(cel::Expression::new_strict("request.path").unwrap()),
+			],
+			ttl: std::time::Duration::from_secs(300),
+		}),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin?debug=true")
+		.header("authorization", "Bearer token")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let key = extauthz.cache_key(&req).unwrap();
+
+	assert_eq!(
+		key.0,
+		vec![
+			super::CacheKeyValue::String(Arc::from("Bearer token")),
+			super::CacheKeyValue::String(Arc::from("/admin")),
+		]
+	);
+}
+
+#[test]
+fn test_cached_grpc_allow_replays_request_and_response_mutations() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin?old=true")
+		.header("x-remove", "remove-me")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedGrpcPolicyResponse::Allow {
+		headers: vec![HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-allowed".to_string(),
+				value: "yes".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		}],
+		headers_to_remove: vec!["x-remove".to_string()],
+		response_headers: Some(HeaderMap::from_iter([(
+			HeaderName::from_static("x-response"),
+			HeaderValue::from_static("cached"),
+		)])),
+		query_parameters_to_set: vec![QueryParameter {
+			key: "new".to_string(),
+			value: "true".to_string(),
+		}],
+		query_parameters_to_remove: vec!["old".to_string()],
+		dynamic_metadata: Some(serde_json::Map::from_iter([(
+			"subject".to_string(),
+			serde_json::Value::String("alice".to_string()),
+		)])),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	assert!(req.headers().get("x-remove").is_none());
+	assert_eq!(req.headers().get("x-allowed").unwrap(), "yes");
+	assert_eq!(
+		req.uri().path_and_query().unwrap().as_str(),
+		"/admin?new=true"
+	);
+	assert_eq!(
+		response
+			.response_headers
+			.unwrap()
+			.get("x-response")
+			.unwrap(),
+		"cached"
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<ExtAuthzDynamicMetadata>()
+			.unwrap()
+			.0
+			.get("subject")
+			.unwrap(),
+		"alice"
+	);
 }
 
 #[test]

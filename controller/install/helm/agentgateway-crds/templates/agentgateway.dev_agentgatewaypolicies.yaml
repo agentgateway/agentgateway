@@ -3875,6 +3875,45 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      cache:
+                        description: |-
+                          `cache` configures caching of gRPC authorization results.
+
+                          WARNING: the safety of this feature depends on the cache key accurately
+                          capturing every request property that the authorization service uses to
+                          make a decision. For example, if the service returns different results
+                          based on both path and authorization header, both must be included in
+                          `key`; otherwise, one request may incorrectly reuse another request's
+                          authorization result.
+
+                          If any key expression fails to evaluate or produces an unsupported value,
+                          the request is still sent to the authorization service, but its result is
+                          not read from or written to the cache.
+                        properties:
+                          key:
+                            description: |-
+                              `key` is an ordered list of CEL expressions evaluated against the request
+                              to construct the cache key.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                          ttl:
+                            description: '`ttl` is the duration that cached authorization
+                              results may be reused.'
+                            type: string
+                            x-kubernetes-validations:
+                            - message: ttl must be at least 1s.
+                              rule: duration(self) >= duration('1s')
+                        required:
+                        - key
+                        - ttl
+                        type: object
                       failureMode:
                         description: |-
                           FailureMode controls behavior when the external authorization service is
@@ -4016,6 +4055,9 @@ spec:
                             type: object
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: cache requires grpc
+                      rule: '!has(self.cache) || has(self.grpc)'
                   health:
                     description: health defines settings for passive and active health
                       checking.
@@ -6517,6 +6559,45 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      cache:
+                        description: |-
+                          `cache` configures caching of gRPC authorization results.
+
+                          WARNING: the safety of this feature depends on the cache key accurately
+                          capturing every request property that the authorization service uses to
+                          make a decision. For example, if the service returns different results
+                          based on both path and authorization header, both must be included in
+                          `key`; otherwise, one request may incorrectly reuse another request's
+                          authorization result.
+
+                          If any key expression fails to evaluate or produces an unsupported value,
+                          the request is still sent to the authorization service, but its result is
+                          not read from or written to the cache.
+                        properties:
+                          key:
+                            description: |-
+                              `key` is an ordered list of CEL expressions evaluated against the request
+                              to construct the cache key.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                          ttl:
+                            description: '`ttl` is the duration that cached authorization
+                              results may be reused.'
+                            type: string
+                            x-kubernetes-validations:
+                            - message: ttl must be at least 1s.
+                              rule: duration(self) >= duration('1s')
+                        required:
+                        - key
+                        - ttl
+                        type: object
                       conditional:
                         description: |-
                           `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
@@ -6607,6 +6688,45 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                cache:
+                                  description: |-
+                                    `cache` configures caching of gRPC authorization results.
+
+                                    WARNING: the safety of this feature depends on the cache key accurately
+                                    capturing every request property that the authorization service uses to
+                                    make a decision. For example, if the service returns different results
+                                    based on both path and authorization header, both must be included in
+                                    `key`; otherwise, one request may incorrectly reuse another request's
+                                    authorization result.
+
+                                    If any key expression fails to evaluate or produces an unsupported value,
+                                    the request is still sent to the authorization service, but its result is
+                                    not read from or written to the cache.
+                                  properties:
+                                    key:
+                                      description: |-
+                                        `key` is an ordered list of CEL expressions evaluated against the request
+                                        to construct the cache key.
+                                      items:
+                                        description: CELExpression represents a Common
+                                          Expression Language (CEL) expression.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                    ttl:
+                                      description: '`ttl` is the duration that cached
+                                        authorization results may be reused.'
+                                      type: string
+                                      x-kubernetes-validations:
+                                      - message: ttl must be at least 1s.
+                                        rule: duration(self) >= duration('1s')
+                                  required:
+                                  - key
+                                  - ttl
+                                  type: object
                                 failureMode:
                                   description: |-
                                     FailureMode controls behavior when the external authorization service is
@@ -6755,6 +6875,8 @@ spec:
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
                                   == 1'
+                              - message: cache requires grpc
+                                rule: '!has(self.cache) || has(self.grpc)'
                           required:
                           - policy
                           type: object
@@ -6910,8 +7032,10 @@ spec:
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
+                    - message: cache requires grpc
+                      rule: '!has(self.cache) || has(self.grpc)'
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'

@@ -771,6 +771,10 @@ message TrafficPolicySpec {
       bool allow_partial_message = 2;
       bool pack_as_bytes = 3;
     }
+    message Cache {
+      repeated string key = 1;
+      google.protobuf.Duration ttl = 2;
+    }
     message GRPCProtocol {
       map<string, string> context = 1;
       map<string, string> metadata = 2;
@@ -791,7 +795,7 @@ message TrafficPolicySpec {
     optional uint32 status_on_error = 5;
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
-    reserved 8;
+    Cache cache = 8;
     reserved "timeout";
   }
   message RBAC {

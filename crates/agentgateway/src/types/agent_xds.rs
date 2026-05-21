@@ -2026,6 +2026,23 @@ fn external_auth_from_proto(
 				allow_partial_message: body_opts.allow_partial_message,
 				pack_as_bytes: body_opts.pack_as_bytes,
 			});
+	let cache = ea
+		.cache
+		.as_ref()
+		.map(|cache| {
+			let key = cache
+				.key
+				.iter()
+				.map(|expr| permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.cache.key", expr))
+				.collect();
+			let ttl = cache
+				.ttl
+				.as_ref()
+				.ok_or(ProtoError::MissingRequiredField)
+				.map(|ttl| convert_duration(*ttl))?;
+			Ok::<_, ProtoError>(http::ext_authz::CacheConfig { key, ttl })
+		})
+		.transpose()?;
 	let protocol = match ea
 		.protocol
 		.as_ref()
@@ -2115,6 +2132,8 @@ fn external_auth_from_proto(
 			)
 			.collect(),
 		include_request_body,
+		cache,
+		cache_store: crate::http::ext_authz::default_cache_store(),
 	})
 }
 

@@ -1715,6 +1715,7 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
 type ExtAuth struct {
 	// `backendRef` references the External Authorization server to reach.
 	//
@@ -1744,6 +1745,38 @@ type ExtAuth struct {
 	// If enabled, the request body will be buffered.
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
+
+	// `cache` configures caching of gRPC authorization results.
+	//
+	// WARNING: the safety of this feature depends on the cache key accurately
+	// capturing every request property that the authorization service uses to
+	// make a decision. For example, if the service returns different results
+	// based on both path and authorization header, both must be included in
+	// `key`; otherwise, one request may incorrectly reuse another request's
+	// authorization result.
+	//
+	// If any key expression fails to evaluate or produces an unsupported value,
+	// the request is still sent to the authorization service, but its result is
+	// not read from or written to the cache.
+	//
+	// +optional
+	Cache *ExtAuthCache `json:"cache,omitempty"`
+}
+
+type ExtAuthCache struct {
+	// `key` is an ordered list of CEL expressions evaluated against the request
+	// to construct the cache key.
+	//
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +required
+	Key []shared.CELExpression `json:"key"`
+
+	// `ttl` is the duration that cached authorization results may be reused.
+	//
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1s."
+	// +required
+	TTL metav1.Duration `json:"ttl"`
 }
 
 type AgentExtAuthHTTP struct {

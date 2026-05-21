@@ -4265,6 +4265,17 @@
               "type": "null"
             }
           ]
+        },
+        "cache": {
+          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "oneOf": [
@@ -4477,6 +4488,27 @@
       },
       "additionalProperties": false
     },
+    "CacheConfig": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "CEL expressions that make up the cache key.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
+          "default": []
+        },
+        "ttl": {
+          "description": "How long cached authorization results are reused.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "ttl"
+      ]
+    },
     "ExtAuthz": {
       "type": "object",
       "properties": {
@@ -4515,6 +4547,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/BodyOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache": {
+          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
             },
             {
               "type": "null"

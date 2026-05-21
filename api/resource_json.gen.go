@@ -908,6 +908,17 @@ func (this *TrafficPolicySpec_ExternalAuth_BodyOptions) UnmarshalJSON(b []byte) 
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_Cache
+func (this *TrafficPolicySpec_ExternalAuth_Cache) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExternalAuth_Cache
+func (this *TrafficPolicySpec_ExternalAuth_Cache) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_GRPCProtocol
 func (this *TrafficPolicySpec_ExternalAuth_GRPCProtocol) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

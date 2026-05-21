@@ -1093,6 +1093,15 @@ func buildExtAuthSpec(
 			PackAsBytes: false,
 		}
 	}
+	if cache := extAuth.Cache; cache != nil {
+		key := castCELSlice(cache.Key, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
+		})
+		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
+			Key: key,
+			Ttl: durationpb.New(cache.TTL.Duration),
+		}
+	}
 
 	return spec, errors.Join(errs...)
 }

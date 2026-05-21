@@ -233,6 +233,7 @@ dependencies = [
  "prost-types",
  "prost-wkt-types",
  "protos",
+ "quick_cache",
  "rand 0.10.1",
  "rcgen 0.14.8",
  "regex",
@@ -5230,6 +5231,18 @@ checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.6.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a70b1b8b47e31d0498ecbc3c5470bb931399a8bfed1fd79d1717a61ce7f96e3"
+dependencies = [
+ "ahash",
+ "equivalent",
+ "hashbrown 0.16.1",
+ "parking_lot",
 ]
 
 [[package]]
