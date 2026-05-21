@@ -1,5 +1,5 @@
 binds:
-  - port: 8080
+  - port: 3000
     tunnelProtocol: direct
     listeners:
       - protocol: HTTP
@@ -32,24 +32,3 @@ binds:
                 allowOrigins:
                   - "*"
                 exposeHeaders: []
-  - port: 8081
-    listeners:
-      - routes:
-          - backends:
-              - mcp:
-                  targets:
-                    - name: everything
-                      stdio:
-                        cmd: npx
-                        args:
-                          - "@modelcontextprotocol/server-everything"
-            policies:
-              cors:
-                allowOrigins:
-                  - "*"
-                allowHeaders:
-                  - mcp-protocol-version
-                  - content-type
-                  - cache-control
-                exposeHeaders:
-                  - Mcp-Session-Id
