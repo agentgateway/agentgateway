@@ -818,6 +818,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			crate::http::auth::AuthorizationLocation::bearer_header(),
 		)),
 		mode: crate::types::agent::McpAuthenticationMode::Strict,
+		client_id: None,
 	};
 
 	let mut t = setup_proxy_test("{}")
