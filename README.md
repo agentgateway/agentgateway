@@ -67,36 +67,6 @@
 - [Standalone Quickstart](https://agentgateway.dev/docs/quickstart) — Get started with agentgateway in minutes.
 - [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
-## Setup (standalone)
-
-```
-# Clone the fork and check out the feature branch
-git clone git@github.com:solo-io/agentgateway-new-ui.git
-cd agentgateway-new-ui
-git checkout new-ui-features
-
-# Install cargo/rust if you havent already
-curl https://sh.rustup.rs -sSf | sh
-> Proceed with standard installation
-
-# reload shell & source env file
-source ~/.zshrc
-. "$HOME/.cargo/env" # note leading dot in front of command
-
-# install yarn dependencies in /ui directory
-yarn --cwd=ui install
-
-# Build agentgateway binary and install it in /usr/local/bin
-# This script will probably get removed before the fork is merged.
-bash ./build-replace-agentgateway.sh
-
-# Run the agentgateway proxy with an example yaml file (this has a MCP backend defined so that the MCP playground can be tested)
-agentgateway -f ./tmp-config.yaml
-
-# Open the built UI (this is the local version that was just built and packaged in the agentgateway binary)
-open http://localhost:15000/ui
-```
-
 ## Documentation
 
 Depending on your deployment environment, check out the following docs:
