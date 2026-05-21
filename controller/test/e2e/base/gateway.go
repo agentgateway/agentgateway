@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
@@ -121,8 +121,7 @@ func ResolveGatewayPort(ctx context.Context, installation *e2e.TestInstallation,
 }
 
 func shouldUsePortForward() bool {
-	_, set := os.LookupEnv("USE_PORTFORWARD")
-	return set
+	return testutils.ShouldUsePortForward()
 }
 
 func setupGatewayPortForwards(ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) (string, map[int]int, error) {

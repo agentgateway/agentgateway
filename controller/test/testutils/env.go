@@ -1,6 +1,9 @@
 package testutils
 
 import (
+	"flag"
+	"os"
+
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 )
 
@@ -76,29 +79,60 @@ const (
 	// When set, this overrides the chart's AppVersion, ensuring locally-built
 	// images (loaded via `make setup`) are used instead of pulling from the registry.
 	Version = "VERSION"
+
+	// UsePortForward makes e2e tests connect to Gateways through local port-forwarding.
+	UsePortForward = "USE_PORTFORWARD"
+
+	// E2ETrace emits timing traces for e2e setup/apply/wait steps.
+	E2ETrace = "AGW_E2E_TRACE"
+
+	// E2EVerbose is the older documented name for E2ETrace.
+	E2EVerbose = "E2E_VERBOSE"
 )
+
+var (
+	flagSkipInstallAndTeardown = flag.Bool("agw.skip-install", envutils.IsEnvTruthy(SkipInstallAndTeardown), "Skip agentgateway install and teardown; env: "+SkipInstallAndTeardown)
+	flagPersistInstall         = flag.Bool("agw.persist", envutils.IsEnvTruthy(PersistInstall), "Reuse installed charts and skip teardown; env: "+PersistInstall)
+	flagFailFastAndPersist     = flag.Bool("agw.fail-fast-persist", envutils.IsEnvTruthy(FailFastAndPersist), "Reuse installed charts and skip cleanup when tests fail; env: "+FailFastAndPersist)
+	flagSkipAllTeardown        = flag.Bool("agw.skip-all-teardown", envutils.IsEnvTruthy(SkipAllTeardown), "Skip all teardown and per-test cleanup; env: "+SkipAllTeardown)
+	flagSkipDump               = flag.Bool("agw.skip-dump", envutils.IsEnvTruthy(SkipDump), "Skip Kubernetes state dumps; env: "+SkipDump)
+	flagSkipIstioInstall       = flag.Bool("agw.skip-istio-install", envutils.IsEnvTruthy(SkipIstioInstall), "Skip Istio install and teardown; env: "+SkipIstioInstall)
+	flagSkipBugReport          = flag.Bool("agw.skip-bug-report", envutils.IsEnvTruthy(SkipBugReport), "Skip automatic bug report generation on failure; env: "+SkipBugReport)
+	flagUsePortForward         = flag.Bool("agw.port-forward", envutils.IsEnvDefined(UsePortForward), "Use port-forwarding for Gateway traffic; env: "+UsePortForward)
+	flagE2ETrace               = flag.Bool("agw.trace", envutils.IsEnvTruthy(E2ETrace) || envutils.IsEnvTruthy(E2EVerbose), "Log e2e setup/apply/wait timings; env: "+E2ETrace+" or "+E2EVerbose)
+
+	flagInstallNamespace = flag.String("agw.install-namespace", envutils.GetOrDefault(InstallNamespace, "", true), "Namespace where agentgateway is installed; env: "+InstallNamespace)
+	flagClusterName      = flag.String("agw.cluster-name", os.Getenv(ClusterName), "Cluster name used for e2e tests; env: "+ClusterName)
+	flagKubeContext      = flag.String("agw.kube-context", os.Getenv(KubeCtx), "Kubernetes context for e2e tests; env: "+KubeCtx)
+	flagDefaultNamespace = flag.String("agw.default-namespace", envutils.GetOrDefault(DefaultNamespace, "default", false), "Default namespace for resources without an explicit namespace; env: "+DefaultNamespace)
+	flagVersion          = flag.String("agw.version", os.Getenv(Version), "Controller/proxy image tag override; env: "+Version)
+)
+
+func init() {
+	flag.BoolVar(flagE2ETrace, "agw.verbose", *flagE2ETrace, "Alias for -agw.trace")
+}
 
 // ShouldSkipInstallAndTeardown returns true if agentgateway installation and teardown should be skipped.
 func ShouldSkipInstallAndTeardown() bool {
-	return envutils.IsEnvTruthy(SkipInstallAndTeardown)
+	return *flagSkipInstallAndTeardown
 }
 
 // ShouldPersistInstall returns true if the install should be persisted across test runs.
 // This skips installation when charts are already installed and skips teardown.
 func ShouldPersistInstall() bool {
-	return envutils.IsEnvTruthy(PersistInstall)
+	return *flagPersistInstall
 }
 
 // ShouldSkipIstioInstall returns true if istio installation and teardown should be skipped.
 func ShouldSkipIstioInstall() bool {
-	return envutils.IsEnvTruthy(SkipIstioInstall)
+	return *flagSkipIstioInstall
 }
 
 // ShouldFailFastAndPersist returns true if tests should skip cleanup on failure.
 // This allows resources to persist for debugging when tests fail.
 // Combine with `go test -failfast` to stop running tests after first failure.
 func ShouldFailFastAndPersist() bool {
-	return envutils.IsEnvTruthy(FailFastAndPersist)
+	return *flagFailFastAndPersist
 }
 
 // SkipAllTeardown returns true if tests, regardless of success or failure,
@@ -107,11 +141,45 @@ func ShouldFailFastAndPersist() bool {
 // single test case when skipping all teardown because a suite is likely to
 // waste your time and confuse you if each test case starts in a chaotic state.
 func ShouldSkipAllTeardown() bool {
-	return envutils.IsEnvTruthy(SkipAllTeardown)
+	return *flagSkipAllTeardown
 }
 
 func ShouldSkipBugReport() bool {
-	return envutils.IsEnvTruthy(SkipBugReport)
+	return *flagSkipBugReport
+}
+
+func ShouldSkipDump() bool {
+	return *flagSkipDump
+}
+
+func ShouldUsePortForward() bool {
+	return *flagUsePortForward
+}
+
+func ShouldTraceE2E() bool {
+	return *flagE2ETrace
+}
+
+func InstallNamespaceOrDefault(fallback string) (string, bool) {
+	if *flagInstallNamespace != "" {
+		return *flagInstallNamespace, true
+	}
+	if value, ok := os.LookupEnv(InstallNamespace); ok {
+		return value, true
+	}
+	return fallback, false
+}
+
+func ClusterNameValue() string {
+	return *flagClusterName
+}
+
+func KubeContextValue() string {
+	return *flagKubeContext
+}
+
+func VersionValue() (string, bool) {
+	return *flagVersion, *flagVersion != ""
 }
 
 // TestingT is an interface that matches the subset of testing.T methods we need
@@ -156,5 +224,5 @@ func Cleanup(t TestingT, f func()) {
 // This can be overridden via the DEFAULT_NAMESPACE environment variable.
 // Defaults to "default" if not set.
 func GetDefaultNamespace() string {
-	return envutils.GetOrDefault(DefaultNamespace, "default", false)
+	return *flagDefaultNamespace
 }

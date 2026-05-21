@@ -22,15 +22,24 @@ share a file and use standard Go subtests for filterable groups. YAML lives in
 
 ```bash
 go test -tags=e2e -v ./controller/test/e2e -run '^TestRBAC$'
-PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e -run '^TestAIBackend$/^Routing$'
+go test -tags=e2e -v ./controller/test/e2e -run '^TestAIBackend$/^Routing$' -agw.persist=true
 ```
 
-Useful environment variables:
+Useful flags, with their legacy environment variable fallback:
 
-- `PERSIST_INSTALL=true`: reuse the installation and skip uninstall.
-- `FAIL_FAST_AND_PERSIST=true`: keep the installation only after failure.
-- `SKIP_INSTALL=true`: do not install or uninstall.
-- `E2E_VERBOSE=true`: log setup/apply/wait timings.
+- `-agw.persist=true` (`PERSIST_INSTALL=true`): reuse the installation and skip uninstall.
+- `-agw.fail-fast-persist=true` (`FAIL_FAST_AND_PERSIST=true`): keep resources only after failure.
+- `-agw.skip-install=true` (`SKIP_INSTALL=true`): do not install or uninstall.
+- `-agw.skip-all-teardown=true` (`SKIP_ALL_TEARDOWN=true`): skip shared and per-test cleanup.
+- `-agw.skip-bug-report=true` (`SKIP_BUG_REPORT=true`): skip failure dump collection.
+- `-agw.skip-dump=true` (`SKIP_DUMP=true`): skip Kubernetes state dumping.
+- `-agw.port-forward=true` (`USE_PORTFORWARD` set): send Gateway traffic through port-forwarding.
+- `-agw.trace=true` / `-agw.verbose=true` (`AGW_E2E_TRACE=true` or `E2E_VERBOSE=true`): log setup/apply/wait timings.
+- `-agw.install-namespace=<namespace>` (`INSTALL_NAMESPACE`): override the install namespace.
+- `-agw.cluster-name=<name>` (`CLUSTER_NAME`): select the Kind cluster name.
+- `-agw.kube-context=<context>` (`KUBE_CTX`): select the kube context.
+- `-agw.default-namespace=<namespace>` (`DEFAULT_NAMESPACE`): default namespace for resources without one.
+- `-agw.version=<tag>` (`VERSION`): use locally-built controller/proxy images with this tag.
 
 ## Helpers
 

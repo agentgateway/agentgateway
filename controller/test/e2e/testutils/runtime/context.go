@@ -3,8 +3,6 @@
 package runtime
 
 import (
-	"os"
-
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
@@ -31,7 +29,7 @@ func NewContext() Context {
 
 	return Context{
 		// ClusterName is derived from the environment variable
-		ClusterName: os.Getenv(testutils.ClusterName),
+		ClusterName: testutils.ClusterNameValue(),
 
 		RunSource: runSource,
 	}

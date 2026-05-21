@@ -32,7 +32,7 @@ type resourceDumpSpec struct {
 // the admin interface when a test fails.
 // Look at `KubeDumpOnFail` && `EnvoyDumpOnFail` for more details
 func StandardAgentgatewayDumpOnFail(outLog io.Writer, kubeClient client.Client, clientset kubernetes.Interface, outDir string, namespaces []string) {
-	if os.Getenv(testutils.SkipDump) == "true" {
+	if testutils.ShouldSkipDump() {
 		return
 	}
 	fmt.Printf("Test failed. Dumping state from %s...\n", strings.Join(namespaces, ", "))

@@ -3,21 +3,15 @@
 package base
 
 import (
-	"os"
 	"time"
 
 	"istio.io/istio/pkg/test"
+
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
-const traceEnv = "AGW_E2E_TRACE"
-
 func traceEnabled() bool {
-	switch os.Getenv(traceEnv) {
-	case "1", "true", "TRUE", "yes", "YES":
-		return true
-	default:
-		return false
-	}
+	return testutils.ShouldTraceE2E()
 }
 
 func tracef(t test.Failer, format string, args ...any) {

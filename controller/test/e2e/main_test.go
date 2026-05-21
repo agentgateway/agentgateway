@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/envutils"
 	e2e "github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
@@ -69,7 +68,7 @@ func setup(t *testing.T) {
 	agwSetupT = t
 	agwCtx = context.Background()
 	done := base.TraceStep(t, "resolved install namespace")
-	installNs, nsEnvPredefined := envutils.LookupOrDefault(testutils.InstallNamespace, "agentgateway-system")
+	installNs, nsEnvPredefined := testutils.InstallNamespaceOrDefault("agentgateway-system")
 	agwInstallNamespace = installNs
 	agwNsEnvPredefined = nsEnvPredefined
 	done()

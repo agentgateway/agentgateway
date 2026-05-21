@@ -174,7 +174,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	extraArgs := i.ExtraHelmArgs
 	// If VERSION is set, override the chart's AppVersion so locally-built images are used
 	// instead of trying to pull the chart's default appVersion from the remote registry.
-	if tag, ok := os.LookupEnv(testutils.Version); ok && tag != "" {
+	if tag, ok := testutils.VersionValue(); ok {
 		extraArgs = append(extraArgs, "--set-string", "image.tag="+tag)
 	}
 
