@@ -1447,6 +1447,118 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 }
 
 #[allow(clippy::too_many_arguments)]
+async fn apply_inference_routing(
+	policies: &BackendPolicies,
+	policy_client: PolicyClient,
+	req: &mut Request,
+	log: &mut Option<&mut RequestLog>,
+	response_policies: &mut ResponsePolicies,
+) -> Result<(http::ext_proc::InferencePoolRouter, ServiceCallOverride), ProxyResponse> {
+	let mut maybe_inference = policies.build_inference(policy_client);
+	let inference_result = maybe_inference.mutate_request(req).await?;
+	inference_result
+		.policy_response
+		.apply(response_policies.headers())?;
+	log.add(|l| l.inference_pool = inference_result.destination);
+
+	// Use inference override if present, otherwise check for stateful MCP pinning.
+	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
+	let service_override = ServiceCallOverride {
+		destination: inference_result.destination.or(policies.override_dest),
+		destination_passthrough: inference_result.destination.is_some()
+			&& matches!(
+				inference_result.destination_mode,
+				InferenceRoutingDestinationMode::Passthrough
+			),
+		inference_failed_open: inference_result.failed_open,
+	};
+
+	Ok((maybe_inference, service_override))
+}
+
+/// Builds a call for an already-resolved simple backend without re-entering
+/// full AI or MCP backend dispatch.
+#[allow(clippy::too_many_arguments)]
+async fn build_simple_backend_call(
+	inputs: &ProxyInputs,
+	policy_client: PolicyClient,
+	backend: &SimpleBackend,
+	policies: BackendPolicies,
+	req: &mut Request,
+	log: &mut Option<&mut RequestLog>,
+	response_policies: &mut ResponsePolicies,
+	hbone_source: Option<HboneSourceRole>,
+) -> Result<(BackendCall, http::ext_proc::InferencePoolRouter), ProxyResponse> {
+	let (maybe_inference, service_override) =
+		apply_inference_routing(&policies, policy_client, req, log, response_policies).await?;
+	let backend_call = match backend {
+		SimpleBackend::Service(svc, port) => {
+			// If user explicitly set auto hostname, we support it for Service.
+			// Otherwise, the implicit default only applies to AgentgatewayBackend.
+			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
+				&& auto.explicit
+			{
+				auto.target = Some(svc.hostname.clone());
+			}
+			build_service_call(
+				inputs,
+				policies,
+				log,
+				service_override,
+				svc,
+				port,
+				req.uri().host(),
+				hbone_source,
+			)?
+		},
+		SimpleBackend::Opaque(_, target) => BackendCall {
+			target: target.clone(),
+			backend_policies: policies,
+			http_version_override: None,
+			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			network_gateway: None,
+			waypoint: None,
+		},
+		SimpleBackend::Aws(_, config) => {
+			http::modify_req_uri(req, |uri| {
+				let host_with_port = format!("{}:443", config.get_host());
+				uri.authority =
+					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
+				uri.path_and_query = Some(PathAndQuery::from_str(&config.get_path())?);
+				Ok(())
+			})
+			.map_err(ProxyError::Processing)?;
+
+			req.extensions_mut().insert(llm::bedrock::AwsRegion {
+				region: config.region().to_string(),
+			});
+
+			let default_policies = BackendPolicies {
+				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
+					service_name: Some(config.service_name().to_string()),
+				})),
+				..Default::default()
+			};
+			BackendCall {
+				target: Target::Hostname(config.get_host().into(), 443),
+				backend_policies: default_policies.merge(policies),
+				http_version_override: None,
+				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+				network_gateway: None,
+				waypoint: None,
+			}
+		},
+		SimpleBackend::Invalid => {
+			return Err(ProxyError::BackendDoesNotExist.into());
+		},
+	};
+	Ok((backend_call, maybe_inference))
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
@@ -1500,26 +1612,7 @@ async fn make_backend_call(
 		}
 	});
 
-	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let inference_result = maybe_inference.mutate_request(&mut req).await?;
-	inference_result
-		.policy_response
-		.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_result.destination);
-
-	// Use inference override if present, otherwise check for stateful MCP pinning.
-	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
-	let service_override = ServiceCallOverride {
-		destination: inference_result.destination.or(policies.override_dest),
-		destination_passthrough: inference_result.destination.is_some()
-			&& matches!(
-				inference_result.destination_mode,
-				InferenceRoutingDestinationMode::Passthrough
-			),
-		inference_failed_open: inference_result.failed_open,
-	};
-
-	let mut backend_call = match backend {
+	let (mut backend_call, mut maybe_inference) = match backend {
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
@@ -1549,30 +1642,17 @@ async fn make_backend_call(
 					.merge(sub_backend_policies)
 					.merge(provider_backend_policies);
 
-				match &provider_backend.backend {
-					SimpleBackend::Service(svc, port) => build_service_call(
-						&inputs,
-						effective_policies,
-						&mut log,
-						service_override,
-						svc,
-						port,
-						req.uri().host(),
-						hbone_source,
-					)?,
-					SimpleBackend::Opaque(_, target) => BackendCall {
-						target: target.clone(),
-						backend_policies: effective_policies,
-						http_version_override: None,
-						transport_override: None,
-						hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-						network_gateway: None,
-						waypoint: None,
-					},
-					SimpleBackend::Aws(_, _) | SimpleBackend::Invalid => {
-						return Err(ProxyError::InvalidBackendType.into());
-					},
-				}
+				build_simple_backend_call(
+					&inputs,
+					policy_client.clone(),
+					&provider_backend.backend,
+					effective_policies,
+					&mut req,
+					&mut log,
+					response_policies,
+					hbone_source,
+				)
+				.await?
 			} else {
 				let (target, provider_defaults) = match &provider.host_override {
 					Some(target) => (target.clone(), provider_defaults),
@@ -1586,81 +1666,80 @@ async fn make_backend_call(
 				let effective_policies = provider_defaults
 					.merge(policies)
 					.merge(sub_backend_policies);
-				BackendCall {
-					target,
-					backend_policies: effective_policies,
-					http_version_override: None,
-					transport_override: None,
-					hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-					network_gateway: None,
-					waypoint: None,
-				}
+				let (maybe_inference, _) = apply_inference_routing(
+					&effective_policies,
+					policy_client.clone(),
+					&mut req,
+					&mut log,
+					response_policies,
+				)
+				.await?;
+				(
+					BackendCall {
+						target,
+						backend_policies: effective_policies,
+						http_version_override: None,
+						transport_override: None,
+						hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+						network_gateway: None,
+						waypoint: None,
+					},
+					maybe_inference,
+				)
 			}
 		},
 		Backend::Service(svc, port) => {
-			// If user explicitly set auto hostname, we support it for Service.
-			// Otherwise, the implicit default only applies to AgentgatewayBackend.
-			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
-				&& auto.explicit
-			{
-				auto.target = Some(svc.hostname.clone());
-			}
-			build_service_call(
+			let simple = SimpleBackend::Service(svc.clone(), *port);
+			build_simple_backend_call(
 				&inputs,
+				policy_client.clone(),
+				&simple,
 				policies,
+				&mut req,
 				&mut log,
-				service_override,
-				svc,
-				port,
-				req.uri().host(),
+				response_policies,
 				hbone_source,
-			)?
+			)
+			.await?
 		},
-		Backend::Opaque(_, target) => BackendCall {
-			target: target.clone(),
-			http_version_override: None,
-			transport_override: None,
-			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			network_gateway: None,
-			waypoint: None,
-			backend_policies: policies,
+		Backend::Opaque(name, target) => {
+			let simple = SimpleBackend::Opaque(name.clone(), target.clone());
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
 		},
-		Backend::Aws(_, config) => {
-			http::modify_req_uri(&mut req, |uri| {
-				let host_with_port = format!("{}:443", config.get_host());
-				uri.authority =
-					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
-				uri.path_and_query = Some(PathAndQuery::from_str(&config.get_path())?);
-				Ok(())
-			})
-			.map_err(ProxyError::Processing)?;
-
-			req.extensions_mut().insert(llm::bedrock::AwsRegion {
-				region: config.region().to_string(),
-			});
-
-			let default_policies = BackendPolicies {
-				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
-					service_name: Some(config.service_name().to_string()),
-				})),
-				..Default::default()
-			};
-			BackendCall {
-				target: Target::Hostname(config.get_host().into(), 443),
-				backend_policies: default_policies.merge(policies),
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
-			}
+		Backend::Aws(name, config) => {
+			let simple = SimpleBackend::Aws(name.clone(), config.clone());
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
 		},
 		Backend::Dynamic(_, _) => {
-			// Use a preliminary target from the current request URI.
-			// This will be re-resolved after transformations are applied,
-			// so that policies like `:authority` overrides take effect.
-			BackendCall {
+			let (maybe_inference, _) = apply_inference_routing(
+				&policies,
+				policy_client.clone(),
+				&mut req,
+				&mut log,
+				response_policies,
+			)
+			.await?;
+			let backend_call = BackendCall {
 				target: target_from_request(&req)?,
 				http_version_override: None,
 				transport_override: None,
@@ -1668,7 +1747,8 @@ async fn make_backend_call(
 				network_gateway: None,
 				waypoint: None,
 				backend_policies: policies,
-			}
+			};
+			(backend_call, maybe_inference)
 		},
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
