@@ -982,16 +982,20 @@ impl ActiveHandle {
 				.fetch_add(1, AtomicOrdering::Relaxed);
 		};
 		if let Some(eviction_time) = eviction_time {
-			self
-				.info
-				.times_ejected
-				.fetch_add(1, AtomicOrdering::Relaxed);
 			let time = Instant::now() + eviction_time;
 			let prev = self
 				.info
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
+				// Only count an ejection when this request actually starts a new
+				// eviction window. Failures of in-flight requests during an existing
+				// window are no-ops here, so bumping the counter would inflate the
+				// ejection-duration multiplier without extending the eviction.
+				self
+					.info
+					.times_ejected
+					.fetch_add(1, AtomicOrdering::Relaxed);
 				self.eviction_starter.start();
 				let mut tx = self.tx.clone();
 				let key = self.key.clone();
@@ -1227,6 +1231,37 @@ mod tests {
 		);
 		let ep_info = &group.active.get(&key).unwrap().info;
 		assert_eq!(ep_info.health_score(), 1.0, "health should be reset to 1.0");
+	}
+
+	#[tokio::test]
+	async fn endpoint_set_repeated_failure_during_window_does_not_bump_times_ejected() {
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		let info = eps.best_bucket().active.get(&key).unwrap().info.clone();
+
+		// First failure starts a 100ms eviction window.
+		eps.start_request(key.clone(), &info).finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(1.0),
+		);
+		assert_eq!(info.times_ejected(), 1);
+
+		// A second failure while still inside the window must not bump the counter:
+		// the eviction CAS no-ops, so counting it would inflate the multiplier.
+		eps.start_request(key.clone(), &info).finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(1.0),
+		);
+		assert_eq!(
+			info.times_ejected(),
+			1,
+			"repeated failure during eviction window should not bump times_ejected"
+		);
 	}
 
 	#[tokio::test]
