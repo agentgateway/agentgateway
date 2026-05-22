@@ -130,13 +130,31 @@ pub struct CacheConfig {
 	/// Non-empty list of CEL expressions that make up the cache key.
 	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
 	pub key: Vec<Arc<cel::Expression>>,
-	/// How long cached authorization results are reused.
-	#[serde(with = "serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	pub ttl: Duration,
+	/// CEL expression that returns how long cached authorization results are reused.
+	/// The expression is evaluated after the authorization response has been applied
+	/// to the request, and must return either a duration or timestamp.
+	#[serde(deserialize_with = "deserialize_cache_ttl")]
+	pub ttl: Arc<cel::Expression>,
 	/// Maximum number of authorization results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
+}
+
+fn deserialize_cache_ttl<'de, D>(deserializer: D) -> Result<Arc<cel::Expression>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	use serde::Deserialize;
+
+	let raw = String::deserialize(deserializer)?;
+	let expression = if agent_core::durfmt::parse(&raw).is_ok() {
+		format!("duration({raw:?})")
+	} else {
+		raw
+	};
+	cel::Expression::new_strict(&expression)
+		.map(Arc::new)
+		.map_err(serde::de::Error::custom)
 }
 
 #[apply(schema!)]
@@ -541,12 +559,14 @@ impl ExtAuthz {
 					body,
 					dynamic_metadata,
 				};
-				self.insert_cache(cache_key, cached.clone());
-				return cached.apply(req);
+				let response = cached.clone().apply(req)?;
+				self.insert_cache(cache_key, req, cached);
+				return Ok(response);
 			}
 			let cached = CachedGrpcPolicyResponse::DenyWithoutResponse { dynamic_metadata };
-			self.insert_cache(cache_key, cached.clone());
-			return cached.apply(req);
+			let response = cached.clone().apply(req);
+			self.insert_cache(cache_key, req, cached);
+			return response;
 		}
 
 		let cached = match cr.http_response {
@@ -591,20 +611,24 @@ impl ExtAuthz {
 		};
 
 		pol_result_timed!(start, Severity::Info, Apply, "allowed");
-		self.insert_cache(cache_key, cached.clone());
-		cached.apply(req)
+		let response = cached.clone().apply(req)?;
+		self.insert_cache(cache_key, req, cached);
+		Ok(response)
 	}
 
-	fn insert_cache(&self, key: Option<CacheKey>, response: CachedGrpcPolicyResponse) {
+	fn insert_cache(&self, key: Option<CacheKey>, req: &Request, response: CachedGrpcPolicyResponse) {
 		let Some(key) = key else {
 			return;
 		};
 		let Some(cache) = &self.cache else {
 			return;
 		};
-		let Some(expires_at) = Instant::now().checked_add(cache.ttl) else {
+		let Some(ttl) = self.cache_ttl(req, cache) else {
+			return;
+		};
+		let Some(expires_at) = Instant::now().checked_add(ttl) else {
 			warn!(
-				ttl = ?cache.ttl,
+				ttl = ?ttl,
 				"skipping ext_authz cache insert because ttl overflows Instant"
 			);
 			return;
@@ -616,6 +640,19 @@ impl ExtAuthz {
 				response,
 			},
 		);
+	}
+
+	fn cache_ttl(&self, req: &Request, cache: &CacheConfig) -> Option<Duration> {
+		let exec = cel::Executor::new_request(req);
+		let value = exec.eval(&cache.ttl).ok()?;
+		match value {
+			Value::Duration(ttl) => ttl.to_std().ok(),
+			Value::Timestamp(expires_at) => expires_at
+				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
+				.to_std()
+				.ok(),
+			_ => None,
+		}
 	}
 
 	pub async fn check_http(
@@ -890,10 +927,13 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
-		let cache_iter = self
-			.cache
-			.iter()
-			.flat_map(|cache| cache.key.iter().map(|v| v.as_ref()));
+		let cache_iter = self.cache.iter().flat_map(|cache| {
+			cache
+				.key
+				.iter()
+				.map(|v| v.as_ref())
+				.chain(Some(cache.ttl.as_ref()))
+		});
 		let protocol_iter: Box<dyn Iterator<Item = &cel::Expression>> = match &self.protocol {
 			Protocol::Grpc {
 				metadata: Some(m), ..

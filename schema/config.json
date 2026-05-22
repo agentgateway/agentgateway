@@ -4500,8 +4500,8 @@
           "minItems": 1
         },
         "ttl": {
-          "description": "How long cached authorization results are reused.",
-          "type": "string"
+          "description": "CEL expression that returns how long cached authorization results are reused.\nThe expression is evaluated after the authorization response has been applied\nto the request, and must return either a duration or timestamp.",
+          "$ref": "#/$defs/Expression"
         },
         "maxEntries": {
           "description": "Maximum number of authorization results to keep in the cache.",

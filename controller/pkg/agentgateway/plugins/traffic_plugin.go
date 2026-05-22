@@ -1097,9 +1097,12 @@ func buildExtAuthSpec(
 		key := castCELSlice(cache.Key, func(expr shared.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
+		ttl := castExtAuthCacheTTL(cache.TTL, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
+		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
 			Key:        key,
-			Ttl:        durationpb.New(cache.TTL.Duration),
+			Ttl:        ttl,
 			MaxEntries: ptr.OrDefault(cache.MaxEntries, 0),
 		}
 	}
@@ -1256,6 +1259,21 @@ func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) 
 		invalid(*item)
 	}
 	return res
+}
+
+func castCEL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+	if !isCEL(item) {
+		invalid(item)
+	}
+	return string(item)
+}
+
+func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+	raw := string(item)
+	if _, err := time.ParseDuration(raw); err == nil {
+		return "duration(" + strconv.Quote(raw) + ")"
+	}
+	return castCEL(item, invalid)
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies

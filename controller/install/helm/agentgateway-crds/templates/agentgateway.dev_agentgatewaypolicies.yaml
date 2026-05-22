@@ -3911,12 +3911,14 @@ spec:
                             minimum: 1
                             type: integer
                           ttl:
-                            description: '`ttl` is the duration that cached authorization
-                              results may be reused.'
+                            description: |-
+                              `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                              returns the duration that cached authorization results may be reused, or a
+                              timestamp when the cached authorization result expires. The expression is
+                              evaluated after the authorization response has been applied to the request.
+                            maxLength: 16384
+                            minLength: 1
                             type: string
-                            x-kubernetes-validations:
-                            - message: ttl must be at least 1s.
-                              rule: duration(self) >= duration('1s')
                         required:
                         - key
                         - ttl
@@ -6608,12 +6610,14 @@ spec:
                             minimum: 1
                             type: integer
                           ttl:
-                            description: '`ttl` is the duration that cached authorization
-                              results may be reused.'
+                            description: |-
+                              `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                              returns the duration that cached authorization results may be reused, or a
+                              timestamp when the cached authorization result expires. The expression is
+                              evaluated after the authorization response has been applied to the request.
+                            maxLength: 16384
+                            minLength: 1
                             type: string
-                            x-kubernetes-validations:
-                            - message: ttl must be at least 1s.
-                              rule: duration(self) >= duration('1s')
                         required:
                         - key
                         - ttl
@@ -6744,12 +6748,14 @@ spec:
                                       minimum: 1
                                       type: integer
                                     ttl:
-                                      description: '`ttl` is the duration that cached
-                                        authorization results may be reused.'
+                                      description: |-
+                                        `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                                        returns the duration that cached authorization results may be reused, or a
+                                        timestamp when the cached authorization result expires. The expression is
+                                        evaluated after the authorization response has been applied to the request.
+                                      maxLength: 16384
+                                      minLength: 1
                                       type: string
-                                      x-kubernetes-validations:
-                                      - message: ttl must be at least 1s.
-                                        rule: duration(self) >= duration('1s')
                                   required:
                                   - key
                                   - ttl

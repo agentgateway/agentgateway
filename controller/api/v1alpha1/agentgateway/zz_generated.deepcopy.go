@@ -1687,7 +1687,6 @@ func (in *ExtAuthCache) DeepCopyInto(out *ExtAuthCache) {
 		*out = make([]shared.CELExpression, len(*in))
 		copy(*out, *in)
 	}
-	out.TTL = in.TTL
 	if in.MaxEntries != nil {
 		in, out := &in.MaxEntries, &out.MaxEntries
 		*out = new(uint32)

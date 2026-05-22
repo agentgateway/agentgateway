@@ -2089,11 +2089,11 @@ fn external_auth_from_proto(
 					"traffic.extAuthz.cache.key must contain at least one expression".to_string(),
 				));
 			}
-			let ttl = cache
-				.ttl
-				.as_ref()
-				.ok_or(ProtoError::MissingRequiredField)
-				.map(|ttl| convert_duration(*ttl))?;
+			if cache.ttl.is_empty() {
+				return Err(ProtoError::MissingRequiredField);
+			}
+			let ttl =
+				permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.cache.ttl", &cache.ttl);
 			let max_entries = http::ext_authz::effective_cache_entries(cache.max_entries as usize);
 			Ok::<_, ProtoError>(http::ext_authz::CacheConfig {
 				key,

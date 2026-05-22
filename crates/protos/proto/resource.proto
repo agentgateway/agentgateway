@@ -773,7 +773,7 @@ message TrafficPolicySpec {
     }
     message Cache {
       repeated string key = 1;
-      google.protobuf.Duration ttl = 2;
+      string ttl = 2; // CEL expr returning duration or timestamp
       uint32 max_entries = 3;
     }
     message GRPCProtocol {

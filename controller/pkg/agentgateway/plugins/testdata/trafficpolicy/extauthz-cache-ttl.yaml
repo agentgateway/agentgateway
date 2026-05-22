@@ -1,0 +1,157 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: raw-duration
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      grpc: {}
+      cache:
+        key:
+        - request.path
+        ttl: 5m
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: cel-expression
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      grpc: {}
+      cache:
+        key:
+        - request.path
+        ttl: duration(request.headers["x-cache-ttl"])
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+  - port: 1024
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/cel-expression:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: cel-expression
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          cache:
+            key:
+            - request.path
+            ttl: duration(request.headers["x-cache-ttl"])
+          grpc: {}
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/raw-duration:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: raw-duration
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          cache:
+            key:
+            - request.path
+            ttl: duration("5m")
+          grpc: {}
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: cel-expression
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: raw-duration
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

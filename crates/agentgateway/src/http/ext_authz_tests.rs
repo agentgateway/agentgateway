@@ -183,7 +183,7 @@ fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
 				Arc::new(cel::Expression::new_strict(r#"request.headers["authorization"]"#).unwrap()),
 				Arc::new(cel::Expression::new_strict("request.path").unwrap()),
 			],
-			ttl: std::time::Duration::from_secs(300),
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: super::default_cache_entries(),
 		}),
 		..Default::default()
@@ -212,7 +212,7 @@ fn test_ext_authz_cache_store_uses_configured_capacity() {
 			key: vec![Arc::new(
 				cel::Expression::new_strict("request.path").unwrap(),
 			)],
-			ttl: std::time::Duration::from_secs(300),
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: 7,
 		}),
 		..Default::default()
@@ -229,7 +229,7 @@ fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
 			key: vec![Arc::new(
 				cel::Expression::new_strict("request.path").unwrap(),
 			)],
-			ttl: std::time::Duration::from_secs(300),
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: 0,
 		}),
 		..Default::default()
@@ -240,6 +240,86 @@ fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
 		extauthz.cache_store.capacity(),
 		super::default_cache_store().capacity()
 	);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_evaluates_duration() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict(r#"duration("42s")"#).unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(
+		extauthz.cache_ttl(&req, &cache),
+		Some(std::time::Duration::from_secs(42))
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_evaluates_after_response_is_applied() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(
+			cel::Expression::new_strict(r#"duration(request.headers["x-cache-ttl"])"#).unwrap(),
+		),
+		max_entries: super::default_cache_entries(),
+	};
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedGrpcPolicyResponse::Allow {
+		headers: vec![HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-cache-ttl".to_string(),
+				value: "17s".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		}],
+		headers_to_remove: Vec::new(),
+		response_headers: None,
+		query_parameters_to_set: Vec::new(),
+		query_parameters_to_remove: Vec::new(),
+		dynamic_metadata: None,
+	};
+
+	let _ = cached.apply(&mut req).unwrap();
+
+	assert_eq!(
+		extauthz.cache_ttl(&req, &cache),
+		Some(std::time::Duration::from_secs(17))
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_skips_invalid_type() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict("request.path").unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(extauthz.cache_ttl(&req, &cache), None);
 }
 
 #[test]

@@ -1863,11 +1863,13 @@ type ExtAuthCache struct {
 	// +required
 	Key []shared.CELExpression `json:"key"`
 
-	// `ttl` is the duration that cached authorization results may be reused.
+	// `ttl` is either a duration string, such as `5m`, or a CEL expression that
+	// returns the duration that cached authorization results may be reused, or a
+	// timestamp when the cached authorization result expires. The expression is
+	// evaluated after the authorization response has been applied to the request.
 	//
-	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1s."
 	// +required
-	TTL metav1.Duration `json:"ttl"`
+	TTL shared.CELExpression `json:"ttl"`
 
 	// `maxEntries` is the maximum number of authorization results to keep in
 	// the cache. If unset, this defaults to 10000.
