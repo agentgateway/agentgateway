@@ -29,6 +29,7 @@ import (
 )
 
 func SetupBaseConfig(ctx context.Context, t *testing.T, installation *e2e.TestInstallation, manifests ...string) {
+	manifests = interceptManifestFiles(t, installation.GeneratedFiles.TempDir, manifests...)
 	err := installation.ClusterContext.Client.ApplyYAMLFiles("", manifests...)
 	assert.NoError(t, err)
 }

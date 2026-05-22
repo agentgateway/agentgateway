@@ -13,7 +13,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
@@ -21,7 +20,7 @@ func TestAgwPolicyClearStaleStatus(tt *testing.T) {
 	t := New(tt)
 	t.Apply(manifest("policystatus", "policy-with-gw.yaml"))
 
-	agwControllerName := wellknown.DefaultAgwControllerName
+	agwControllerName := base.AgentgatewayControllerName
 	otherControllerName := "other-controller.example.com/controller"
 
 	addAncestorStatus(t, "example-policy", base.Namespace, "other-gw", otherControllerName)

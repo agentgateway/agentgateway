@@ -44,6 +44,7 @@ func TestMain(m *testing.M) {
 
 func New(t *testing.T, opts ...base.SuiteOption) base.Test {
 	t.Helper()
+	base.ConfigureTest(t)
 	agwSetupOnce.Do(func() {
 		done := base.TraceStep(t, "shared e2e setup")
 		setup(t)

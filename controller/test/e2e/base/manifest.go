@@ -30,6 +30,7 @@ import (
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
 func (s *Test) applyManifests(manifests ...string) {
+	manifests = interceptManifestFiles(s, s.TestInstallation.GeneratedFiles.TempDir, manifests...)
 	done := func() {}
 	if len(manifests) > 0 {
 		done = traceStep(s, "applied manifests %v", manifestNames(manifests))
@@ -145,6 +146,7 @@ func stripNamespaceResources(t test.Failer, manifests ...string) string {
 }
 
 func (s *Test) deleteManifests(manifests ...string) {
+	manifests = interceptManifestFiles(s, s.TestInstallation.GeneratedFiles.TempDir, manifests...)
 	nf := stripNamespaceResources(s, manifests...)
 	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
 	istioassert.NoError(s, os.WriteFile(fp, []byte(nf), 0o644)) //nolint:gosec // G306: Golden test file can be readable
@@ -154,6 +156,7 @@ func (s *Test) deleteManifests(manifests ...string) {
 }
 
 func (s *Test) setupHelpers() {
+	configureScheme(s, s.TestInstallation.ClusterContext.ControllerClient.Scheme())
 	s.validator = apitests.NewAgentgatewayValidatorSkipMissing(s)
 }
 
