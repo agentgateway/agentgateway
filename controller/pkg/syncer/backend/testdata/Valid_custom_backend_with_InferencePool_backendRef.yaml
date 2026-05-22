@@ -2,8 +2,9 @@ ai:
   providerGroups:
   - providers:
     - custom:
-        supportedFormats:
-        - MESSAGES
+        formats:
+        - format: MESSAGES
+          path: /api/messages
       name: backend
       providerBackend:
         port: 8000

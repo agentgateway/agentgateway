@@ -312,25 +312,42 @@ spec:
                                     - message: Must have port for Service reference
                                       rule: '(size(self.group) == 0 && self.kind ==
                                         ''Service'') ? has(self.port) : true'
-                                  supportedFormats:
-                                    description: SupportedFormats declares the provider-native
+                                  formats:
+                                    description: Formats declares the provider-native
                                       API formats this provider supports.
                                     items:
-                                      description: ProviderFormat specifies a provider-native
-                                        LLM API format.
-                                      enum:
-                                      - Completions
-                                      - Messages
-                                      - Responses
-                                      - Embeddings
-                                      - AnthropicTokenCount
-                                      - Realtime
-                                      type: string
+                                      description: ProviderFormatConfig configures
+                                        a provider-native LLM API format.
+                                      properties:
+                                        path:
+                                          description: |-
+                                            Path overrides the default upstream path for this format.
+                                            If unset, agentgateway uses the default path for the format.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          type: string
+                                        type:
+                                          description: Type is the provider-native
+                                            API format.
+                                          enum:
+                                          - Completions
+                                          - Messages
+                                          - Responses
+                                          - Embeddings
+                                          - AnthropicTokenCount
+                                          - Realtime
+                                          type: string
+                                      required:
+                                      - type
+                                      type: object
+                                    maxItems: 6
                                     minItems: 1
                                     type: array
-                                    x-kubernetes-list-type: set
+                                    x-kubernetes-list-map-keys:
+                                    - type
+                                    x-kubernetes-list-type: map
                                 required:
-                                - supportedFormats
+                                - formats
                                 type: object
                                 x-kubernetes-validations:
                                 - message: custom provider backendRef must be namespace-local
@@ -5080,6 +5097,10 @@ spec:
                                 != has(self.host) : true'
                             - message: path and pathPrefix are mutually exclusive
                               rule: '!(has(self.path) && has(self.pathPrefix))'
+                            - message: path, pathPrefix, and custom format paths are
+                                mutually exclusive
+                              rule: '!(has(self.custom) && self.custom.formats.exists(f,
+                                has(f.path)) && (has(self.path) || has(self.pathPrefix)))'
                             - message: pathPrefix requires host to be set
                               rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
@@ -5319,25 +5340,41 @@ spec:
                             - message: Must have port for Service reference
                               rule: '(size(self.group) == 0 && self.kind == ''Service'')
                                 ? has(self.port) : true'
-                          supportedFormats:
-                            description: SupportedFormats declares the provider-native
-                              API formats this provider supports.
+                          formats:
+                            description: Formats declares the provider-native API
+                              formats this provider supports.
                             items:
-                              description: ProviderFormat specifies a provider-native
+                              description: ProviderFormatConfig configures a provider-native
                                 LLM API format.
-                              enum:
-                              - Completions
-                              - Messages
-                              - Responses
-                              - Embeddings
-                              - AnthropicTokenCount
-                              - Realtime
-                              type: string
+                              properties:
+                                path:
+                                  description: |-
+                                    Path overrides the default upstream path for this format.
+                                    If unset, agentgateway uses the default path for the format.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  type: string
+                                type:
+                                  description: Type is the provider-native API format.
+                                  enum:
+                                  - Completions
+                                  - Messages
+                                  - Responses
+                                  - Embeddings
+                                  - AnthropicTokenCount
+                                  - Realtime
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                            maxItems: 6
                             minItems: 1
                             type: array
-                            x-kubernetes-list-type: set
+                            x-kubernetes-list-map-keys:
+                            - type
+                            x-kubernetes-list-type: map
                         required:
-                        - supportedFormats
+                        - formats
                         type: object
                         x-kubernetes-validations:
                         - message: custom provider backendRef must be namespace-local
@@ -5442,6 +5479,10 @@ spec:
                         : true'
                     - message: path and pathPrefix are mutually exclusive
                       rule: '!(has(self.path) && has(self.pathPrefix))'
+                    - message: path, pathPrefix, and custom format paths are mutually
+                        exclusive
+                      rule: '!(has(self.custom) && self.custom.formats.exists(f, has(f.path))
+                        && (has(self.path) || has(self.pathPrefix)))'
                     - message: pathPrefix requires host to be set
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
                     - message: exactly one of the fields in [openai azureopenai azure

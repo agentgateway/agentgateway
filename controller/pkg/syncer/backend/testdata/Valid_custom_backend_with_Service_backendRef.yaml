@@ -2,8 +2,8 @@ ai:
   providerGroups:
   - providers:
     - custom:
-        supportedFormats:
-        - COMPLETIONS
+        formats:
+        - format: COMPLETIONS
       name: backend
       providerBackend:
         port: 8080

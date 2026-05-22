@@ -6,15 +6,15 @@ use crate::*;
 
 #[apply(schema!)]
 pub struct Provider {
-	pub supported_formats: Vec<ProviderFormat>,
+	pub formats: Vec<ProviderFormatConfig>,
 }
 
 impl Provider {
 	pub fn supports(&self, format: InputFormat) -> bool {
 		self
-			.supported_formats
+			.formats
 			.iter()
-			.any(|supported| supported.supports(format))
+			.any(|supported| supported.format.supports(format))
 	}
 
 	pub fn native_format_for(&self, input_format: InputFormat) -> Option<InputFormat> {
@@ -32,10 +32,25 @@ impl Provider {
 			.copied()
 			.find(|format| self.supports(*format))
 	}
+
+	pub fn path_for(&self, format: InputFormat) -> Option<&str> {
+		self
+			.formats
+			.iter()
+			.find(|supported| supported.format.supports(format))
+			.and_then(|supported| supported.path.as_deref())
+	}
 }
 
 impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("custom");
+}
+
+#[apply(schema!)]
+pub struct ProviderFormatConfig {
+	#[serde(rename = "type")]
+	pub format: ProviderFormat,
+	pub path: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -68,7 +83,12 @@ mod tests {
 	use super::*;
 
 	fn provider(supported_formats: Vec<ProviderFormat>) -> Provider {
-		Provider { supported_formats }
+		Provider {
+			formats: supported_formats
+				.into_iter()
+				.map(|format| ProviderFormatConfig { format, path: None })
+				.collect(),
+		}
 	}
 
 	#[test]
@@ -94,5 +114,27 @@ mod tests {
 			embeddings_only.native_format_for(InputFormat::Completions),
 			None
 		);
+	}
+
+	#[test]
+	fn path_for_returns_format_path() {
+		let provider = Provider {
+			formats: vec![
+				ProviderFormatConfig {
+					format: ProviderFormat::Completions,
+					path: Some(strng::literal!("/v1/chat/completions")),
+				},
+				ProviderFormatConfig {
+					format: ProviderFormat::Messages,
+					path: Some(strng::literal!("/api/messages")),
+				},
+			],
+		};
+
+		assert_eq!(
+			provider.path_for(InputFormat::Messages),
+			Some("/api/messages")
+		);
+		assert_eq!(provider.path_for(InputFormat::Responses), None);
 	}
 }

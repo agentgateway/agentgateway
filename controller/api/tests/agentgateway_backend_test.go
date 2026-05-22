@@ -30,8 +30,8 @@ spec:
   backendRef:
     name: llm-service
     port: 8080
-  supportedFormats:
-  - Completions`,
+  formats:
+  - type: Completions`,
 			wantValid: true,
 		},
 		{
@@ -41,21 +41,22 @@ spec:
     group: inference.networking.k8s.io
     kind: InferencePool
     name: llama-pool
-  supportedFormats:
-  - Completions`,
+  formats:
+  - type: Completions`,
 			wantValid: true,
 		},
 		{
 			name: "direct host port",
 			provider: `custom:
-  supportedFormats:
-  - Messages
+  formats:
+  - type: Messages
+    path: /api/chat
 host: llm.example.com
 port: 443`,
 			wantValid: true,
 		},
 		{
-			name: "missing supportedFormats",
+			name: "missing formats",
 			provider: `custom:
   backendRef:
     name: llm-service
@@ -63,12 +64,12 @@ port: 443`,
 			wantValid: false,
 		},
 		{
-			name: "empty supportedFormats",
+			name: "empty formats",
 			provider: `custom:
   backendRef:
     name: llm-service
     port: 8080
-  supportedFormats: []`,
+  formats: []`,
 			wantValid: false,
 		},
 		{
@@ -77,15 +78,38 @@ port: 443`,
   backendRef:
     name: llm-service
     port: 8080
-  supportedFormats:
-  - Detect`,
+  formats:
+  - type: Detect`,
+			wantValid: false,
+		},
+		{
+			name: "path and custom format path",
+			provider: `custom:
+  backendRef:
+    name: llm-service
+    port: 8080
+  formats:
+  - type: Messages
+    path: /api/messages
+path: /v1/messages`,
+			wantValid: false,
+		},
+		{
+			name: "pathPrefix and custom format path",
+			provider: `custom:
+  formats:
+  - type: Messages
+    path: /api/messages
+host: llm.example.com
+port: 443
+pathPrefix: /custom`,
 			wantValid: false,
 		},
 		{
 			name: "missing target",
 			provider: `custom:
-  supportedFormats:
-  - Completions`,
+  formats:
+  - type: Completions`,
 			wantValid: false,
 		},
 		{
@@ -94,8 +118,8 @@ port: 443`,
   backendRef:
     name: llm-service
     port: 8080
-  supportedFormats:
-  - Completions
+  formats:
+  - type: Completions
 host: llm.example.com
 port: 443`,
 			wantValid: false,
@@ -107,8 +131,8 @@ port: 443`,
     name: llm-service
     namespace: other
     port: 8080
-  supportedFormats:
-  - Completions`,
+  formats:
+  - type: Completions`,
 			wantValid: false,
 		},
 		{
@@ -118,8 +142,8 @@ port: 443`,
     group: agentgateway.dev
     kind: AgentgatewayBackend
     name: other-backend
-  supportedFormats:
-  - Completions`,
+  formats:
+  - type: Completions`,
 			wantValid: false,
 		},
 	}

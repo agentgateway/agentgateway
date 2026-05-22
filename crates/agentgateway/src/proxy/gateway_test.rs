@@ -1123,14 +1123,27 @@ fn setup_custom_llm_provider_backend_mock(
 	mock: MockServer,
 	supported_formats: Vec<custom::ProviderFormat>,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		supported_formats
+			.into_iter()
+			.map(|format| custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+fn setup_custom_llm_provider_backend_mock_with_formats(
+	mock: MockServer,
+	formats: Vec<custom::ProviderFormatConfig>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let backend_name = "custom-ai";
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_bind(simple_bind())
-		.with_raw_backend(custom_llm_backend(
+		.with_raw_backend(custom_llm_backend_with_formats(
 			backend_name,
 			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
-			supported_formats,
+			formats,
 		))
 		.with_route(basic_named_route(strng::format!("/{backend_name}")));
 	let io = t.serve_http(BIND_KEY);
@@ -1203,6 +1216,38 @@ async fn llm_custom_provider_uses_native_format_fallback() {
 		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
 	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
 	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_format_path_override() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) = setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/api/messages"
+	);
 }
 
 #[tokio::test]

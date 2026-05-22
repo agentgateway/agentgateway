@@ -2,9 +2,10 @@ ai:
   providerGroups:
   - providers:
     - custom:
-        supportedFormats:
-        - COMPLETIONS
-        - RESPONSES
+        formats:
+        - format: COMPLETIONS
+        - format: RESPONSES
+          path: /v1/responses
       hostOverride:
         host: llm.example.com
         port: 443

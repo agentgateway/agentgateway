@@ -5970,16 +5970,34 @@
     "Provider8": {
       "type": "object",
       "properties": {
-        "supportedFormats": {
+        "formats": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/ProviderFormat"
+            "$ref": "#/$defs/ProviderFormatConfig"
           }
         }
       },
       "additionalProperties": false,
       "required": [
-        "supportedFormats"
+        "formats"
+      ]
+    },
+    "ProviderFormatConfig": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ProviderFormat"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
       ]
     },
     "ProviderFormat": {

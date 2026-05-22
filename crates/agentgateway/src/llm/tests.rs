@@ -1330,6 +1330,45 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
 
+#[test]
+fn setup_request_custom_path_override_wins_over_format_path() {
+	let provider = AIProvider::Custom(custom::Provider {
+		formats: vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		native_format: InputFormat::Messages,
+		request_model: "input-model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/chat/completions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			Some("/override/messages"),
+			None,
+			true,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/override/messages");
+	assert_eq!(req.uri().query(), None);
+}
+
 fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,

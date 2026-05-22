@@ -1412,15 +1412,20 @@ message AIBackend {
     FOUNDRY = 1;
   }
   enum ProviderFormat {
-    COMPLETIONS = 0;
-    MESSAGES = 1;
-    RESPONSES = 2;
-    EMBEDDINGS = 3;
-    ANTHROPIC_TOKEN_COUNT = 4;
-    REALTIME = 5;
+    PROVIDER_FORMAT_UNSPECIFIED = 0;
+    COMPLETIONS = 1;
+    MESSAGES = 2;
+    RESPONSES = 3;
+    EMBEDDINGS = 4;
+    ANTHROPIC_TOKEN_COUNT = 5;
+    REALTIME = 6;
+  }
+  message ProviderFormatConfig {
+    ProviderFormat format = 1;
+    optional string path = 2;
   }
   message Custom {
-    repeated ProviderFormat supported_formats = 1;
+    repeated ProviderFormatConfig formats = 1;
   }
 
   message Provider {

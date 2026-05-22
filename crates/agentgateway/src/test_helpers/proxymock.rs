@@ -183,9 +183,24 @@ pub fn custom_llm_backend(
 	provider_backend: SimpleBackendReference,
 	supported_formats: Vec<crate::llm::custom::ProviderFormat>,
 ) -> BackendWithPolicies {
+	custom_llm_backend_with_formats(
+		name,
+		provider_backend,
+		supported_formats
+			.into_iter()
+			.map(|format| crate::llm::custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+pub fn custom_llm_backend_with_formats(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	formats: Vec<crate::llm::custom::ProviderFormatConfig>,
+) -> BackendWithPolicies {
 	let provider = NamedAIProvider {
 		name: "default".into(),
-		provider: AIProvider::Custom(crate::llm::custom::Provider { supported_formats }),
+		provider: AIProvider::Custom(crate::llm::custom::Provider { formats }),
 		provider_backend: Some(provider_backend),
 		host_override: None,
 		path_override: None,

@@ -2088,7 +2088,9 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
-|`binds[].listeners[].routes[].backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string||
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -3194,7 +3196,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -8266,7 +8270,9 @@
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string||
 |`backends[].ai.provider.custom`|object||
-|`backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`backends[].ai.provider.custom.formats`|[]object||
+|`backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`backends[].ai.provider.custom.formats[].path`|string||
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -9372,7 +9378,9 @@
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`backends[].ai.groups[].providers[].provider.custom`|object||
-|`backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
+|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -13537,7 +13545,9 @@
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.custom`|object||
-|`routeGroups[].routes[].backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats`|[]object||
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string||
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -14643,7 +14653,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|

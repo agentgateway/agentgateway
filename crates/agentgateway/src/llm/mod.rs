@@ -523,12 +523,16 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Custom(_) => http::modify_req(req, |req| {
+			AIProvider::Custom(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					let Some(native_route_type) = llm_request.and_then(|l| l.native_format.route_type())
 					else {
 						return Ok(());
 					};
+					if let Some(path) = llm_request.and_then(|l| provider.path_for(l.native_format)) {
+						Self::set_path_and_query(uri, path)?;
+						return Ok(());
+					}
 					let path = match native_route_type {
 						RouteType::Messages | RouteType::AnthropicTokenCount => format!(
 							"{}{}",

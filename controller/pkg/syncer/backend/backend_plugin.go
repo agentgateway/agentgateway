@@ -524,13 +524,13 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 	} else if llm.Custom != nil {
-		formats, err := translateProviderFormats(llm.Custom.SupportedFormats)
+		formats, err := translateProviderFormats(llm.Custom.Formats)
 		if err != nil {
 			return nil, err
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{
 			Custom: &api.AIBackend_Custom{
-				SupportedFormats: formats,
+				Formats: formats,
 			},
 		}
 		if llm.Custom.BackendRef != nil {
@@ -547,27 +547,39 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 	return provider, nil
 }
 
-func translateProviderFormats(formats []agentgateway.ProviderFormat) ([]api.AIBackend_ProviderFormat, error) {
-	out := make([]api.AIBackend_ProviderFormat, 0, len(formats))
+func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
+	out := make([]*api.AIBackend_ProviderFormatConfig, 0, len(formats))
 	for _, format := range formats {
-		switch format {
-		case agentgateway.ProviderFormatCompletions:
-			out = append(out, api.AIBackend_COMPLETIONS)
-		case agentgateway.ProviderFormatMessages:
-			out = append(out, api.AIBackend_MESSAGES)
-		case agentgateway.ProviderFormatResponses:
-			out = append(out, api.AIBackend_RESPONSES)
-		case agentgateway.ProviderFormatEmbeddings:
-			out = append(out, api.AIBackend_EMBEDDINGS)
-		case agentgateway.ProviderFormatAnthropicTokenCount:
-			out = append(out, api.AIBackend_ANTHROPIC_TOKEN_COUNT)
-		case agentgateway.ProviderFormatRealtime:
-			out = append(out, api.AIBackend_REALTIME)
-		default:
-			return nil, fmt.Errorf("unsupported custom provider format %q", format)
+		protoFormat, err := translateProviderFormat(format.Type)
+		if err != nil {
+			return nil, err
 		}
+		protoConfig := &api.AIBackend_ProviderFormatConfig{Format: protoFormat}
+		if format.Path != "" {
+			protoConfig.Path = ptr.Of(string(format.Path))
+		}
+		out = append(out, protoConfig)
 	}
 	return out, nil
+}
+
+func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_ProviderFormat, error) {
+	switch format {
+	case agentgateway.ProviderFormatCompletions:
+		return api.AIBackend_COMPLETIONS, nil
+	case agentgateway.ProviderFormatMessages:
+		return api.AIBackend_MESSAGES, nil
+	case agentgateway.ProviderFormatResponses:
+		return api.AIBackend_RESPONSES, nil
+	case agentgateway.ProviderFormatEmbeddings:
+		return api.AIBackend_EMBEDDINGS, nil
+	case agentgateway.ProviderFormatAnthropicTokenCount:
+		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
+	case agentgateway.ProviderFormatRealtime:
+		return api.AIBackend_REALTIME, nil
+	default:
+		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
+	}
 }
 
 func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref gwv1.BackendObjectReference) (*api.BackendReference, error) {

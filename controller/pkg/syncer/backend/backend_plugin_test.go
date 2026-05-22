@@ -455,9 +455,9 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								SupportedFormats: []agentgateway.ProviderFormat{
-									agentgateway.ProviderFormatCompletions,
-									agentgateway.ProviderFormatResponses,
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatCompletions},
+									{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},
 								},
 							},
 							Host: "llm.example.com",
@@ -482,8 +482,8 @@ func TestBuildAIBackend(t *testing.T) {
 									Name: "llm-service",
 									Port: ptr.Of(gwv1.PortNumber(8080)),
 								},
-								SupportedFormats: []agentgateway.ProviderFormat{
-									agentgateway.ProviderFormatCompletions,
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatCompletions},
 								},
 							},
 						},
@@ -508,8 +508,8 @@ func TestBuildAIBackend(t *testing.T) {
 									Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
 									Name:  "llm-pool",
 								},
-								SupportedFormats: []agentgateway.ProviderFormat{
-									agentgateway.ProviderFormatMessages,
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatMessages, Path: "/api/messages"},
 								},
 							},
 						},
@@ -795,7 +795,9 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 							Name: "llm-service",
 							Port: ptr.Of(gwv1.PortNumber(8080)),
 						},
-						SupportedFormats: []agentgateway.ProviderFormat{agentgateway.ProviderFormatCompletions},
+						Formats: []agentgateway.ProviderFormatConfig{
+							{Type: agentgateway.ProviderFormatCompletions},
+						},
 					},
 				},
 				PriorityGroups: []agentgateway.PriorityGroup{
@@ -810,7 +812,9 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 											Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
 											Name:  "llm-pool",
 										},
-										SupportedFormats: []agentgateway.ProviderFormat{agentgateway.ProviderFormatMessages},
+										Formats: []agentgateway.ProviderFormatConfig{
+											{Type: agentgateway.ProviderFormatMessages},
+										},
 									},
 								},
 							},

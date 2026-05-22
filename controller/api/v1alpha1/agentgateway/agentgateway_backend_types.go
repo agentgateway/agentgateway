@@ -215,6 +215,7 @@ type NamedLLMProvider struct {
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) ? has(self.custom.backendRef) != has(self.host) : true",message="custom providers must specify exactly one of backendRef or host and port"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.custom) && self.custom.formats.exists(f, has(f.path)) && (has(self.path) || has(self.pathPrefix)))",message="path, pathPrefix, and custom format paths are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
 type LLMProvider struct {
 	// OpenAI provider
@@ -286,11 +287,25 @@ type CustomProvider struct {
 	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
-	// SupportedFormats declares the provider-native API formats this provider supports.
+	// Formats declares the provider-native API formats this provider supports.
 	// +kubebuilder:validation:MinItems=1
-	// +listType=set
+	// +kubebuilder:validation:MaxItems=6
+	// +listType=map
+	// +listMapKey=type
 	// +required
-	SupportedFormats []ProviderFormat `json:"supportedFormats"`
+	Formats []ProviderFormatConfig `json:"formats"`
+}
+
+// ProviderFormatConfig configures a provider-native LLM API format.
+type ProviderFormatConfig struct {
+	// Type is the provider-native API format.
+	// +required
+	Type ProviderFormat `json:"type"`
+
+	// Path overrides the default upstream path for this format.
+	// If unset, agentgateway uses the default path for the format.
+	// +optional
+	Path LongString `json:"path,omitempty"`
 }
 
 // ProviderFormat specifies a provider-native LLM API format.

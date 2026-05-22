@@ -538,6 +538,9 @@ fn convert_provider_format(
 	use proto::agent::ai_backend::ProviderFormat as ProtoFormat;
 
 	match ProtoFormat::try_from(proto_format) {
+		Ok(ProtoFormat::Unspecified) => Err(ProtoError::Generic(format!(
+			"AI backend custom provider at index {provider_idx} has unspecified format"
+		))),
 		Ok(ProtoFormat::Completions) => Ok(llm::custom::ProviderFormat::Completions),
 		Ok(ProtoFormat::Messages) => Ok(llm::custom::ProviderFormat::Messages),
 		Ok(ProtoFormat::Responses) => Ok(llm::custom::ProviderFormat::Responses),
@@ -548,6 +551,16 @@ fn convert_provider_format(
 			"AI backend custom provider at index {provider_idx} has unknown supported format value {proto_format}"
 		))),
 	}
+}
+
+fn convert_provider_format_config(
+	proto_format: &proto::agent::ai_backend::ProviderFormatConfig,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderFormatConfig, ProtoError> {
+	Ok(llm::custom::ProviderFormatConfig {
+		format: convert_provider_format(proto_format.format, provider_idx)?,
+		path: proto_format.path.as_ref().map(strng::new),
+	})
 }
 
 fn convert_backend_ai_policy(
@@ -1169,17 +1182,17 @@ pub(crate) fn backend_with_policies_from_proto(
 							)));
 						},
 						Some(provider::Provider::Custom(custom)) => {
-							if custom.supported_formats.is_empty() {
+							if custom.formats.is_empty() {
 								return Err(ProtoError::Generic(format!(
-									"AI backend custom provider at index {provider_idx} must specify at least one supported format"
+									"AI backend custom provider at index {provider_idx} must specify at least one format"
 								)));
 							}
-							let supported_formats = custom
-								.supported_formats
+							let formats = custom
+								.formats
 								.iter()
-								.map(|format| convert_provider_format(*format, provider_idx))
+								.map(|format| convert_provider_format_config(format, provider_idx))
 								.collect::<Result<Vec<_>, _>>()?;
-							AIProvider::Custom(llm::custom::Provider { supported_formats })
+							AIProvider::Custom(llm::custom::Provider { formats })
 						},
 						None => {
 							return Err(ProtoError::Generic(format!(
@@ -3808,7 +3821,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_custom_provider_state_from_xds() -> Result<(), ProtoError> {
 		use proto::agent::ai_backend::provider::Provider;
-		use proto::agent::ai_backend::{Custom, ProviderFormat};
+		use proto::agent::ai_backend::{Custom, ProviderFormat, ProviderFormatConfig};
 		use proto::agent::backend_reference;
 
 		let proto_backend = proto::agent::Backend {
@@ -3834,9 +3847,15 @@ mod tests {
 							)),
 						}),
 						provider: Some(Provider::Custom(Custom {
-							supported_formats: vec![
-								ProviderFormat::Completions as i32,
-								ProviderFormat::Messages as i32,
+							formats: vec![
+								ProviderFormatConfig {
+									format: ProviderFormat::Completions as i32,
+									path: None,
+								},
+								ProviderFormatConfig {
+									format: ProviderFormat::Messages as i32,
+									path: Some("/api/messages".to_string()),
+								},
 							],
 						})),
 						inline_policies: vec![],
@@ -3855,17 +3874,16 @@ mod tests {
 		let AIProvider::Custom(custom) = &provider.provider else {
 			panic!("Expected AIProvider::Custom");
 		};
-		assert_eq!(custom.supported_formats.len(), 2);
+		assert_eq!(custom.formats.len(), 2);
 		assert!(
 			custom
-				.supported_formats
-				.contains(&llm::custom::ProviderFormat::Completions)
+				.formats
+				.iter()
+				.any(|format| format.format == llm::custom::ProviderFormat::Completions)
 		);
-		assert!(
-			custom
-				.supported_formats
-				.contains(&llm::custom::ProviderFormat::Messages)
-		);
+		assert!(custom.formats.iter().any(|format| format.format
+			== llm::custom::ProviderFormat::Messages
+			&& format.path.as_deref() == Some("/api/messages")));
 		let Some(SimpleBackendReference::Service { name, port }) = provider.provider_backend.as_ref()
 		else {
 			panic!("Expected custom provider backend reference to resolve to a Service");
