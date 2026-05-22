@@ -556,7 +556,8 @@ func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*a
 		}
 		protoConfig := &api.AIBackend_ProviderFormatConfig{Format: protoFormat}
 		if format.Path != "" {
-			protoConfig.Path = ptr.Of(string(format.Path))
+			path := string(format.Path)
+			protoConfig.Path = &path
 		}
 		out = append(out, protoConfig)
 	}
