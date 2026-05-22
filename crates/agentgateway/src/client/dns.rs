@@ -87,7 +87,11 @@ impl CacheEntry {
 					(expiry, false)
 				},
 				Err(e) => {
-					// if we got an error, retain the last state
+					if self.entries.load().is_none() {
+						let cb = CircularBuffer::new(Default::default());
+						self.entries.store(Some(Arc::new(cb)));
+					}
+					// If we got an error, retain the last successful state when one exists.
 					debug!("resolution failed: {e:?}");
 
 					backoff = std::cmp::min(backoff * 2, ERROR_BACKOFF_MAX);
