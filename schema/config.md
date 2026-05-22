@@ -2063,7 +2063,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini`|object||
@@ -2087,6 +2087,8 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -3167,7 +3169,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -3191,6 +3193,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -8237,7 +8241,7 @@
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string||
-|`backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`backends[].ai.provider.openAI`|object||
 |`backends[].ai.provider.openAI.model`|string||
 |`backends[].ai.provider.gemini`|object||
@@ -8261,6 +8265,8 @@
 |`backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string||
+|`backends[].ai.provider.custom`|object||
+|`backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -9341,7 +9347,7 @@
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object||
 |`backends[].ai.groups[].providers[].name`|string||
-|`backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`backends[].ai.groups[].providers[].provider.openAI`|object||
 |`backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -9365,6 +9371,8 @@
 |`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string||
+|`backends[].ai.groups[].providers[].provider.custom`|object||
+|`backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -13504,7 +13512,7 @@
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string||
-|`routeGroups[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`routeGroups[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routeGroups[].routes[].backends[].ai.provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.provider.openAI.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.gemini`|object||
@@ -13528,6 +13536,8 @@
 |`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string||
+|`routeGroups[].routes[].backends[].ai.provider.custom`|object||
+|`routeGroups[].routes[].backends[].ai.provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -14608,7 +14618,7 @@
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].name`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, or copilot may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
@@ -14632,6 +14642,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.supportedFormats`|[]enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|

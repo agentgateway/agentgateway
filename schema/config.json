@@ -5800,6 +5800,18 @@
             "copilot"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -5954,6 +5966,32 @@
         }
       },
       "additionalProperties": false
+    },
+    "Provider8": {
+      "type": "object",
+      "properties": {
+        "supportedFormats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProviderFormat"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "supportedFormats"
+      ]
+    },
+    "ProviderFormat": {
+      "type": "string",
+      "enum": [
+        "completions",
+        "messages",
+        "responses",
+        "embeddings",
+        "anthropicTokenCount",
+        "realtime"
+      ]
     },
     "LocalBackendPolicies": {
       "type": "object",

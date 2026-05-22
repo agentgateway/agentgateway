@@ -1171,13 +1171,48 @@ async fn llm_custom_provider_routes_to_provider_backend() {
 }
 
 #[tokio::test]
+async fn llm_custom_provider_uses_native_format_fallback() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let response_body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
+	assert_eq!(response_body["object"], "chat.completion");
+	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["completion_tokens"], 21);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/messages"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
+	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
 async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 	let mock = body_mock(include_bytes!(
 		"../llm/tests/response/completions/basic.json"
 	))
 	.await;
 	let (mock, _bind, io) =
-		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
 
 	let res = send_request_body(
 		io,

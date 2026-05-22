@@ -336,6 +336,7 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Responses,
+			native_format: InputFormat::Responses,
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

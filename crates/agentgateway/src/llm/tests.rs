@@ -13,6 +13,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,
 		input_format: InputFormat::Completions,
+		native_format: InputFormat::Completions,
 		request_model: "test-model".into(),
 		provider: "test-provider".into(),
 		streaming: true,
@@ -682,6 +683,7 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
+			native_format: input_format,
 			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
@@ -1160,6 +1162,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
+		native_format: InputFormat::Completions,
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: true,
@@ -1241,6 +1244,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,
+				native_format: InputFormat::Completions,
 				request_model: "input-model".into(),
 				provider: Default::default(),
 				streaming: true,
@@ -1330,6 +1334,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Messages,
+		native_format: InputFormat::Messages,
 		request_model: request_model.into(),
 		provider: Default::default(),
 		streaming: false,

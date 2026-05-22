@@ -66,6 +66,7 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Embeddings,
+			native_format: InputFormat::Embeddings,
 			request_model: model,
 			provider,
 			streaming: false,

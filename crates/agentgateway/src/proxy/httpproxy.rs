@@ -1960,6 +1960,7 @@ async fn make_backend_call(
 						log.add(|l| {
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
+								native_format: InputFormat::Realtime,
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),

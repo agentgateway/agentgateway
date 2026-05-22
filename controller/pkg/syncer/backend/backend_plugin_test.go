@@ -504,8 +504,8 @@ func TestBuildAIBackend(t *testing.T) {
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
 								BackendRef: &gwv1.BackendObjectReference{
-									Group: ptr.Of(gwv1.Group(wellknown.InferencePoolGVK.Group)),
-									Kind:  ptr.Of(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
+									Group: new(gwv1.Group(wellknown.InferencePoolGVK.Group)),
+									Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
 									Name:  "llm-pool",
 								},
 								SupportedFormats: []agentgateway.ProviderFormat{
@@ -806,8 +806,8 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 								LLMProvider: agentgateway.LLMProvider{
 									Custom: &agentgateway.CustomProvider{
 										BackendRef: &gwv1.BackendObjectReference{
-											Group: ptr.Of(gwv1.Group(wellknown.InferencePoolGVK.Group)),
-											Kind:  ptr.Of(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
+											Group: new(gwv1.Group(wellknown.InferencePoolGVK.Group)),
+											Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
 											Name:  "llm-pool",
 										},
 										SupportedFormats: []agentgateway.ProviderFormat{agentgateway.ProviderFormatMessages},
