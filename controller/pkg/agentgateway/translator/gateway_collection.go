@@ -385,24 +385,32 @@ const (
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for _, listener := range listeners {
-		hset := sets.New(listener.ParentInfo.Hostnames...)
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
 			if p.protocol == listener.ParentInfo.Protocol {
-				if p.hostnames.Intersection(hset).Len() == 0 {
-					p.hostnames = p.hostnames.Merge(hset)
-				} else {
+				if hasAnyHostname(p.hostnames, listener.ParentInfo.Hostnames) {
 					listener.Conflict = ListenerConflictHostname
+				} else {
+					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
 				}
 			} else {
 				listener.Conflict = ListenerConflictProtocol
 			}
 		} else {
 			portMap[listener.ParentInfo.Port] = &portProtocol{
-				hostnames: hset,
+				hostnames: sets.New(listener.ParentInfo.Hostnames...),
 				protocol:  listener.ParentInfo.Protocol,
 			}
 		}
 	}
+}
+
+func hasAnyHostname(seen sets.String, hostnames []string) bool {
+	for _, hostname := range hostnames {
+		if seen.Contains(hostname) {
+			return true
+		}
+	}
+	return false
 }
 
 type ListenerSet struct {
