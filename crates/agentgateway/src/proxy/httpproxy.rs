@@ -9,7 +9,6 @@ use ::http::{HeaderMap, header};
 use anyhow::anyhow;
 use frozen_collections::Len;
 use headers::HeaderMapExt;
-use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::RngExt;
@@ -494,11 +493,7 @@ where
 }
 
 impl HTTPProxy {
-	pub async fn proxy(
-		&self,
-		connection: Arc<Extension>,
-		mut req: ::http::Request<Incoming>,
-	) -> Response {
+	pub async fn proxy(&self, connection: Arc<Extension>, mut req: Request) -> Response {
 		let start = agent_core::Timestamp::now();
 
 		dtrace::trace(|f| f.request_started());
@@ -596,7 +591,7 @@ impl HTTPProxy {
 
 	async fn proxy_internal(
 		&self,
-		req: ::http::Request<Incoming>,
+		mut req: Request,
 		log: &mut RequestLog,
 		response_policies: &mut ResponsePolicies,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -607,7 +602,6 @@ impl HTTPProxy {
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
-		let mut req = req.map(http::Body::new);
 
 		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 			return Err(ProxyResponse::Error(ProxyError::BindNotFound)).snapshot_on_err(log, &mut req);

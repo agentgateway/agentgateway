@@ -444,7 +444,7 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 	let (_mock, _bind, io) = basic_setup().await;
-	let mut trace_rx = crate::proxy::dtrace::track();
+	let mut trace_rx = crate::proxy::dtrace::track_expression(None);
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -464,6 +464,49 @@ async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 		.filter(|event| event["message"]["type"] == "requestStarted")
 		.count();
 	assert_eq!(request_started, 1, "{events:#?}");
+}
+
+#[tokio::test]
+async fn debug_trace_expression_watchers_match_first_request() {
+	let (_mock, _bind, io) = basic_setup().await;
+	let mut first_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/first'").unwrap(),
+	));
+	let mut second_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/second'").unwrap(),
+	));
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/second").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), first_trace_rx.recv())
+			.await
+			.is_err(),
+		"first watcher should remain queued when its expression does not match",
+	);
+	let second_event = tokio::time::timeout(Duration::from_secs(1), second_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(second_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/first").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let first_event = tokio::time::timeout(Duration::from_secs(1), first_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(first_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
 }
 
 #[tokio::test]

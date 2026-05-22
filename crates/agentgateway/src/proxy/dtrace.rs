@@ -1,12 +1,16 @@
+use std::pin::Pin;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::task::{Context, Poll};
 
 pub use Severity::*;
 use agent_core::prelude::*;
-use arc_swap::ArcSwapOption;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use crate::cel::{Executor, Expression};
+use crate::http::Request;
 use crate::types::agent::{RouteKey, Target};
 tokio::task_local! {
 		static ACTIVE: Option<DebugTracer>;
@@ -400,27 +404,103 @@ impl ScopeGuard {
 	}
 }
 
-static RECEIVER: ArcSwapOption<Sender<Message>> = ArcSwapOption::const_empty();
-
-pub fn track() -> Receiver<Message> {
-	let (tx, rx) = tokio::sync::mpsc::channel(32);
-	RECEIVER.store(Some(Arc::new(tx)));
-	rx
+struct Watcher {
+	id: u64,
+	expression: Option<Expression>,
+	sender: Sender<Message>,
 }
 
-fn take_sender() -> Option<Sender<Message>> {
-	RECEIVER
-		.swap(None)
-		.map(|v| Arc::try_unwrap(v).expect("can't unwrap Arc"))
+static HAS_WATCHERS: AtomicBool = AtomicBool::new(false);
+static NEXT_WATCHER_ID: AtomicU64 = AtomicU64::new(0);
+static WATCHERS: Mutex<Vec<Watcher>> = Mutex::new(Vec::new());
+
+pub struct TraceReceiver {
+	id: u64,
+	receiver: Receiver<Message>,
+}
+
+impl TraceReceiver {
+	#[cfg(test)]
+	pub async fn recv(&mut self) -> Option<Message> {
+		self.receiver.recv().await
+	}
+}
+
+impl tokio_stream::Stream for TraceReceiver {
+	type Item = Message;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		let this = self.get_mut();
+		Pin::new(&mut this.receiver).poll_recv(cx)
+	}
+}
+
+impl Drop for TraceReceiver {
+	fn drop(&mut self) {
+		remove_pending_watcher(self.id);
+	}
+}
+
+pub fn track_expression(expression: Option<Expression>) -> TraceReceiver {
+	let (tx, rx) = tokio::sync::mpsc::channel(32);
+	let id = NEXT_WATCHER_ID.fetch_add(1, Ordering::Relaxed);
+	let Ok(mut watchers) = WATCHERS.lock() else {
+		return TraceReceiver { id, receiver: rx };
+	};
+	watchers.push(Watcher {
+		id,
+		expression,
+		sender: tx,
+	});
+	HAS_WATCHERS.store(true, Ordering::Release);
+	TraceReceiver { id, receiver: rx }
+}
+
+fn remove_pending_watcher(id: u64) {
+	let Ok(mut watchers) = WATCHERS.lock() else {
+		HAS_WATCHERS.store(false, Ordering::Release);
+		return;
+	};
+	watchers.retain(|watcher| watcher.id != id);
+	if watchers.is_empty() {
+		HAS_WATCHERS.store(false, Ordering::Release);
+	}
+}
+
+fn take_sender(req: &Request) -> Option<Sender<Message>> {
+	if !HAS_WATCHERS.load(Ordering::Acquire) {
+		return None;
+	}
+	let Ok(mut watchers) = WATCHERS.lock() else {
+		HAS_WATCHERS.store(false, Ordering::Release);
+		return None;
+	};
+	watchers.retain(|watcher| !watcher.sender.is_closed());
+	if watchers.is_empty() {
+		HAS_WATCHERS.store(false, Ordering::Release);
+		return None;
+	}
+	let index = watchers
+		.iter()
+		.position(|watcher| match &watcher.expression {
+			Some(expression) => Executor::new_request(req).eval_bool(expression),
+			None => true,
+		})?;
+	let sender = watchers.remove(index).sender;
+	if watchers.is_empty() {
+		HAS_WATCHERS.store(false, Ordering::Release);
+	}
+	Some(sender)
 }
 
 impl DebugTracer {
-	pub async fn maybe_scope<F>(f: F) -> <F as Future>::Output
+	pub async fn maybe_scope<F, Fut>(req: Request, f: F) -> Fut::Output
 	where
-		F: Future,
+		F: FnOnce(Request) -> Fut,
+		Fut: Future,
 	{
-		let Some(tx) = take_sender() else {
-			return f.await;
+		let Some(tx) = take_sender(&req) else {
+			return f(req).await;
 		};
 		let ins = DebugTracer {
 			sender: tx,
@@ -430,7 +510,7 @@ impl DebugTracer {
 				stack: Vec::new(),
 			})),
 		};
-		ACTIVE.scope(Some(ins), f).await
+		ACTIVE.scope(Some(ins), f(req)).await
 	}
 	pub fn active() -> Option<Self> {
 		ACTIVE.try_with(Clone::clone).ok().flatten()

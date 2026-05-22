@@ -154,7 +154,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression)
 	if err != nil {
 		return err
 	}
@@ -232,8 +232,22 @@ func traceAdminAddress(target *traceTarget, adminPort int) (string, func(), erro
 	return adminForwarder.Address(), adminForwarder.Close, nil
 }
 
-func openTraceStream(ctx context.Context, adminAddress string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://%s/debug/trace", adminAddress), nil)
+func traceStreamURL(adminAddress, expression string) string {
+	u := url.URL{
+		Scheme: "http",
+		Host:   adminAddress,
+		Path:   "/debug/trace",
+	}
+	if expression != "" {
+		q := u.Query()
+		q.Set("expression", expression)
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
+}
+
+func openTraceStream(ctx context.Context, adminAddress, expression string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct trace request: %w", err)
 	}
