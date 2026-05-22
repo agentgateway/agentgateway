@@ -375,18 +375,13 @@ fn mcp_authorization_from_proto(
 
 fn mcp_authentication_from_proto(
 	m: &proto::agent::backend_policy_spec::McpAuthentication,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<McpAuthentication, ProtoError> {
 	if m.jwks_inline.is_empty() {
 		return Err(ProtoError::Generic(
 			"MCP Authentication requires jwks_inline to be set.".to_string(),
 		));
 	}
-	let jwks_json = m.jwks_inline.clone();
-
-	let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json).map_err(|e| {
-		ProtoError::Generic(format!("failed to parse JWKS for MCP Authentication: {e}"))
-	})?;
 
 	let audiences = (!m.audiences.is_empty()).then(|| m.audiences.clone());
 	let jwt_validation_options = m
@@ -396,13 +391,14 @@ fn mcp_authentication_from_proto(
 			required_claims: vo.required_claims.iter().cloned().collect(),
 		})
 		.unwrap_or_default();
-	let jwt_provider =
-		http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences, jwt_validation_options)
-			.map_err(|e| {
-				ProtoError::Generic(format!(
-					"failed to create JWT provider for MCP Authentication: {e}"
-				))
-			})?;
+	let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
+		diagnostics,
+		"MCP Authentication",
+		&m.jwks_inline,
+		m.issuer.clone(),
+		audiences,
+		jwt_validation_options,
+	);
 
 	let mode = match proto::agent::backend_policy_spec::mcp_authentication::Mode::try_from(m.mode)
 		.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
@@ -419,7 +415,7 @@ fn mcp_authentication_from_proto(
 	};
 
 	let jwt_validator = http::jwt::Jwt::from_providers(
-		vec![jwt_provider],
+		jwt_provider.into_iter().collect(),
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
 	);
@@ -432,6 +428,34 @@ fn mcp_authentication_from_proto(
 		mode,
 		m.client_id.clone(),
 	))
+}
+
+fn jwt_provider_from_inline_jwks_or_warn(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	jwks_json: &str,
+	issuer: String,
+	audiences: Option<Vec<String>>,
+	jwt_validation_options: http::jwt::JWTValidationOptions,
+) -> Option<http::jwt::Provider> {
+	let context = context.as_ref();
+	let jwk_set = match serde_json::from_str::<jsonwebtoken::jwk::JwkSet>(jwks_json) {
+		Ok(jwk_set) => jwk_set,
+		Err(err) => {
+			diagnostics.add_warning(format!("failed to parse JWKS for {context}: {err}"));
+			return None;
+		},
+	};
+
+	match http::jwt::Provider::from_jwks(jwk_set, issuer, audiences, jwt_validation_options) {
+		Ok(provider) => Some(provider),
+		Err(err) => {
+			diagnostics.add_warning(format!(
+				"failed to create JWT provider for {context}: {err}"
+			));
+			None
+		},
+	}
 }
 
 fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
@@ -1652,15 +1676,13 @@ fn traffic_policy_from_proto(
 				.iter()
 				.map(|p| {
 					let jwks_json = match &p.jwks_source {
-						Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
+						Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline,
 						None => {
 							return Err(ProtoError::Generic(
 								"JWT policy missing JWKS source".to_string(),
 							));
 						},
 					};
-					let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-						.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
 					let audiences = if p.audiences.is_empty() {
 						None
 					} else {
@@ -1673,15 +1695,19 @@ fn traffic_policy_from_proto(
 							required_claims: vo.required_claims.iter().cloned().collect(),
 						})
 						.unwrap_or_default();
-					http::jwt::Provider::from_jwks(
-						jwk_set,
+					Ok(jwt_provider_from_inline_jwks_or_warn(
+						diagnostics,
+						"JWT policy",
+						jwks_json,
 						p.issuer.clone(),
 						audiences,
 						jwt_validation_options,
-					)
-					.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
+					))
 				})
-				.collect::<Result<Vec<_>, _>>()?;
+				.collect::<Result<Vec<_>, _>>()?
+				.into_iter()
+				.flatten()
+				.collect();
 			let jwt_auth = http::jwt::Jwt::from_providers(
 				providers,
 				mode,
@@ -3241,6 +3267,66 @@ mod tests {
 				.to_string()
 				.contains("must all have the same traffic policy kind")
 		);
+	}
+
+	fn build_unsigned_token(kid: &str) -> String {
+		use base64::Engine as _;
+		use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+		let header = json!({ "alg": "ES256", "kid": kid });
+		let payload = json!({
+			"iss": "https://issuer.example.com",
+			"aud": "audience",
+			"exp": 4_102_444_800_u64,
+		});
+		let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+		let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+		let s = URL_SAFE_NO_PAD.encode(b"sig");
+		format!("{h}.{p}.{s}")
+	}
+
+	#[test]
+	fn test_traffic_jwt_invalid_jwks_warns_and_validates_no_keys() -> Result<(), ProtoError> {
+		use proto::agent::traffic_policy_spec as tps;
+
+		use crate::http::jwt::TokenError;
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: tps::PolicyPhase::Route as i32,
+			kind: Some(tps::Kind::Jwt(tps::Jwt {
+				mode: tps::jwt::Mode::Strict as i32,
+				providers: vec![tps::JwtProvider {
+					issuer: "https://issuer.example.com".to_string(),
+					audiences: vec!["audience".to_string()],
+					jwks_source: Some(tps::jwt_provider::JwksSource::Inline(
+						r#"{"keys":[{"kty":"EC","crv":"P-256","x":"x","y":"y"}]}"#.to_string(),
+					)),
+					..Default::default()
+				}],
+				..Default::default()
+			})),
+		};
+
+		let mut diagnostics = Diagnostics::default();
+		let policy = traffic_policy_from_proto(&spec, &mut diagnostics)?;
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1);
+		assert!(warnings[0].contains("failed to create JWT provider"));
+
+		let TrafficPolicy::JwtAuth(policy) = policy else {
+			panic!("expected JWT auth policy");
+		};
+		let jwt = &policy
+			.iter()
+			.next()
+			.expect("expected single JWT policy")
+			.pol
+			.jwt;
+		assert!(matches!(
+			jwt.validate_claims(&build_unsigned_token("kid")),
+			Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
+		));
+		Ok(())
 	}
 
 	#[test]
