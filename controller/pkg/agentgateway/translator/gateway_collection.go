@@ -2,6 +2,7 @@ package translator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -328,11 +329,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 		// - ListenerSet ordered alphabetically by “{namespace}/{name}”
 		slices.SortFunc(listenersFromSets, func(a, b ListenerSet) int {
 			// primary sort: creation timestamp (oldest first)
-			if cmp := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); cmp != 0 {
-				return cmp
+			if r := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); r != 0 {
+				return r
 			}
 			// secondary sort: alphabetically by "{namespace}/{name}"
-			return strings.Compare(a.Parent.String(), b.Parent.String())
+			if r := cmp.Compare(a.Parent.Namespace, b.Parent.Namespace); r != 0 {
+				return r
+			}
+			return cmp.Compare(a.Parent.Name, b.Parent.Name)
 		})
 
 		for _, ls := range listenersFromSets {
@@ -385,7 +389,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
 			if p.protocol == listener.ParentInfo.Protocol {
 				if p.hostnames.Intersection(hset).Len() == 0 {
-					p.hostnames = p.hostnames.Union(hset)
+					p.hostnames = p.hostnames.Merge(hset)
 				} else {
 					listener.Conflict = ListenerConflictHostname
 				}
