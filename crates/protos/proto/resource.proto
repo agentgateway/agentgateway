@@ -1095,6 +1095,14 @@ message BackendPolicySpec {
     message Webhook {
       BackendReference backend = 1;
       repeated HeaderMatch forward_header_matches = 3;
+
+      // Behavior when the webhook guardrail is unavailable or returns an
+      // error. Defaults to FAIL_CLOSED.
+      enum FailureMode {
+        FAIL_CLOSED = 0;
+        FAIL_OPEN = 1;
+      }
+      FailureMode failure_mode = 4;
     }
 
     message Moderation {
