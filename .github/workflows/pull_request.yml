@@ -137,8 +137,9 @@ jobs:
         go mod tidy
         git diff --exit-code go.mod go.sum
     - name: Gen
-      # TODO: the rest of codegen
-      run: make generate-apis check-clean-repo
+      run: |
+        make generate-apis check-clean-repo
+        make -C controller verify
 
   controller-e2e:
     runs-on: blacksmith-4vcpu-ubuntu-2404
