@@ -2402,11 +2402,30 @@
           "items": {
             "$ref": "#/$defs/HeaderMatch"
           }
+        },
+        "failureMode": {
+          "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/FailureMode"
         }
       },
       "additionalProperties": false,
       "required": [
         "target"
+      ]
+    },
+    "FailureMode": {
+      "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `FailClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files.",
+      "oneOf": [
+        {
+          "description": "Reject the request when the webhook guardrail is unavailable (default).",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request through when the webhook guardrail is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "Moderation": {
@@ -3680,7 +3699,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode",
+          "$ref": "#/$defs/FailureMode2",
           "default": "failClosed"
         }
       },
@@ -3812,7 +3831,7 @@
         "value"
       ]
     },
-    "FailureMode": {
+    "FailureMode2": {
       "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
       "oneOf": [
         {
@@ -3849,7 +3868,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode",
+          "$ref": "#/$defs/FailureMode2",
           "default": "failClosed"
         }
       },
@@ -4311,7 +4330,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4502,7 +4521,7 @@
         }
       ]
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "oneOf": [
         {
           "type": "string",
@@ -4606,7 +4625,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4756,7 +4775,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -4867,7 +4886,7 @@
         }
       ]
     },
-    "FailureMode3": {
+    "FailureMode4": {
       "type": "string",
       "enum": [
         "failClosed",
@@ -4948,7 +4967,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5387,7 +5406,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode4"
+              "$ref": "#/$defs/FailureMode5"
             },
             {
               "type": "null"
@@ -5703,7 +5722,7 @@
         "conditional"
       ]
     },
-    "FailureMode4": {
+    "FailureMode5": {
       "oneOf": [
         {
           "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
@@ -8147,7 +8166,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode4"
+              "$ref": "#/$defs/FailureMode5"
             },
             {
               "type": "null"

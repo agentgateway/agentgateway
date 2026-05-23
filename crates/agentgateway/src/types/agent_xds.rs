@@ -3052,15 +3052,14 @@ fn convert_webhook(
 		&w.forward_header_matches,
 	)?;
 
-	let failure_mode = match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(
-		w.failure_mode,
-	) {
-		Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
-			llm::policy::FailureMode::FailOpen
-		},
-		// Default to FailClosed (proto default is FAIL_CLOSED = 0)
-		_ => llm::policy::FailureMode::FailClosed,
-	};
+	let failure_mode =
+		match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(w.failure_mode) {
+			Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
+				llm::policy::FailureMode::FailOpen
+			},
+			// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+			_ => llm::policy::FailureMode::FailClosed,
+		};
 
 	Ok(llm::policy::Webhook {
 		target,
