@@ -16,14 +16,14 @@
           "requirement": "ALTERNATIVE",
           "priority": 10,
           "userSetupAllowed": false,
-          "autheticatorFlow": false
+          "authenticatorFlow": false
         },
         {
           "authenticator": "auth-x509-client-username-form",
           "requirement": "ALTERNATIVE",
           "priority": 20,
           "userSetupAllowed": false,
-          "autheticatorFlow": false,
+          "authenticatorFlow": false,
           "authenticatorConfig": "x509-config"
         }
       ]

@@ -12,5 +12,6 @@ openssl x509 -req -in server.csr -CA ca-cert.pem -CAkey ca-key.pem -CAcreateseri
 # Generate Client cert
 openssl req -newkey rsa:2048 -keyout client-key.pem -out client.csr -nodes -subj "/CN=test-client"
 openssl x509 -req -in client.csr -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial -out client-cert.pem -days 365
+openssl pkcs12 -export -out client.p12 -inkey client-key.pem -in client-cert.pem -name "test-client" -passout pass:1234
 
 rm *.csr *.srl

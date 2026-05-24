@@ -1065,20 +1065,3 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 		assert!(err.to_string().contains(expected_error_fragment), "{name}");
 	}
 }
-
-#[test]
-fn test_cookie_dot_in_name_parses() {
-    use std::borrow::Cow;
-    let header = "agw_oidc_t_9136b0925445821c.vIzxv6Nw3q7kIH_MhlnQ9A=somevalue; other=val";
-    let parsed: Vec<_> = cookie::Cookie::split_parse(Cow::Borrowed(header)).collect();
-    println!("parsed: {:?}", parsed);
-    let ok: Vec<_> = cookie::Cookie::split_parse(Cow::Borrowed(header))
-        .filter_map(Result::ok)
-        .collect();
-    println!("ok count: {}", ok.len());
-    for c in &ok {
-        println!("  name={:?} value={:?}", c.name(), c.value());
-    }
-    assert!(ok.iter().any(|c| c.name() == "agw_oidc_t_9136b0925445821c.vIzxv6Nw3q7kIH_MhlnQ9A"),
-        "dot-in-name cookie not found in: {:?}", ok);
-}

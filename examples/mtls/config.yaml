@@ -11,9 +11,9 @@ binds:
       - name: default
         protocol: HTTPS
         tls:
-          cert: examples/mtls/certs/cert.pem
-          key: examples/mtls/certs/key.pem
-          root: examples/mtls/certs/ca-cert.pem
+          cert: certs/cert.pem
+          key: certs/key.pem
+          root: certs/ca-cert.pem
         routes:
           - name: keycloak-auth
             matches:

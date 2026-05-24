@@ -1000,7 +1000,7 @@ impl Gateway {
 					issuer: crate::strng::EMPTY,
 					subject: crate::strng::EMPTY,
 					subject_cn: None,
-					certificate: None
+					certificate: crate::strng::EMPTY
 				}),
 				server_name: None,
 				negotiated_alpn: None,

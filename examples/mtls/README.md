@@ -18,7 +18,6 @@ This example demonstrates how to use **AgentGateway** as an mTLS-terminating pro
 
 ## Prerequisites
 
-*   **Rust Patch**: This example requires a fix in the AgentGateway source code (provided during the setup of this example) to prevent OIDC cookie stripping. Ensure you have rebuilt the gateway with `cargo build`.
 *   **OpenSSL**: For generating certificates and browser bundles.
 
 ## Setup
@@ -26,16 +25,6 @@ This example demonstrates how to use **AgentGateway** as an mTLS-terminating pro
 1.  **Generate Certificates**:
     ```bash
     ./certs/gen.sh
-    ```
-
-2.  **Create Browser Certificate Bundle**:
-    Browsers require a PKCS#12 bundle (`.p12`) to use client certificates.
-    ```bash
-    openssl pkcs12 -export -out certs/client.p12 \
-                   -inkey certs/client-key.pem \
-                   -in certs/client-cert.pem \
-                   -name "test-client" \
-                   -passout pass:1234
     ```
 
 ## Running the Example
@@ -48,7 +37,7 @@ This example demonstrates how to use **AgentGateway** as an mTLS-terminating pro
 2.  **Start AgentGateway**:
     ```bash
     # Ensure you are using the rebuilt binary with the fix
-    export OIDC_COOKIE_SECRET="a-very-secret-key-32-chars-long!!"
+    export OIDC_COOKIE_SECRET="$(python3 -c 'import os; print(os.urandom(32).hex())')"
     cargo run -- -f config.yaml
     ```
 
@@ -62,21 +51,6 @@ This example demonstrates how to use **AgentGateway** as an mTLS-terminating pro
     *   The gateway will redirect you through Keycloak.
     *   You should be logged in automatically and see the message: 
         `"Success! You are authenticated via mTLS certificate and OIDC."`
-
-## Debugging with Curl
-
-You can verify the entire flow (including redirects) from the terminal:
-
-```bash
-curl -v -k -L --cert certs/client-cert.pem \
-              --key certs/client-key.pem \
-              https://localhost:3000/
-```
-
-Check the `mtls-keycloak` logs to see the certificate being processed:
-```bash
-docker logs -f mtls-keycloak
-```
 
 ## Configuration Summary
 

@@ -1732,7 +1732,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
-				certificate: Some("-----BEGIN%20CERTIFICATE-----test-----END CERTIFICATE-----".into())
+				certificate: Default::default()
 			}),
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),

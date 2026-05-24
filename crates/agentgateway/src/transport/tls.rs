@@ -989,9 +989,9 @@ pub struct TlsInfo {
 	/// The CN of the subject from the downstream certificate, if available.
 	#[serde(default)]
 	pub subject_cn: Option<Strng>,
-	/// URL-encoded PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
+	/// PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
 	#[serde(default)]
-	pub certificate: Option<Strng>,
+	pub certificate: Strng,
 }
 
 #[apply(schema!)]
@@ -1041,7 +1041,7 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 
 	let (issuer, subject, subject_cn) = names(&cert);
 	let (istio, sans) = sans(&cert).ok()?;
-	let certificate = certicate(cert);
+	let certificate = certificate(cert);
 	Some(TlsInfo {
 		identity: istio.into_iter().next().map(|i| {
 			let Identity::Spiffe {
@@ -1059,7 +1059,7 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 		issuer,
 		subject,
 		subject_cn,
-		certificate
+		certificate,
 	})
 }
 fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
@@ -1119,10 +1119,10 @@ fn sans(cert: &X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 	}
 	Ok((Vec::default(), Vec::default()))
 }
-fn certicate(cert: X509Certificate) -> Option<Strng> {
+fn certificate(cert: X509Certificate) -> Strng {
   let pem_block = pem::Pem::new("CERTIFICATE", cert.as_raw().to_vec());
   let pem_string = pem::encode(&pem_block);
-  Some(Strng::from(pem_string))
+  Strng::from(pem_string)
 }
 
 #[derive(thiserror::Error, Debug)]
