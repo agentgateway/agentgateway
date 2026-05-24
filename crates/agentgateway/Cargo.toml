@@ -140,7 +140,6 @@ tracing-subscriber.workspace = true
 tracing.workspace = true
 typespec_client_core.workspace = true
 url.workspace = true
-urlencoding.workspace = true
 uuid.workspace = true
 x509-parser.workspace = true
 reqwest.workspace = true

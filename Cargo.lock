@@ -279,7 +279,6 @@ dependencies = [
  "tracing-subscriber",
  "typespec_client_core",
  "url",
- "urlencoding",
  "uuid",
  "vector-map",
  "websocket-sans-io",

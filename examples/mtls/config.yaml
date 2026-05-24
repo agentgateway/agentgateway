@@ -25,7 +25,7 @@ binds:
               transformations:
                 request:
                   set:
-                    SSL_CLIENT_CERT: source.certificate
+                    SSL_CLIENT_CERT: url.encode(source.certificate)
                     X-Forwarded-Proto: '"https"'
                     X-Forwarded-Host: '"localhost:3000"'
 
@@ -49,4 +49,4 @@ binds:
               transformations:
                 request:
                   set:
-                    x-client-cert: source.certificate
+                    x-client-cert: url.encode(source.certificate)

@@ -1122,7 +1122,7 @@ fn sans(cert: &X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 fn certicate(cert: X509Certificate) -> Option<Strng> {
   let pem_block = pem::Pem::new("CERTIFICATE", cert.as_raw().to_vec());
   let pem_string = pem::encode(&pem_block);
-  Some(Strng::from(urlencoding::encode(&pem_string).into_owned()))
+  Some(Strng::from(pem_string))
 }
 
 #[derive(thiserror::Error, Debug)]
