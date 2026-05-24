@@ -544,7 +544,7 @@
           "default": null
         },
         "certificate": {
-          "description": "URL-encoded PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
+          "description": "PEM-encoded downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
           "type": [
             "string",
             "null"
