@@ -134,6 +134,10 @@ impl<T: Serialize> Serialize for RequestPolicy<T> {
 }
 
 impl<T> RequestPolicy<T> {
+	pub fn is_empty(&self) -> bool {
+		matches!(self, RequestPolicy::Empty)
+	}
+
 	pub fn single(pol: T) -> Self {
 		RequestPolicy::Single(PolicyWithCondition {
 			pol: Arc::new(pol),

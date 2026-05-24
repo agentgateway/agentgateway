@@ -138,7 +138,9 @@ async fn apply_request_policies(
 		.oidc
 		.apply_without_response("oidc", c, l, req, rp.headers())
 		.await?;
-	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
+	if !pol.oidc.is_empty() {
+		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
+	}
 
 	pol
 		.jwt

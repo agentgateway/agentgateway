@@ -1,0 +1,79 @@
+{
+  "realm": "agentgateway",
+  "enabled": true,
+  "sslRequired": "NONE",
+  "displayName": "Agentgateway OIDC + mTLS Auth",
+  "authenticationFlows": [
+    {
+      "alias": "browser-x509",
+      "description": "Browser flow with x509",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-x509-client-username-form",
+          "requirement": "ALTERNATIVE",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false,
+          "authenticatorConfig": "x509-config"
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "x509-config",
+      "config": {
+        "x509-auth.user-attribute-name": "certificate",
+        "x509-auth.mapper-selection": "Username or Email",
+        "x509-auth.mapper-selection-from-certificate": "Subject's Common Name",
+        "x509-auth.cr-list-via-http": "false",
+        "x509-auth.confirmation-page-disallowed": "true",
+        "x509-auth.revalidate-certificate": "false",
+        "x509-cert-auth.confirmation-page-disallowed": "true"
+      }
+    }
+  ],
+  "browserFlow": "browser-x509",
+  "clients": [
+    {
+      "clientId": "agentgateway-browser",
+      "name": "Agentgateway Browser",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "agentgateway-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "https://localhost:3000/oauth/callback"
+      ],
+      "webOrigins": [
+        "https://localhost:3000"
+      ],
+      "rootUrl": "https://localhost:3000",
+      "baseUrl": "https://localhost:3000/"
+    }
+  ],
+  "users": [
+    {
+      "username": "CN=test-client",
+      "enabled": true,
+      "email": "test-client@example.com",
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "Client"
+    }
+  ]
+}
