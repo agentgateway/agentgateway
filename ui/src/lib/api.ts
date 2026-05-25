@@ -52,7 +52,15 @@ export async function fetchConfig(): Promise<LocalConfig> {
       }
       throw new Error(`Failed to fetch config: ${r.status}`);
     }
-    return (await r.json()) as LocalConfig;
+    const config = (await r.json()) as any;
+    // The simplified mcp/llm top-level config formats are expanded into binds/listeners/routes/backends
+    // by the backend at runtime. The raw config file won't have binds in that case, so fall back
+    // to config_dump which returns the fully expanded representation.
+    if (!config.binds && (config.mcp || config.llm)) {
+      return fetchViaDump();
+    }
+    config.binds = config.binds ?? [];
+    return config as LocalConfig;
   }
 }
 
