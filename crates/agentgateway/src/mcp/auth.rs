@@ -338,25 +338,14 @@ pub(super) async fn client_registration(
 	Ok(upstream)
 }
 
+const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
+
 /// Build the mock Dynamic Client Registration response used when
 /// `MCPAuthentication.clientId` is configured.
 ///
-/// RFC 7591 §3.2.1 (Client Information Response) requires the server to
-/// echo back the metadata the client registered, with the issued client_id
-/// appended. Strict MCP clients validate the response with a Zod schema
-/// (`OAuthClientInformationFullSchema`) that requires both `client_id` AND
-/// `redirect_uris` on the response. Returning only `{"client_id": "..."}`
-/// passes lax test clients but fails the MCP SDK used by Claude Code,
-/// MCP Inspector, and similar production clients.
-///
-/// We parse the client's submitted body, override `client_id` with the
-/// operator-configured value, and set `client_id_issued_at`. We do NOT
-/// mint a `client_secret` — operators using this path have a real
-/// pre-registered IdP app whose secret lives outside the gateway.
-///
-/// If the request body is empty or fails to parse as JSON, we fall back
-/// to a minimal `{"client_id": ...}` body so the function never fails on
-/// malformed input — same behavior as before for those cases.
+/// This path is for pre-registered IdP clients. The gateway is not creating
+/// a client upstream, so return deterministic registration metadata and carry
+/// forward only the requested redirect URIs that strict MCP clients validate.
 async fn build_mock_dcr_response(
 	req: &mut Request,
 	client_id: &str,
@@ -367,22 +356,19 @@ async fn build_mock_dcr_response(
 		.await
 		.map_err(ProxyError::Body)?;
 
-	let mut response_json: serde_json::Value =
-		serde_json::from_slice(&bytes).unwrap_or_else(|_| serde_json::json!({}));
-	// Ensure the response is a JSON object — if a client posted a non-object
-	// body (e.g. an array), default to an empty object so we don't return
-	// nonsense.
-	if !response_json.is_object() {
-		response_json = serde_json::json!({});
-	}
+	let redirect_uris = serde_json::from_slice::<serde_json::Value>(&bytes)
+		.ok()
+		.and_then(|json| json.get("redirect_uris").filter(|v| v.is_array()).cloned())
+		.unwrap_or_else(|| serde_json::json!([]));
 
-	response_json["client_id"] = serde_json::Value::String(client_id.to_string());
-	response_json["client_id_issued_at"] = serde_json::json!(
-		std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.map(|d| d.as_secs())
-			.unwrap_or(0)
-	);
+	let response_json = serde_json::json!({
+		"client_id": client_id,
+		"client_id_issued_at": MOCK_DCR_CLIENT_ID_ISSUED_AT,
+		"token_endpoint_auth_method": "none",
+		"grant_types": ["authorization_code"],
+		"response_types": ["code"],
+		"redirect_uris": redirect_uris,
+	});
 
 	let body_bytes = bytes::Bytes::from(
 		serde_json::to_vec(&response_json).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
@@ -431,8 +417,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn mock_dcr_echoes_redirect_uris_and_overrides_client_id() {
-		// RFC 7591 §3.2.1: response includes the metadata the client
-		// registered. MCP SDK's Zod schema requires redirect_uris.
 		let body = r#"{"redirect_uris":["http://localhost:33418/callback"],"grant_types":["authorization_code"],"client_name":"Claude Code"}"#;
 		let mut req = dcr_request(body);
 
@@ -451,8 +435,10 @@ mod tests {
 			json["grant_types"],
 			serde_json::json!(["authorization_code"])
 		);
-		assert_eq!(json["client_name"], "Claude Code");
-		assert!(json["client_id_issued_at"].is_number());
+		assert_eq!(json["response_types"], serde_json::json!(["code"]));
+		assert_eq!(json["token_endpoint_auth_method"], "none");
+		assert_eq!(json["client_id_issued_at"], MOCK_DCR_CLIENT_ID_ISSUED_AT);
+		assert!(json.get("client_name").is_none());
 	}
 
 	#[tokio::test]
@@ -477,8 +463,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn mock_dcr_handles_empty_body() {
-		// Empty body — no metadata to echo. Response still has client_id
-		// + issued_at so the function never fails on minimal input.
 		let mut req = ::http::Request::builder()
 			.method(Method::POST)
 			.uri("https://gateway.example.com/client-registration")
@@ -491,13 +475,12 @@ mod tests {
 
 		let json = response_body_to_json(resp).await;
 		assert_eq!(json["client_id"], "operator-id");
-		assert!(json["client_id_issued_at"].is_number());
-		assert!(json.get("redirect_uris").is_none());
+		assert_eq!(json["client_id_issued_at"], MOCK_DCR_CLIENT_ID_ISSUED_AT);
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
 	}
 
 	#[tokio::test]
 	async fn mock_dcr_handles_malformed_json() {
-		// Garbage body — graceful fallback to minimal response, no 500.
 		let mut req = dcr_request("this is not json {{{");
 
 		let resp = build_mock_dcr_response(&mut req, "operator-id")
@@ -506,13 +489,11 @@ mod tests {
 
 		let json = response_body_to_json(resp).await;
 		assert_eq!(json["client_id"], "operator-id");
-		assert!(json["client_id_issued_at"].is_number());
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
 	}
 
 	#[tokio::test]
 	async fn mock_dcr_handles_non_object_body() {
-		// JSON array instead of object — we coerce to {} rather than
-		// trying to splice client_id into an array.
 		let mut req = dcr_request(r#"["not", "an", "object"]"#);
 
 		let resp = build_mock_dcr_response(&mut req, "operator-id")
@@ -522,5 +503,6 @@ mod tests {
 		let json = response_body_to_json(resp).await;
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
 	}
 }
