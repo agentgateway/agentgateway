@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -103,6 +104,7 @@ func translatePoliciesForBackendTLS(
 	// per Gateway, instead of per-Backend. This is questionable for users, but also means we don't have to worry about
 	// telling users if a reference is invalid and should just silently fail...
 	uniqueGateways := sets.New[types.NamespacedName]()
+	gatewayClientCertErrors := map[types.NamespacedName]*ConfigError{}
 	for _, target := range btls.Spec.TargetRefs {
 		var policyTarget *api.PolicyTarget
 
@@ -176,7 +178,9 @@ func translatePoliciesForBackendTLS(
 				Hostname:              baseTLS.Hostname,
 				VerifySubjectAltNames: baseTLS.VerifySubjectAltNames,
 			}
-			applyGatewayBackendClientCert(krtctx, gatewayTarget, gateways, secrets, res, conds)
+			if err := applyGatewayBackendClientCert(krtctx, logger, gatewayTarget, gateways, secrets, res); err != nil {
+				gatewayClientCertErrors[gatewayTarget] = err
+			}
 
 			policy := &api.Policy{
 				Key:    btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
@@ -203,7 +207,12 @@ func translatePoliciesForBackendTLS(
 			Kind:  new(gwv1.Kind(gvk.KubernetesGateway.Kind)),
 			Name:  gwv1.ObjectName(g.Name),
 		}
-		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, conds, gwv1.GatewayController(controllerName)))
+		gatewayConds := conds
+		if err := gatewayClientCertErrors[g]; err != nil {
+			gatewayConds = copyConditionMap(conds)
+			gatewayConds[string(gwv1.PolicyConditionAccepted)].Error = err
+		}
+		ancestorStatus = append(ancestorStatus, SetAncestorStatus(pr, status, btls.Generation, gatewayConds, gwv1.GatewayController(controllerName)))
 	}
 	status.Ancestors = MergeAncestors(controllerName, status.Ancestors, ancestorStatus)
 	return status, policies
@@ -247,8 +256,17 @@ func targetEqual(a, b gwv1.LocalPolicyTargetReferenceWithSectionName) bool {
 var dummyCaCert = []byte("invalid")
 var dummyClientCert = []byte("invalid")
 
-func invalidBackendClientCertificate(conds map[string]*Condition, message string) {
-	conds[string(gwv1.PolicyConditionAccepted)].Error = &ConfigError{
+func copyConditionMap(conds map[string]*Condition) map[string]*Condition {
+	out := make(map[string]*Condition, len(conds))
+	for k, v := range conds {
+		copied := *v
+		out[k] = &copied
+	}
+	return out
+}
+
+func invalidBackendClientCertificate(message string) *ConfigError {
+	return &ConfigError{
 		Reason:  string(gwv1.PolicyReasonInvalid),
 		Message: message,
 	}
@@ -256,32 +274,33 @@ func invalidBackendClientCertificate(conds map[string]*Condition, message string
 
 func applyGatewayBackendClientCert(
 	krtctx krt.HandlerContext,
+	logger *slog.Logger,
 	gatewayNN types.NamespacedName,
 	gateways krt.Collection[*gwv1.Gateway],
 	secrets krt.Collection[*corev1.Secret],
 	res *api.BackendPolicySpec_BackendTLS,
-	conds map[string]*Condition,
-) {
+) *ConfigError {
 	gtw := ptr.Flatten(krt.FetchOne(krtctx, gateways, krt.FilterKey(gatewayNN.String())))
 	if gtw == nil || gtw.Spec.TLS == nil || gtw.Spec.TLS.Backend == nil || gtw.Spec.TLS.Backend.ClientCertificateRef == nil {
-		return
+		return nil
 	}
 	mtlsClientRef := gtw.Spec.TLS.Backend.ClientCertificateRef
 	skip := false
+	var configErr *ConfigError
 	if mtlsClientRef.Namespace != nil {
 		// TODO Implement this later
 		logger.Warn("ignoring Gateway.spec.tls.backend; cross namespace not permitted")
-		invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef cross namespace reference is not permitted")
+		configErr = invalidBackendClientCertificate("Gateway.spec.tls.backend.clientCertificateRef cross namespace reference is not permitted")
 		skip = true
 	}
 	if mtlsClientRef.Kind != nil && *mtlsClientRef.Kind != wellknown.SecretKind {
 		logger.Warn("ignoring Gateway.spec.tls.backend; only Secret is allowed")
-		invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef must refer to a Secret")
+		configErr = invalidBackendClientCertificate("Gateway.spec.tls.backend.clientCertificateRef must refer to a Secret")
 		skip = true
 	}
 	if mtlsClientRef.Group != nil && string(*mtlsClientRef.Group) != wellknown.SecretGVK.Group {
 		logger.Warn("ignoring Gateway.spec.tls.backend; only core is allowed")
-		invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef must use the core API group")
+		configErr = invalidBackendClientCertificate("Gateway.spec.tls.backend.clientCertificateRef must use the core API group")
 		skip = true
 	}
 	if !skip {
@@ -292,11 +311,11 @@ func applyGatewayBackendClientCert(
 		scrt := ptr.Flatten(krt.FetchOne(krtctx, secrets, krt.FilterObjectName(nn)))
 		if scrt == nil {
 			logger.Warn("ignoring Gateway.spec.tls.backend; secret not found")
-			invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef Secret not found")
+			configErr = invalidBackendClientCertificate("Gateway.spec.tls.backend.clientCertificateRef Secret not found")
 		} else {
 			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
 				logger.Warn("ignoring Gateway.spec.tls.backend; secret invalid")
-				invalidBackendClientCertificate(conds, "Gateway.spec.tls.backend.clientCertificateRef Secret invalid: "+err.Error())
+				configErr = invalidBackendClientCertificate("Gateway.spec.tls.backend.clientCertificateRef Secret invalid: " + err.Error())
 			} else {
 				res.Cert = scrt.Data[corev1.TLSCertKey]
 				res.Key = scrt.Data[corev1.TLSPrivateKeyKey]
@@ -307,6 +326,7 @@ func applyGatewayBackendClientCert(
 		res.Cert = dummyClientCert
 		res.Key = dummyClientCert
 	}
+	return configErr
 }
 
 func getBackendTLSCACert(
