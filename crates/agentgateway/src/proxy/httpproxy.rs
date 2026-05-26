@@ -1449,6 +1449,18 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
+	let host = http::get_host(req)?;
+	let port = req
+		.uri()
+		.port_u16()
+		.unwrap_or_else(|| match req.uri().scheme() {
+			Some(s) if *s == Scheme::HTTPS => 443,
+			_ => 80,
+		});
+	Ok(Target::from((host, port)))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
@@ -1625,17 +1637,8 @@ async fn make_backend_call(
 			// Use a preliminary target from the current request URI.
 			// This will be re-resolved after transformations are applied,
 			// so that policies like `:authority` overrides take effect.
-			let host = http::get_host(&req)?;
-			let port = req
-				.uri()
-				.port_u16()
-				.unwrap_or_else(|| match req.uri().scheme() {
-					Some(s) if *s == Scheme::HTTPS => 443,
-					_ => 80,
-				});
-			let target = Target::from((host, port));
 			BackendCall {
-				target,
+				target: target_from_request(&req)?,
 				http_version_override: None,
 				transport_override: None,
 				network_gateway: None,
@@ -1685,15 +1688,7 @@ async fn make_backend_call(
 	// request URI. This allows policies like `:authority` overrides (e.g., VPC endpoint
 	// routing) to take effect on the actual upstream connection target.
 	if matches!(backend, Backend::Dynamic(_, _)) {
-		let host = http::get_host(&req)?;
-		let port = req
-			.uri()
-			.port_u16()
-			.unwrap_or_else(|| match req.uri().scheme() {
-				Some(s) if *s == Scheme::HTTPS => 443,
-				_ => 80,
-			});
-		backend_call.target = Target::from((host, port));
+		backend_call.target = target_from_request(&req)?;
 	}
 
 	log.add(|l| {
