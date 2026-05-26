@@ -646,10 +646,8 @@ impl Store {
 			match self.bind_listeners(bind.address) {
 				Ok(listeners) => {
 					// When port 0 is used, update the address with the actual bound port.
-					if bind.address.port() == 0 {
-						if let Some(actual_port) = listeners.local_port() {
-							bind.address.set_port(actual_port);
-						}
+					if bind.address.port() == 0 && let Some(actual_port) = listeners.local_port() {
+						bind.address.set_port(actual_port);
 					}
 					Some(listeners)
 				},
