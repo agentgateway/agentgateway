@@ -334,7 +334,6 @@ async fn apply_gateway_policies(
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
 		.await?;
-	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
 	policies
 		.jwt
