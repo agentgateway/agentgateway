@@ -787,6 +787,19 @@ impl HTTPProxy {
 			log.backend_protocol = Some(bp)
 		}
 
+		// Run EPP once before retry loop — parse ordered destination list
+		let policy_client = self.policy_client();
+		let mut maybe_inference = backend_policies.build_inference(policy_client.clone());
+		let inference_result = maybe_inference
+			.mutate_request(&mut req)
+			.await
+			.snapshot_on_err(log, &mut req)?;
+		inference_result
+			.policy_response
+			.apply(response_policies.headers())
+			.map_err(SnapshottedProxyResponse)?;
+		log.inference_pool = inference_result.destinations.first().copied();
+
 		let (head, body) = req.into_parts();
 		for mirror in route_policies
 			.request_mirror
@@ -845,17 +858,35 @@ impl HTTPProxy {
 				trace!("no retries");
 				// no retries at all, just send the request as normal
 				let req = Request::from_parts(head, http::Body::new(body));
-				return self
+				let service_override = ServiceCallOverride {
+					destination: inference_result
+						.destinations
+						.first()
+						.copied()
+						.or(backend_policies.override_dest),
+					destination_passthrough: !inference_result.destinations.is_empty()
+						&& matches!(
+							inference_result.destination_mode,
+							InferenceRoutingDestinationMode::Passthrough
+						),
+					inference_failed_open: inference_result.failed_open,
+				};
+				let mut res = self
 					.attempt_upstream(
 						log,
 						&mut req_upgrade,
 						llm_request_policies,
 						&selected_backend,
 						backend_policies,
+						service_override,
 						response_policies,
 						req,
 					)
 					.await;
+				if let Ok(ref mut resp) = res {
+					let _ = maybe_inference.mutate_response(resp).await;
+				}
+				return res;
 			},
 		};
 		let mut last_res: Option<Result<Response, SnapshottedProxyResponse>> = None;
@@ -881,13 +912,27 @@ impl HTTPProxy {
 				);
 			}
 			let req = Request::from_parts(head, http::Body::new(this));
-			let res = self
+			let service_override = ServiceCallOverride {
+				destination: inference_result
+					.destinations
+					.get(n as usize)
+					.copied()
+					.or(backend_policies.override_dest),
+				destination_passthrough: inference_result.destinations.get(n as usize).is_some()
+					&& matches!(
+						inference_result.destination_mode,
+						InferenceRoutingDestinationMode::Passthrough
+					),
+				inference_failed_open: inference_result.failed_open,
+			};
+			let mut res = self
 				.attempt_upstream(
 					log,
 					&mut req_upgrade,
 					llm_request_policies.clone(),
 					&selected_backend,
 					backend_policies.clone(),
+					service_override,
 					response_policies,
 					req,
 				)
@@ -895,6 +940,9 @@ impl HTTPProxy {
 			if last || !should_retry(&res, retries.as_ref().unwrap()) {
 				if !last {
 					debug!("response not retry-able");
+				}
+				if let Ok(ref mut resp) = res {
+					let _ = maybe_inference.mutate_response(resp).await;
 				}
 				return res;
 			}
@@ -1073,6 +1121,7 @@ impl HTTPProxy {
 		route_policies: Arc<store::LLMRequestPolicies>,
 		selected_backend: &RouteBackend,
 		backend_policies: BackendPolicies,
+		service_override: ServiceCallOverride,
 		response_policies: &mut ResponsePolicies,
 		mut req: Request,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -1096,6 +1145,7 @@ impl HTTPProxy {
 			route_policies.clone(),
 			&selected_backend.backend.backend,
 			backend_policies,
+			service_override,
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
@@ -1455,6 +1505,7 @@ async fn make_backend_call(
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
 	base_policies: BackendPolicies,
+	service_override: ServiceCallOverride,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
@@ -1502,25 +1553,6 @@ async fn make_backend_call(
 			l.backend_protocol = Some(bp)
 		}
 	});
-
-	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let inference_result = maybe_inference.mutate_request(&mut req).await?;
-	inference_result
-		.policy_response
-		.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_result.destination);
-
-	// Use inference override if present, otherwise check for stateful MCP pinning.
-	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
-	let service_override = ServiceCallOverride {
-		destination: inference_result.destination.or(policies.override_dest),
-		destination_passthrough: inference_result.destination.is_some()
-			&& matches!(
-				inference_result.destination_mode,
-				InferenceRoutingDestinationMode::Passthrough
-			),
-		inference_failed_open: inference_result.failed_open,
-	};
 
 	let backend_call = match backend {
 		Backend::AI(n, ai) => {
@@ -1922,7 +1954,7 @@ async fn make_backend_call(
 	)
 	.await
 	.map_err(ProxyError::Processing)?;
-	let mut resp = if let (Some(llm), Some(llm_request)) =
+	let resp = if let (Some(llm), Some(llm_request)) =
 		(backend_call.backend_policies.llm_provider, llm_request)
 	{
 		llm
@@ -1942,7 +1974,6 @@ async fn make_backend_call(
 		resp
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
-	let _ = maybe_inference.mutate_response(&mut resp).await?;
 	if let Some(log) = log.as_ref() {
 		dtrace::snapshot!(Response, "backend response ready", log, &resp);
 	}
@@ -2872,6 +2903,7 @@ impl PolicyClient {
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
 				pols,
+				ServiceCallOverride::default(),
 				MustSnapshot::new(&mut req),
 				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM

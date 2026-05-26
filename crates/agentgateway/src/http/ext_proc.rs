@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 
-use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::BodyExt;
@@ -157,7 +156,7 @@ pub struct InferencePoolRouter {
 
 #[derive(Debug, Default)]
 pub struct InferenceRequestResult {
-	pub destination: Option<SocketAddr>,
+	pub destinations: Vec<SocketAddr>,
 	pub destination_mode: InferenceRoutingDestinationMode,
 	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
@@ -199,15 +198,19 @@ impl InferencePoolRouter {
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
-		let dest = req
+		let destinations = req
 			.headers()
 			.get(HeaderName::from_static("x-gateway-destination-endpoint"))
 			.and_then(|v| v.to_str().ok())
-			.map(|v| v.parse::<SocketAddr>())
-			.transpose()
-			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
+			.map(|v| {
+				v.split(',')
+					.map(str::trim)
+					.filter_map(|s| s.parse::<SocketAddr>().ok())
+					.collect::<Vec<_>>()
+			})
+			.unwrap_or_default();
 		Ok(InferenceRequestResult {
-			destination: dest,
+			destinations,
 			destination_mode: self.destination_mode,
 			policy_response: pr.unwrap_or_default(),
 			failed_open,
