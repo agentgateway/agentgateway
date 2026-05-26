@@ -123,7 +123,11 @@ impl BindListeners {
 	fn local_port(&self) -> Option<u16> {
 		match self {
 			Self::Single(l) => l.local_addr().ok().map(|a| a.port()),
-			Self::PerCore(m) => m.values().next().and_then(|l| l.local_addr().ok()).map(|a| a.port()),
+			Self::PerCore(m) => m
+				.values()
+				.next()
+				.and_then(|l| l.local_addr().ok())
+				.map(|a| a.port()),
 		}
 	}
 }
