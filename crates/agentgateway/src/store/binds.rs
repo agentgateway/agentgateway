@@ -119,6 +119,15 @@ pub enum BindListeners {
 	PerCore(HashMap<core_affinity::CoreId, StdTcpListener>),
 }
 
+impl BindListeners {
+	fn local_port(&self) -> Option<u16> {
+		match self {
+			Self::Single(l) => l.local_addr().ok().map(|a| a.port()),
+			Self::PerCore(m) => m.values().next().and_then(|l| l.local_addr().ok()).map(|a| a.port()),
+		}
+	}
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
@@ -631,7 +640,15 @@ impl Store {
 			None
 		} else {
 			match self.bind_listeners(bind.address) {
-				Ok(listeners) => Some(listeners),
+				Ok(listeners) => {
+					// When port 0 is used, update the address with the actual bound port.
+					if bind.address.port() == 0 {
+						if let Some(actual_port) = listeners.local_port() {
+							bind.address.set_port(actual_port);
+						}
+					}
+					Some(listeners)
+				},
 				Err(err) => {
 					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
 					None
@@ -1127,6 +1144,10 @@ impl Store {
 
 	pub fn bind(&self, bind: &BindKey) -> Option<Arc<Bind>> {
 		self.binds.get(bind).cloned()
+	}
+
+	pub fn bind_addresses(&self) -> Vec<std::net::SocketAddr> {
+		self.binds.values().map(|b| b.address).collect()
 	}
 
 	/// find_bind looks up a bind by address. Typically, this is done by the kernel for us, but in some cases

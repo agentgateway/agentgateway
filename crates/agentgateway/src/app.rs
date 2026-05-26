@@ -168,6 +168,10 @@ impl Bound {
 		self.ready.clone()
 	}
 
+	pub fn bind_addresses(&self) -> Vec<std::net::SocketAddr> {
+		self.stores.binds.read().bind_addresses()
+	}
+
 	pub async fn wait_termination(self) -> anyhow::Result<()> {
 		// Wait for a signal to shutdown from explicit admin shutdown or signal
 		self.shutdown.wait().await;

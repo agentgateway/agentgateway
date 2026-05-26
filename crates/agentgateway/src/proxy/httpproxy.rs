@@ -1364,6 +1364,7 @@ pub async fn build_transport(
 			if ca.get_identity().await.is_ok() {
 				Transport::Hbone(
 					app_transport,
+					backend_call.hbone_port,
 					idents.clone(),
 					build_hbone_headers(inputs, hbone_source),
 				)
@@ -1571,6 +1572,7 @@ async fn make_backend_call(
 				backend_policies: effective_policies,
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 			}
@@ -1598,6 +1600,7 @@ async fn make_backend_call(
 			target: target.clone(),
 			http_version_override: None,
 			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			network_gateway: None,
 			waypoint: None,
 			backend_policies: policies,
@@ -1628,6 +1631,7 @@ async fn make_backend_call(
 				backend_policies: default_policies.merge(policies),
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 			}
@@ -1640,6 +1644,7 @@ async fn make_backend_call(
 				target: target_from_request(&req)?,
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 				backend_policies: policies,
@@ -2002,6 +2007,7 @@ pub fn build_service_call(
 			target: Target::Address(destination),
 			http_version_override,
 			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			network_gateway: None,
 			waypoint: None,
 			backend_policies,
@@ -2224,10 +2230,17 @@ pub fn build_service_call(
 		}
 	};
 
+	let hbone_port = if wl.hbone_mtls_port > 0 {
+		wl.hbone_mtls_port
+	} else {
+		agent_hbone::DEFAULT_HBONE_PORT
+	};
+
 	Ok(BackendCall {
 		target,
 		http_version_override,
 		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
+		hbone_port,
 		network_gateway,
 		waypoint,
 		backend_policies,
@@ -2683,6 +2696,7 @@ pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
+	pub hbone_port: u16,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub waypoint: Option<WaypointTarget>,                    // For ingress waypoint routing
 	pub backend_policies: BackendPolicies,
