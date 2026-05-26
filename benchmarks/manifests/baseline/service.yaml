@@ -1,0 +1,24 @@
+# Baseline target: a plain ClusterIP Service that round-robins across all
+# inference-sim pods with no gateway or EPP in the path. This is the
+# comparison endpoint — traffic goes directly from the load generator to
+# a pod chosen by kube-proxy, bypassing agentgateway entirely.
+#
+# Endpoint used by inference-perf:
+#   http://baseline.inference-benchmark.svc.cluster.local:8000
+apiVersion: v1
+kind: Service
+metadata:
+  name: baseline
+  namespace: inference-benchmark
+  labels:
+    app: inference-sim
+    benchmark-role: baseline
+spec:
+  selector:
+    app: inference-sim
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,49 @@
+# inference-perf Job — plain k8s Service (baseline) path.
+# Identical workload to job-agentgateway.yaml; only the config ConfigMap
+# differs (points at the baseline Service instead of benchmark-gateway).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf-baseline
+  namespace: inference-benchmark
+  labels:
+    benchmark-target: baseline
+    benchmark-scenario: standard
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+        benchmark-target: baseline
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              python inference_perf/main.py --config_file /workspace/config.yml
+              echo "=== RESULTS JSON ==="
+              for f in /results/*.json; do echo "--- $f ---"; cat "$f"; done
+          volumeMounts:
+            - name: config
+              mountPath: /workspace/config.yml
+              subPath: config.yaml
+              readOnly: true
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+      volumes:
+        - name: config
+          configMap:
+            name: inference-perf-config-baseline
+        - name: results
+          emptyDir: {}

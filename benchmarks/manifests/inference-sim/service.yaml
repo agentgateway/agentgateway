@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-sim
+  namespace: inference-benchmark
+  labels:
+    app: inference-sim
+spec:
+  selector:
+    app: inference-sim
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

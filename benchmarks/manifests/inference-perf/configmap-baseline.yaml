@@ -1,0 +1,58 @@
+# inference-perf config for the plain k8s Service (baseline) path.
+# Target: baseline.inference-benchmark.svc.cluster.local:8000
+#
+# Identical workload to the agentgateway config — same dataset, same QPS
+# stages, same duration — so the two result sets are directly comparable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-perf-config-baseline
+  namespace: inference-benchmark
+data:
+  config.yaml: |
+    server:
+      base_url: "http://baseline.inference-benchmark.svc.cluster.local:8000"
+      model_name: "meta-llama/Llama-3.1-8B-Instruct"
+
+    api:
+      type: completion
+      # See comment in configmap-agentgateway.yaml re: streaming disabled.
+      streaming: false
+
+    data:
+      type: synthetic
+      input_distribution:
+        min: 64
+        max: 512
+        mean: 256.0
+        std_dev: 64.0
+      output_distribution:
+        min: 32
+        max: 256
+        mean: 128.0
+        std_dev: 32.0
+
+    load:
+      type: constant
+      stages:
+        - rate: 10
+          duration: 20
+        - rate: 20
+          duration: 20
+        - rate: 30
+          duration: 20
+
+    report:
+      request_lifecycle:
+        per_stage: true
+        percentiles: [50, 90, 95, 99]
+
+    storage:
+      local_storage:
+        path: /results
+
+    # Use gpt2 tokenizer for token counting — the Llama tokenizer is a gated
+    # HuggingFace repo that requires auth. gpt2 is publicly available and
+    # sufficient for approximate token-length distribution in a local PoC.
+    tokenizer:
+      pretrained_model_name_or_path: gpt2

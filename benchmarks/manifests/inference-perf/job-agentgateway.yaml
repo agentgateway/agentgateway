@@ -1,0 +1,52 @@
+# inference-perf Job — agentgateway + InferencePool path.
+# Runs the Standard scenario (10->20->30 QPS, synthetic data, streaming).
+# Results are written to /results inside the container; use
+#   kubectl cp inference-benchmark/<pod>:/results ./benchmarks/results/agentgateway/
+# to extract them after the Job completes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: inference-perf-agentgateway
+  namespace: inference-benchmark
+  labels:
+    benchmark-target: agentgateway
+    benchmark-scenario: standard
+spec:
+  # Do not retry on failure so we get a clean error signal.
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: inference-perf
+        benchmark-target: agentgateway
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: inference-perf
+          image: quay.io/inference-perf/inference-perf:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              python inference_perf/main.py --config_file /workspace/config.yml
+              echo "=== RESULTS JSON ==="
+              for f in /results/*.json; do echo "--- $f ---"; cat "$f"; done
+          volumeMounts:
+            - name: config
+              mountPath: /workspace/config.yml
+              subPath: config.yaml
+              readOnly: true
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+      volumes:
+        - name: config
+          configMap:
+            name: inference-perf-config-agentgateway
+        - name: results
+          emptyDir: {}

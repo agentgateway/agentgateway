@@ -1,0 +1,16 @@
+# Routes all traffic entering benchmark-gateway to the InferencePool backend.
+# The InferencePool kind tells agentgateway to apply inference routing logic
+# (ext_proc → EPP) rather than standard round-robin load balancing.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: inference-route
+  namespace: inference-benchmark
+spec:
+  parentRefs:
+    - name: benchmark-gateway
+  rules:
+    - backendRefs:
+        - name: inference-pool
+          kind: InferencePool
+          group: inference.networking.k8s.io
