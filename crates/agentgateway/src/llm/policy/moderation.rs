@@ -6,7 +6,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 pub async fn send_request(
 	req: &mut dyn RequestType,
@@ -41,9 +41,9 @@ pub async fn send_request(
 			"model": model,
 		}),
 	)?))?;
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_openai-moderation"), strng::literal!("")),
-		Target::Hostname(strng::literal!("api.openai.com"), 443),
+		(),
 	);
 	let resp = client
 		.call_with_explicit_policies_list(req, mock_be, pols)

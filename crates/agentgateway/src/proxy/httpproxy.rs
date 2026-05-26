@@ -1522,7 +1522,7 @@ async fn make_backend_call(
 		inference_failed_open: inference_result.failed_open,
 	};
 
-	let backend_call = match backend {
+	let mut backend_call = match backend {
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
@@ -1622,6 +1622,9 @@ async fn make_backend_call(
 			}
 		},
 		Backend::Dynamic(_, _) => {
+			// Use a preliminary target from the current request URI.
+			// This will be re-resolved after transformations are applied,
+			// so that policies like `:authority` overrides take effect.
 			let host = http::get_host(&req)?;
 			let port = req
 				.uri()
@@ -1677,6 +1680,21 @@ async fn make_backend_call(
 		response_policies,
 	)
 	.await?;
+
+	// For Dynamic backends, re-resolve the target from the (now potentially transformed)
+	// request URI. This allows policies like `:authority` overrides (e.g., VPC endpoint
+	// routing) to take effect on the actual upstream connection target.
+	if matches!(backend, Backend::Dynamic(_, _)) {
+		let host = http::get_host(&req)?;
+		let port = req
+			.uri()
+			.port_u16()
+			.unwrap_or_else(|| match req.uri().scheme() {
+				Some(s) if *s == Scheme::HTTPS => 443,
+				_ => 80,
+			});
+		backend_call.target = Target::from((host, port));
+	}
 
 	log.add(|l| {
 		l.endpoint = Some(backend_call.target.clone());
@@ -2847,10 +2865,9 @@ impl PolicyClient {
 	pub async fn call_with_explicit_policies_list(
 		&self,
 		req: Request,
-		backend: SimpleBackend,
+		backend: Backend,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Result<Response, ProxyError> {
-		let backend = Backend::from(backend);
 		let pols = self
 			.inputs
 			.stores
