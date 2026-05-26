@@ -8243,6 +8243,7 @@ version = "0.0.0"
 dependencies = [
  "agentgateway",
  "anyhow",
+ "cel",
  "fs-err",
  "schemars 1.0.4",
  "serde_json",

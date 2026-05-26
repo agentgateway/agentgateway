@@ -2,10 +2,13 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::time::{Duration, SystemTime};
 
+use serde::Serialize;
+
 use crate::common::types;
 use crate::common::types::Type;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CelVal {
 	Unspecified,
 	Error,
@@ -14,16 +17,44 @@ pub enum CelVal {
 	Boolean(bool),
 	Bytes(Vec<u8>),
 	Double(f64),
+	#[serde(serialize_with = "serialize_duration")]
 	Duration(Duration),
 	Int(i64),
 	List,
 	Map,
 	Null,
 	String(String),
+	#[serde(serialize_with = "serialize_system_time")]
 	Timestamp(SystemTime),
 	Type,
 	UInt(u64),
 	Unknown,
+}
+
+fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	#[derive(serde::Serialize)]
+	#[serde(rename_all = "camelCase")]
+	struct DurationSerde {
+		secs: u64,
+		nanos: u32,
+	}
+
+	DurationSerde {
+		secs: duration.as_secs(),
+		nanos: duration.subsec_nanos(),
+	}
+	.serialize(serializer)
+}
+
+fn serialize_system_time<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	let time: chrono::DateTime<chrono::Utc> = (*time).into();
+	serializer.serialize_str(&time.to_rfc3339())
 }
 
 pub trait Val {

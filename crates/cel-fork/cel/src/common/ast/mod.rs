@@ -5,11 +5,14 @@ use crate::common::value::CelVal;
 
 pub mod operators;
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Ast {
 	pub expr: IdedExpr,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Expr {
 	#[default]
 	/// UnspecifiedExprKind represents an unset expression with no specified properties.
@@ -48,13 +51,22 @@ pub enum Expr {
 	},
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum OptimizedExpr {
 	HeaderLookup {
 		// Request or response
 		request: bool,
+		#[serde(serialize_with = "serialize_header_name")]
 		header: http::HeaderName,
 	},
+}
+
+fn serialize_header_name<S>(header: &http::HeaderName, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	serializer.serialize_str(header.as_str())
 }
 
 impl Expr {
@@ -75,50 +87,58 @@ impl Expr {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum EntryExpr {
 	StructField(StructFieldExpr),
 	MapEntry(MapEntryExpr),
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IdedExpr {
 	pub id: u64,
 	pub expr: Expr,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IdedEntryExpr {
 	pub id: u64,
 	pub expr: EntryExpr,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CallExpr {
 	pub func_name: String,
 	pub target: Option<Box<IdedExpr>>,
 	pub args: Vec<IdedExpr>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SelectExpr {
 	pub operand: Box<IdedExpr>,
 	pub field: String,
 	pub test: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StructExpr {
 	pub type_name: String,
 	pub entries: Vec<IdedEntryExpr>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MapExpr {
 	pub entries: Vec<IdedEntryExpr>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListExpr {
 	pub elements: Vec<IdedExpr>,
 	pub optional_indices: Vec<usize>,
@@ -137,21 +157,24 @@ impl ListExpr {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StructFieldExpr {
 	pub field: String,
 	pub value: IdedExpr,
 	pub optional: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MapEntryExpr {
 	pub key: IdedExpr,
 	pub value: IdedExpr,
 	pub optional: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComprehensionExpr {
 	pub iter_range: IdedExpr,
 	pub iter_var: String,
@@ -163,7 +186,8 @@ pub struct ComprehensionExpr {
 	pub result: IdedExpr,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SourceInfo {
 	offsets: BTreeMap<u64, OffsetRange>,
 	pub source: String,
@@ -202,7 +226,8 @@ impl SourceInfo {
 	}
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OffsetRange {
 	pub start: u32,
 	pub stop: u32,
