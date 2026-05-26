@@ -153,7 +153,7 @@ mod base64 {
 mod aes {
 	use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
 	use base64::Engine;
-	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	use base64::engine::general_purpose::STANDARD;
 
 	#[derive(Debug)]
 	pub struct Encoder {
@@ -180,13 +180,13 @@ mod aes {
 			let mut result = nonce.as_ref().to_vec();
 			result.extend_from_slice(&in_out);
 			// Base64 encode
-			Ok(URL_SAFE_NO_PAD.encode(&result))
+			Ok(STANDARD.encode(&result))
 		}
 
 		/// Decode and decrypt
 		pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
 			// Base64 decode
-			let data = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| Error::InvalidFormat)?;
+			let data = STANDARD.decode(encoded).map_err(|_| Error::InvalidFormat)?;
 			if data.len() < 12 {
 				return Err(Error::InvalidFormat);
 			}
@@ -225,7 +225,7 @@ mod aes {
 		#[test]
 		fn short_ciphertexts_fail_cleanly() {
 			let encoder = Encoder::new(&[0u8; 32]).expect("encoder");
-			let short = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([0u8; 11]);
+			let short = base64::engine::general_purpose::STANDARD.encode([0u8; 11]);
 			assert!(matches!(encoder.decrypt(&short), Err(Error::InvalidFormat)));
 		}
 	}
