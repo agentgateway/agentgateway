@@ -2621,28 +2621,26 @@ fn sensitive_headers(req: &mut Request) {
 // the rest of the code doesn't need to worry about it
 fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
-	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version()
-		&& req.uri().authority().is_none()
-	{
-		let mut parts = std::mem::take(req.uri_mut()).into_parts();
-		// TODO: handle absolute HTTP/1.1 form
-		let host = req
-			.headers_mut()
-			.remove(http::header::HOST)
-			// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
-			.and_then(|h| Authority::try_from(h.as_bytes()).ok())
-			.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
+	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version() {
+		let host = req.headers_mut().remove(http::header::HOST);
+		if req.uri().authority().is_none() {
+			let mut parts = std::mem::take(req.uri_mut()).into_parts();
+			let host = host
+				// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
+				.and_then(|h| Authority::try_from(h.as_bytes()).ok())
+				.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
 
-		parts.authority = Some(host);
-		if parts.path_and_query.is_some() {
-			// TODO: or always do this?
-			if tls.is_some() {
-				parts.scheme = Some(Scheme::HTTPS);
-			} else {
-				parts.scheme = Some(Scheme::HTTP);
+			parts.authority = Some(host);
+			if parts.path_and_query.is_some() {
+				// TODO: or always do this?
+				if tls.is_some() {
+					parts.scheme = Some(Scheme::HTTPS);
+				} else {
+					parts.scheme = Some(Scheme::HTTP);
+				}
 			}
+			*req.uri_mut() = Uri::from_parts(parts)?
 		}
-		*req.uri_mut() = Uri::from_parts(parts)?
 	}
 	debug!("request after normalization: {req:?}");
 	Ok(())
