@@ -1330,7 +1330,7 @@ fn authorization_from_proto(
 
 	// Create PolicySet using the same pattern as in de_policies function
 	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-	Authorization(authorization::RuleSet::new(policy_set))
+	Authorization(Arc::new(authorization::RuleSet::new(policy_set)))
 }
 
 fn transformation_from_proto(

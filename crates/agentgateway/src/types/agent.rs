@@ -2345,7 +2345,7 @@ pub enum BackendTrafficPolicy {
 pub struct A2aPolicy {}
 
 #[apply(schema!)]
-pub struct Authorization(pub RuleSet);
+pub struct Authorization(pub Arc<RuleSet>);
 
 // Do not use schema! as it will reject the `extra` field
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

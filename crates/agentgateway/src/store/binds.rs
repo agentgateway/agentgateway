@@ -777,7 +777,9 @@ impl Store {
 			}
 		}
 		if !authz.is_empty() {
-			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(authz.into()));
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(
+				crate::http::authorization::RuleSets::from_arcs(authz),
+			));
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();

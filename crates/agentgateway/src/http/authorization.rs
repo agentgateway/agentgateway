@@ -68,7 +68,7 @@ impl NetworkAuthorizationSet {
 	}
 
 	pub fn merge_rule_set(&mut self, rule_set: RuleSet) {
-		self.0.0.push(rule_set);
+		self.0.0.push(Arc::new(rule_set));
 	}
 }
 
@@ -183,10 +183,16 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct RuleSets(Vec<RuleSet>);
+pub struct RuleSets(Vec<Arc<RuleSet>>);
 
 impl From<Vec<RuleSet>> for RuleSets {
 	fn from(value: Vec<RuleSet>) -> Self {
+		Self(value.into_iter().map(Arc::new).collect())
+	}
+}
+
+impl RuleSets {
+	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
 	}
 }
