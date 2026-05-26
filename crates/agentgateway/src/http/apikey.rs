@@ -48,6 +48,8 @@ pub enum Mode {
 pub struct Claims {
 	#[dynamic(with_value = "redact_key")]
 	pub key: APIKey,
+	#[serde(skip, default)]
+	pub id: String,
 	#[serde(default, flatten)]
 	#[dynamic(flatten)]
 	pub metadata: UserMetadata,
@@ -139,6 +141,7 @@ impl APIKeyAuthentication {
 				serde_json::to_string(meta).unwrap_or_default()
 			);
 			let claims = Claims {
+				id: key.0.expose_secret().to_string(),
 				key,
 				metadata: meta.clone(),
 			};
@@ -167,13 +170,13 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 	async fn apply(
 		&self,
 		_client: &crate::proxy::httpproxy::PolicyClient,
-		_log: &mut crate::telemetry::log::RequestLog,
+		log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
 	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
 		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
 		if let Some(claims) = res {
 			self.location.remove(req).map_err(ProxyResponse::from)?;
-			// Insert the claims into extensions so we can reference it later
+			log.api_key = Some(claims.key.0.expose_secret().to_string());
 			req.extensions_mut().insert(claims);
 		}
 		Ok(crate::http::PolicyResponse::default())

@@ -1712,6 +1712,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		api_key: Some(apikey::Claims {
 			key: apikey::APIKey::new("test-api-key-id"),
+			id: "test-api-key-id".to_string(),
 			metadata: json!({"role": "admin"}),
 		}),
 		basic_auth: Some(basicauth::Claims {
