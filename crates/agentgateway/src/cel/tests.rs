@@ -345,6 +345,15 @@ mod headers {
 	}
 }
 
+#[test]
+fn api_key_secret_is_redacted_by_default() {
+	assert_eq!(json!("<redacted>"), eval("apiKey.key").unwrap());
+	assert_eq!(
+		json!("test-api-key-id"),
+		eval("apiKey.key.unredacted()").unwrap()
+	);
+}
+
 mod query_accessors {
 	use cel::Value;
 	use http::Method;
