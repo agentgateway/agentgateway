@@ -387,7 +387,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 	for _, listener := range listeners {
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
 			if p.protocol == listener.ParentInfo.Protocol {
-				if hasAnyHostname(p.hostnames, listener.ParentInfo.Hostnames) {
+				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
 					listener.Conflict = ListenerConflictHostname
 				} else {
 					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
@@ -402,15 +402,6 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 			}
 		}
 	}
-}
-
-func hasAnyHostname(seen sets.String, hostnames []string) bool {
-	for _, hostname := range hostnames {
-		if seen.Contains(hostname) {
-			return true
-		}
-	}
-	return false
 }
 
 type ListenerSet struct {
