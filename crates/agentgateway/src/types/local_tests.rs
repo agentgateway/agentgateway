@@ -6,8 +6,8 @@ use secrecy::SecretString;
 
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget,
-	PolicyType, ResourceName, RouteBackendTarget, TrafficPolicy,
+	Backend, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, ListenerTarget, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, RouteBackendTarget, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
@@ -212,6 +212,92 @@ async fn test_llm_config() {
 #[tokio::test]
 async fn test_llm_simple_config() {
 	test_config_parsing("llm_simple").await;
+}
+
+#[tokio::test]
+async fn test_llm_cost_class_routing_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+llm:
+  policies:
+    transformations:
+      request:
+        set:
+          x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
+  models:
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o-mini
+      apiKey: sk-economy
+      baseUrl: http://economy.example.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: economy
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: sk-premium
+      baseUrl: http://premium.example.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: premium
+"#,
+	)
+	.await
+	.expect("cost-aware LLM routing config should normalize");
+
+	let routes = &normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "llm")
+		.expect("llm listener routes")
+		.1;
+	let economy_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "llm:model:000000:smart-model")
+		.expect("economy route");
+	let premium_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "llm:model:000001:smart-model")
+		.expect("premium route");
+
+	assert_exact_header(
+		&economy_route.matches[0].headers,
+		"x-gateway-cost-class",
+		"economy",
+	);
+	assert_exact_header(
+		&premium_route.matches[0].headers,
+		"x-gateway-cost-class",
+		"premium",
+	);
+	assert_exact_header(
+		&economy_route.matches[0].headers,
+		"x-gateway-model-name",
+		"smart-model",
+	);
+	assert_exact_header(
+		&premium_route.matches[0].headers,
+		"x-gateway-model-name",
+		"smart-model",
+	);
+}
+
+fn assert_exact_header(headers: &[HeaderMatch], name: &str, want: &str) {
+	let header = headers
+		.iter()
+		.find(|header| header.name.to_string() == name)
+		.unwrap_or_else(|| panic!("missing header match {name}"));
+	match &header.value {
+		HeaderValueMatch::Exact(value) => assert_eq!(value, want),
+		other => panic!("expected exact header match for {name}, got {other:?}"),
+	}
 }
 
 #[tokio::test]

@@ -43,6 +43,10 @@ The `http` example shows how to use agentgateway to serve generic HTTP traffic.
 
 The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
 
+### [LLM cost-aware routing](llm-cost-routing/README.md)
+
+The `llm-cost-routing` example shows how to classify LLM requests with CEL and route the same public model name to different upstream models.
+
 ### [Standalone EPP](standalone-epp/README.md)
 
 The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy

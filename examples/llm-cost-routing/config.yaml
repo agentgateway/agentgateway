@@ -1,0 +1,50 @@
+llm:
+  port: 4000
+  policies:
+    transformations:
+      request:
+        set:
+          x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
+  models:
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o-mini
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: economy
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: premium
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: balanced
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class

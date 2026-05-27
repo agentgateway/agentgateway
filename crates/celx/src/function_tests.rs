@@ -595,6 +595,32 @@ fn uuid() {
 		"Multiple uuid() calls should return different values"
 	);
 }
+
+#[test]
+fn llm_cost_class() {
+	assert(json!("economy"), "llm.costClass(128)");
+	assert(json!("economy"), "llm.costClass(1024)");
+	assert(json!("balanced"), "llm.costClass(1025)");
+	assert(json!("balanced"), "llm.costClass(4096)");
+	assert(json!("premium"), "llm.costClass(4097)");
+
+	assert(json!("premium"), r#"llm.costClass(128, "premium")"#);
+	assert(json!("balanced"), r#"llm.costClass(128, "BALANCED")"#);
+	assert(json!("economy"), r#"llm.costClass(128, "")"#);
+	assert(json!("economy"), "llm.costClass(128, null)");
+	assert(json!("economy"), "llm.costClass(500, 500, 2000)");
+	assert(json!("balanced"), "llm.costClass(501, 500, 2000)");
+	assert(json!("premium"), "llm.costClass(2001, 500, 2000)");
+	assert(
+		json!("premium"),
+		r#"llm.costClass(500, 500, 2000, "premium")"#,
+	);
+
+	assert_fails(r#"llm.costClass(128, "cheap")"#);
+	assert_fails("llm.costClass(128, 2000, 500)");
+	assert_fails("llm.costClass(-1)");
+	assert_fails("llm.costClass()");
+}
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,
