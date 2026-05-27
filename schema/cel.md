@@ -74,7 +74,7 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
-|`source.certificate`|string|PEM-encoded downstream client certificate. Present only when the client presented a certificate during the TLS handshake.|
+|`source.certificate`|string|PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.|
 |`source.unverifiedWorkload`|object|The workload context of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.<br><br>Fields are nested under `unverified` to signal that they are derived<br>from the source IP (not cryptographically authenticated). Policy<br>authors should prefer `source.identity.*` for trust-sensitive checks.|
 |`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
 |`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|

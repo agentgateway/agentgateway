@@ -2,7 +2,7 @@ services:
   keycloak:
     container_name: mtls-keycloak
     image: quay.io/keycloak/keycloak:26.3
-    command: ["start-dev", "--import-realm", "--http-port", "7080", "--http-relative-path", "/auth"]
+    command: ["start-dev", "--import-realm", "--http-port", "7080"]
     environment:
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 3000

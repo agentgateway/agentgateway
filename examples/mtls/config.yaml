@@ -11,14 +11,14 @@ binds:
       - name: default
         protocol: HTTPS
         tls:
-          cert: certs/cert.pem
-          key: certs/key.pem
-          root: certs/ca-cert.pem
+          cert: examples/mtls/certs/cert.pem
+          key: examples/mtls/certs/key.pem
+          root: examples/mtls/certs/ca-cert.pem
         routes:
           - name: keycloak-auth
             matches:
               - path:
-                  pathPrefix: /auth
+                  pathPrefix: /realms
             backends:
               - host: localhost:7080
             policies:
@@ -37,15 +37,15 @@ binds:
               - host: localhost:18080
             policies:
               oidc:
-                issuer: https://localhost:3000/auth/realms/agentgateway
+                issuer: https://localhost:3000/realms/agentgateway
                 clientId: agentgateway-browser
                 clientSecret: agentgateway-secret
                 redirectURI: https://localhost:3000/oauth/callback
                 scopes: ["openid", "profile", "email"]
-                authorizationEndpoint: https://localhost:3000/auth/realms/agentgateway/protocol/openid-connect/auth
-                tokenEndpoint: http://localhost:7080/auth/realms/agentgateway/protocol/openid-connect/token
+                authorizationEndpoint: https://localhost:3000/realms/agentgateway/protocol/openid-connect/auth
+                tokenEndpoint: http://localhost:7080/realms/agentgateway/protocol/openid-connect/token
                 jwks:
-                  url: http://localhost:7080/auth/realms/agentgateway/protocol/openid-connect/certs
+                  url: http://localhost:7080/realms/agentgateway/protocol/openid-connect/certs
               transformations:
                 request:
                   set:
