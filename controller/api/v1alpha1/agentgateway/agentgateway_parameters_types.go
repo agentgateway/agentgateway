@@ -14,7 +14,7 @@ import (
 // AgentgatewayParameters are configuration that is used to dynamically
 // provision the agentgateway data plane. Labels and annotations that apply to
 // all resources may be specified at a higher level; see
-// https://gateway-api.sigs.k8s.io/reference/spec/#gatewayinfrastructure
+// https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#gatewayinfrastructure
 //
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +genclient
