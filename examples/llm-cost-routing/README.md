@@ -2,18 +2,26 @@
 
 This example shows how to route one public model name to different upstream models using request-time policy.
 
-The gateway transformation computes `x-gateway-cost-class` from the request body:
+The important distinction is:
+
+- `smart-model` is the public name the caller sends
+- `economy`, `balanced`, and `premium` are gateway routing tiers
+- `gpt-4o-mini` and `gpt-4o` are the concrete upstream models the gateway can pick
+
+The gateway transformation computes `x-gateway-cost-class` from the request body. That header is only a routing signal; it is removed before the request reaches the provider:
 
 ```yaml
 x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
 ```
 
-The model entries then use normal header matches:
+The model entries then use normal header matches. In this example:
 
-- `economy` routes to a lower-cost upstream model
-- `balanced` routes to the default higher-capability upstream model
-- `premium` routes to a higher-capability upstream model
+- `economy` routes to `gpt-4o-mini`
+- `balanced` routes to `gpt-4o`
+- `premium` also routes to `gpt-4o`
 - callers can explicitly request a tier with `metadata.cost_tier`
+
+This keeps the public API stable while letting the gateway make a policy decision before model selection.
 
 Run the gateway:
 

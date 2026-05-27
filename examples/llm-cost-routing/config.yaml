@@ -1,11 +1,17 @@
 llm:
   port: 4000
   policies:
+    # Compute a routing tier from request data before the model is selected.
+    # This only writes a temporary header that is used for matching, then the
+    # header is stripped before the request is forwarded upstream.
     transformations:
       request:
         set:
+          # Requests with small output budgets land in the economy bucket.
+          # Callers can override the derived class with metadata.cost_tier.
           x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
   models:
+  # Same public model name, lower-cost upstream model.
   - name: smart-model
     provider: openAI
     params:
@@ -20,6 +26,7 @@ llm:
     requestHeaders:
       remove:
       - x-gateway-cost-class
+  # Same public model name, default higher-capability upstream model.
   - name: smart-model
     provider: openAI
     params:
@@ -34,6 +41,9 @@ llm:
     requestHeaders:
       remove:
       - x-gateway-cost-class
+  # Same public model name, premium bucket. This example maps it to the same
+  # upstream model as balanced so the routing signal stays visible without
+  # forcing a third provider account.
   - name: smart-model
     provider: openAI
     params:

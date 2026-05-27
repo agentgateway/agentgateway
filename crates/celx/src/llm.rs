@@ -3,6 +3,9 @@ use cel::{Context, ExecutionError, FunctionContext, ResolveResult, Value};
 const ECONOMY_MAX_OUTPUT_TOKENS: usize = 1024;
 const BALANCED_MAX_OUTPUT_TOKENS: usize = 4096;
 
+// `llm.costClass(...)` is a small policy helper, not a scheduler.
+// It turns request size and optional caller intent into a stable routing tier
+// so policies can branch before model selection.
 pub fn insert_all(ctx: &mut Context) {
 	ctx.add_qualified_function("llm", "costClass", cost_class);
 }
@@ -15,6 +18,9 @@ fn cost_class<'a>(ftx: &mut FunctionContext<'a, '_>) -> ResolveResult<'a> {
 		});
 	}
 
+	// The helper supports two calling styles:
+	//   1. derive a tier from request size using built-in thresholds
+	//   2. supply custom thresholds and optionally an explicit override
 	let (economy_max, balanced_max, explicit_tier) = match ftx.args.len() {
 		1 => (ECONOMY_MAX_OUTPUT_TOKENS, BALANCED_MAX_OUTPUT_TOKENS, None),
 		2 => (
@@ -75,6 +81,7 @@ fn explicit_tier_value<'a>(
 }
 
 fn normalize_tier<'a>(ftx: &FunctionContext<'a, '_>, tier: &str) -> ResolveResult<'a> {
+	// Keep the tier vocabulary narrow so routing rules stay predictable.
 	let normalized = tier.trim().to_ascii_lowercase();
 	match normalized.as_str() {
 		"economy" | "balanced" | "premium" => Ok(normalized.into()),
