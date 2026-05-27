@@ -2155,7 +2155,7 @@ async fn setup_body_driven_inference_routing_mock(
 		"backends": [
 			{
 				"service": {
-					"name": STANDALONE_SERVICE_REF,
+					"name": { "namespace": "default", "hostname": STANDALONE_SERVICE_NAME },
 					"port": STANDALONE_SERVICE_PORT,
 				},
 				"policies": {
