@@ -42,6 +42,7 @@ pub enum GuardrailAction {
 	Allow,
 	Mask,
 	Reject,
+	FailOpen,
 }
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]

@@ -771,7 +771,7 @@ impl Policy {
 						Self::record_guardrail_trip(
 							client,
 							crate::telemetry::metrics::GuardrailPhase::Request,
-							crate::telemetry::metrics::GuardrailAction::Allow,
+							crate::telemetry::metrics::GuardrailAction::FailOpen,
 						);
 						Ok(None)
 					},
@@ -845,7 +845,7 @@ impl Policy {
 						Self::record_guardrail_trip(
 							client,
 							crate::telemetry::metrics::GuardrailPhase::Response,
-							crate::telemetry::metrics::GuardrailAction::Allow,
+							crate::telemetry::metrics::GuardrailAction::FailOpen,
 						);
 						Ok(None)
 					},
@@ -1252,23 +1252,18 @@ pub struct NamedRegex {
 /// Defines how the proxy behaves when a webhook guardrail is unreachable or
 /// returns an error.
 ///
-/// Defaults to `FailClosed`. When failing closed, the error is propagated and
+/// Defaults to `failClosed`. When failing closed, the error is propagated and
 /// the LLM request is rejected. When failing open, the request is allowed
 /// through despite the webhook failure.
-///
-/// # Configuration
-///
-/// Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,
-/// `FailClosed`) are accepted in configuration files.
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
 	/// Reject the request when the webhook guardrail is unavailable (default).
 	#[default]
-	#[serde(rename = "failClosed", alias = "FailClosed")]
+	#[serde(rename = "failClosed")]
 	FailClosed,
 	/// Allow the request through when the webhook guardrail is unavailable.
-	#[serde(rename = "failOpen", alias = "FailOpen")]
+	#[serde(rename = "failOpen")]
 	FailOpen,
 }
 
