@@ -1,0 +1,146 @@
+package plugins
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"istio.io/istio/pkg/kube/krt"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+)
+
+func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthResolvesConfiguredCredentialRef"))
+	ctx := PolicyCtx{
+		Krt: krt.TestingDummyContext{},
+		Collections: &AgwCollections{
+			Secrets: secrets,
+		},
+	}
+
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{}, "default")
+	if err != nil {
+		t.Fatalf("buildAwsAuthPolicy() error = %v, want nil", err)
+	}
+	if policy != nil {
+		t.Fatalf("buildAwsAuthPolicy() policy = %v, want nil", policy)
+	}
+
+	_, err = buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		SecretRef: agentgateway.CredentialRef{
+			Group: "agentgateway.dev",
+			Kind:  "FileCredential",
+		},
+	}, "default")
+	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
+		t.Fatalf("buildAwsAuthPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
+	}
+}
+
+func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"))
+	ctx := PolicyCtx{
+		Krt: krt.TestingDummyContext{},
+		Collections: &AgwCollections{
+			Secrets: secrets,
+		},
+	}
+
+	_, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
+		SecretRef: agentgateway.CredentialRef{
+			Group: "agentgateway.dev",
+			Kind:  "FileCredential",
+		},
+	}, "default")
+	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
+		t.Fatalf("buildAzureAuthPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
+	}
+}
+
+func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "basic-auth",
+		},
+		Data: map[string]string{
+			".htaccess": "alice:hash",
+		},
+	}
+	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"))
+	ctx := PolicyCtx{
+		Krt:                krt.TestingDummyContext{},
+		CredentialResolver: configMapCredentialResolver{configMaps: configMaps},
+	}
+
+	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
+		SecretRef: &agentgateway.CredentialRef{
+			Name:  "basic-auth",
+			Group: "example.agentgateway.dev",
+			Kind:  "ConfigMapCredential",
+		},
+	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
+	if err != nil {
+		t.Fatalf("processBasicAuthenticationPolicy() error = %v, want nil", err)
+	}
+	if got := policy.GetTraffic().GetBasicAuth().HtpasswdContent; got != "alice:hash" {
+		t.Fatalf("basic auth htpasswd content = %q, want %q", got, "alice:hash")
+	}
+}
+
+func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "basic-auth",
+		},
+		Data: map[string][]byte{
+			".htaccess": []byte("bob:hash"),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver"))
+	ctx := PolicyCtx{
+		Krt: krt.TestingDummyContext{},
+		Collections: &AgwCollections{
+			Secrets: secrets,
+		},
+		CredentialResolver: configMapCredentialResolver{},
+	}
+
+	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
+		SecretRef: &agentgateway.CredentialRef{
+			Name: "basic-auth",
+			Kind: "Secret",
+		},
+	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
+	if err != nil {
+		t.Fatalf("processBasicAuthenticationPolicy() error = %v, want nil", err)
+	}
+	if got := policy.GetTraffic().GetBasicAuth().HtpasswdContent; got != "bob:hash" {
+		t.Fatalf("basic auth htpasswd content = %q, want %q", got, "bob:hash")
+	}
+}
+
+type configMapCredentialResolver struct {
+	configMaps krt.Collection[*corev1.ConfigMap]
+}
+
+func (r configMapCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.CredentialRef, namespace string) (map[string][]byte, error) {
+	if ref.Group != "example.agentgateway.dev" || ref.Kind != "ConfigMapCredential" {
+		return nil, fmt.Errorf("%w: %q/%q", kubeutils.ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
+	}
+	configMap := krt.FetchOne(krtctx, r.configMaps, krt.FilterKey(namespace+"/"+ref.Name))
+	if configMap == nil {
+		return nil, fmt.Errorf("ConfigMap %s/%s not found", namespace, ref.Name)
+	}
+	data := make(map[string][]byte, len((*configMap).Data))
+	for k, v := range (*configMap).Data {
+		data[k] = []byte(v)
+	}
+	return data, nil
+}

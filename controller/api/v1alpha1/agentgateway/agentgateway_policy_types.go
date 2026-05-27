@@ -352,7 +352,7 @@ const (
 type BackendTLS struct {
 	// `mtlsCertificateRef` enables mutual TLS to the backend, using the
 	// specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-	// `Secret`.
+	// credential source, defaulting to a Kubernetes `Secret`.
 	//
 	// An optional `ca.cert` field, if present, will be used to verify the
 	// server certificate. If `caCertificateRefs` is also specified, the
@@ -363,7 +363,7 @@ type BackendTLS struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []corev1.LocalObjectReference `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []CredentialRef `json:"mtlsCertificateRef,omitempty"`
 	// `caCertificateRefs` defines the CA certificate `ConfigMap` to use to
 	// verify the server certificate.
 	// If unset, the system's trusted certificates are used.
@@ -1030,9 +1030,10 @@ type BasicAuthentication struct {
 	// +optional
 	Users []string `json:"users,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing the `.htaccess`
-	// file. The `Secret` must have a key named `.htaccess`, and should contain
-	// the complete `.htaccess` file.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing the `.htaccess` file. When using the default Secret
+	// resolver, the `Secret` must have a key named `.htaccess`, and should
+	// contain the complete `.htaccess` file.
 	//
 	// Note: passwords should be the hash of the password, not the raw password. Use the `htpasswd` or similar commands
 	// to generate a hash. MD5, bcrypt, crypt, and SHA-1 are supported.
@@ -1048,7 +1049,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *CredentialRef `json:"secretRef,omitempty"`
 
 	// `location` controls where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
@@ -1078,10 +1079,11 @@ type APIKeyAuthentication struct {
 	// +optional
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing a set of API keys.
-	// If there are many keys, `secretSelector` can be used instead.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing a set of API keys. If there are many Secret-backed
+	// keys, `secretSelector` can be used instead.
 	//
-	// Each entry in the `Secret` represents one API key. The key is an
+	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
 	// * A JSON object with two fields, `key` and `metadata`. `key` contains
@@ -1106,13 +1108,14 @@ type APIKeyAuthentication struct {
 	//	    }
 	//	  client2: "k-456"
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *CredentialRef `json:"secretRef,omitempty"`
 
-	// `secretSelector` selects multiple `Secret` resources containing API
-	// keys. If the same key is defined in multiple secrets, the behavior is
-	// undefined.
+	// `secretSelector` selects multiple Kubernetes `Secret` resources
+	// containing API keys. It is Secret-only; use `secretRef` for other
+	// credential kinds. If the same key is defined in multiple secrets, the
+	// behavior is undefined.
 	//
-	// Each entry in the `Secret` represents one API key. The key is an
+	// Each entry in the `Secret` data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
 	// * A JSON object with two fields, `key` and `metadata`. `key` contains
@@ -1169,10 +1172,12 @@ type BackendAuth struct {
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing the key to use as
-	// the authorization value. This must be stored in the `Authorization` key.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing the key to use as the authorization value. When using
+	// the default Secret resolver, this must be stored in the `Authorization`
+	// key.
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *CredentialRef `json:"secretRef,omitempty"`
 
 	// `passthrough` passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
@@ -1223,12 +1228,13 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
-	// `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-	// Google credential JSON in the `credentials.json` key. When omitted,
-	// ambient credentials are used.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing ADC-compatible Google credential JSON. When using
+	// the default Secret resolver, this must be stored in the `credentials.json`
+	// key. When omitted, ambient credentials are used.
 	//
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *CredentialRef `json:"secretRef,omitempty"`
 	// `audience` allows explicitly configuring the `aud` of the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.
@@ -1239,11 +1245,12 @@ type GcpAuth struct {
 
 // AwsAuth specifies the authentication method to use for the backend.
 type AwsAuth struct {
-	// `secretRef` references a Kubernetes `Secret` containing the AWS
-	// credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing the AWS credentials. When using the default Secret
+	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
 	// +required
-	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+	SecretRef CredentialRef `json:"secretRef"`
 
 	// `serviceName` is the AWS SigV4 signing service name (for example,
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
@@ -1254,12 +1261,13 @@ type AwsAuth struct {
 }
 
 type AzureAuth struct {
-	// `secretRef` references a Kubernetes `Secret` containing the Azure
-	// credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing the Azure credentials. When using the default Secret
+	// resolver, the `Secret` must have keys `clientID`, `tenantID`, and
 	// `clientSecret`.
 	//
 	// +optional
-	SecretRef corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef CredentialRef `json:"secretRef,omitempty"`
 
 	// Details for managed identity authentication
 	//
