@@ -140,6 +140,15 @@ enum RequestedModelLocation {
 	Path,
 }
 
+impl RequestedModelLocation {
+	fn llm_request(&self) -> Option<&Value> {
+		match self {
+			Self::Body(body) => Some(body),
+			Self::Multipart | Self::Path => None,
+		}
+	}
+}
+
 impl ModelRouter {
 	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
@@ -239,7 +248,10 @@ impl ModelRouter {
 				});
 			},
 			VirtualModelRouting::Conditional(targets) => {
-				let exec = cel::Executor::new_request(req);
+				let exec = match location.llm_request() {
+					Some(llm_request) => cel::Executor::new_llm_request(req, llm_request),
+					None => cel::Executor::new_request(req),
+				};
 				match targets.iter().find(|target| {
 					target
 						.when
@@ -679,6 +691,64 @@ mod tests {
 	use super::*;
 	use crate::transport::BufferLimit;
 	use crate::types::agent::RouteBackendTarget;
+
+	#[tokio::test]
+	async fn conditional_virtual_model_can_use_llm_request() {
+		let model = |name: &str| ModelRoute {
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Internal,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let router = ModelRouter::new(
+			vec![model("economy-model"), model("premium-model")],
+			vec![VirtualModelRoute {
+				name: "smart-model".to_string(),
+				created: 0,
+				llm_policy: default_route_types(),
+				routing: VirtualModelRouting::Conditional(vec![
+					ConditionalTarget {
+						model: "economy-model".to_string(),
+						when: Some(Arc::new(
+							cel::Expression::new_strict("llmRequest.max_tokens <= 1024")
+								.expect("valid CEL expression"),
+						)),
+					},
+					ConditionalTarget {
+						model: "premium-model".to_string(),
+						when: None,
+					},
+				]),
+			}],
+		);
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(
+				r#"{"model":"smart-model","max_tokens":256}"#,
+			))
+			.expect("valid request");
+
+		assert!(matches!(
+			router.resolve(&mut req).await,
+			ResolveResult::Backend(_)
+		));
+		let body = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("rewritten request body");
+		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
+		assert_eq!(body["model"], "economy-model");
+	}
 
 	#[test]
 	fn concrete_model_authorization_filters_requests() {
