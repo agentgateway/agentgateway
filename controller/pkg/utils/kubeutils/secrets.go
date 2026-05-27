@@ -22,7 +22,7 @@ var ErrUnsupportedCredentialKind = errors.New("unsupported credential kind")
 // ErrUnsupportedCredentialKind for group/kind pairs they do not handle; missing
 // data for a handled ref should return a normal error.
 type CredentialResolver interface {
-	ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.CredentialRef, namespace string) (map[string][]byte, error)
+	ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error)
 }
 
 // ChainedCredentialResolver tries resolvers in order until one supports the
@@ -30,7 +30,7 @@ type CredentialResolver interface {
 // for refs they do not handle so the chain can fall through.
 type ChainedCredentialResolver []CredentialResolver
 
-func (r ChainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.CredentialRef, namespace string) (map[string][]byte, error) {
+func (r ChainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
 	for _, resolver := range r {
 		if resolver == nil {
 			continue
@@ -61,7 +61,7 @@ func GetSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext
 }
 
 // ResolveCredentialRef fetches Secret-backed credential bytes for a CredentialRef.
-func (r SecretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.CredentialRef, namespace string) (map[string][]byte, error) {
+func (r SecretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
 	if ref.Group != "" || (ref.Kind != "" && ref.Kind != "Secret") {
 		return nil, fmt.Errorf("%w: %q/%q", ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 	}

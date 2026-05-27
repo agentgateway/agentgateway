@@ -956,7 +956,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 	return nil, errors.Join(errs...)
 }
 
-func credentialRefConfigured(ref agentgateway.CredentialRef) bool {
+func credentialRefConfigured(ref agentgateway.LocalCredentialRef) bool {
 	return ref.Name != "" || ref.Group != "" || ref.Kind != ""
 }
 

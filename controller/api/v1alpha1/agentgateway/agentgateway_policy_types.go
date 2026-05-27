@@ -363,7 +363,7 @@ type BackendTLS struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []CredentialRef `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []LocalCredentialRef `json:"mtlsCertificateRef,omitempty"`
 	// `caCertificateRefs` defines the CA certificate `ConfigMap` to use to
 	// verify the server certificate.
 	// If unset, the system's trusted certificates are used.
@@ -1049,7 +1049,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *CredentialRef `json:"secretRef,omitempty"`
+	SecretRef *LocalCredentialRef `json:"secretRef,omitempty"`
 
 	// `location` controls where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
@@ -1108,7 +1108,7 @@ type APIKeyAuthentication struct {
 	//	    }
 	//	  client2: "k-456"
 	// +optional
-	SecretRef *CredentialRef `json:"secretRef,omitempty"`
+	SecretRef *LocalCredentialRef `json:"secretRef,omitempty"`
 
 	// `secretSelector` selects multiple Kubernetes `Secret` resources
 	// containing API keys. It is Secret-only; use `secretRef` for other
@@ -1177,7 +1177,7 @@ type BackendAuth struct {
 	// the default Secret resolver, this must be stored in the `Authorization`
 	// key.
 	// +optional
-	SecretRef *CredentialRef `json:"secretRef,omitempty"`
+	SecretRef *LocalCredentialRef `json:"secretRef,omitempty"`
 
 	// `passthrough` passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
@@ -1234,7 +1234,7 @@ type GcpAuth struct {
 	// key. When omitted, ambient credentials are used.
 	//
 	// +optional
-	SecretRef *CredentialRef `json:"secretRef,omitempty"`
+	SecretRef *LocalCredentialRef `json:"secretRef,omitempty"`
 	// `audience` allows explicitly configuring the `aud` of the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.
@@ -1250,7 +1250,7 @@ type AwsAuth struct {
 	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
 	// +required
-	SecretRef CredentialRef `json:"secretRef"`
+	SecretRef LocalCredentialRef `json:"secretRef"`
 
 	// `serviceName` is the AWS SigV4 signing service name (for example,
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
@@ -1267,7 +1267,7 @@ type AzureAuth struct {
 	// `clientSecret`.
 	//
 	// +optional
-	SecretRef CredentialRef `json:"secretRef,omitempty"`
+	SecretRef LocalCredentialRef `json:"secretRef,omitempty"`
 
 	// Details for managed identity authentication
 	//

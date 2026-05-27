@@ -850,3 +850,20 @@ spec:
       secretRef:
         name: api-key-secret
         group: agentgateway.dev
+---
+_err: 'custom credential refs must set both group and kind'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-group-empty-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        group: agentgateway.dev
+        kind: ""

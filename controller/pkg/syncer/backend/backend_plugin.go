@@ -32,7 +32,7 @@ var logger = logging.New("agentgateway/backend")
 
 // NewBackendPlugin creates an AgentgatewayBackend plugin. Credential resolvers
 // are consulted before the built-in Secret fallback.
-func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolvers ...kubeutils.CredentialResolver) plugins.AgwPlugin {
+func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
 			wellknown.AgentgatewayBackendGVK.GroupKind(): {
@@ -46,14 +46,7 @@ func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver,
 						*agentgateway.AgentgatewayBackendStatus,
 						[]agwir.AgwResource,
 					) {
-						pc := plugins.PolicyCtx{
-							Krt:                ctx,
-							Collections:        agw,
-							References:         input.References,
-							Resolver:           resolver,
-							JWKSLookup:         jwksLookup,
-							CredentialResolver: kubeutils.ChainedCredentialResolver(credentialResolvers),
-						}
+						pc := plugins.NewPolicyCtx(ctx, agw, input.References, resolver, jwksLookup, credentialResolver)
 						return TranslateAgwBackend(pc, backend, input.References)
 					}, agw.KrtOpts.ToOptions("backends/Agentgateway")...)
 					return plugins.ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "backends/Agentgateway"), col

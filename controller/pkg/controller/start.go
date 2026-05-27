@@ -180,13 +180,13 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 
 // Plugins registers built-in policy plugins with shared credential resolver
 // extensions.
-func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver ...kubeutils.CredentialResolver) []agwplugins.AgwPlugin {
+func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) []agwplugins.AgwPlugin {
 	return []agwplugins.AgwPlugin{
-		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup, credentialResolver...),
+		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup, credentialResolver),
 		agwplugins.NewInferencePlugin(agw),
 		agwplugins.NewA2APlugin(agw),
 		agwplugins.NewBackendTLSPlugin(agw),
-		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup, credentialResolver...),
+		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup, credentialResolver),
 	}
 }
 

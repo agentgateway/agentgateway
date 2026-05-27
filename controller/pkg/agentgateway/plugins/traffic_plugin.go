@@ -91,7 +91,7 @@ func ConvertStatusCollection[T controllers.Object, S any](
 
 // NewAgentPlugin creates an AgentgatewayPolicy plugin. Credential resolvers are
 // consulted before the built-in Secret fallback.
-func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolvers ...kubeutils.CredentialResolver) AgwPlugin {
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -100,7 +100,7 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup, credentialResolvers...)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup, credentialResolver)
 					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
 					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
@@ -114,11 +114,11 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 	}
 }
 
-// DefaultCredentialResolver composes injected resolvers with the built-in
-// Secret resolver, preserving name-only Secret refs when custom resolvers are
-// installed.
-func DefaultCredentialResolver(agw *AgwCollections, overrides ...kubeutils.CredentialResolver) kubeutils.CredentialResolver {
-	resolvers := make(kubeutils.ChainedCredentialResolver, 0, len(overrides)+1)
+// defaultCredentialResolver composes injected resolvers with the built-in
+// Secret resolver, preserving name-only Secret refs when custom resolvers are installed.
+func defaultCredentialResolver(agw *AgwCollections, override kubeutils.CredentialResolver) kubeutils.CredentialResolver {
+	resolvers := make(kubeutils.ChainedCredentialResolver, 0, 2)
+	hasSecretResolver := false
 	var appendResolver func(kubeutils.CredentialResolver)
 	appendResolver = func(r kubeutils.CredentialResolver) {
 		if r == nil {
@@ -130,12 +130,13 @@ func DefaultCredentialResolver(agw *AgwCollections, overrides ...kubeutils.Crede
 			}
 			return
 		}
+		if _, ok := r.(kubeutils.SecretCredentialResolver); ok {
+			hasSecretResolver = true
+		}
 		resolvers = append(resolvers, r)
 	}
-	for _, r := range overrides {
-		appendResolver(r)
-	}
-	if agw != nil {
+	appendResolver(override)
+	if agw != nil && !hasSecretResolver {
 		resolvers = append(resolvers, kubeutils.SecretCredentialResolver{Secrets: agw.Secrets})
 	}
 	if len(resolvers) == 0 {
@@ -151,12 +152,38 @@ type PolicyCtx struct {
 	Resolver           remotehttp.Resolver
 	JWKSLookup         jwks.Lookup
 	CredentialResolver kubeutils.CredentialResolver
+
+	resolvedCredentialResolver kubeutils.CredentialResolver
+}
+
+// NewPolicyCtx creates a policy translation context
+func NewPolicyCtx(
+	krtctx krt.HandlerContext,
+	collections *AgwCollections,
+	references ReferenceIndex,
+	resolver remotehttp.Resolver,
+	jwksLookup jwks.Lookup,
+	credentialResolver kubeutils.CredentialResolver,
+) PolicyCtx {
+	return PolicyCtx{
+		Krt:                krtctx,
+		Collections:        collections,
+		References:         references,
+		Resolver:           resolver,
+		JWKSLookup:         jwksLookup,
+		CredentialResolver: credentialResolver,
+
+		resolvedCredentialResolver: defaultCredentialResolver(collections, credentialResolver),
+	}
 }
 
 // ResolveCredentialRef applies the context's credential resolvers with the
 // built-in Secret fallback.
-func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.CredentialRef, namespace string) (map[string][]byte, error) {
-	resolver := DefaultCredentialResolver(ctx.Collections, ctx.CredentialResolver)
+func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+	resolver := ctx.resolvedCredentialResolver
+	if resolver == nil {
+		resolver = defaultCredentialResolver(ctx.Collections, ctx.CredentialResolver)
+	}
 	if resolver == nil {
 		return nil, errors.New("credential resolver is not configured")
 	}
@@ -178,19 +205,12 @@ func TranslateAgentgatewayPolicy(
 	references ReferenceIndex,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
-	credentialResolvers ...kubeutils.CredentialResolver,
+	credentialResolver kubeutils.CredentialResolver,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{
-		Krt:                ctx,
-		Collections:        agw,
-		References:         references,
-		Resolver:           resolver,
-		JWKSLookup:         jwksLookup,
-		CredentialResolver: kubeutils.ChainedCredentialResolver(credentialResolvers),
-	}
+	pctx := NewPolicyCtx(ctx, agw, references, resolver, jwksLookup, credentialResolver)
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -807,8 +827,8 @@ func processAPIKeyAuthenticationPolicy(
 	}
 	if s := ak.SecretSelector; s != nil {
 		dataSets = nil
-		// SecretSelector is intentionally Secret-only; CredentialRef resolution
-		// is handled by SecretRef above.
+		// Preserve existing precedence: secretSelector replaces secretRef, and
+		// remains Secret-only. CredentialRef resolution is handled by secretRef.
 		for _, secret := range krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace)) {
 			dataSets = append(dataSets, apiKeyData{name: secret.Name, data: secret.Data})
 		}
