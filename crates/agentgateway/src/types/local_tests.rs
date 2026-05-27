@@ -223,7 +223,7 @@ llm:
     transformations:
       request:
         set:
-          x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
+          x-gateway-cost-class: 'default(json(request.body).metadata.cost_tier, "") != "" ? default(json(request.body).metadata.cost_tier, "") : (default(json(request.body).max_tokens, 1024) > 4096 ? "premium" : default(json(request.body).max_tokens, 1024) > 1024 ? "balanced" : "economy")'
   models:
   - name: smart-model
     provider: openAI

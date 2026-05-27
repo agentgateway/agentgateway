@@ -8,10 +8,10 @@ The important distinction is:
 - `economy`, `balanced`, and `premium` are gateway routing tiers
 - `gpt-4o-mini` and `gpt-4o` are the concrete upstream models the gateway can pick
 
-The gateway transformation computes `x-gateway-cost-class` from the request body. That header is only a routing signal; it is removed before the request reaches the provider:
+The gateway transformation computes `x-gateway-cost-class` from the request body. That header is only a routing signal; it is removed before the request reaches the provider. The example uses a plain CEL expression, not a custom helper:
 
 ```yaml
-x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
+x-gateway-cost-class: 'default(json(request.body).metadata.cost_tier, "") != "" ? default(json(request.body).metadata.cost_tier, "") : (default(json(request.body).max_tokens, 1024) > 4096 ? "premium" : default(json(request.body).max_tokens, 1024) > 1024 ? "balanced" : "economy")'
 ```
 
 The model entries then use normal header matches. In this example:

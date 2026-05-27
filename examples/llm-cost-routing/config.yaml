@@ -9,7 +9,7 @@ llm:
         set:
           # Requests with small output budgets land in the economy bucket.
           # Callers can override the derived class with metadata.cost_tier.
-          x-gateway-cost-class: 'llm.costClass(default(json(request.body).max_tokens, 1024), 1024, 4096, default(json(request.body).metadata.cost_tier, ""))'
+          x-gateway-cost-class: 'default(json(request.body).metadata.cost_tier, "") != "" ? default(json(request.body).metadata.cost_tier, "") : (default(json(request.body).max_tokens, 1024) > 4096 ? "premium" : default(json(request.body).max_tokens, 1024) > 1024 ? "balanced" : "economy")'
   models:
   # Same public model name, lower-cost upstream model.
   - name: smart-model
