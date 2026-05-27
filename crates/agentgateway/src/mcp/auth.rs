@@ -296,18 +296,7 @@ pub(super) async fn client_registration(
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
 	if let Some(client_id) = &auth.client_id {
-		let body = serde_json::json!({
-			"client_id": client_id
-		});
-		let body = bytes::Bytes::from(
-			serde_json::to_vec(&body).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
-		);
-		return Ok(
-			Response::builder()
-				.status(::http::StatusCode::CREATED)
-				.header(::http::header::CONTENT_TYPE, "application/json")
-				.body(body.into())?,
-		);
+		return build_mock_dcr_response(req, client_id).await;
 	}
 
 	// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
@@ -349,6 +338,49 @@ pub(super) async fn client_registration(
 	Ok(upstream)
 }
 
+const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
+
+/// Build the mock Dynamic Client Registration response used when
+/// `MCPAuthentication.clientId` is configured.
+///
+/// This path is for pre-registered IdP clients. The gateway is not creating
+/// a client upstream, so return deterministic registration metadata and carry
+/// forward only the requested redirect URIs that strict MCP clients validate.
+async fn build_mock_dcr_response(
+	req: &mut Request,
+	client_id: &str,
+) -> Result<Response, ProxyError> {
+	let limit = crate::http::buffer_limit(req);
+	let body = std::mem::take(req.body_mut());
+	let bytes = crate::http::read_body_with_limit(body, limit)
+		.await
+		.map_err(ProxyError::Body)?;
+
+	let redirect_uris = serde_json::from_slice::<serde_json::Value>(&bytes)
+		.ok()
+		.and_then(|json| json.get("redirect_uris").filter(|v| v.is_array()).cloned())
+		.unwrap_or_else(|| serde_json::json!([]));
+
+	let response_json = serde_json::json!({
+		"client_id": client_id,
+		"client_id_issued_at": MOCK_DCR_CLIENT_ID_ISSUED_AT,
+		"token_endpoint_auth_method": "none",
+		"grant_types": ["authorization_code"],
+		"response_types": ["code"],
+		"redirect_uris": redirect_uris,
+	});
+
+	let body_bytes = bytes::Bytes::from(
+		serde_json::to_vec(&response_json).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
+	);
+	Ok(
+		Response::builder()
+			.status(::http::StatusCode::CREATED)
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(body_bytes.into())?,
+	)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -365,5 +397,112 @@ mod tests {
 			request_uri_for_oauth_metadata(&req).to_string(),
 			"https://example.com/.well-known/oauth-protected-resource/mcp"
 		);
+	}
+
+	async fn response_body_to_json(resp: Response) -> serde_json::Value {
+		let bytes = crate::http::read_resp_body(resp)
+			.await
+			.expect("response body should read");
+		serde_json::from_slice(&bytes).expect("response body should be JSON")
+	}
+
+	fn dcr_request(body: &'static str) -> Request {
+		::http::Request::builder()
+			.method(Method::POST)
+			.uri("https://gateway.example.com/client-registration")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(body))
+			.expect("request should build")
+	}
+
+	#[tokio::test]
+	async fn mock_dcr_echoes_redirect_uris_and_overrides_client_id() {
+		let body = r#"{"redirect_uris":["http://localhost:33418/callback"],"grant_types":["authorization_code"],"client_name":"Claude Code"}"#;
+		let mut req = dcr_request(body);
+
+		let resp = build_mock_dcr_response(&mut req, "0oa1wcsu7sbWwq3Ht358")
+			.await
+			.expect("mock should build");
+
+		assert_eq!(resp.status(), ::http::StatusCode::CREATED);
+		let json = response_body_to_json(resp).await;
+		assert_eq!(json["client_id"], "0oa1wcsu7sbWwq3Ht358");
+		assert_eq!(
+			json["redirect_uris"],
+			serde_json::json!(["http://localhost:33418/callback"])
+		);
+		assert_eq!(
+			json["grant_types"],
+			serde_json::json!(["authorization_code"])
+		);
+		assert_eq!(json["response_types"], serde_json::json!(["code"]));
+		assert_eq!(json["token_endpoint_auth_method"], "none");
+		assert_eq!(json["client_id_issued_at"], MOCK_DCR_CLIENT_ID_ISSUED_AT);
+		assert!(json.get("client_name").is_none());
+	}
+
+	#[tokio::test]
+	async fn mock_dcr_overrides_client_id_if_client_submitted_one() {
+		// If a client submitted its own client_id (unusual but possible),
+		// we override it with the operator-configured value rather than
+		// honoring what the client sent.
+		let body = r#"{"redirect_uris":["http://localhost:1234/cb"],"client_id":"client-supplied-id"}"#;
+		let mut req = dcr_request(body);
+
+		let resp = build_mock_dcr_response(&mut req, "operator-id")
+			.await
+			.expect("mock should build");
+
+		let json = response_body_to_json(resp).await;
+		assert_eq!(json["client_id"], "operator-id");
+		assert_eq!(
+			json["redirect_uris"],
+			serde_json::json!(["http://localhost:1234/cb"])
+		);
+	}
+
+	#[tokio::test]
+	async fn mock_dcr_handles_empty_body() {
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.uri("https://gateway.example.com/client-registration")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = build_mock_dcr_response(&mut req, "operator-id")
+			.await
+			.expect("mock should build for empty body");
+
+		let json = response_body_to_json(resp).await;
+		assert_eq!(json["client_id"], "operator-id");
+		assert_eq!(json["client_id_issued_at"], MOCK_DCR_CLIENT_ID_ISSUED_AT);
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[tokio::test]
+	async fn mock_dcr_handles_malformed_json() {
+		let mut req = dcr_request("this is not json {{{");
+
+		let resp = build_mock_dcr_response(&mut req, "operator-id")
+			.await
+			.expect("mock should build for invalid JSON");
+
+		let json = response_body_to_json(resp).await;
+		assert_eq!(json["client_id"], "operator-id");
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[tokio::test]
+	async fn mock_dcr_handles_non_object_body() {
+		let mut req = dcr_request(r#"["not", "an", "object"]"#);
+
+		let resp = build_mock_dcr_response(&mut req, "operator-id")
+			.await
+			.expect("mock should build for non-object body");
+
+		let json = response_body_to_json(resp).await;
+		assert_eq!(json["client_id"], "operator-id");
+		assert!(json.is_object());
+		assert_eq!(json["redirect_uris"], serde_json::json!([]));
 	}
 }
