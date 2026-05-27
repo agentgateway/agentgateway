@@ -85,6 +85,9 @@ export type McpIDP =
     }
   | {
       keycloak: {};
+    }
+  | {
+      okta: {};
     };
 export type FileInlineOrRemote =
   | {
@@ -511,6 +514,14 @@ export type LocalConditionalPolicy4 = {
    * Options for including the request body in the authorization request
    */
   includeRequestBody?: BodyOptions | null;
+  /**
+   * Cache gRPC authorization results by CEL-derived request key.
+   *
+   * Warning: the safety of this feature depends on the cache key accurately capturing the fields
+   * the server operates on. For example, if you return a different result based on header A but only
+   * cache header B, users may get incorrect cache hits.
+   */
+  cache?: CacheConfig | null;
   [k: string]: unknown;
 } & LocalConditionalPolicy41;
 export type HeaderOrPseudo = string;
@@ -608,6 +619,14 @@ export type ExtAuthz = {
    * Options for including the request body in the authorization request
    */
   includeRequestBody?: BodyOptions | null;
+  /**
+   * Cache gRPC authorization results by CEL-derived request key.
+   *
+   * Warning: the safety of this feature depends on the cache key accurately capturing the fields
+   * the server operates on. For example, if you return a different result based on header A but only
+   * cache header B, users may get incorrect cache hits.
+   */
+  cache?: CacheConfig | null;
   [k: string]: unknown;
 } & ExtAuthz1;
 export type ExtAuthz1 =
@@ -668,6 +687,7 @@ export type LocalConditionalPolicy5 = {
   responseAttributes?: {
     [k: string]: Expression;
   } | null;
+  processingOptions?: ProcessingOptions;
   [k: string]: unknown;
 } & LocalConditionalPolicy51;
 export type LocalConditionalPolicy51 =
@@ -723,6 +743,7 @@ export type ExtProc = {
   responseAttributes?: {
     [k: string]: Expression;
   } | null;
+  processingOptions?: ProcessingOptions1;
   [k: string]: unknown;
 } & ExtProc1;
 export type ExtProc1 =
@@ -1444,12 +1465,20 @@ export interface LocalConditionalPolicy {
    * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
    */
   condition?: Expression | null;
-  body: Bytes;
+  body?: Bytes;
+  bodyExpression?: Expression | null;
+  headers?: {
+    [k: string]: Expression;
+  };
   status: number;
   [k: string]: unknown;
 }
 export interface DirectResponse {
-  body: Bytes;
+  body?: Bytes;
+  bodyExpression?: Expression | null;
+  headers?: {
+    [k: string]: Expression;
+  };
   status: number;
 }
 export interface CorsSerde {
@@ -1493,6 +1522,7 @@ export interface LocalMcpAuthentication {
         };
       };
   jwtValidationOptions?: JWTValidationOptions;
+  clientId?: string | null;
 }
 export interface ResourceMetadata {
   [k: string]: unknown;
@@ -2013,11 +2043,55 @@ export interface BodyOptions {
    */
   packAsBytes?: boolean;
 }
+export interface CacheConfig {
+  /**
+   * Non-empty list of CEL expressions that make up the cache key.
+   *
+   * @minItems 1
+   */
+  key: [Expression, ...Expression[]];
+  /**
+   * CEL expression that returns how long cached authorization results are reused.
+   * The expression is evaluated after the authorization response has been applied
+   * to the request, and must return either a duration or timestamp.
+   */
+  ttl: string;
+  /**
+   * Maximum number of authorization results to keep in the cache.
+   */
+  maxEntries?: number;
+}
 export interface LocalConditionalPolicies5 {
   /**
    * conditional policy entries. An entry without a condition must be the final fallback.
    */
   conditional: LocalConditionalPolicy5[];
+}
+export interface ProcessingOptions {
+  requestBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  responseBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  requestHeaderMode?: "send" | "skip";
+  responseHeaderMode?: "send" | "skip";
+  requestTrailerMode?: "send" | "skip";
+  responseTrailerMode?: "send" | "skip";
+  /**
+   * Allow ext_proc `mode_override` values from matching headers responses to update
+   * subsequent request/response processing phases for this exchange.
+   */
+  allowModeOverride?: boolean;
+}
+export interface ProcessingOptions1 {
+  requestBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  responseBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  requestHeaderMode?: "send" | "skip";
+  responseHeaderMode?: "send" | "skip";
+  requestTrailerMode?: "send" | "skip";
+  responseTrailerMode?: "send" | "skip";
+  /**
+   * Allow ext_proc `mode_override` values from matching headers responses to update
+   * subsequent request/response processing phases for this exchange.
+   */
+  allowModeOverride?: boolean;
 }
 export interface LocalConditionalPolicies6 {
   /**

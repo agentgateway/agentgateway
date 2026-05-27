@@ -1,0 +1,1 @@
+These configs may be used to test specific features of the UI. The mcp-config.yaml file can be used to test the MCP playground if it's used as the active agentgateway configuration file.

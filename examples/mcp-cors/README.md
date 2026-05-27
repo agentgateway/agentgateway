@@ -8,7 +8,7 @@ This example shows how to expose an MCP backend through agentgateway with a CORS
 cargo run -- -f examples/mcp-cors/config.yaml
 ```
 
-The gateway listens on port `8081` and spawns the `@modelcontextprotocol/server-everything` MCP server over stdio on demand.
+The gateway listens on port `3000` and spawns the `@modelcontextprotocol/server-everything` MCP server over stdio on demand.
 
 You can connect with the [MCP inspector](https://github.com/modelcontextprotocol/inspector):
 
@@ -27,14 +27,14 @@ policies:
   cors:
     allowOrigins: ["*"]
     allowHeaders:
-    - mcp-protocol-version
-    - content-type
-    - cache-control
+      - mcp-protocol-version
+      - content-type
+      - cache-control
     exposeHeaders:
-    - Mcp-Session-Id
+      - Mcp-Session-Id
 ```
 
-* `mcp-protocol-version` — sent by clients to negotiate the MCP protocol version.
-* `Mcp-Session-Id` — returned by the server and must be `exposeHeaders` so browser code can read it and include it on subsequent requests.
+- `mcp-protocol-version` — sent by clients to negotiate the MCP protocol version.
+- `Mcp-Session-Id` — returned by the server and must be `exposeHeaders` so browser code can read it and include it on subsequent requests.
 
 Restrict `allowOrigins` to your client's origin for production deployments.

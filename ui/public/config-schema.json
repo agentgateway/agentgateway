@@ -1704,6 +1704,22 @@
         "body": {
           "$ref": "#/$defs/Bytes"
         },
+        "bodyExpression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "status": {
           "type": "integer",
           "format": "uint16",
@@ -1712,7 +1728,6 @@
         }
       },
       "required": [
-        "body",
         "status"
       ]
     },
@@ -1737,6 +1752,22 @@
         "body": {
           "$ref": "#/$defs/Bytes"
         },
+        "bodyExpression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "status": {
           "type": "integer",
           "format": "uint16",
@@ -1746,7 +1777,6 @@
       },
       "additionalProperties": false,
       "required": [
-        "body",
         "status"
       ]
     },
@@ -1859,6 +1889,12 @@
         },
         "jwtValidationOptions": {
           "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -1894,6 +1930,19 @@
           },
           "required": [
             "keycloak"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "okta": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "okta"
           ],
           "additionalProperties": false
         }
@@ -4246,6 +4295,17 @@
               "type": "null"
             }
           ]
+        },
+        "cache": {
+          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "oneOf": [
@@ -4458,6 +4518,35 @@
       },
       "additionalProperties": false
     },
+    "CacheConfig": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Non-empty list of CEL expressions that make up the cache key.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
+          "minItems": 1
+        },
+        "ttl": {
+          "description": "CEL expression that returns how long cached authorization results are reused.\nThe expression is evaluated after the authorization response has been applied\nto the request, and must return either a duration or timestamp.",
+          "$ref": "#/$defs/Expression"
+        },
+        "maxEntries": {
+          "description": "Maximum number of authorization results to keep in the cache.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 10000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "ttl"
+      ]
+    },
     "ExtAuthz": {
       "type": "object",
       "properties": {
@@ -4496,6 +4585,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/BodyOptions"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache": {
+          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
             },
             {
               "type": "null"
@@ -4655,6 +4755,18 @@
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
+        },
+        "processingOptions": {
+          "$ref": "#/$defs/ProcessingOptions",
+          "default": {
+            "requestBodyMode": "fullDuplexStreamed",
+            "responseBodyMode": "fullDuplexStreamed",
+            "requestHeaderMode": "send",
+            "responseHeaderMode": "send",
+            "requestTrailerMode": "send",
+            "responseTrailerMode": "send",
+            "allowModeOverride": false
+          }
         }
       },
       "oneOf": [
@@ -4726,6 +4838,64 @@
         "failOpen"
       ]
     },
+    "ProcessingOptions": {
+      "type": "object",
+      "properties": {
+        "requestBodyMode": {
+          "$ref": "#/$defs/BodySendMode",
+          "default": "fullDuplexStreamed"
+        },
+        "responseBodyMode": {
+          "$ref": "#/$defs/BodySendMode",
+          "default": "fullDuplexStreamed"
+        },
+        "requestHeaderMode": {
+          "$ref": "#/$defs/HeaderSendMode",
+          "default": "send"
+        },
+        "responseHeaderMode": {
+          "$ref": "#/$defs/HeaderSendMode",
+          "default": "send"
+        },
+        "requestTrailerMode": {
+          "$ref": "#/$defs/TrailerSendMode",
+          "default": "send"
+        },
+        "responseTrailerMode": {
+          "$ref": "#/$defs/TrailerSendMode",
+          "default": "send"
+        },
+        "allowModeOverride": {
+          "description": "Allow ext_proc `mode_override` values from matching headers responses to update\nsubsequent request/response processing phases for this exchange.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "BodySendMode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "buffered",
+        "bufferedPartial",
+        "fullDuplexStreamed"
+      ]
+    },
+    "HeaderSendMode": {
+      "type": "string",
+      "enum": [
+        "send",
+        "skip"
+      ]
+    },
+    "TrailerSendMode": {
+      "type": "string",
+      "enum": [
+        "send",
+        "skip"
+      ]
+    },
     "ExtProc": {
       "type": "object",
       "properties": {
@@ -4776,6 +4946,18 @@
           ],
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
+          }
+        },
+        "processingOptions": {
+          "$ref": "#/$defs/ProcessingOptions",
+          "default": {
+            "requestBodyMode": "fullDuplexStreamed",
+            "responseBodyMode": "fullDuplexStreamed",
+            "requestHeaderMode": "send",
+            "responseHeaderMode": "send",
+            "requestTrailerMode": "send",
+            "responseTrailerMode": "send",
+            "allowModeOverride": false
           }
         }
       },
@@ -5755,7 +5937,7 @@
           "const": "openAI"
         },
         {
-          "description": "Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
           "type": "string",
           "const": "foundry"
         }

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# cd to the repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}/../../../"
+
 # Prompt for sudo password immediately and keep refreshing in background
 sudo -v
 while true; do sudo -n true; sleep 60; done 2>/dev/null &
