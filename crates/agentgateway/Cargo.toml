@@ -33,6 +33,7 @@ atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
+aws-types.workspace = true
 aws-lc-rs.workspace = true
 openssl = { workspace = true, optional = true }
 rustls-openssl = { workspace = true, optional = true }

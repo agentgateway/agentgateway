@@ -1316,12 +1316,48 @@ type AwsAuth struct {
 	// +required
 	SecretRef shared.LocalSecretObjectRef `json:"secretRef"`
 
+	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+	// When `secretRef` is set, those static credentials are used as the source
+	// credentials for STS; otherwise ambient AWS credentials are used.
+	//
+	// +optional
+	AssumeRole *AwsAssumeRole `json:"assumeRole,omitempty"`
+
 	// `serviceName` is the AWS SigV4 signing service name (for example,
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
 	// backends may provide this automatically.
 	//
 	// +optional
 	ServiceName *ShortString `json:"serviceName,omitempty"`
+}
+
+// AwsAssumeRole configures AWS STS AssumeRole for backend authentication.
+type AwsAssumeRole struct {
+	// `roleArn` is the AWS IAM role ARN to assume.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	RoleArn string `json:"roleArn"`
+
+	// `sessionName` is the optional STS role session name.
+	//
+	// +optional
+	SessionName *ShortString `json:"sessionName,omitempty"`
+
+	// `externalId` is the optional STS external ID for cross-account access.
+	//
+	// +optional
+	ExternalID *ShortString `json:"externalId,omitempty"`
+
+	// `duration` is the optional STS role session duration.
+	//
+	// +optional
+	Duration *metav1.Duration `json:"duration,omitempty"`
+
+	// `stsRegion` is the optional AWS region to use for the STS AssumeRole call.
+	//
+	// +optional
+	STSRegion *ShortString `json:"stsRegion,omitempty"`
 }
 
 type AzureAuth struct {

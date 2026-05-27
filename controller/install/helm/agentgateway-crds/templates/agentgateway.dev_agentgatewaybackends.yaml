@@ -686,6 +686,55 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    When `secretRef` is set, those static credentials are used as the source
+                                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                                  properties:
+                                                                    duration:
+                                                                      description: '`duration`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        duration.'
+                                                                      type: string
+                                                                    externalId:
+                                                                      description: '`externalId`
+                                                                        is the optional
+                                                                        STS external
+                                                                        ID for cross-account
+                                                                        access.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    sessionName:
+                                                                      description: '`sessionName`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        name.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    stsRegion:
+                                                                      description: '`stsRegion`
+                                                                        is the optional
+                                                                        AWS region
+                                                                        to use for
+                                                                        the STS AssumeRole
+                                                                        call.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -1440,6 +1489,55 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    When `secretRef` is set, those static credentials are used as the source
+                                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                                  properties:
+                                                                    duration:
+                                                                      description: '`duration`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        duration.'
+                                                                      type: string
+                                                                    externalId:
+                                                                      description: '`externalId`
+                                                                        is the optional
+                                                                        STS external
+                                                                        ID for cross-account
+                                                                        access.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    sessionName:
+                                                                      description: '`sessionName`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        name.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    stsRegion:
+                                                                      description: '`stsRegion`
+                                                                        is the optional
+                                                                        AWS region
+                                                                        to use for
+                                                                        the STS AssumeRole
+                                                                        call.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -2190,6 +2288,55 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    When `secretRef` is set, those static credentials are used as the source
+                                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                                  properties:
+                                                                    duration:
+                                                                      description: '`duration`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        duration.'
+                                                                      type: string
+                                                                    externalId:
+                                                                      description: '`externalId`
+                                                                        is the optional
+                                                                        STS external
+                                                                        ID for cross-account
+                                                                        access.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    sessionName:
+                                                                      description: '`sessionName`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        name.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    stsRegion:
+                                                                      description: '`stsRegion`
+                                                                        is the optional
+                                                                        AWS region
+                                                                        to use for
+                                                                        the STS AssumeRole
+                                                                        call.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -3166,6 +3313,55 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    When `secretRef` is set, those static credentials are used as the source
+                                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                                  properties:
+                                                                    duration:
+                                                                      description: '`duration`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        duration.'
+                                                                      type: string
+                                                                    externalId:
+                                                                      description: '`externalId`
+                                                                        is the optional
+                                                                        STS external
+                                                                        ID for cross-account
+                                                                        access.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    sessionName:
+                                                                      description: '`sessionName`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        name.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    stsRegion:
+                                                                      description: '`stsRegion`
+                                                                        is the optional
+                                                                        AWS region
+                                                                        to use for
+                                                                        the STS AssumeRole
+                                                                        call.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -3920,6 +4116,55 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    When `secretRef` is set, those static credentials are used as the source
+                                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                                  properties:
+                                                                    duration:
+                                                                      description: '`duration`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        duration.'
+                                                                      type: string
+                                                                    externalId:
+                                                                      description: '`externalId`
+                                                                        is the optional
+                                                                        STS external
+                                                                        ID for cross-account
+                                                                        access.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    sessionName:
+                                                                      description: '`sessionName`
+                                                                        is the optional
+                                                                        STS role session
+                                                                        name.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    stsRegion:
+                                                                      description: '`stsRegion`
+                                                                        is the optional
+                                                                        AWS region
+                                                                        to use for
+                                                                        the STS AssumeRole
+                                                                        call.'
+                                                                      maxLength: 256
+                                                                      minLength: 1
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -4953,6 +5198,44 @@ spec:
                                           Auth specifies an explicit AWS authentication method for the backend.
                                           When omitted, we will try to use the default AWS SDK authentication methods.
                                         properties:
+                                          assumeRole:
+                                            description: |-
+                                              `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                              When `secretRef` is set, those static credentials are used as the source
+                                              credentials for STS; otherwise ambient AWS credentials are used.
+                                            properties:
+                                              duration:
+                                                description: '`duration` is the optional
+                                                  STS role session duration.'
+                                                type: string
+                                              externalId:
+                                                description: '`externalId` is the
+                                                  optional STS external ID for cross-account
+                                                  access.'
+                                                maxLength: 256
+                                                minLength: 1
+                                                type: string
+                                              roleArn:
+                                                description: '`roleArn` is the AWS
+                                                  IAM role ARN to assume.'
+                                                minLength: 1
+                                                type: string
+                                              sessionName:
+                                                description: '`sessionName` is the
+                                                  optional STS role session name.'
+                                                maxLength: 256
+                                                minLength: 1
+                                                type: string
+                                              stsRegion:
+                                                description: '`stsRegion` is the optional
+                                                  AWS region to use for the STS AssumeRole
+                                                  call.'
+                                                maxLength: 256
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - roleArn
+                                            type: object
                                           secretRef:
                                             description: |-
                                               `secretRef` references a credential source, defaulting to a Kubernetes
@@ -6574,6 +6857,44 @@ spec:
                                         Auth specifies an explicit AWS authentication method for the backend.
                                         When omitted, we will try to use the default AWS SDK authentication methods.
                                       properties:
+                                        assumeRole:
+                                          description: |-
+                                            `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                            When `secretRef` is set, those static credentials are used as the source
+                                            credentials for STS; otherwise ambient AWS credentials are used.
+                                          properties:
+                                            duration:
+                                              description: '`duration` is the optional
+                                                STS role session duration.'
+                                              type: string
+                                            externalId:
+                                              description: '`externalId` is the optional
+                                                STS external ID for cross-account
+                                                access.'
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                            roleArn:
+                                              description: '`roleArn` is the AWS IAM
+                                                role ARN to assume.'
+                                              minLength: 1
+                                              type: string
+                                            sessionName:
+                                              description: '`sessionName` is the optional
+                                                STS role session name.'
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                            stsRegion:
+                                              description: '`stsRegion` is the optional
+                                                AWS region to use for the STS AssumeRole
+                                                call.'
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - roleArn
+                                          type: object
                                         secretRef:
                                           description: |-
                                             `secretRef` references a credential source, defaulting to a Kubernetes
@@ -7430,6 +7751,47 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    When `secretRef` is set, those static credentials are used as the source
+                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                  properties:
+                                                    duration:
+                                                      description: '`duration` is
+                                                        the optional STS role session
+                                                        duration.'
+                                                      type: string
+                                                    externalId:
+                                                      description: '`externalId` is
+                                                        the optional STS external
+                                                        ID for cross-account access.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      type: string
+                                                    sessionName:
+                                                      description: '`sessionName`
+                                                        is the optional STS role session
+                                                        name.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    stsRegion:
+                                                      description: '`stsRegion` is
+                                                        the optional AWS region to
+                                                        use for the STS AssumeRole
+                                                        call.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -8082,6 +8444,47 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    When `secretRef` is set, those static credentials are used as the source
+                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                  properties:
+                                                    duration:
+                                                      description: '`duration` is
+                                                        the optional STS role session
+                                                        duration.'
+                                                      type: string
+                                                    externalId:
+                                                      description: '`externalId` is
+                                                        the optional STS external
+                                                        ID for cross-account access.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      type: string
+                                                    sessionName:
+                                                      description: '`sessionName`
+                                                        is the optional STS role session
+                                                        name.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    stsRegion:
+                                                      description: '`stsRegion` is
+                                                        the optional AWS region to
+                                                        use for the STS AssumeRole
+                                                        call.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -8731,6 +9134,47 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    When `secretRef` is set, those static credentials are used as the source
+                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                  properties:
+                                                    duration:
+                                                      description: '`duration` is
+                                                        the optional STS role session
+                                                        duration.'
+                                                      type: string
+                                                    externalId:
+                                                      description: '`externalId` is
+                                                        the optional STS external
+                                                        ID for cross-account access.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      type: string
+                                                    sessionName:
+                                                      description: '`sessionName`
+                                                        is the optional STS role session
+                                                        name.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    stsRegion:
+                                                      description: '`stsRegion` is
+                                                        the optional AWS region to
+                                                        use for the STS AssumeRole
+                                                        call.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -9597,6 +10041,47 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    When `secretRef` is set, those static credentials are used as the source
+                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                  properties:
+                                                    duration:
+                                                      description: '`duration` is
+                                                        the optional STS role session
+                                                        duration.'
+                                                      type: string
+                                                    externalId:
+                                                      description: '`externalId` is
+                                                        the optional STS external
+                                                        ID for cross-account access.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      type: string
+                                                    sessionName:
+                                                      description: '`sessionName`
+                                                        is the optional STS role session
+                                                        name.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    stsRegion:
+                                                      description: '`stsRegion` is
+                                                        the optional AWS region to
+                                                        use for the STS AssumeRole
+                                                        call.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -10249,6 +10734,47 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    When `secretRef` is set, those static credentials are used as the source
+                                                    credentials for STS; otherwise ambient AWS credentials are used.
+                                                  properties:
+                                                    duration:
+                                                      description: '`duration` is
+                                                        the optional STS role session
+                                                        duration.'
+                                                      type: string
+                                                    externalId:
+                                                      description: '`externalId` is
+                                                        the optional STS external
+                                                        ID for cross-account access.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      type: string
+                                                    sessionName:
+                                                      description: '`sessionName`
+                                                        is the optional STS role session
+                                                        name.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                    stsRegion:
+                                                      description: '`stsRegion` is
+                                                        the optional AWS region to
+                                                        use for the STS AssumeRole
+                                                        call.'
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -11174,6 +11700,42 @@ spec:
                           Auth specifies an explicit AWS authentication method for the backend.
                           When omitted, we will try to use the default AWS SDK authentication methods.
                         properties:
+                          assumeRole:
+                            description: |-
+                              `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                              When `secretRef` is set, those static credentials are used as the source
+                              credentials for STS; otherwise ambient AWS credentials are used.
+                            properties:
+                              duration:
+                                description: '`duration` is the optional STS role
+                                  session duration.'
+                                type: string
+                              externalId:
+                                description: '`externalId` is the optional STS external
+                                  ID for cross-account access.'
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                              roleArn:
+                                description: '`roleArn` is the AWS IAM role ARN to
+                                  assume.'
+                                minLength: 1
+                                type: string
+                              sessionName:
+                                description: '`sessionName` is the optional STS role
+                                  session name.'
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                              stsRegion:
+                                description: '`stsRegion` is the optional AWS region
+                                  to use for the STS AssumeRole call.'
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - roleArn
+                            type: object
                           secretRef:
                             description: |-
                               `secretRef` references a credential source, defaulting to a Kubernetes

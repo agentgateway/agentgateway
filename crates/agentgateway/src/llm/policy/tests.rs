@@ -1234,6 +1234,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 				region: Some("us-east-1".to_string()),
 				session_token: None,
 				service_name: None,
+				assume_role: None,
 			},
 		))],
 	};
@@ -1275,7 +1276,10 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::Implicit { service_name: None }))
+			Some(BackendAuth::Aws(AwsAuth::Implicit {
+				service_name: None,
+				assume_role: None
+			}))
 		),
 		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth

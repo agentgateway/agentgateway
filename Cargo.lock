@@ -167,6 +167,7 @@ dependencies = [
  "aws-sigv4",
  "aws-smithy-eventstream",
  "aws-smithy-types",
+ "aws-types",
  "axum",
  "axum-core",
  "axum-extra",

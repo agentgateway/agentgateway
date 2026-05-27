@@ -1,10 +1,16 @@
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::time::{Duration, SystemTime};
+
+use aws_config::sts::AssumeRoleProvider;
 use aws_config::{BehaviorVersion, SdkConfig};
 use aws_credential_types::Credentials;
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sigv4::http_request::{SignableBody, sign};
 use aws_sigv4::sign::v4::SigningParams;
+use aws_types::region::Region;
 use secrecy::{ExposeSecret, SecretString};
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::llm::bedrock::AwsRegion;
 use crate::*;
@@ -28,6 +34,9 @@ pub enum AwsAuth {
 		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
 		#[serde(skip_serializing_if = "Option::is_none")]
 		service_name: Option<String>,
+		/// Optional AWS STS role to assume before signing requests.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		assume_role: Option<AwsAssumeRole>,
 	},
 	/// Use implicit AWS authentication (environment variables, IAM roles, etc.)
 	#[serde(rename_all = "camelCase")]
@@ -35,14 +44,49 @@ pub enum AwsAuth {
 		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
 		#[serde(skip_serializing_if = "Option::is_none")]
 		service_name: Option<String>,
+		/// Optional AWS STS role to assume before signing requests.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		assume_role: Option<AwsAssumeRole>,
 	},
+}
+
+#[derive(PartialEq, Eq, Hash)]
+#[apply(schema!)]
+pub struct AwsAssumeRole {
+	/// AWS IAM role ARN to assume.
+	pub role_arn: String,
+	/// Optional STS role session name.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub session_name: Option<String>,
+	/// Optional STS external ID for cross-account access.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub external_id: Option<String>,
+	/// Optional STS role session duration.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub duration: Option<Duration>,
+	/// Optional AWS region to use for the STS AssumeRole call.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub sts_region: Option<String>,
 }
 
 impl AwsAuth {
 	fn service_name(&self) -> Option<&str> {
 		match self {
-			AwsAuth::ExplicitConfig { service_name, .. } | AwsAuth::Implicit { service_name } => {
+			AwsAuth::ExplicitConfig { service_name, .. } | AwsAuth::Implicit { service_name, .. } => {
 				service_name.as_deref()
+			},
+		}
+	}
+
+	fn assume_role(&self) -> Option<&AwsAssumeRole> {
+		match self {
+			AwsAuth::ExplicitConfig { assume_role, .. } | AwsAuth::Implicit { assume_role, .. } => {
+				assume_role.as_ref()
 			},
 		}
 	}
@@ -52,7 +96,6 @@ pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
 ) -> anyhow::Result<()> {
-	let creds = load_credentials(aws_auth).await?.into();
 	let lim = crate::http::buffer_limit(req);
 	let orig_body = std::mem::take(req.body_mut());
 	// Get the region based on auth mode
@@ -74,6 +117,7 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
+	let creds = load_credentials(aws_auth, region).await?.into();
 
 	let service = aws_auth.service_name().unwrap_or("bedrock");
 	trace!("AWS signing with region: {}, service: {}", region, service);
@@ -133,7 +177,16 @@ async fn sdk_config<'a>() -> &'a SdkConfig {
 		.await
 }
 
-async fn load_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
+async fn load_credentials(aws_auth: &AwsAuth, signing_region: &str) -> anyhow::Result<Credentials> {
+	let source_credentials = load_source_credentials(aws_auth).await?;
+	if let Some(assume_role) = aws_auth.assume_role() {
+		load_assumed_credentials(source_credentials, assume_role, signing_region).await
+	} else {
+		Ok(source_credentials)
+	}
+}
+
+async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
 	match aws_auth {
 		AwsAuth::ExplicitConfig {
 			access_key_id,
@@ -141,6 +194,7 @@ async fn load_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
 			session_token,
 			region: _,
 			service_name: _,
+			assume_role: _,
 		} => {
 			// Use explicit credentials
 			let mut builder = Credentials::builder()
@@ -170,5 +224,84 @@ async fn load_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
 					.await?,
 			)
 		},
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct AssumeRoleCacheKey {
+	source_access_key_id: String,
+	assume_role: AwsAssumeRole,
+	resolved_sts_region: String,
+}
+
+static ASSUME_ROLE_CACHE: LazyLock<Mutex<HashMap<AssumeRoleCacheKey, Credentials>>> =
+	LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
+
+async fn load_assumed_credentials(
+	source_credentials: Credentials,
+	assume_role: &AwsAssumeRole,
+	signing_region: &str,
+) -> anyhow::Result<Credentials> {
+	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
+	let key = AssumeRoleCacheKey {
+		source_access_key_id: source_credentials.access_key_id().to_string(),
+		assume_role: assume_role.clone(),
+		resolved_sts_region: sts_region.clone(),
+	};
+
+	if let Some(creds) = ASSUME_ROLE_CACHE.lock().await.get(&key)
+		&& credentials_valid(creds)
+	{
+		return Ok(creds.clone());
+	}
+
+	let config = Box::pin(sdk_config()).await;
+	let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
+		.configure(config)
+		.region(Region::new(sts_region));
+
+	if let Some(session_name) = &assume_role.session_name {
+		builder = builder.session_name(session_name);
+	}
+	if let Some(external_id) = &assume_role.external_id {
+		builder = builder.external_id(external_id);
+	}
+	if let Some(duration) = assume_role.duration {
+		builder = builder.session_length(duration);
+	}
+
+	let provider = builder.build_from_provider(source_credentials).await;
+	let creds = provider.provide_credentials().await?;
+	ASSUME_ROLE_CACHE.lock().await.insert(key, creds.clone());
+	Ok(creds)
+}
+
+async fn resolve_sts_region(
+	assume_role: &AwsAssumeRole,
+	signing_region: &str,
+) -> anyhow::Result<String> {
+	if let Some(sts_region) = &assume_role.sts_region {
+		return Ok(sts_region.clone());
+	}
+	if !signing_region.is_empty() {
+		return Ok(signing_region.to_string());
+	}
+	let config = Box::pin(sdk_config()).await;
+	config
+		.region()
+		.map(|r| r.as_ref().to_string())
+		.ok_or(anyhow::anyhow!(
+			"No region found in AWS config or request extensions"
+		))
+}
+
+fn credentials_valid(creds: &Credentials) -> bool {
+	match creds.expiry() {
+		Some(expiry) => expiry
+			.duration_since(SystemTime::now())
+			.is_ok_and(|ttl| ttl > ASSUMED_CREDENTIAL_REFRESH_BUFFER),
+		None => true,
 	}
 }

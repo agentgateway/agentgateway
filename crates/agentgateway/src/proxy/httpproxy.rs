@@ -1720,6 +1720,7 @@ async fn build_simple_backend_call(
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
 					service_name: Some(config.service_name().to_string()),
+					assume_role: None,
 				})),
 				..Default::default()
 			};

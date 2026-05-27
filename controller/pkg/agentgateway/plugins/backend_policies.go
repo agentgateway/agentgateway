@@ -859,10 +859,6 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 
 func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
-	if auth.SecretRef.Name == "" {
-		logger.Warn("not using any auth for AWS - it's most likely not what you want")
-		return nil, nil
-	}
 
 	var accessKeyId, secretAccessKey string
 	var sessionToken *string
@@ -870,45 +866,71 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 	if auth.ServiceName != nil {
 		serviceName = string(*auth.ServiceName)
 	}
-
-	// Get secret using the SecretIndex
-	data, err := ctx.ResolveCredentialRef(auth.SecretRef, namespace)
-	if err != nil {
-		errs = append(errs, err)
-	} else {
-		// Extract access key
-		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.AccessKey); !exists {
-			errs = append(errs, errors.New("accessKey is missing or not a valid string"))
-		} else {
-			accessKeyId = value
+	var assumeRole *api.AwsAssumeRole
+	if auth.AssumeRole != nil {
+		assumeRole = &api.AwsAssumeRole{
+			RoleArn: auth.AssumeRole.RoleArn,
 		}
-
-		// Extract secret key
-		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SecretKey); !exists {
-			errs = append(errs, errors.New("secretKey is missing or not a valid string"))
-		} else {
-			secretAccessKey = value
+		if auth.AssumeRole.SessionName != nil {
+			assumeRole.SessionName = string(*auth.AssumeRole.SessionName)
 		}
+		if auth.AssumeRole.ExternalID != nil {
+			assumeRole.ExternalId = string(*auth.AssumeRole.ExternalID)
+		}
+		if auth.AssumeRole.Duration != nil {
+			assumeRole.Duration = durationpb.New(auth.AssumeRole.Duration.Duration)
+		}
+		if auth.AssumeRole.STSRegion != nil {
+			assumeRole.StsRegion = string(*auth.AssumeRole.STSRegion)
+		}
+	}
 
-		// Extract session token (optional)
-		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SessionToken); exists {
-			sessionToken = new(value)
+	awsAuth := &api.Aws{
+		Kind: &api.Aws_Implicit{
+			Implicit: &api.AwsImplicit{},
+		},
+		ServiceName: serviceName,
+		AssumeRole:  assumeRole,
+	}
+	if auth.SecretRef != nil && auth.SecretRef.Name != "" {
+		// Get secret using the SecretIndex
+		data, err := ctx.ResolveCredentialRef(auth.SecretRef, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			// Extract access key
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.AccessKey); !exists {
+				errs = append(errs, errors.New("accessKey is missing or not a valid string"))
+			} else {
+				accessKeyId = value
+			}
+
+			// Extract secret key
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SecretKey); !exists {
+				errs = append(errs, errors.New("secretKey is missing or not a valid string"))
+			} else {
+				secretAccessKey = value
+			}
+
+			// Extract session token (optional)
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SessionToken); exists {
+				sessionToken = new(value)
+
+			}
+		}
+		awsAuth.Kind = &api.Aws_ExplicitConfig{
+			ExplicitConfig: &api.AwsExplicitConfig{
+				AccessKeyId:     accessKeyId,
+				SecretAccessKey: secretAccessKey,
+				SessionToken:    sessionToken,
+				Region:          "",
+			},
 		}
 	}
 
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Aws{
-			Aws: &api.Aws{
-				Kind: &api.Aws_ExplicitConfig{
-					ExplicitConfig: &api.AwsExplicitConfig{
-						AccessKeyId:     accessKeyId,
-						SecretAccessKey: secretAccessKey,
-						SessionToken:    sessionToken,
-						Region:          "",
-					},
-				},
-				ServiceName: serviceName,
-			},
+			Aws: awsAuth,
 		},
 	}, errors.Join(errs...)
 }
