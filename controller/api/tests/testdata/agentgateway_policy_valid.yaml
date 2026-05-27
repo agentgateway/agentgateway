@@ -859,6 +859,9 @@ spec:
           policy:
             status: 403
             body: denied
+            headers:
+              - name: x-direct
+                value: "'blocked'"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -878,4 +881,5 @@ spec:
             body: denied
         - policy:
             status: 404
+            bodyExpression: "'missing ' + request.path"
 ---

@@ -3875,6 +3875,54 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      cache:
+                        description: |-
+                          `cache` configures caching of gRPC authorization results.
+
+                          WARNING: the safety of this feature depends on the cache key accurately
+                          capturing every request property that the authorization service uses to
+                          make a decision. For example, if the service returns different results
+                          based on both path and authorization header, both must be included in
+                          `key`; otherwise, one request may incorrectly reuse another request's
+                          authorization result.
+
+                          If any key expression fails to evaluate or produces an unsupported value,
+                          the request is still sent to the authorization service, but its result is
+                          not read from or written to the cache.
+                        properties:
+                          key:
+                            description: |-
+                              `key` is an ordered list of CEL expressions evaluated against the request
+                              to construct the cache key.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                          maxEntries:
+                            description: |-
+                              `maxEntries` is the maximum number of authorization results to keep in
+                              the cache. If unset, this defaults to 10000.
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          ttl:
+                            description: |-
+                              `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                              returns the duration that cached authorization results may be reused, or a
+                              timestamp when the cached authorization result expires. The expression is
+                              evaluated after the authorization response has been applied to the request.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - ttl
+                        type: object
                       failureMode:
                         description: |-
                           FailureMode controls behavior when the external authorization service is
@@ -4016,6 +4064,9 @@ spec:
                             type: object
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: cache requires grpc
+                      rule: '!has(self.cache) || has(self.grpc)'
                   health:
                     description: health defines settings for passive and active health
                       checking.
@@ -4137,6 +4188,11 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           issuer:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
@@ -4257,6 +4313,7 @@ spec:
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:
@@ -6377,6 +6434,14 @@ spec:
                         maxLength: 4096
                         minLength: 1
                         type: string
+                      bodyExpression:
+                        description: |-
+                          BodyExpression is a CEL expression that produces the HTTP response body.
+                          Strings and bytes are written directly; other values are serialized as JSON.
+                          If this field is omitted, no expression body is included in the response.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                       conditional:
                         description: |-
                           `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level directResponse fields.
@@ -6402,6 +6467,42 @@ spec:
                                   maxLength: 4096
                                   minLength: 1
                                   type: string
+                                bodyExpression:
+                                  description: |-
+                                    BodyExpression is a CEL expression that produces the HTTP response body.
+                                    Strings and bytes are written directly; other values are serialized as JSON.
+                                    If this field is omitted, no expression body is included in the response.
+                                  maxLength: 16384
+                                  minLength: 1
+                                  type: string
+                                headers:
+                                  description: Headers defines response headers to
+                                    set on the direct response.
+                                  items:
+                                    properties:
+                                      name:
+                                        description: The name of the header to set.
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: |-
+                                          `value` is the CEL expression to apply to generate the output value for
+                                          the header.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  maxItems: 16
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                  - name
+                                  x-kubernetes-list-type: map
                                 status:
                                   description: StatusCode defines the HTTP status
                                     code to return for this route.
@@ -6413,6 +6514,8 @@ spec:
                               x-kubernetes-validations:
                               - message: status is required
                                 rule: has(self.status)
+                              - message: body and bodyExpression may not both be set
+                                rule: '!(has(self.body) && has(self.bodyExpression))'
                           required:
                           - policy
                           type: object
@@ -6423,6 +6526,34 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      headers:
+                        description: Headers defines response headers to set on the
+                          direct response.
+                        items:
+                          properties:
+                            name:
+                              description: The name of the header to set.
+                              maxLength: 256
+                              minLength: 1
+                              pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                              type: string
+                            value:
+                              description: |-
+                                `value` is the CEL expression to apply to generate the output value for
+                                the header.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          - value
+                          type: object
+                        maxItems: 16
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
                       status:
                         description: StatusCode defines the HTTP status code to return
                           for this route.
@@ -6432,8 +6563,10 @@ spec:
                         type: integer
                     type: object
                     x-kubernetes-validations:
+                    - message: body and bodyExpression may not both be set
+                      rule: '!(has(self.body) && has(self.bodyExpression))'
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.body),has(self.status)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.body),has(self.bodyExpression),has(self.headers),has(self.status)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'status: Required value'
                       rule: 'has(self.conditional) ? true : has(self.status)'
@@ -6517,6 +6650,54 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      cache:
+                        description: |-
+                          `cache` configures caching of gRPC authorization results.
+
+                          WARNING: the safety of this feature depends on the cache key accurately
+                          capturing every request property that the authorization service uses to
+                          make a decision. For example, if the service returns different results
+                          based on both path and authorization header, both must be included in
+                          `key`; otherwise, one request may incorrectly reuse another request's
+                          authorization result.
+
+                          If any key expression fails to evaluate or produces an unsupported value,
+                          the request is still sent to the authorization service, but its result is
+                          not read from or written to the cache.
+                        properties:
+                          key:
+                            description: |-
+                              `key` is an ordered list of CEL expressions evaluated against the request
+                              to construct the cache key.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                          maxEntries:
+                            description: |-
+                              `maxEntries` is the maximum number of authorization results to keep in
+                              the cache. If unset, this defaults to 10000.
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          ttl:
+                            description: |-
+                              `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                              returns the duration that cached authorization results may be reused, or a
+                              timestamp when the cached authorization result expires. The expression is
+                              evaluated after the authorization response has been applied to the request.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - ttl
+                        type: object
                       conditional:
                         description: |-
                           `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
@@ -6607,6 +6788,54 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                cache:
+                                  description: |-
+                                    `cache` configures caching of gRPC authorization results.
+
+                                    WARNING: the safety of this feature depends on the cache key accurately
+                                    capturing every request property that the authorization service uses to
+                                    make a decision. For example, if the service returns different results
+                                    based on both path and authorization header, both must be included in
+                                    `key`; otherwise, one request may incorrectly reuse another request's
+                                    authorization result.
+
+                                    If any key expression fails to evaluate or produces an unsupported value,
+                                    the request is still sent to the authorization service, but its result is
+                                    not read from or written to the cache.
+                                  properties:
+                                    key:
+                                      description: |-
+                                        `key` is an ordered list of CEL expressions evaluated against the request
+                                        to construct the cache key.
+                                      items:
+                                        description: CELExpression represents a Common
+                                          Expression Language (CEL) expression.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      maxItems: 16
+                                      minItems: 1
+                                      type: array
+                                    maxEntries:
+                                      description: |-
+                                        `maxEntries` is the maximum number of authorization results to keep in
+                                        the cache. If unset, this defaults to 10000.
+                                      format: int32
+                                      minimum: 1
+                                      type: integer
+                                    ttl:
+                                      description: |-
+                                        `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                                        returns the duration that cached authorization results may be reused, or a
+                                        timestamp when the cached authorization result expires. The expression is
+                                        evaluated after the authorization response has been applied to the request.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - key
+                                  - ttl
+                                  type: object
                                 failureMode:
                                   description: |-
                                     FailureMode controls behavior when the external authorization service is
@@ -6755,6 +6984,8 @@ spec:
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
                                   == 1'
+                              - message: cache requires grpc
+                                rule: '!has(self.cache) || has(self.grpc)'
                           required:
                           - policy
                           type: object
@@ -6910,8 +7141,10 @@ spec:
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
+                    - message: cache requires grpc
+                      rule: '!has(self.cache) || has(self.grpc)'
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
@@ -7080,6 +7313,79 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                processingOptions:
+                                  description: processingOptions configures how request
+                                    and response phases are sent to ext_proc.
+                                  properties:
+                                    allowModeOverride:
+                                      default: false
+                                      description: |-
+                                        allowModeOverride allows ext_proc `mode_override` values from matching headers responses to update
+                                        subsequent request/response processing phases for this exchange. Defaults to `false`.
+                                      type: boolean
+                                    requestBodyMode:
+                                      default: FullDuplexStreamed
+                                      description: |-
+                                        requestBodyMode controls how request bodies are sent to the external processor.
+                                        `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+                                        `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+                                        body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                                      enum:
+                                      - None
+                                      - Buffered
+                                      - BufferedPartial
+                                      - FullDuplexStreamed
+                                      type: string
+                                    requestHeaderMode:
+                                      default: Send
+                                      description: |-
+                                        requestHeaderMode controls whether request headers are sent to the external processor.
+                                        Defaults to `Send`.
+                                      enum:
+                                      - Send
+                                      - Skip
+                                      type: string
+                                    requestTrailerMode:
+                                      default: Send
+                                      description: |-
+                                        requestTrailerMode controls whether request trailers are sent to the external processor.
+                                        Defaults to `Send`.
+                                      enum:
+                                      - Skip
+                                      - Send
+                                      type: string
+                                    responseBodyMode:
+                                      default: FullDuplexStreamed
+                                      description: |-
+                                        responseBodyMode controls how response bodies are sent to the external processor.
+                                        `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+                                        `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+                                        body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                                      enum:
+                                      - None
+                                      - Buffered
+                                      - BufferedPartial
+                                      - FullDuplexStreamed
+                                      type: string
+                                    responseHeaderMode:
+                                      default: Send
+                                      description: |-
+                                        responseHeaderMode controls whether response headers are sent to the external processor.
+                                        Defaults to `Send`.
+                                      enum:
+                                      - Send
+                                      - Skip
+                                      type: string
+                                    responseTrailerMode:
+                                      default: Send
+                                      description: |-
+                                        responseTrailerMode controls whether response trailers are sent to the external processor.
+                                        Defaults to `Send`.
+                                      enum:
+                                      - Skip
+                                      - Send
+                                      type: string
+                                  type: object
                               type: object
                               x-kubernetes-validations:
                               - message: backendRef is required
@@ -7094,10 +7400,83 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      processingOptions:
+                        description: processingOptions configures how request and
+                          response phases are sent to ext_proc.
+                        properties:
+                          allowModeOverride:
+                            default: false
+                            description: |-
+                              allowModeOverride allows ext_proc `mode_override` values from matching headers responses to update
+                              subsequent request/response processing phases for this exchange. Defaults to `false`.
+                            type: boolean
+                          requestBodyMode:
+                            default: FullDuplexStreamed
+                            description: |-
+                              requestBodyMode controls how request bodies are sent to the external processor.
+                              `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+                              `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+                              body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                            enum:
+                            - None
+                            - Buffered
+                            - BufferedPartial
+                            - FullDuplexStreamed
+                            type: string
+                          requestHeaderMode:
+                            default: Send
+                            description: |-
+                              requestHeaderMode controls whether request headers are sent to the external processor.
+                              Defaults to `Send`.
+                            enum:
+                            - Send
+                            - Skip
+                            type: string
+                          requestTrailerMode:
+                            default: Send
+                            description: |-
+                              requestTrailerMode controls whether request trailers are sent to the external processor.
+                              Defaults to `Send`.
+                            enum:
+                            - Skip
+                            - Send
+                            type: string
+                          responseBodyMode:
+                            default: FullDuplexStreamed
+                            description: |-
+                              responseBodyMode controls how response bodies are sent to the external processor.
+                              `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+                              `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+                              body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                            enum:
+                            - None
+                            - Buffered
+                            - BufferedPartial
+                            - FullDuplexStreamed
+                            type: string
+                          responseHeaderMode:
+                            default: Send
+                            description: |-
+                              responseHeaderMode controls whether response headers are sent to the external processor.
+                              Defaults to `Send`.
+                            enum:
+                            - Send
+                            - Skip
+                            type: string
+                          responseTrailerMode:
+                            default: Send
+                            description: |-
+                              responseTrailerMode controls whether response trailers are sent to the external processor.
+                              Defaults to `Send`.
+                            enum:
+                            - Skip
+                            - Send
+                            type: string
+                        type: object
                     type: object
                     x-kubernetes-validations:
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.processingOptions)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
@@ -7495,12 +7874,18 @@ spec:
                           and MCP-specific authentication behavior on top of standard JWT validation.
                           When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
                         properties:
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           provider:
                             description: '`provider` specifies the identity provider
                               to use for MCP authentication flows.'
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:

@@ -96,6 +96,7 @@ prost-types.workspace = true
 prost-wkt-types.workspace = true
 prost.workspace = true
 rand.workspace = true
+quick_cache.workspace = true
 libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true

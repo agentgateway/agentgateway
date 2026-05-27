@@ -1,3 +1,0 @@
-controller:
-  xds:
-    mode: tls

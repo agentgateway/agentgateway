@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team1
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team2
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team2-root
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: svc1
+  namespace: team1
+spec:
+  static:
+    host: backend.agentgateway-base.svc.cluster.local
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: svc2
+  namespace: team2
+spec:
+  static:
+    host: backend.agentgateway-base.svc.cluster.local
+    port: 80

@@ -132,6 +132,28 @@ fn base64() {
 }
 
 #[test]
+fn url() {
+	assert(
+		json!("hello%20world%2F%3Fx%3D1%26y%3D2"),
+		r#"url.encode("hello world/?x=1&y=2")"#,
+	);
+	assert(json!("abc-._~"), r#"url.encode("abc-._~")"#);
+	assert(json!("%21"), r#"url.encode("!")"#);
+	assert(
+		json!("hello world/?x=1&y=2"),
+		r#"url.decode("hello%20world%2F%3Fx%3D1%26y%3D2")"#,
+	);
+	assert(json!("a+b"), r#"url.decode("a+b")"#);
+	assert(
+		json!("hello world"),
+		r#"url.decode(url.encode("hello world"))"#,
+	);
+
+	assert(json!("hello"), r#"url.encode("hello")"#);
+	assert_fails(r#"url.decode("%FF")"#);
+}
+
+#[test]
 fn form() {
 	assert(
 		json!({"client_id": "abc", "scope": "openid profile"}),

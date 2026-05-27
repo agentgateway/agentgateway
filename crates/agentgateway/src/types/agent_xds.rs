@@ -37,6 +37,9 @@ use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
 use crate::types::proto::agent::mcp_target::Protocol;
+use crate::types::proto::agent::traffic_policy_spec::ext_proc::{
+	BodySendMode as XdsBodySendMode, HeaderTrailerSendMode as XdsHeaderTrailerSendMode,
+};
 use crate::types::proto::agent::traffic_policy_spec::host_rewrite::Mode;
 use crate::types::{agent, backend, proto};
 use crate::*;
@@ -57,6 +60,37 @@ impl Diagnostics {
 
 	pub fn into_warnings(self) -> Vec<String> {
 		self.warnings
+	}
+}
+
+impl From<XdsBodySendMode> for http::ext_proc::BodySendMode {
+	fn from(mode: XdsBodySendMode) -> Self {
+		match mode {
+			XdsBodySendMode::None => http::ext_proc::BodySendMode::None,
+			XdsBodySendMode::Buffered => http::ext_proc::BodySendMode::Buffered,
+			XdsBodySendMode::BufferedPartial => http::ext_proc::BodySendMode::BufferedPartial,
+			XdsBodySendMode::FullDuplexStreamed => http::ext_proc::BodySendMode::FullDuplexStreamed,
+		}
+	}
+}
+
+impl From<XdsHeaderTrailerSendMode> for http::ext_proc::HeaderSendMode {
+	fn from(mode: XdsHeaderTrailerSendMode) -> Self {
+		match mode {
+			XdsHeaderTrailerSendMode::Unset => http::ext_proc::HeaderSendMode::default(),
+			XdsHeaderTrailerSendMode::Send => http::ext_proc::HeaderSendMode::Send,
+			XdsHeaderTrailerSendMode::Skip => http::ext_proc::HeaderSendMode::Skip,
+		}
+	}
+}
+
+impl From<XdsHeaderTrailerSendMode> for http::ext_proc::TrailerSendMode {
+	fn from(mode: XdsHeaderTrailerSendMode) -> Self {
+		match mode {
+			XdsHeaderTrailerSendMode::Unset => http::ext_proc::TrailerSendMode::default(),
+			XdsHeaderTrailerSendMode::Send => http::ext_proc::TrailerSendMode::Send,
+			XdsHeaderTrailerSendMode::Skip => http::ext_proc::TrailerSendMode::Skip,
+		}
 	}
 }
 
@@ -341,18 +375,13 @@ fn mcp_authorization_from_proto(
 
 fn mcp_authentication_from_proto(
 	m: &proto::agent::backend_policy_spec::McpAuthentication,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<McpAuthentication, ProtoError> {
 	if m.jwks_inline.is_empty() {
 		return Err(ProtoError::Generic(
 			"MCP Authentication requires jwks_inline to be set.".to_string(),
 		));
 	}
-	let jwks_json = m.jwks_inline.clone();
-
-	let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json).map_err(|e| {
-		ProtoError::Generic(format!("failed to parse JWKS for MCP Authentication: {e}"))
-	})?;
 
 	let audiences = (!m.audiences.is_empty()).then(|| m.audiences.clone());
 	let jwt_validation_options = m
@@ -362,13 +391,14 @@ fn mcp_authentication_from_proto(
 			required_claims: vo.required_claims.iter().cloned().collect(),
 		})
 		.unwrap_or_default();
-	let jwt_provider =
-		http::jwt::Provider::from_jwks(jwk_set, m.issuer.clone(), audiences, jwt_validation_options)
-			.map_err(|e| {
-				ProtoError::Generic(format!(
-					"failed to create JWT provider for MCP Authentication: {e}"
-				))
-			})?;
+	let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
+		diagnostics,
+		"MCP Authentication",
+		&m.jwks_inline,
+		m.issuer.clone(),
+		audiences,
+		jwt_validation_options,
+	);
 
 	let mode = match proto::agent::backend_policy_spec::mcp_authentication::Mode::try_from(m.mode)
 		.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
@@ -385,7 +415,7 @@ fn mcp_authentication_from_proto(
 	};
 
 	let jwt_validator = http::jwt::Jwt::from_providers(
-		vec![jwt_provider],
+		jwt_provider.into_iter().collect(),
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
 	);
@@ -396,7 +426,36 @@ fn mcp_authentication_from_proto(
 		convert_mcp_resource_metadata(m.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
 		std::sync::Arc::new(jwt_validator),
 		mode,
+		m.client_id.clone(),
 	))
+}
+
+fn jwt_provider_from_inline_jwks_or_warn(
+	diagnostics: &mut Diagnostics,
+	context: impl AsRef<str>,
+	jwks_json: &str,
+	issuer: String,
+	audiences: Option<Vec<String>>,
+	jwt_validation_options: http::jwt::JWTValidationOptions,
+) -> Option<http::jwt::Provider> {
+	let context = context.as_ref();
+	let jwk_set = match serde_json::from_str::<jsonwebtoken::jwk::JwkSet>(jwks_json) {
+		Ok(jwk_set) => jwk_set,
+		Err(err) => {
+			diagnostics.add_warning(format!("failed to parse JWKS for {context}: {err}"));
+			return None;
+		},
+	};
+
+	match http::jwt::Provider::from_jwks(jwk_set, issuer, audiences, jwt_validation_options) {
+		Ok(provider) => Some(provider),
+		Err(err) => {
+			diagnostics.add_warning(format!(
+				"failed to create JWT provider for {context}: {err}"
+			));
+			None
+		},
+	}
 }
 
 fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
@@ -405,6 +464,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Unspecified as i32 => None,
 		x if x == McpIdp::Auth0 as i32 => Some(McpIDP::Auth0 {}),
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
+		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
 		_ => None,
 	}
 }
@@ -435,6 +495,7 @@ fn build_mcp_authentication(
 	resource_metadata: ResourceMetadata,
 	jwt_validator: Arc<http::jwt::Jwt>,
 	mode: McpAuthenticationMode,
+	client_id: Option<String>,
 ) -> McpAuthentication {
 	McpAuthentication {
 		issuer,
@@ -443,6 +504,7 @@ fn build_mcp_authentication(
 		resource_metadata,
 		jwt_validator,
 		mode,
+		client_id,
 	}
 }
 
@@ -1292,7 +1354,7 @@ fn authorization_from_proto(
 
 	// Create PolicySet using the same pattern as in de_policies function
 	let policy_set = authorization::PolicySet::new(allow_exprs, deny_exprs, require_exprs);
-	Authorization(authorization::RuleSet::new(policy_set))
+	Authorization(Arc::new(authorization::RuleSet::new(policy_set)))
 }
 
 fn transformation_from_proto(
@@ -1614,15 +1676,13 @@ fn traffic_policy_from_proto(
 				.iter()
 				.map(|p| {
 					let jwks_json = match &p.jwks_source {
-						Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline.clone(),
+						Some(tps::jwt_provider::JwksSource::Inline(inline)) => inline,
 						None => {
 							return Err(ProtoError::Generic(
 								"JWT policy missing JWKS source".to_string(),
 							));
 						},
 					};
-					let jwk_set: jsonwebtoken::jwk::JwkSet = serde_json::from_str(&jwks_json)
-						.map_err(|e| ProtoError::Generic(format!("failed to parse JWKS: {e}")))?;
 					let audiences = if p.audiences.is_empty() {
 						None
 					} else {
@@ -1635,15 +1695,19 @@ fn traffic_policy_from_proto(
 							required_claims: vo.required_claims.iter().cloned().collect(),
 						})
 						.unwrap_or_default();
-					http::jwt::Provider::from_jwks(
-						jwk_set,
+					Ok(jwt_provider_from_inline_jwks_or_warn(
+						diagnostics,
+						"JWT policy",
+						jwks_json,
 						p.issuer.clone(),
 						audiences,
 						jwt_validation_options,
-					)
-					.map_err(|e| ProtoError::Generic(format!("failed to create JWT config: {e}")))
+					))
 				})
-				.collect::<Result<Vec<_>, _>>()?;
+				.collect::<Result<Vec<_>, _>>()?
+				.into_iter()
+				.flatten()
+				.collect();
 			let jwt_auth = http::jwt::Jwt::from_providers(
 				providers,
 				mode,
@@ -1676,6 +1740,7 @@ fn traffic_policy_from_proto(
 							tps::jwt::Mode::Strict => McpAuthenticationMode::Strict,
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
+						mcp.client_id.clone(),
 					))
 				},
 				None => None,
@@ -1764,6 +1829,20 @@ fn traffic_policy_from_proto(
 				Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 				_ => http::ext_proc::FailureMode::FailClosed,
 			};
+
+			let processing_options = ep
+				.processing_options
+				.as_ref()
+				.map(|opts| http::ext_proc::ProcessingOptions {
+					request_body_mode: opts.request_body_mode().into(),
+					response_body_mode: opts.response_body_mode().into(),
+					request_header_mode: opts.request_header_mode().into(),
+					response_header_mode: opts.response_header_mode().into(),
+					request_trailer_mode: opts.request_trailer_mode().into(),
+					response_trailer_mode: opts.response_trailer_mode().into(),
+					allow_mode_override: opts.allow_mode_override,
+				})
+				.unwrap_or_default();
 			fn to_cel_attrs(
 				diagnostics: &mut Diagnostics,
 				context: &str,
@@ -1828,6 +1907,7 @@ fn traffic_policy_from_proto(
 							}),
 					)
 				},
+				processing_options,
 			}))
 		},
 		Some(tps::Kind::RequestHeaderModifier(rhm)) => {
@@ -1917,6 +1997,27 @@ fn traffic_policy_from_proto(
 		Some(tps::Kind::DirectResponse(dr)) => {
 			TrafficPolicy::DirectResponse(RequestPolicy::single(http::filters::DirectResponse {
 				body: bytes::Bytes::copy_from_slice(&dr.body),
+				body_expression: (!dr.body_expression.is_empty()).then(|| {
+					Arc::new(permissive_cel_expression(
+						diagnostics,
+						"direct response body",
+						dr.body_expression.clone(),
+					))
+				}),
+				headers: dr
+					.headers
+					.iter()
+					.map(|h| {
+						Ok((
+							HeaderName::try_from(h.name.as_str())?,
+							Arc::new(permissive_cel_expression(
+								diagnostics,
+								format!("direct response header {}", h.name),
+								h.expression.clone(),
+							)),
+						))
+					})
+					.collect::<Result<_, ProtoError>>()?,
 				status: StatusCode::from_u16(dr.status as u16)?,
 			}))
 		},
@@ -2021,6 +2122,33 @@ fn external_auth_from_proto(
 				allow_partial_message: body_opts.allow_partial_message,
 				pack_as_bytes: body_opts.pack_as_bytes,
 			});
+	let cache = ea
+		.cache
+		.as_ref()
+		.map(|cache| {
+			let key: Vec<_> = cache
+				.key
+				.iter()
+				.map(|expr| permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.cache.key", expr))
+				.collect();
+			if key.is_empty() {
+				return Err(ProtoError::Generic(
+					"traffic.extAuthz.cache.key must contain at least one expression".to_string(),
+				));
+			}
+			if cache.ttl.is_empty() {
+				return Err(ProtoError::MissingRequiredField);
+			}
+			let ttl =
+				permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.cache.ttl", &cache.ttl);
+			let max_entries = http::ext_authz::effective_cache_entries(cache.max_entries as usize);
+			Ok::<_, ProtoError>(http::ext_authz::CacheConfig {
+				key,
+				ttl,
+				max_entries,
+			})
+		})
+		.transpose()?;
 	let protocol = match ea
 		.protocol
 		.as_ref()
@@ -2089,6 +2217,10 @@ fn external_auth_from_proto(
 				.collect::<Result<_, _>>()?,
 		},
 	};
+	let cache_store = cache
+		.as_ref()
+		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
+		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
 		target: Arc::new(target),
@@ -2110,6 +2242,8 @@ fn external_auth_from_proto(
 			)
 			.collect(),
 		include_request_body,
+		cache,
+		cache_store,
 	})
 }
 
@@ -3156,6 +3290,66 @@ mod tests {
 		);
 	}
 
+	fn build_unsigned_token(kid: &str) -> String {
+		use base64::Engine as _;
+		use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+
+		let header = json!({ "alg": "ES256", "kid": kid });
+		let payload = json!({
+			"iss": "https://issuer.example.com",
+			"aud": "audience",
+			"exp": 4_102_444_800_u64,
+		});
+		let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+		let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+		let s = URL_SAFE_NO_PAD.encode(b"sig");
+		format!("{h}.{p}.{s}")
+	}
+
+	#[test]
+	fn test_traffic_jwt_invalid_jwks_warns_and_validates_no_keys() -> Result<(), ProtoError> {
+		use proto::agent::traffic_policy_spec as tps;
+
+		use crate::http::jwt::TokenError;
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: tps::PolicyPhase::Route as i32,
+			kind: Some(tps::Kind::Jwt(tps::Jwt {
+				mode: tps::jwt::Mode::Strict as i32,
+				providers: vec![tps::JwtProvider {
+					issuer: "https://issuer.example.com".to_string(),
+					audiences: vec!["audience".to_string()],
+					jwks_source: Some(tps::jwt_provider::JwksSource::Inline(
+						r#"{"keys":[{"kty":"EC","crv":"P-256","x":"x","y":"y"}]}"#.to_string(),
+					)),
+					..Default::default()
+				}],
+				..Default::default()
+			})),
+		};
+
+		let mut diagnostics = Diagnostics::default();
+		let policy = traffic_policy_from_proto(&spec, &mut diagnostics)?;
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1);
+		assert!(warnings[0].contains("failed to create JWT provider"));
+
+		let TrafficPolicy::JwtAuth(policy) = policy else {
+			panic!("expected JWT auth policy");
+		};
+		let jwt = &policy
+			.iter()
+			.next()
+			.expect("expected single JWT policy")
+			.pol
+			.jwt;
+		assert!(matches!(
+			jwt.validate_claims(&build_unsigned_token("kid")),
+			Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
+		));
+		Ok(())
+	}
+
 	#[test]
 	fn test_policy_spec_to_csrf_policy() -> Result<(), ProtoError> {
 		// Test CSRF policy conversion with deduplication
@@ -3187,6 +3381,124 @@ mod tests {
 		} else {
 			panic!("Expected CSRF policy variant, got: {policy:?}");
 		}
+	}
+
+	#[test]
+	fn test_ext_proc_processing_options_default_header_trailer_modes() -> Result<(), ProtoError> {
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::ExtProc(
+				proto::agent::traffic_policy_spec::ExtProc {
+					processing_options: Some(
+						proto::agent::traffic_policy_spec::ext_proc::ProcessingOptions::default(),
+					),
+					..Default::default()
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(&spec, &mut Diagnostics::default())?;
+		let TrafficPolicy::ExtProc(policy) = policy else {
+			panic!("expected ext_proc policy");
+		};
+		let processing_options = policy
+			.iter()
+			.next()
+			.expect("expected single ext_proc policy")
+			.pol
+			.processing_options;
+
+		assert!(matches!(
+			processing_options.request_header_mode,
+			crate::http::ext_proc::HeaderSendMode::Send
+		));
+		assert!(matches!(
+			processing_options.response_header_mode,
+			crate::http::ext_proc::HeaderSendMode::Send
+		));
+		assert!(matches!(
+			processing_options.request_trailer_mode,
+			crate::http::ext_proc::TrailerSendMode::Send
+		));
+		assert!(matches!(
+			processing_options.response_trailer_mode,
+			crate::http::ext_proc::TrailerSendMode::Send
+		));
+		Ok(())
+	}
+
+	#[test]
+	fn test_ext_proc_processing_options_explicit_none_body_modes() -> Result<(), ProtoError> {
+		use proto::agent::traffic_policy_spec::ext_proc::BodySendMode;
+
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::ExtProc(
+				proto::agent::traffic_policy_spec::ExtProc {
+					processing_options: Some(
+						proto::agent::traffic_policy_spec::ext_proc::ProcessingOptions {
+							request_body_mode: BodySendMode::None as i32,
+							response_body_mode: BodySendMode::None as i32,
+							..Default::default()
+						},
+					),
+					..Default::default()
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(&spec, &mut Diagnostics::default())?;
+		let TrafficPolicy::ExtProc(policy) = policy else {
+			panic!("expected ext_proc policy");
+		};
+		let processing_options = policy
+			.iter()
+			.next()
+			.expect("expected single ext_proc policy")
+			.pol
+			.processing_options;
+
+		assert!(matches!(
+			processing_options.request_body_mode,
+			crate::http::ext_proc::BodySendMode::None
+		));
+		assert!(matches!(
+			processing_options.response_body_mode,
+			crate::http::ext_proc::BodySendMode::None
+		));
+		Ok(())
+	}
+
+	#[test]
+	fn test_ext_proc_processing_options_allow_mode_override() -> Result<(), ProtoError> {
+		let spec = proto::agent::TrafficPolicySpec {
+			phase: proto::agent::traffic_policy_spec::PolicyPhase::Route as i32,
+			kind: Some(proto::agent::traffic_policy_spec::Kind::ExtProc(
+				proto::agent::traffic_policy_spec::ExtProc {
+					processing_options: Some(
+						proto::agent::traffic_policy_spec::ext_proc::ProcessingOptions {
+							allow_mode_override: true,
+							..Default::default()
+						},
+					),
+					..Default::default()
+				},
+			)),
+		};
+
+		let policy = traffic_policy_from_proto(&spec, &mut Diagnostics::default())?;
+		let TrafficPolicy::ExtProc(policy) = policy else {
+			panic!("expected ext_proc policy");
+		};
+		let processing_options = policy
+			.iter()
+			.next()
+			.expect("expected single ext_proc policy")
+			.pol
+			.processing_options;
+
+		assert!(processing_options.allow_mode_override);
+		Ok(())
 	}
 
 	#[test]

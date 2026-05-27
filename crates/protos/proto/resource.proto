@@ -445,6 +445,13 @@ message CORS {
 message DirectResponse {
   uint32 status = 1;
   bytes body = 2;
+  string body_expression = 3;
+  repeated ExpressionHeader headers = 4;
+}
+
+message ExpressionHeader {
+  string name = 1;
+  string expression = 2;
 }
 
 message HeaderModifier {
@@ -771,6 +778,11 @@ message TrafficPolicySpec {
       bool allow_partial_message = 2;
       bool pack_as_bytes = 3;
     }
+    message Cache {
+      repeated string key = 1;
+      string ttl = 2; // CEL expr returning duration or timestamp
+      uint32 max_entries = 3;
+    }
     message GRPCProtocol {
       map<string, string> context = 1;
       map<string, string> metadata = 2;
@@ -791,7 +803,7 @@ message TrafficPolicySpec {
     optional uint32 status_on_error = 5;
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
-    reserved 8;
+    Cache cache = 8;
     reserved "timeout";
   }
   message RBAC {
@@ -820,6 +832,7 @@ message TrafficPolicySpec {
     message MCP {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
+      optional string client_id = 3;
     }
 
     // Validation mode for JWT authentication
@@ -920,6 +933,19 @@ message TrafficPolicySpec {
       FAIL_CLOSED = 0;
       FAIL_OPEN = 1;
     }
+    // TODO(keithmattix): Should we depend on the actual Envoy types?
+    enum BodySendMode {
+      NONE = 0;
+      reserved 1; // STREAMED
+      BUFFERED = 2;
+      BUFFERED_PARTIAL = 3;
+      FULL_DUPLEX_STREAMED = 4;
+    }
+    enum HeaderTrailerSendMode {
+      UNSET = 0;
+      SEND = 1;
+      SKIP = 2;
+    }
     BackendReference target = 1;
     FailureMode failure_mode = 2;
 
@@ -929,7 +955,19 @@ message TrafficPolicySpec {
     message NamespacedMetadataContext {
       map<string, string> context = 1;
     }
+    message ProcessingOptions {
+      BodySendMode request_body_mode = 1;
+      BodySendMode response_body_mode = 2;
+      HeaderTrailerSendMode request_header_mode = 3;
+      HeaderTrailerSendMode response_header_mode = 4;
+      HeaderTrailerSendMode request_trailer_mode = 5;
+      HeaderTrailerSendMode response_trailer_mode = 6;
+      // Allow ext_proc mode_override values from matching headers responses to update
+      // subsequent request/response processing phases for this exchange.
+      bool allow_mode_override = 7;
+    }
     map<string, NamespacedMetadataContext> metadata_context = 5;
+    ProcessingOptions processing_options = 6;
   }
   enum PolicyPhase {
     ROUTE = 0;
@@ -1258,6 +1296,7 @@ message BackendPolicySpec {
       UNSPECIFIED = 0;
       AUTH0 = 1;
       KEYCLOAK = 2;
+      OKTA = 3;
     }
 
     // Validation mode for JWT authentication
@@ -1280,6 +1319,7 @@ message BackendPolicySpec {
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
+    optional string client_id = 9;
   }
 
   oneof kind {

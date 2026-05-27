@@ -137,7 +137,11 @@ spec:
                                     description: |-
                                       The Azure resource name used to construct the endpoint host.
                                       For OpenAI: {resourceName}.openai.azure.com
-                                      For Foundry: {resourceName}-resource.services.ai.azure.com
+                                      For Foundry: {resourceName}.services.ai.azure.com
+                                      Note: when the Azure portal "Foundry legacy" template was used, the
+                                      generated resource name may end in "-resource" (e.g. "myproject-resource");
+                                      that suffix is part of the resource name as the user configured it, not
+                                      part of the hostname suffix agentgateway should append.
                                     maxLength: 256
                                     minLength: 1
                                     type: string
@@ -5028,7 +5032,11 @@ spec:
                             description: |-
                               The Azure resource name used to construct the endpoint host.
                               For OpenAI: {resourceName}.openai.azure.com
-                              For Foundry: {resourceName}-resource.services.ai.azure.com
+                              For Foundry: {resourceName}.services.ai.azure.com
+                              Note: when the Azure portal "Foundry legacy" template was used, the
+                              generated resource name may end in "-resource" (e.g. "myproject-resource");
+                              that suffix is part of the resource name as the user configured it, not
+                              part of the hostname suffix agentgateway should append.
                             maxLength: 256
                             minLength: 1
                             type: string
@@ -9800,6 +9808,54 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      cache:
+                        description: |-
+                          `cache` configures caching of gRPC authorization results.
+
+                          WARNING: the safety of this feature depends on the cache key accurately
+                          capturing every request property that the authorization service uses to
+                          make a decision. For example, if the service returns different results
+                          based on both path and authorization header, both must be included in
+                          `key`; otherwise, one request may incorrectly reuse another request's
+                          authorization result.
+
+                          If any key expression fails to evaluate or produces an unsupported value,
+                          the request is still sent to the authorization service, but its result is
+                          not read from or written to the cache.
+                        properties:
+                          key:
+                            description: |-
+                              `key` is an ordered list of CEL expressions evaluated against the request
+                              to construct the cache key.
+                            items:
+                              description: CELExpression represents a Common Expression
+                                Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 16
+                            minItems: 1
+                            type: array
+                          maxEntries:
+                            description: |-
+                              `maxEntries` is the maximum number of authorization results to keep in
+                              the cache. If unset, this defaults to 10000.
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          ttl:
+                            description: |-
+                              `ttl` is either a duration string, such as `5m`, or a CEL expression that
+                              returns the duration that cached authorization results may be reused, or a
+                              timestamp when the cached authorization result expires. The expression is
+                              evaluated after the authorization response has been applied to the request.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                        required:
+                        - key
+                        - ttl
+                        type: object
                       failureMode:
                         description: |-
                           FailureMode controls behavior when the external authorization service is
@@ -9941,6 +9997,9 @@ spec:
                             type: object
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: cache requires grpc
+                      rule: '!has(self.cache) || has(self.grpc)'
                   health:
                     description: health defines settings for passive and active health
                       checking.
@@ -10062,6 +10121,11 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          clientId:
+                            description: |-
+                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                            type: string
                           issuer:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
@@ -10182,6 +10246,7 @@ spec:
                             enum:
                             - Auth0
                             - Keycloak
+                            - Okta
                             type: string
                           resourceMetadata:
                             additionalProperties:

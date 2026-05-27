@@ -2,6 +2,7 @@ pub mod filters;
 pub mod health;
 pub mod timeout;
 
+pub mod bufferbody;
 mod buflist;
 pub mod cors;
 pub mod jwt;

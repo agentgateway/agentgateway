@@ -2345,7 +2345,7 @@ pub enum BackendTrafficPolicy {
 pub struct A2aPolicy {}
 
 #[apply(schema!)]
-pub struct Authorization(pub RuleSet);
+pub struct Authorization(pub Arc<RuleSet>);
 
 // Do not use schema! as it will reject the `extra` field
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -2444,6 +2444,7 @@ pub struct McpAuthentication {
 	pub resource_metadata: ResourceMetadata,
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
+	pub client_id: Option<String>,
 }
 
 #[apply(schema_enum!)]
@@ -2487,6 +2488,7 @@ pub struct LocalMcpAuthentication {
 	pub authorization_location: http::auth::AuthorizationLocation,
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	pub client_id: Option<String>,
 }
 
 impl LocalMcpAuthentication {
@@ -2497,7 +2499,7 @@ impl LocalMcpAuthentication {
 					url.clone()
 				} else {
 					match &self.provider {
-						None | Some(McpIDP::Auth0 { .. }) => {
+						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
 							format!("{}/.well-known/jwks.json", self.issuer).parse()?
 						},
 						Some(McpIDP::Keycloak { .. }) => {
@@ -2533,6 +2535,7 @@ impl LocalMcpAuthentication {
 			resource_metadata: self.resource_metadata.clone(),
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
+			client_id: self.client_id.clone(),
 		})
 	}
 }
@@ -2541,6 +2544,7 @@ impl LocalMcpAuthentication {
 pub enum McpIDP {
 	Auth0 {},
 	Keycloak {},
+	Okta {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

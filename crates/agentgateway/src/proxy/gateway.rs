@@ -478,13 +478,21 @@ impl Gateway {
 			},
 			BindProtocol::auto => {
 				// Auto-detect: peek at first byte to distinguish TLS from plaintext HTTP.
-				// No timeout here — existing HTTP header_read_timeout and TLS handshake
-				// timeout handle slow/dead clients downstream.
+				let def = frontend::TLS::default();
+				let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 				let (ext, metrics, inner) = raw_stream.into_parts();
 				let mut rewind = Socket::new_rewind(inner);
 				let mut buf = [0u8; 1];
-				match tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf).await {
-					Ok(_) => {
+				match tokio::time::timeout(
+					to,
+					tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf),
+				)
+				.await
+				{
+					Err(_) => {
+						debug!(bind=%bind_name, "auto protocol detection timed out");
+					},
+					Ok(Ok(_)) => {
 						rewind.rewind();
 						let stream = Socket::from_rewind(ext, metrics, rewind);
 						if buf[0] == 0x16 {
@@ -558,8 +566,8 @@ impl Gateway {
 							}
 						}
 					},
-					Err(e) => {
-						warn!(src.addr = %peer_addr, "auto-detect read failed: {e}");
+					Ok(Err(e)) => {
+						debug!(bind=%bind_name, "auto protocol detection failed: {e}");
 					},
 				}
 			},

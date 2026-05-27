@@ -203,7 +203,11 @@ pub(super) async fn authorization_server_metadata(
 	// RFC 8414 URL for standard AS metadata. Keycloak does not implement RFC 8414; it only
 	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
 	let metadata_uri = match &auth.provider {
-		Some(McpIDP::Keycloak { .. }) => openid_configuration_metadata_url(&auth.issuer),
+		// Keycloak and Okta do not support the RFC 8414 path-based issuer format;
+		// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
+		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) => {
+			openid_configuration_metadata_url(&auth.issuer)
+		},
 		_ => authorization_server_metadata_url(&auth.issuer),
 	};
 	let ureq = ::http::Request::builder()
@@ -227,6 +231,27 @@ pub(super) async fn authorization_server_metadata(
 			// If the user provided multiple audiences with auth0, just prepend the first one
 			if let Some(aud) = auth.audiences.first() {
 				ae.push_str(&format!("?audience={}", aud));
+			}
+		},
+		Some(McpIDP::Okta {}) => {
+			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
+			let Some(serde_json::Value::String(ae)) =
+				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+			else {
+				return Err(ProxyError::ProcessingString(
+					"authorization_endpoint missing".to_string(),
+				));
+			};
+			if let Some(aud) = auth.audiences.first() {
+				ae.push_str(&format!("?audience={}", aud));
+			}
+
+			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
+			let current_uri = request_uri_for_oauth_metadata(req);
+			if let Some(serde_json::Value::String(re)) =
+				json::traverse_mut(&mut resp, &["registration_endpoint"])
+			{
+				*re = format!("{current_uri}/client-registration");
 			}
 		},
 		Some(McpIDP::Keycloak { .. }) => {
@@ -270,11 +295,40 @@ pub(super) async fn client_registration(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
+	if let Some(client_id) = &auth.client_id {
+		let body = serde_json::json!({
+			"client_id": client_id
+		});
+		let body = bytes::Bytes::from(
+			serde_json::to_vec(&body).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
+		);
+		return Ok(
+			Response::builder()
+				.status(::http::StatusCode::CREATED)
+				.header(::http::header::CONTENT_TYPE, "application/json")
+				.body(body.into())?,
+		);
+	}
+
 	// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 	let issuer = auth.issuer.trim_end_matches('/');
 	let body = std::mem::take(req.body_mut());
+	let registration_uri = match &auth.provider {
+		Some(McpIDP::Okta {}) => {
+			// Okta's DCR endpoint is relative to the org URL, not the issuer.
+			// Issuer: https://trial-xxx.okta.com/oauth2/default
+			// DCR:    https://trial-xxx.okta.com/oauth2/v1/clients
+			let parsed: url::Url = issuer
+				.parse()
+				.map_err(|e| ProxyError::ProcessingString(format!("invalid issuer URL: {e}")))?;
+			let origin = parsed.origin().ascii_serialization();
+			format!("{origin}/oauth2/v1/clients")
+		},
+		// Keycloak and default
+		_ => format!("{issuer}/clients-registrations/openid-connect"),
+	};
 	let ureq = ::http::Request::builder()
-		.uri(format!("{issuer}/clients-registrations/openid-connect"))
+		.uri(registration_uri)
 		.method(Method::POST)
 		.body(body)?;
 

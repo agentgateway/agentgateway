@@ -270,6 +270,10 @@ impl ContextBuilder {
 }
 
 impl Expression {
+	pub fn ast(&self) -> &cel::IdedExpr {
+		self.expression.expression()
+	}
+
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
 	/// with an expression that always fails to evaluate. The returned error is the compilation error
 	/// from the original expression, if one was suppressed.

@@ -8,7 +8,7 @@ use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -215,9 +215,9 @@ async fn send_guardrail_request(
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(&request_body)?))?;
 
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_bedrock-guardrails"), strng::literal!("")),
-		Target::Hostname(host, 443),
+		(),
 	);
 
 	let resp = client

@@ -118,7 +118,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, only two providers are supported: Keycloak and Auth0.
+Currently, three providers are supported: Keycloak, Auth0, and Okta.
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -164,6 +164,7 @@ What setting a provider does (high level):
 - If `jwksUrl` is omitted, the gateway derives it from the provider:
   - Auth0 → `<issuer>/.well-known/jwks.json`
   - Keycloak → `<issuer>/protocol/openid-connect/certs`
+  - Okta → `<issuer>/.well-known/jwks.json`
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -171,6 +172,12 @@ Auth0-specific notes:
 Keycloak-specific notes:
 - No RFC 8707 support; use a fixed audience in config.
 - Client registration is proxied by the gateway at `.../client-registration` to forward to Keycloak’s `clients-registrations/openid-connect`.
+
+Okta-specific notes:
+- Okta supports RFC 8414 (like Auth0), so the gateway uses standard AS metadata discovery.
+- No RFC 8707 support; gateway appends `?audience=...` to the authorization endpoint (same workaround as Auth0).
+- Client registration is proxied by the gateway at `.../client-registration` to forward to Okta's `oauth2/v1/clients`.
+- Okta DCR requires an SSWS API token; the gateway proxies the request and the MCP client must provide the token.
 
 Notes:
 - Omit the `provider` block for spec-compliant servers. Use it only when adaptation is needed.

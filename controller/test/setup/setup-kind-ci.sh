@@ -250,7 +250,6 @@ function step_setup_gateway_api() {
 function step_preload_images() {(
   if [[ "${TEST_MODE}" == "e2e" ]]; then
     make --no-print-directory -C controller testbox-docker kind-load-testbox &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull gcr.io/solo-public/docs/ai-guardrail-webhook@sha256:01f81b20ae016d123f018841c62daff7f6f44d0dec9189ecf591b3e99753c6b1 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/otel/opentelemetry-collector-contrib:0.143.0 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/library/redis:7.4.3 &
     docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/envoyproxy/ratelimit:3e085e5b &
@@ -264,7 +263,7 @@ function step_preload_images() {(
 
 function step_warm_test() {
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e/tests
+    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e
   elif [[ "${TEST_MODE}" == "conformance" ]]; then
     # TODO
     :

@@ -10,7 +10,7 @@ use crate::*;
 pub enum AzureResourceType {
 	/// Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`
 	OpenAI,
-	/// Azure AI Foundry (project) endpoint: `{resourceName}-resource.services.ai.azure.com`
+	/// Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`
 	/// Requires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`
 	#[serde(alias = "aiServices")]
 	Foundry,
@@ -82,12 +82,36 @@ impl Provider {
 				strng::format!("{}.openai.azure.com", self.resource_name)
 			},
 			AzureResourceType::Foundry => {
-				strng::format!("{}-resource.services.ai.azure.com", self.resource_name)
+				strng::format!("{}.services.ai.azure.com", self.resource_name)
 			},
 		}
 	}
 
 	fn api_version(&self) -> &str {
 		self.api_version.as_deref().unwrap_or("v1")
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn make_provider(resource_name: &str, resource_type: AzureResourceType) -> Provider {
+		Provider {
+			model: None,
+			resource_name: strng::new(resource_name),
+			resource_type,
+			api_version: None,
+			project_name: None,
+			cached_cred: AzureCredentialCache::default(),
+		}
+	}
+
+	#[rstest::rstest]
+	#[case::openai(AzureResourceType::OpenAI, "my-resource.openai.azure.com")]
+	#[case::foundry(AzureResourceType::Foundry, "my-resource.services.ai.azure.com")]
+	fn test_get_host(#[case] resource_type: AzureResourceType, #[case] expected: &str) {
+		let p = make_provider("my-resource", resource_type);
+		assert_eq!(p.get_host().as_str(), expected);
 	}
 }

@@ -175,5 +175,49 @@ binds:
             #         - query
             #         resourceDocumentation: http://localhost:3000/keycloak/docs
             #         resourcePolicyUri: http://localhost:3000/keycloak/policies
+            # Example configuration for Okta:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /okta/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/okta/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/okta/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/okta/mcp/client-registration
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://dev-123456.okta.com/oauth2/default
+            #       audiences:
+            #       - api://default
+            #       jwksUrl: https://dev-123456.okta.com/oauth2/default/.well-known/jwks.json
+            #       provider:
+            #         okta: {}
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/okta/mcp
+            #         scopesSupported:
+            #         - profile
+            #         - offline_access
+            #         - openid
+            #         bearerMethodsSupported:
+            #         - header
+            #         - body
+            #         - query
+            #         resourceDocumentation: http://localhost:3000/okta/docs
+            #         resourcePolicyUri: http://localhost:3000/okta/policies
   # Public port to listen on
   port: 3000

@@ -104,6 +104,27 @@ impl Relay {
 		}
 	}
 
+	/// Reverse of `resource_uri`: extracts the service name and original URI from a
+	/// multiplexed URI of the form `service+scheme://rest`.
+	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
+		if let Some(default) = self.upstreams.default_target_name.as_ref() {
+			Ok((default.as_str(), uri.to_string()))
+		} else {
+			// URI format: "service+scheme://rest"
+			let plus_pos = uri
+				.find('+')
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let service_name = &uri[..plus_pos];
+			let original_uri = &uri[plus_pos + 1..];
+			// Validate that the extracted service name corresponds to a known upstream
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri.to_string()))
+		}
+	}
+
 	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
 		let mut sessions = Vec::with_capacity(self.upstreams.size());
 		for (_, us) in self.upstreams.iter_named() {
@@ -162,9 +183,6 @@ impl Relay {
 	}
 	pub fn is_multiplexing(&self) -> bool {
 		self.upstreams.is_multiplexing
-	}
-	pub fn default_target_name(&self) -> Option<String> {
-		self.upstreams.default_target_name.clone()
 	}
 
 	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
@@ -332,6 +350,7 @@ impl Relay {
 	}
 	pub fn merge_resource_templates(&self, cel: CelExecWrapper) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams| {
 			let resource_templates = streams
 				.into_iter()
@@ -351,8 +370,15 @@ impl Relay {
 								&cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Prefix uri_template with service name when multiplexing
+						.map(|mut rt| {
+							rt.uri_template = resource_uri(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&rt.uri_template,
+							);
+							rt
+						})
 						.collect_vec()
 				})
 				.collect_vec();
@@ -385,19 +411,6 @@ impl Relay {
 		let stream = us.generic_stream(r, &ctx).await?;
 
 		messages_to_response(id, stream, mcp_log)
-	}
-	// For some requests, we don't have a sane mapping of incoming requests to a specific
-	// downstream service when multiplexing. Only forward when we have only one backend.
-	pub async fn send_single_without_multiplexing(
-		&self,
-		r: JsonRpcRequest<ClientRequest>,
-		ctx: IncomingRequestContext,
-		mcp_log: Option<AsyncLog<MCPInfo>>,
-	) -> Result<Response, UpstreamError> {
-		let Some(service_name) = &self.upstreams.default_target_name else {
-			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
-		};
-		self.send_single(r, ctx, service_name, mcp_log).await
 	}
 	pub async fn send_fanout_deletion(
 		&self,
@@ -590,10 +603,11 @@ impl Relay {
 	) -> ServerInfo {
 		let capabilities = if multiplexing {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
-			// Resources can be listed, but read/templates/completion do not have reverse routing yet.
+			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
 			ServerCapabilities::builder()
 				.enable_tools()
 				.enable_prompts()
+				.enable_resources()
 				.build()
 		} else {
 			ServerCapabilities::builder()

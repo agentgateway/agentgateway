@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -12,6 +13,7 @@ use hyper_util::rt::{TokioExecutor, TokioTimer};
 use serde_json::Value;
 use shellexpand::LookupError;
 use tempfile::TempDir;
+use tokio::net::TcpListener;
 use tracing::info;
 use url::Url;
 
@@ -47,7 +49,7 @@ impl AgentGateway {
 		let raw_config = raw_config.into();
 		let config = shellexpand::env_with_context(&raw_config, |key| match key {
 			"PORT" => futures::executor::block_on(async {
-				let p = crate::common::compare::find_free_port().await?;
+				let p = find_free_port().await?;
 				*port.lock().unwrap() = p;
 				Ok(Some(p.to_string()))
 			}),
@@ -57,7 +59,7 @@ impl AgentGateway {
 		let mut js: Value =
 			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = js.pointer_mut("/config").unwrap();
-		let readiness_port = crate::common::compare::find_free_port().await?;
+		let readiness_port = find_free_port().await?;
 		config.as_object_mut().unwrap().insert(
 			"adminAddr".to_string(),
 			Value::String("127.0.0.1:0".to_string()),
@@ -73,7 +75,7 @@ impl AgentGateway {
 
 		let js = serde_json::to_string(&js).unwrap();
 		let mut temp_dirs = Vec::new();
-		let (temp, config) = crate::common::compare::create_temp_config_file(&js).await?;
+		let (temp, config) = create_temp_config_file(&js).await?;
 		temp_dirs.push(temp);
 		info!("starting agent...");
 
@@ -98,7 +100,7 @@ impl AgentGateway {
 
 		info!("waiting for agent...");
 		let port = *port.lock().unwrap();
-		crate::common::compare::wait_for_port(port).await?;
+		wait_for_port(port).await?;
 		wait_for_readiness(readiness_port).await?;
 		info!("agent ready!...");
 		let client = ::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
@@ -173,6 +175,38 @@ async fn wait_for_readiness(readiness_port: u16) -> anyhow::Result<()> {
 		"Timeout waiting for readiness endpoint {}",
 		url
 	))
+}
+
+/// Note: this is racy, since we drop it. But it will at least prevent taking long-running ports.
+async fn find_free_port() -> anyhow::Result<u16> {
+	let listener = TcpListener::bind("127.0.0.1:0").await?;
+	let addr = listener.local_addr()?;
+	Ok(addr.port())
+}
+
+async fn wait_for_port(port: u16) -> anyhow::Result<()> {
+	let timeout_duration = Duration::from_secs(10);
+	let start = std::time::Instant::now();
+
+	while start.elapsed() < timeout_duration {
+		if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+			.await
+			.is_ok()
+		{
+			return Ok(());
+		}
+		tokio::time::sleep(Duration::from_millis(100)).await;
+	}
+
+	Err(anyhow::anyhow!("Timeout waiting for port {}", port))
+}
+
+async fn create_temp_config_file(content: &str) -> anyhow::Result<(TempDir, PathBuf)> {
+	let temp_dir = TempDir::new()?;
+	let config_path = temp_dir.path().join("config.yaml");
+	tokio::fs::write(&config_path, content).await?;
+
+	Ok((temp_dir, config_path))
 }
 
 impl Drop for AgentGateway {

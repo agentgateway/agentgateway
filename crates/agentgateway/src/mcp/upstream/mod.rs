@@ -92,8 +92,6 @@ pub enum UpstreamError {
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
-	#[error("method {0} is unsupported with multiplexing")]
-	InvalidMethodWithMultiplexing(String),
 	#[error("stdio upstream error: {0}")]
 	ServiceError(#[from] rmcp::ServiceError),
 	#[error("http upstream error: {0}")]
@@ -304,6 +302,11 @@ impl UpstreamGroup {
 			.get(name)
 			.map(|v| v.as_ref())
 			.ok_or_else(|| anyhow::anyhow!("requested target {name} is not initialized",))
+	}
+	/// Returns the stored name key if it exists in the upstream map.
+	/// Used by `parse_resource_uri` to get a stable `&str` reference.
+	pub(crate) fn get_name(&self, name: &str) -> Option<&str> {
+		self.by_name.get_key_value(name).map(|(k, _)| k.as_str())
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {

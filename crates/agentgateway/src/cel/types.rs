@@ -362,6 +362,9 @@ impl<'a> Executor<'a> {
 		if let Some(llm) = resp.extensions().get::<LLMContext>() {
 			self.llm = ExtensionOrDirect::Direct(Some(llm));
 		}
+		if let Some(extproc) = resp.extensions().get::<ExtProcDynamicMetadata>() {
+			self.extproc = ExtensionOrDirect::Direct(Some(extproc));
+		}
 		if let Some(metadata) = resp.extensions().get::<TransformationMetadata>() {
 			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
 		}
@@ -1152,8 +1155,39 @@ fn to_value_str_opt<'a, T: AsRef<str>>(c: &'a Option<&'a T>) -> Value<'a> {
 		Some(c) => Value::String(c.as_ref().into()),
 	}
 }
-pub fn to_value_redacted<'a>(c: &'a SecretString) -> Value<'a> {
-	Value::String(c.expose_secret().into())
+#[derive(Debug, Clone, Copy)]
+pub struct SecretStringValue<'a>(&'a SecretString);
+
+impl DynamicType for SecretStringValue<'_> {
+	fn materialize(&self) -> Value<'_> {
+		Value::String("<redacted>".into())
+	}
+
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<cel::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		match name {
+			"unredacted" => {
+				if !ftx.args.is_empty() {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						0,
+						ftx.args.len(),
+					)));
+				}
+				Some(Ok(Value::String(self.0.expose_secret().into())))
+			},
+			_ => None,
+		}
+	}
+}
+
+pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
+	Value::Dynamic(DynamicValue::new_owned(SecretStringValue(secret)))
 }
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())

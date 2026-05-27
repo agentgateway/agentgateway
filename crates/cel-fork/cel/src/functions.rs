@@ -492,7 +492,7 @@ pub use time::{duration, timestamp};
 use crate::common::ast::Expr;
 
 pub mod time {
-	use chrono::{Datelike, Timelike};
+	use chrono::{Datelike, TimeZone, Timelike};
 
 	use super::{FunctionContext, ResolveResult, Result};
 	use crate::magic::{Argument, This};
@@ -519,13 +519,19 @@ pub mod time {
 		Ok(Value::Duration(_duration(value.as_ref())?))
 	}
 
-	/// Timestamp parses the provided argument into a [`Value::Timestamp`] value.
-	/// The
+	/// Timestamp converts the provided argument into a [`Value::Timestamp`] value.
 	pub fn timestamp<'a>(ftx: &mut FunctionContext<'a, '_>, value: Argument) -> ResolveResult<'a> {
-		let value: StringValue = value.load_value(ftx)?;
-		Ok(Value::Timestamp(
-			chrono::DateTime::parse_from_rfc3339(value.as_ref()).map_err(|e| ftx.error(e.to_string()))?,
-		))
+		let value: Value = value.load_value(ftx)?;
+		Ok(Value::Timestamp(match value {
+			Value::String(value) => _timestamp(value.as_ref())?,
+			Value::Timestamp(value) => value,
+			Value::Int(value) => chrono::FixedOffset::east_opt(0)
+				.unwrap()
+				.timestamp_opt(value, 0)
+				.single()
+				.ok_or_else(|| ftx.error("timestamp out of range"))?,
+			v => return Err(ftx.error(format!("cannot convert {v:?} to timestamp"))),
+		}))
 	}
 
 	/// A wrapper around [`parse_duration`] that converts errors into [`ExecutionError`].
@@ -913,6 +919,14 @@ mod tests {
 			(
 				"timestamp string",
 				"timestamp('2023-05-28T00:00:00Z').string() == '2023-05-28T00:00:00Z'",
+			),
+			(
+				"timestamp from unix seconds",
+				"timestamp(1900650294).string() == '2030-03-25T06:24:54Z'",
+			),
+			(
+				"timestamp identity",
+				"timestamp(timestamp('2023-05-28T00:00:00Z')) == timestamp('2023-05-28T00:00:00Z')",
 			),
 			(
 				"timestamp string with 1 decimal",

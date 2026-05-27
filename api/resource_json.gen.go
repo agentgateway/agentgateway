@@ -501,6 +501,17 @@ func (this *DirectResponse) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for ExpressionHeader
+func (this *ExpressionHeader) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for ExpressionHeader
+func (this *ExpressionHeader) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for HeaderModifier
 func (this *HeaderModifier) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -908,6 +919,17 @@ func (this *TrafficPolicySpec_ExternalAuth_BodyOptions) UnmarshalJSON(b []byte) 
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_Cache
+func (this *TrafficPolicySpec_ExternalAuth_Cache) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExternalAuth_Cache
+func (this *TrafficPolicySpec_ExternalAuth_Cache) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth_GRPCProtocol
 func (this *TrafficPolicySpec_ExternalAuth_GRPCProtocol) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1081,6 +1103,17 @@ func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) MarshalJSON() (
 
 // UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExtProc_NamespacedMetadataContext
 func (this *TrafficPolicySpec_ExtProc_NamespacedMetadataContext) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_ExtProc_ProcessingOptions
+func (this *TrafficPolicySpec_ExtProc_ProcessingOptions) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ExtProc_ProcessingOptions
+func (this *TrafficPolicySpec_ExtProc_ProcessingOptions) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

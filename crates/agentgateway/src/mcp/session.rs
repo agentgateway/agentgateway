@@ -412,18 +412,10 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
+							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
@@ -462,73 +454,46 @@ impl Session {
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
-						if let Some(service_name) = self.relay.default_target_name() {
-							let uri = rrr.params.uri.clone();
-							self.authorize_resource_request(
-								&service_name,
-								&uri,
-								&method,
-								&mut span,
-								&log,
-								&cel,
-							)?;
-							self
-								.relay
-								.send_single_without_multiplexing(r, ctx, None)
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						let uri = rrr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						self.authorize_resource_request(
+							service_name,
+							&original_uri,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						rrr.params.uri = original_uri;
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::SubscribeRequest(sr) => {
-						if let Some(service_name) = self.relay.default_target_name() {
-							let uri = sr.params.uri.clone();
-							self.authorize_resource_request(
-								&service_name,
-								&uri,
-								&method,
-								&mut span,
-								&log,
-								&cel,
-							)?;
-							self
-								.relay
-								.send_single_without_multiplexing(r, ctx, None)
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						let uri = sr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						self.authorize_resource_request(
+							service_name,
+							&original_uri,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						sr.params.uri = original_uri;
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
-						if let Some(service_name) = self.relay.default_target_name() {
-							let uri = ur.params.uri.clone();
-							self.authorize_resource_request(
-								&service_name,
-								&uri,
-								&method,
-								&mut span,
-								&log,
-								&cel,
-							)?;
-							self
-								.relay
-								.send_single_without_multiplexing(r, ctx, None)
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						let uri = ur.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						self.authorize_resource_request(
+							service_name,
+							&original_uri,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						ur.params.uri = original_uri;
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 
 					ClientRequest::ListTasksRequest(_)
@@ -539,39 +504,28 @@ impl Session {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
-					ClientRequest::CompleteRequest(cr) => {
-						match &cr.params.r#ref {
-							Reference::Prompt(prompt) => {
-								let name = prompt.name.clone();
-								let (service_name, prompt_name) =
-									self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
-								cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
-								self.relay.send_single(r, ctx, service_name, None).await
-							},
-							Reference::Resource(resource) => {
-								if let Some(service_name) = self.relay.default_target_name() {
-									let uri = resource.uri.clone();
-									self.authorize_resource_request(
-										&service_name,
-										&uri,
-										&method,
-										&mut span,
-										&log,
-										&cel,
-									)?;
-									self
-										.relay
-										.send_single_without_multiplexing(r, ctx, None)
-										.await
-								} else {
-									// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-									// Find a mapping of URL
-									Err(UpstreamError::InvalidMethodWithMultiplexing(
-										r.request.method().to_string(),
-									))
-								}
-							},
-						}
+					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
+						Reference::Prompt(prompt) => {
+							let name = prompt.name.clone();
+							let (service_name, prompt_name) =
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
+						Reference::Resource(resource) => {
+							let uri = resource.uri.clone();
+							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+							self.authorize_resource_request(
+								service_name,
+								&original_uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							cr.params.r#ref = Reference::for_resource(original_uri);
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
 					},
 				}
 			},

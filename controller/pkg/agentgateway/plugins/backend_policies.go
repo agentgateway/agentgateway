@@ -561,6 +561,7 @@ func translateMCPAuthenticationSpec(
 		},
 		JwksInline: translatedInlineJwks,
 		Mode:       mode,
+		ClientId:   authnPolicy.ClientID,
 	}
 	return mcpAuthn, errors.Join(errs...)
 }
@@ -576,6 +577,7 @@ func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySp
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},
+		ClientId: mcp.ClientID,
 	}, nil
 }
 
@@ -588,6 +590,9 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	}
 	if *provider == agentgateway.Auth0 {
 		return api.BackendPolicySpec_McpAuthentication_AUTH0
+	}
+	if *provider == agentgateway.Okta {
+		return api.BackendPolicySpec_McpAuthentication_OKTA
 	}
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }

@@ -143,8 +143,12 @@
 |`binds[].listeners[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].status`|integer||
 |`binds[].listeners[].routes[].policies.directResponse.body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.status`|integer||
 |`binds[].listeners[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`binds[].listeners[].routes[].policies.cors.allowCredentials`|boolean||
@@ -163,6 +167,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -180,6 +185,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string||
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object||
@@ -1506,6 +1512,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -1630,6 +1640,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].service`|object||
@@ -1744,6 +1758,14 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].routes[].policies.extProc.service`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name.namespace`|string||
@@ -1855,6 +1877,14 @@
 |`binds[].listeners[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions`|object||
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -2307,6 +2337,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -3407,6 +3441,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -4482,6 +4520,10 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -5520,6 +5562,10 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extAuthz.service`|object||
 |`binds[].listeners[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].policies.extAuthz.service.name.namespace`|string||
@@ -5644,6 +5690,10 @@
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.extProc.conditional[].service`|object||
@@ -5758,6 +5808,14 @@
 |`binds[].listeners[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions`|object||
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].policies.extProc.service`|object||
 |`binds[].listeners[].policies.extProc.service.name`|object||
 |`binds[].listeners[].policies.extProc.service.name.namespace`|string||
@@ -5869,6 +5927,14 @@
 |`binds[].listeners[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.processingOptions`|object||
+|`binds[].listeners[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].policies.transformations`|object|Modify requests and responses|
 |`binds[].listeners[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -6256,8 +6322,12 @@
 |`policies[].policy.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.directResponse.conditional[].body`|array||
+|`policies[].policy.directResponse.conditional[].bodyExpression`|string||
+|`policies[].policy.directResponse.conditional[].headers`|object||
 |`policies[].policy.directResponse.conditional[].status`|integer||
 |`policies[].policy.directResponse.body`|array||
+|`policies[].policy.directResponse.bodyExpression`|string||
+|`policies[].policy.directResponse.headers`|object||
 |`policies[].policy.directResponse.status`|integer||
 |`policies[].policy.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`policies[].policy.cors.allowCredentials`|boolean||
@@ -6276,6 +6346,7 @@
 |`policies[].policy.mcpAuthentication.provider`|object||
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
+|`policies[].policy.mcpAuthentication.provider.okta`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object||
 |`policies[].policy.mcpAuthentication.jwks`|object||
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
@@ -6293,6 +6364,7 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpAuthentication.clientId`|string||
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object||
@@ -7619,6 +7691,10 @@
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extAuthz.service`|object||
 |`policies[].policy.extAuthz.service.name`|object||
 |`policies[].policy.extAuthz.service.name.namespace`|string||
@@ -7743,6 +7819,10 @@
 |`policies[].policy.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extProc`|object|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extProc.conditional[].service`|object||
@@ -7857,6 +7937,14 @@
 |`policies[].policy.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.conditional[].processingOptions`|object||
+|`policies[].policy.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`policies[].policy.extProc.service`|object||
 |`policies[].policy.extProc.service.name`|object||
 |`policies[].policy.extProc.service.name.namespace`|string||
@@ -7968,6 +8056,14 @@
 |`policies[].policy.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.processingOptions`|object||
+|`policies[].policy.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`policies[].policy.transformations`|object|Modify requests and responses|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -8415,6 +8511,10 @@
 |`backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -9515,6 +9615,10 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -10589,6 +10693,10 @@
 |`backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -11476,8 +11584,12 @@
 |`routeGroups[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].body`|array||
+|`routeGroups[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.conditional[].headers`|object||
 |`routeGroups[].routes[].policies.directResponse.conditional[].status`|integer||
 |`routeGroups[].routes[].policies.directResponse.body`|array||
+|`routeGroups[].routes[].policies.directResponse.bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.headers`|object||
 |`routeGroups[].routes[].policies.directResponse.status`|integer||
 |`routeGroups[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`routeGroups[].routes[].policies.cors.allowCredentials`|boolean||
@@ -11496,6 +11608,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -11513,6 +11626,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string||
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object||
@@ -12839,6 +12953,10 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extAuthz.service`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -12963,6 +13081,10 @@
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`routeGroups[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extProc.conditional[].service`|object||
@@ -13077,6 +13199,14 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`routeGroups[].routes[].policies.extProc.service`|object||
 |`routeGroups[].routes[].policies.extProc.service.name`|object||
 |`routeGroups[].routes[].policies.extProc.service.name.namespace`|string||
@@ -13188,6 +13318,14 @@
 |`routeGroups[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.processingOptions`|object||
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify requests and responses|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -13640,6 +13778,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -14740,6 +14882,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -15815,6 +15961,10 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -17714,6 +17864,10 @@
 |`llm.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extAuthz.service`|object||
 |`llm.policies.extAuthz.service.name`|object||
 |`llm.policies.extAuthz.service.name.namespace`|string||
@@ -17838,6 +17992,10 @@
 |`llm.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`llm.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extProc`|object|Extend agentgateway with an external processor|
 |`llm.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.extProc.conditional[].service`|object||
@@ -17952,6 +18110,14 @@
 |`llm.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.conditional[].processingOptions`|object||
+|`llm.policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`llm.policies.extProc.service`|object||
 |`llm.policies.extProc.service.name`|object||
 |`llm.policies.extProc.service.name.namespace`|string||
@@ -18063,6 +18229,14 @@
 |`llm.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.processingOptions`|object||
+|`llm.policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`llm.policies.transformations`|object|Modify requests and responses|
 |`llm.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -18417,8 +18591,12 @@
 |`mcp.policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.directResponse.conditional[].body`|array||
+|`mcp.policies.directResponse.conditional[].bodyExpression`|string||
+|`mcp.policies.directResponse.conditional[].headers`|object||
 |`mcp.policies.directResponse.conditional[].status`|integer||
 |`mcp.policies.directResponse.body`|array||
+|`mcp.policies.directResponse.bodyExpression`|string||
+|`mcp.policies.directResponse.headers`|object||
 |`mcp.policies.directResponse.status`|integer||
 |`mcp.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`mcp.policies.cors.allowCredentials`|boolean||
@@ -18437,6 +18615,7 @@
 |`mcp.policies.mcpAuthentication.provider`|object||
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
+|`mcp.policies.mcpAuthentication.provider.okta`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object||
 |`mcp.policies.mcpAuthentication.jwks`|object||
 |`mcp.policies.mcpAuthentication.jwks.file`|string||
@@ -18454,6 +18633,7 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpAuthentication.clientId`|string||
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object||
@@ -19780,6 +19960,10 @@
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extAuthz.service`|object||
 |`mcp.policies.extAuthz.service.name`|object||
 |`mcp.policies.extAuthz.service.name.namespace`|string||
@@ -19904,6 +20088,10 @@
 |`mcp.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`mcp.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extProc`|object|Extend agentgateway with an external processor|
 |`mcp.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extProc.conditional[].service`|object||
@@ -20018,6 +20206,14 @@
 |`mcp.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.conditional[].processingOptions`|object||
+|`mcp.policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`mcp.policies.extProc.service`|object||
 |`mcp.policies.extProc.service.name`|object||
 |`mcp.policies.extProc.service.name.namespace`|string||
@@ -20129,6 +20325,14 @@
 |`mcp.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.processingOptions`|object||
+|`mcp.policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`mcp.policies.transformations`|object|Modify requests and responses|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|

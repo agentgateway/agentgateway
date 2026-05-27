@@ -123,6 +123,9 @@ func parseFile(
 			)
 			continue
 		}
+		if meta.APIVersion == "" && meta.Kind == "" && meta.Name == "" {
+			continue
+		}
 
 		gvk := schema.FromAPIVersionAndKind(meta.APIVersion, meta.Kind)
 		obj, err := scheme.New(gvk)
@@ -135,6 +138,10 @@ func parseFile(
 			continue
 		}
 
+		if err := validator.ValidateCustomResourceYAML(string(objYaml), nil); err != nil {
+			return nil, err
+		}
+
 		if err := yaml.Unmarshal(objYaml, obj); err != nil {
 			slog.Warn("failed to parse resource YAML",
 				"error", err,
@@ -144,9 +151,6 @@ func parseFile(
 				"data", truncateString(string(objYaml), 100),
 			)
 			continue
-		}
-		if err := validator.ValidateCustomResource(obj); err != nil {
-			return nil, err
 		}
 
 		genericResources = append(genericResources, obj)

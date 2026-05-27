@@ -15,7 +15,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::GoogleModelArmor;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 /// User prompt data for sanitization
 #[derive(Debug, Clone, Serialize)]
@@ -368,9 +368,9 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(request_body)?))?;
 
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_google-model-armor"), strng::literal!("")),
-		Target::Hostname(host, 443),
+		(),
 	);
 
 	let resp = client

@@ -39,6 +39,7 @@ type ReferenceTypes struct {
 	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector shared.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
 	PolicyBackend           func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend            func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
+	AllowedParentReferences sets.Set[schema.GroupKind]
 }
 
 type BackendReferenceErrorReason string
@@ -241,6 +242,12 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		RouteBackend: func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error) {
 			return DefaultRouteBackend(krtctx, agw, defaultNamespace, gk, name, namespace, port)
 		},
+		AllowedParentReferences: sets.New(
+			wellknown.GatewayGVK.GroupKind(),
+			wellknown.ListenerSetGVK.GroupKind(),
+			wellknown.ServiceGVK.GroupKind(),
+			wellknown.ServiceEntryGVK.GroupKind(),
+		),
 	}
 }
 
