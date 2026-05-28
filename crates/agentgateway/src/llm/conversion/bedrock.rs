@@ -692,7 +692,7 @@ pub mod from_completions {
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
 									name: Some(tu.name),
-									arguments: None,
+									arguments: Some(String::new()),
 								}),
 							}]),
 							..Default::default()
