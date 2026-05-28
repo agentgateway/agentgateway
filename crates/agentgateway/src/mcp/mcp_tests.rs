@@ -3188,6 +3188,54 @@ async fn mcp_extmcp_filtered_list_via_response_mutation() {
 	assert_eq!(names, vec!["echo".to_string()]);
 }
 
+// A mutated `tools/call` result must round-trip back through `ServerResult` and
+// reach the client (the `*/list` case above exercises a different variant).
+#[tokio::test]
+async fn mcp_extmcp_mutated_tool_call_response_reaches_client() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_response_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|_| pass_request(),
+		|req| {
+			if req.method != "tools/call" {
+				return pass_response();
+			}
+			mutated_response_json(serde_json::json!({
+				"content": [{ "type": "text", "text": "scrubbed-by-extmcp" }],
+			}))
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let text = extmcp_test_support::echo_text(&result);
+	assert_eq!(text, "scrubbed-by-extmcp");
+	assert!(!text.contains("world"));
+}
+
 #[tokio::test]
 async fn mcp_extmcp_fail_open_on_grpc_error() {
 	use std::collections::HashMap;
@@ -3224,6 +3272,149 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 
 	let text = extmcp_test_support::echo_text(&result);
 	assert!(text.contains("\"hi\"") && text.contains("\"world\""));
+}
+
+#[tokio::test]
+async fn mcp_extmcp_fail_closed_on_grpc_error() {
+	use std::collections::HashMap;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| Err(tonic::Status::internal("simulated extMcp failure")),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let policy = extmcp_test_support::policy_with(
+		extmcp_mock.address,
+		extmcp::FailureMode::Deny,
+		extmcp_test_support::default_methods(),
+		HashMap::new(),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail under failure_mode=Deny when extMcp errors");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32603, "gRPC failure should map to internal error");
+	assert!(
+		e.message.contains("extMcp checkRequest failed"),
+		"unexpected message: {}",
+		e.message
+	);
+}
+
+#[tokio::test]
+async fn mcp_extmcp_response_reject_surfaces_jsonrpc_error() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response, reject_response};
+
+	let extmcp_mock = closure_mock(
+		|_| pass_request(),
+		|req| {
+			if req.method != "tools/call" {
+				return pass_response();
+			}
+			reject_response(Code::PermissionDenied, "blocked on response")
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail when extMcp rejects the response");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+	assert_eq!(e.message.as_ref(), "blocked on response");
+}
+
+#[tokio::test]
+async fn mcp_extmcp_protocol_violation_fails_closed() {
+	use crate::mcp::extmcp::wire;
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response};
+
+	// A response with no `result` oneof set is a contract violation; under
+	// failure_mode=Deny it must reject rather than pass through.
+	let extmcp_mock = closure_mock(
+		|_| {
+			Ok(wire::McpRequestResult {
+				result: None,
+				header_mutation: None,
+				metadata: None,
+			})
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail on extMcp protocol violation under failure_mode=Deny");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32603, "protocol violation should map to internal error");
+	assert!(
+		e.message.contains("protocol violation"),
+		"unexpected message: {}",
+		e.message
+	);
 }
 
 #[tokio::test]

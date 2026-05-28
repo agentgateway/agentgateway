@@ -255,7 +255,12 @@ impl Relay {
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
 	{
-		if self.ext_mcp.is_none() {
+		let Some(ext) = self.ext_mcp.as_ref() else {
+			return Ok(());
+		};
+		// Skip the (potentially expensive) params serialization when this method
+		// has no request-phase hook configured.
+		if !crate::mcp::extmcp::phase::resolve(method, &ext.methods).runs_request() {
 			return Ok(());
 		}
 		let mut params_v = serde_json::to_value(&*params)
@@ -606,35 +611,43 @@ impl Relay {
 		let mut streams = Vec::new();
 		let method = r.request.method().to_string();
 		let method = method.as_str();
-		let is_list = crate::mcp::extmcp::methods::is_list(method);
 
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
 			.map(|(name, con)| {
 				let r = r.clone();
-				// Each upstream gets its own ctx clone as we may mutate extMcp CEL metadata
-				// or headers from the extMcp result before forwarding the request to each upstream
-				let mut ctx = ctx.clone();
+				let shared_ctx = &ctx;
+				// Only clone ctx per-upstream when extMcp may mutate it (CEL metadata or
+				// headers) before forwarding; otherwise share the borrow across upstreams.
+				let mut owned_ctx = self.ext_mcp.as_ref().map(|_| ctx.clone());
 				async move {
-					if is_list
-						&& let Some(ext) = self.ext_mcp.as_ref()
-						&& let crate::mcp::extmcp::Outcome::Reject(rej) = crate::mcp::extmcp::run_call_request(
-							ext,
-							&mut crate::mcp::extmcp::CallRequestCtx {
-								backend: &name,
-								method,
-								params: None,
-							},
-							&mut ctx,
-							&self.policy_client,
-						)
-						.await
-					{
-						return (name, ctx, Err(UpstreamError::ExtMcp(rej)));
+					// Request-phase hook for fanout methods. The `methods` allowlist + phase
+					// resolution inside run_call_request is the gate; unconfigured methods
+					// no-op before any RPC. params is None for fanout (no body to rewrite).
+					if let Some(ext) = self.ext_mcp.as_ref() {
+						let outcome = {
+							let ctx = owned_ctx.as_mut().expect("ctx is cloned whenever extMcp is configured");
+							crate::mcp::extmcp::run_call_request(
+								ext,
+								&mut crate::mcp::extmcp::CallRequestCtx {
+									backend: &name,
+									method,
+									params: None,
+								},
+								ctx,
+								&self.policy_client,
+							)
+							.await
+						};
+						if let crate::mcp::extmcp::Outcome::Reject(rej) = outcome {
+							return (name, owned_ctx, Err(UpstreamError::ExtMcp(rej)));
+						}
 					}
-					let res = con.generic_stream(r, &ctx).await;
-					(name, ctx, res)
+					let res = con
+						.generic_stream(r, owned_ctx.as_ref().unwrap_or(shared_ctx))
+						.await;
+					(name, owned_ctx, res)
 				}
 			})
 			.collect();
@@ -646,7 +659,10 @@ impl Relay {
 				Ok(s) => {
 					// apply extmcp wrappers per-upstream so that they see an unmuxed view
 					// TODO this is consistent with extauth but has a huge latency cost
-					let msg = match self.build_extmcp_ctx(&r, &ctx, &name) {
+					let msg = match ctx
+						.as_ref()
+						.and_then(|c| self.build_extmcp_ctx(&r, c, &name))
+					{
 						Some(extmcp) => Messages::from_stream(wrap_with_extmcp(id.clone(), s, extmcp)),
 						None => s,
 					};
