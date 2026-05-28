@@ -1,7 +1,12 @@
 # Design Documents
 
 Design documents capture proposed changes that need more context than a GitHub issue or pull request can comfortably
-hold. They are point-in-time proposals, so the current implementation may differ after review or implementation.
+hold.
+They are point-in-time proposals, so the current implementation may differ after review or implementation.
+
+**Design docs must be written entirely by humans**. AI generated content in design docs will be rejected immediately.
+Design docs don't need to be overly verbose - if you felt compelled to use AI to generate the doc, consider instead just submitting the prompt instead.
+Review the [Code of Conduct](../CODE_OF_CONDUCT.md) for more information.
 
 ## Naming
 
