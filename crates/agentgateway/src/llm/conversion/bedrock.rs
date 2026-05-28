@@ -1355,11 +1355,13 @@ pub mod from_messages {
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
+		include_completion_in_log: bool,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
+		let mut completion = include_completion_in_log.then(String::new);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1480,6 +1482,9 @@ pub mod from_messages {
 
 						let anthropic_delta = match d {
 							bedrock::ContentBlockDelta::Text(text) => {
+								if let Some(c) = completion.as_mut() {
+									c.push_str(&text);
+								}
 								messages::ContentBlockDelta::TextDelta { text }
 							},
 							bedrock::ContentBlockDelta::ReasoningContent(rc) => match rc {
@@ -1539,6 +1544,9 @@ pub mod from_messages {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							if let Some(c) = completion.take() {
+								r.response.completion = Some(vec![c]);
+							}
 						});
 					}
 

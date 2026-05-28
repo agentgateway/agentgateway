@@ -1537,6 +1537,92 @@ fn completions_response_missing_message_and_usage_fields() {
 }
 
 #[tokio::test]
+async fn bedrock_from_messages_stream_captures_completion() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/basic.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		buffer_limit,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		true,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for bedrock streaming");
+	assert!(
+		!completion.join("").is_empty(),
+		"completion should contain response text"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/basic.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		buffer_limit,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		false,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
+}
+
+#[tokio::test]
 async fn messages_passthrough_stream_captures_completion() {
 	let input_path = fixture_path("response/anthropic/stream_basic.json");
 	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
