@@ -621,6 +621,7 @@ impl RequestLog {
 			health_policy: None,
 			retry_backoff: None,
 			jwt_sub: None,
+			api_key: None,
 			retry_attempt: None,
 			error: None,
 			grpc_status: Default::default(),
@@ -702,6 +703,7 @@ pub struct RequestLog {
 	pub retry_backoff: Option<Duration>,
 
 	pub jwt_sub: Option<String>,
+	pub api_key: Option<String>,
 
 	pub retry_attempt: Option<u8>,
 	pub error: Option<String>,
@@ -964,6 +966,7 @@ impl Drop for DropOnLog {
 			("trace.id", trace_id.display()),
 			("span.id", span_id.display()),
 			("jwt.sub", log.jwt_sub.display()),
+			("api.key", log.api_key.display()),
 			("protocol", log.backend_protocol.as_ref().map(debug)),
 			("a2a.method", log.a2a_method.display()),
 			(

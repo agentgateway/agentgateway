@@ -52,7 +52,8 @@ export async function fetchConfig(): Promise<LocalConfig> {
       }
       throw new Error(`Failed to fetch config: ${r.status}`);
     }
-    return (await r.json()) as LocalConfig;
+    const raw = await r.json();
+    return { ...raw, binds: raw.binds || [] } as LocalConfig;
   }
 }
 
