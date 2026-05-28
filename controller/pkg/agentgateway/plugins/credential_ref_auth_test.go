@@ -15,14 +15,23 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
+func simpleAuthPolicyCtx(col *AgwCollections, res kubeutils.CredentialResolver) PolicyCtx {
+	return NewPolicyCtx(
+		krt.TestingDummyContext{},
+		col,
+		ReferenceIndex{},
+		nil,
+		nil,
+		res,
+	)
+}
+
 func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthResolvesConfiguredCredentialRef"))
-	ctx := PolicyCtx{
-		Krt: krt.TestingDummyContext{},
-		Collections: &AgwCollections{
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
 			Secrets: secrets,
-		},
-	}
+		}, nil)
 
 	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{}, "default")
 	if err != nil {
@@ -36,6 +45,7 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 		SecretRef: agentgateway.LocalCredentialRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
+			Name:  "file",
 		},
 	}, "default")
 	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
@@ -45,17 +55,15 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 
 func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"))
-	ctx := PolicyCtx{
-		Krt: krt.TestingDummyContext{},
-		Collections: &AgwCollections{
-			Secrets: secrets,
-		},
-	}
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, nil)
 
 	_, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
 		SecretRef: agentgateway.LocalCredentialRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
+			Name:  "file",
 		},
 	}, "default")
 	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
@@ -74,10 +82,7 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 		},
 	}
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"))
-	ctx := PolicyCtx{
-		Krt:                krt.TestingDummyContext{},
-		CredentialResolver: configMapCredentialResolver{configMaps: configMaps},
-	}
+	ctx := simpleAuthPolicyCtx(nil, configMapCredentialResolver{configMaps: configMaps})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
 		SecretRef: &agentgateway.LocalCredentialRef{
@@ -105,13 +110,9 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 		},
 	}
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver"))
-	ctx := PolicyCtx{
-		Krt: krt.TestingDummyContext{},
-		Collections: &AgwCollections{
-			Secrets: secrets,
-		},
-		CredentialResolver: configMapCredentialResolver{},
-	}
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, configMapCredentialResolver{})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
 		SecretRef: &agentgateway.LocalCredentialRef{

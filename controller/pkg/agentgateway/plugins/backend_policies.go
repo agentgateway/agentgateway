@@ -957,7 +957,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 }
 
 func credentialRefConfigured(ref agentgateway.LocalCredentialRef) bool {
-	return ref.Name != "" || ref.Group != "" || ref.Kind != ""
+	return ref.Name != ""
 }
 
 func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {

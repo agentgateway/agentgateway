@@ -96,15 +96,6 @@ func GetSecretDataValue(data map[string][]byte, key string) (string, bool) {
 	return "", false
 }
 
-// GetSecretAuth extracts an authentication value from a Kubernetes secret.
-// It looks for the "Authorization" field and strips the "Bearer " prefix if present.
-func GetSecretAuth(secret *corev1.Secret) (string, bool) {
-	if secret == nil {
-		return "", false
-	}
-	return GetSecretDataAuth(secret.Data)
-}
-
 // GetSecretDataAuth extracts an authentication value from Secret data.
 // It looks for the "Authorization" field and strips the "Bearer " prefix if present.
 func GetSecretDataAuth(data map[string][]byte) (string, bool) {

@@ -114,8 +114,10 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 	}
 }
 
-// defaultCredentialResolver composes injected resolvers with the built-in
-// Secret resolver, preserving name-only Secret refs when custom resolvers are installed.
+// defaultCredentialResolver composes an optional custom override ahead of the
+// built-in Secret resolver, so name-only Secret refs keep resolving when a
+// custom resolver is installed. The override is flattened and deduped against
+// the Secret resolver so the resolved chain stays a single flat pass.
 func defaultCredentialResolver(agw *AgwCollections, override kubeutils.CredentialResolver) kubeutils.CredentialResolver {
 	resolvers := make(kubeutils.ChainedCredentialResolver, 0, 2)
 	hasSecretResolver := false
@@ -147,13 +149,14 @@ func defaultCredentialResolver(agw *AgwCollections, override kubeutils.Credentia
 }
 
 type PolicyCtx struct {
-	Krt                krt.HandlerContext
-	Collections        *AgwCollections
-	References         ReferenceIndex
-	Resolver           remotehttp.Resolver
-	JWKSLookup         jwks.Lookup
-	CredentialResolver kubeutils.CredentialResolver
+	Krt         krt.HandlerContext
+	Collections *AgwCollections
+	References  ReferenceIndex
+	Resolver    remotehttp.Resolver
+	JWKSLookup  jwks.Lookup
 
+	// resolvedCredentialResolver is the composed chain (custom override +
+	// built-in Secret resolver); always build a PolicyCtx via NewPolicyCtx.
 	resolvedCredentialResolver kubeutils.CredentialResolver
 }
 
@@ -167,12 +170,11 @@ func NewPolicyCtx(
 	credentialResolver kubeutils.CredentialResolver,
 ) PolicyCtx {
 	return PolicyCtx{
-		Krt:                krtctx,
-		Collections:        collections,
-		References:         references,
-		Resolver:           resolver,
-		JWKSLookup:         jwksLookup,
-		CredentialResolver: credentialResolver,
+		Krt:         krtctx,
+		Collections: collections,
+		References:  references,
+		Resolver:    resolver,
+		JWKSLookup:  jwksLookup,
 
 		resolvedCredentialResolver: defaultCredentialResolver(collections, credentialResolver),
 	}
@@ -181,14 +183,10 @@ func NewPolicyCtx(
 // ResolveCredentialRef applies the context's credential resolvers with the
 // built-in Secret fallback.
 func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
-	resolver := ctx.resolvedCredentialResolver
-	if resolver == nil {
-		resolver = defaultCredentialResolver(ctx.Collections, ctx.CredentialResolver)
-	}
-	if resolver == nil {
+	if ctx.resolvedCredentialResolver == nil {
 		return nil, errors.New("credential resolver is not configured")
 	}
-	return resolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
+	return ctx.resolvedCredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
 type ResolvedTarget struct {

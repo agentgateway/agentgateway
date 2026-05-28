@@ -203,12 +203,8 @@ func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehtt
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	collections := BuildMockCollection(t, inputs)
 	resolver := BuildRemoteHTTPResolver(collections)
-	return plugins.PolicyCtx{
-		Krt:         krt.TestingDummyContext{},
-		Collections: collections,
-		Resolver:    resolver,
-		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
-	}
+	jwksLookup := jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver))
+	return plugins.NewPolicyCtx(krt.TestingDummyContext{}, collections, plugins.ReferenceIndex{}, resolver, jwksLookup, nil)
 }
 
 func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
