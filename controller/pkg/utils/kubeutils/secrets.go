@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -53,11 +54,11 @@ type SecretCredentialResolver struct {
 // GetSecret fetches a Kubernetes secret by name and namespace using krt collection.
 func GetSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext, secretName, namespace string) (*corev1.Secret, error) {
 	secretKey := namespace + "/" + secretName
-	secret := krt.FetchOne(krtctx, secrets, krt.FilterKey(secretKey))
+	secret := ptr.Flatten(krt.FetchOne(krtctx, secrets, krt.FilterKey(secretKey)))
 	if secret == nil {
 		return nil, fmt.Errorf("secret %s not found", secretKey)
 	}
-	return *secret, nil
+	return secret, nil
 }
 
 // ResolveCredentialRef fetches Secret-backed credential bytes for a CredentialRef.

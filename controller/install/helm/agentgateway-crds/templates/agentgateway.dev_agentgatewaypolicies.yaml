@@ -333,7 +333,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
@@ -394,7 +395,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                               type: object
                                             gcp:
@@ -439,7 +441,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
@@ -557,9 +560,10 @@ spec:
                                               - message: custom credential refs must
                                                   set both group and kind
                                                 rule: '(!has(self.group) || size(self.group)
-                                                  == 0) ? (!has(self.kind) || self.kind
-                                                  == ''Secret'') : (has(self.kind)
-                                                  && size(self.kind) > 0)'
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -765,9 +769,10 @@ spec:
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
-                                                    == 0) ? (!has(self.kind) || self.kind
-                                                    == ''Secret'') : (has(self.kind)
-                                                    && size(self.kind) > 0)'
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -964,7 +969,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
@@ -1025,7 +1031,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                               type: object
                                             gcp:
@@ -1070,7 +1077,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
@@ -1188,9 +1196,10 @@ spec:
                                               - message: custom credential refs must
                                                   set both group and kind
                                                 rule: '(!has(self.group) || size(self.group)
-                                                  == 0) ? (!has(self.kind) || self.kind
-                                                  == ''Secret'') : (has(self.kind)
-                                                  && size(self.kind) > 0)'
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -1396,9 +1405,10 @@ spec:
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
-                                                    == 0) ? (!has(self.kind) || self.kind
-                                                    == ''Secret'') : (has(self.kind)
-                                                    && size(self.kind) > 0)'
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -1592,7 +1602,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
@@ -1653,7 +1664,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                               type: object
                                             gcp:
@@ -1698,7 +1710,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
@@ -1816,9 +1829,10 @@ spec:
                                               - message: custom credential refs must
                                                   set both group and kind
                                                 rule: '(!has(self.group) || size(self.group)
-                                                  == 0) ? (!has(self.kind) || self.kind
-                                                  == ''Secret'') : (has(self.kind)
-                                                  && size(self.kind) > 0)'
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -2024,9 +2038,10 @@ spec:
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
-                                                    == 0) ? (!has(self.kind) || self.kind
-                                                    == ''Secret'') : (has(self.kind)
-                                                    && size(self.kind) > 0)'
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -2437,7 +2452,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
@@ -2498,7 +2514,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                               type: object
                                             gcp:
@@ -2543,7 +2560,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
@@ -2661,9 +2679,10 @@ spec:
                                               - message: custom credential refs must
                                                   set both group and kind
                                                 rule: '(!has(self.group) || size(self.group)
-                                                  == 0) ? (!has(self.kind) || self.kind
-                                                  == ''Secret'') : (has(self.kind)
-                                                  && size(self.kind) > 0)'
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -2869,9 +2888,10 @@ spec:
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
-                                                    == 0) ? (!has(self.kind) || self.kind
-                                                    == ''Secret'') : (has(self.kind)
-                                                    && size(self.kind) > 0)'
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -3068,7 +3088,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
@@ -3129,7 +3150,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                               type: object
                                             gcp:
@@ -3174,7 +3196,8 @@ spec:
                                                       must set both group and kind
                                                     rule: '(!has(self.group) || size(self.group)
                                                       == 0) ? (!has(self.kind) ||
-                                                      self.kind == ''Secret'') : (has(self.kind)
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
@@ -3292,9 +3315,10 @@ spec:
                                               - message: custom credential refs must
                                                   set both group and kind
                                                 rule: '(!has(self.group) || size(self.group)
-                                                  == 0) ? (!has(self.kind) || self.kind
-                                                  == ''Secret'') : (has(self.kind)
-                                                  && size(self.kind) > 0)'
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -3500,9 +3524,10 @@ spec:
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
-                                                    == 0) ? (!has(self.kind) || self.kind
-                                                    == ''Secret'') : (has(self.kind)
-                                                    && size(self.kind) > 0)'
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -3968,8 +3993,9 @@ spec:
                             - message: custom credential refs must set both group
                                 and kind
                               rule: '(!has(self.group) || size(self.group) == 0) ?
-                                (!has(self.kind) || self.kind == ''Secret'') : (has(self.kind)
-                                && size(self.kind) > 0)'
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                           serviceName:
                             description: |-
                               `serviceName` is the AWS SigV4 signing service name (for example,
@@ -4024,8 +4050,9 @@ spec:
                             - message: custom credential refs must set both group
                                 and kind
                               rule: '(!has(self.group) || size(self.group) == 0) ?
-                                (!has(self.kind) || self.kind == ''Secret'') : (has(self.kind)
-                                && size(self.kind) > 0)'
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                         type: object
                       gcp:
                         description: |-
@@ -4065,8 +4092,9 @@ spec:
                             - message: custom credential refs must set both group
                                 and kind
                               rule: '(!has(self.group) || size(self.group) == 0) ?
-                                (!has(self.kind) || self.kind == ''Secret'') : (has(self.kind)
-                                && size(self.kind) > 0)'
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                           type:
                             description: |-
                               The type of token to generate. To authenticate to GCP services,
@@ -4177,8 +4205,8 @@ spec:
                         - message: custom credential refs must set both group and
                             kind
                           rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
-                            || self.kind == ''Secret'') : (has(self.kind) && size(self.kind)
-                            > 0)'
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
                     - message: location may only be set for key or passthrough auth
@@ -4930,8 +4958,8 @@ spec:
                           - message: custom credential refs must set both group and
                               kind
                             rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
-                              || self.kind == ''Secret'') : (has(self.kind) && size(self.kind)
-                              > 0)'
+                              || size(self.kind) == 0 || self.kind == ''Secret'')
+                              : (has(self.kind) && size(self.kind) > 0)'
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
@@ -6288,8 +6316,8 @@ spec:
                         - message: custom credential refs must set both group and
                             kind
                           rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
-                            || self.kind == ''Secret'') : (has(self.kind) && size(self.kind)
-                            > 0)'
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                       secretSelector:
                         description: "`secretSelector` selects multiple Kubernetes
                           `Secret` resources\ncontaining API keys. It is Secret-only;
@@ -6490,8 +6518,8 @@ spec:
                         - message: custom credential refs must set both group and
                             kind
                           rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
-                            || self.kind == ''Secret'') : (has(self.kind) && size(self.kind)
-                            > 0)'
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                       users:
                         description: "`users` provides an inline list of username
                           and password pairs that will\nbe accepted. Each entry represents

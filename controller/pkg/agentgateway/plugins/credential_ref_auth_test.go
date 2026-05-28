@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -134,12 +135,12 @@ func (r configMapCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerCont
 	if ref.Group != "example.agentgateway.dev" || ref.Kind != "ConfigMapCredential" {
 		return nil, fmt.Errorf("%w: %q/%q", kubeutils.ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 	}
-	configMap := krt.FetchOne(krtctx, r.configMaps, krt.FilterKey(namespace+"/"+ref.Name))
+	configMap := ptr.Flatten(krt.FetchOne(krtctx, r.configMaps, krt.FilterKey(namespace+"/"+ref.Name)))
 	if configMap == nil {
 		return nil, fmt.Errorf("ConfigMap %s/%s not found", namespace, ref.Name)
 	}
-	data := make(map[string][]byte, len((*configMap).Data))
-	for k, v := range (*configMap).Data {
+	data := make(map[string][]byte, len(configMap.Data))
+	for k, v := range configMap.Data {
 		data[k] = []byte(v)
 	}
 	return data, nil

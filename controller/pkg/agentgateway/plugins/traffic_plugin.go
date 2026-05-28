@@ -130,7 +130,8 @@ func defaultCredentialResolver(agw *AgwCollections, override kubeutils.Credentia
 			}
 			return
 		}
-		if _, ok := r.(kubeutils.SecretCredentialResolver); ok {
+		switch r.(type) {
+		case kubeutils.SecretCredentialResolver, *kubeutils.SecretCredentialResolver:
 			hasSecretResolver = true
 		}
 		resolvers = append(resolvers, r)

@@ -88,7 +88,7 @@ func TestResolveCredentialRef(t *testing.T) {
 					t.Fatalf("ResolveCredentialRef() error = %v, want ErrUnsupportedCredentialKind", err)
 				}
 				if !strings.Contains(err.Error(), tt.wantErrContains) {
-					t.Fatalf("ResolveCredentialRef() error = %q, want substring %q", err, tt.wantErrContains)
+					t.Fatalf("ResolveCredentialRef() error = %q, want substring %q", err.Error(), tt.wantErrContains)
 				}
 				return
 			}
