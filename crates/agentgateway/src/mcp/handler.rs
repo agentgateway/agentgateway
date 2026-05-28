@@ -627,7 +627,9 @@ impl Relay {
 					// no-op before any RPC. params is None for fanout (no body to rewrite).
 					if let Some(ext) = self.ext_mcp.as_ref() {
 						let outcome = {
-							let ctx = owned_ctx.as_mut().expect("ctx is cloned whenever extMcp is configured");
+							let ctx = owned_ctx
+								.as_mut()
+								.expect("ctx is cloned whenever extMcp is configured");
 							crate::mcp::extmcp::run_call_request(
 								ext,
 								&mut crate::mcp::extmcp::CallRequestCtx {

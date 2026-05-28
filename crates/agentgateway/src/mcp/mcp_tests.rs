@@ -1316,7 +1316,13 @@ async fn setup_proxy_policies_with_target(
 ) -> (TestBind, SocketAddr) {
 	let t = setup_proxy_test("{}")
 		.unwrap()
-		.with_mcp_backend_and_target_policies(mock.addr, stateful, legacy_sse, policies, target_policies)
+		.with_mcp_backend_and_target_policies(
+			mock.addr,
+			stateful,
+			legacy_sse,
+			policies,
+			target_policies,
+		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
 	let io = t.serve_real_listener(BIND_KEY).await;
@@ -3311,7 +3317,10 @@ async fn mcp_extmcp_fail_closed_on_grpc_error() {
 	let rmcp::ServiceError::McpError(e) = &err else {
 		panic!("expected McpError, got {err:?}");
 	};
-	assert_eq!(e.code.0, -32603, "gRPC failure should map to internal error");
+	assert_eq!(
+		e.code.0, -32603,
+		"gRPC failure should map to internal error"
+	);
 	assert!(
 		e.message.contains("extMcp checkRequest failed"),
 		"unexpected message: {}",
@@ -3323,7 +3332,9 @@ async fn mcp_extmcp_fail_closed_on_grpc_error() {
 async fn mcp_extmcp_response_reject_surfaces_jsonrpc_error() {
 	use protos::ext_mcp::authorization_error::Code;
 
-	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response, reject_response};
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_response,
+	};
 
 	let extmcp_mock = closure_mock(
 		|_| pass_request(),
@@ -3409,7 +3420,10 @@ async fn mcp_extmcp_protocol_violation_fails_closed() {
 	let rmcp::ServiceError::McpError(e) = &err else {
 		panic!("expected McpError, got {err:?}");
 	};
-	assert_eq!(e.code.0, -32603, "protocol violation should map to internal error");
+	assert_eq!(
+		e.code.0, -32603,
+		"protocol violation should map to internal error"
+	);
 	assert!(
 		e.message.contains("protocol violation"),
 		"unexpected message: {}",
@@ -3522,7 +3536,9 @@ async fn mcp_extmcp_request_headers_visible_to_policy_server() {
 	let headers = captured.lock().unwrap().clone().expect("headers captured");
 	// The inbound POST's headers reach the policy server without per-header CEL config.
 	assert!(
-		headers.iter().any(|h| h.key.eq_ignore_ascii_case("content-type")),
+		headers
+			.iter()
+			.any(|h| h.key.eq_ignore_ascii_case("content-type")),
 		"expected incoming request headers forwarded to policy server; saw {headers:?}"
 	);
 }

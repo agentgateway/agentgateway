@@ -63,7 +63,10 @@ pub(crate) async fn check_request(
 					// `*/list` carries no params to rewrite; the header/metadata side
 					// effects above still apply. List filtering is a response-phase concern.
 					None => {
-						debug!(method, backend, "extMcp: ignoring mutation on request without body");
+						debug!(
+							method,
+							backend, "extMcp: ignoring mutation on request without body"
+						);
 						Outcome::Pass
 					},
 				}
@@ -305,12 +308,7 @@ fn on_grpc_error(
 	}
 }
 
-fn on_protocol_violation(
-	remote: &Remote,
-	method: &str,
-	backend: &str,
-	reason: &str,
-) -> Outcome {
+fn on_protocol_violation(remote: &Remote, method: &str, backend: &str, reason: &str) -> Outcome {
 	warn!(method, backend, reason, "extMcp: protocol violation");
 	match remote.failure_mode {
 		FailureMode::Allow => Outcome::Pass,
@@ -327,8 +325,7 @@ mod tests {
 	use prost_wkt_types::Struct as ProtoStruct;
 
 	use super::*;
-	use crate::mcp::extmcp::ExtMcpDynamicMetadata;
-	use crate::mcp::extmcp::wire;
+	use crate::mcp::extmcp::{ExtMcpDynamicMetadata, wire};
 
 	fn struct_from_json(v: serde_json::Value) -> ProtoStruct {
 		serde_json::from_value(v).unwrap()

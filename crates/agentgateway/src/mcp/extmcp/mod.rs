@@ -76,9 +76,15 @@ pub struct Remote {
 /// case-insensitively via `HeaderName`.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct HeaderFilter {
-	#[serde(skip_serializing_if = "Vec::is_empty", serialize_with = "ser_header_names")]
+	#[serde(
+		skip_serializing_if = "Vec::is_empty",
+		serialize_with = "ser_header_names"
+	)]
 	pub allowed: Vec<::http::HeaderName>,
-	#[serde(skip_serializing_if = "Vec::is_empty", serialize_with = "ser_header_names")]
+	#[serde(
+		skip_serializing_if = "Vec::is_empty",
+		serialize_with = "ser_header_names"
+	)]
 	pub disallowed: Vec<::http::HeaderName>,
 }
 
