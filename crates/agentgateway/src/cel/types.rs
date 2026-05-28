@@ -601,6 +601,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 	ResponseSnapshot {
 		code: resp.status(),
+		grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
@@ -690,6 +691,7 @@ pub struct RequestRef<'a> {
 #[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
 	pub code: http::StatusCode,
+	pub grpc_status: Option<u8>,
 	pub headers: http::HeaderMap,
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
@@ -700,6 +702,11 @@ pub struct ResponseSnapshot {
 pub struct ResponseRef<'a> {
 	/// The HTTP status code of the response.
 	pub code: u16,
+
+	/// The gRPC status code of the response, when present.
+	#[serde(rename = "grpcStatus", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "grpcStatus")]
+	pub grpc_status: Option<u8>,
 
 	/// The headers of the response.
 	pub headers: Headers<'a>,
@@ -712,6 +719,7 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 	fn from(value: &'a ResponseSnapshot) -> Self {
 		Self {
 			code: value.code.as_u16(),
+			grpc_status: value.grpc_status,
 			headers: Headers::new(&value.headers),
 			body: BodyExtensionOrDirect::Direct {
 				buffered: value.body.as_ref(),
@@ -784,6 +792,14 @@ pub struct ResponseRefSerde {
 	#[serde(default)]
 	pub code: u16,
 
+	/// The gRPC status code of the response, when present.
+	#[serde(
+		default,
+		rename = "grpcStatus",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub grpc_status: Option<u8>,
+
 	/// The headers of the response.
 	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
@@ -840,6 +856,7 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 	fn from(resp: &'a crate::http::Response) -> Self {
 		Self {
 			code: resp.status().as_u16(),
+			grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 			headers: Headers::new(resp.headers()),
 			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
@@ -1661,6 +1678,7 @@ impl ExecutorSerde {
 		if let Some(resp) = &self.response {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
+				grpc_status: resp.grpc_status,
 				headers: Headers::new(&resp.headers),
 				body: BodyExtensionOrDirect::Direct {
 					buffered: resp.body.as_ref(),
@@ -1714,6 +1732,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
+			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
 		}),

@@ -1,14 +1,17 @@
+use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ::http::{Method, StatusCode, Version, header};
+use ::http::{HeaderMap, Method, StatusCode, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
-use http_body_util::BodyExt;
+use http_body::Frame;
+use http_body_util::{BodyExt, StreamBody};
 use hyper::client::conn::http1;
+use hyper::service::service_fn;
 use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use ppp::v2::{
@@ -526,6 +529,78 @@ async fn basic_http2() {
 		.unwrap();
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+async fn grpc_trailer_backend(status: &'static str) -> std::net::SocketAddr {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let Ok((stream, _)) = listener.accept().await else {
+				return;
+			};
+			tokio::spawn(async move {
+				let svc = service_fn(move |_| async move {
+					let mut trailers = HeaderMap::new();
+					trailers.insert("grpc-status", status.parse().unwrap());
+					let body = StreamBody::new(tokio_stream::iter([
+						Ok::<_, Infallible>(Frame::data(bytes::Bytes::new())),
+						Ok(Frame::trailers(trailers)),
+					]));
+					Ok::<_, Infallible>(
+						::http::Response::builder()
+							.status(200)
+							.header(header::CONTENT_TYPE, "application/grpc")
+							.body(body)
+							.unwrap(),
+					)
+				});
+				let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+					.serve_connection(TokioIo::new(stream), svc)
+					.await;
+			});
+		}
+	});
+	addr
+}
+
+#[tokio::test]
+async fn grpc_status_trailer_is_available_to_access_log_cel() {
+	let backend = grpc_trailer_backend("13").await;
+	let path = format!("/grpc-{}", rand::rng().random::<u128>());
+	let t = setup_proxy_test(
+		r#"{"config":{"logging":{"fields":{"add":{"cel_grpc_status":"response.grpcStatus"}}}}}"#,
+	)
+	.unwrap()
+	.with_raw_backend(BackendWithPolicies {
+		backend: Backend::Opaque(
+			ResourceName::new(strng::format!("{}", backend), "".into()),
+			Target::Address(backend),
+		),
+		inline_policies: vec![BackendTrafficPolicy::HTTP(backend::HTTP {
+			version: Some(Version::HTTP_2),
+			..Default::default()
+		})],
+	})
+	.with_bind(simple_bind())
+	.with_route(basic_route(backend));
+	let io = t.serve_http2(strng::new("bind"));
+	let res = RequestBuilder::new(Method::POST, &format!("http://lo{path}"))
+		.version(Version::HTTP_2)
+		.header(header::CONTENT_TYPE, "application/grpc")
+		.body(Body::empty())
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
+	assert_eq!(log["grpc.status"].as_u64(), Some(13));
+	assert_eq!(log["cel_grpc_status"].as_u64(), Some(13));
 }
 
 #[tokio::test]

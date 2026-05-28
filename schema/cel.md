@@ -16,6 +16,7 @@
 |`request.endTime`|string|The time the request completed|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
+|`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`env`|object|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|

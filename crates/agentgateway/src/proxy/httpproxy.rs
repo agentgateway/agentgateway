@@ -2822,12 +2822,16 @@ mod tests {
 }
 
 pub fn maybe_set_grpc_status(status: &AsyncLog<u8>, headers: &HeaderMap) {
-	if let Some(s) = headers.get("grpc-status") {
-		let parsed = std::str::from_utf8(s.as_bytes())
-			.ok()
-			.and_then(|s| s.parse::<u8>().ok());
-		status.store(parsed);
+	if let Some(parsed) = parse_grpc_status(headers) {
+		status.store(Some(parsed));
 	}
+}
+
+pub fn parse_grpc_status(headers: &HeaderMap) -> Option<u8> {
+	headers
+		.get("grpc-status")
+		.and_then(|status| std::str::from_utf8(status.as_bytes()).ok())
+		.and_then(|status| status.parse().ok())
 }
 
 async fn send_mirror(

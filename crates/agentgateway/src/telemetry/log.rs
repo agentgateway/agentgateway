@@ -874,6 +874,14 @@ impl Drop for DropOnLog {
 			let mcp = log.mcp_status.take();
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
+			// The response snapshot is captured before the response body is drained, so
+			// trailer-only grpc-status values are learned later by LogBody. Copy the final
+			// value back into the snapshot before evaluating access-log CEL fields.
+			if let Some(grpc_status) = log.grpc_status.load()
+				&& let Some(resp) = log.response_snapshot.as_mut()
+			{
+				resp.grpc_status = Some(grpc_status);
+			}
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
