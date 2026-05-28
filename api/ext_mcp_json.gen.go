@@ -50,6 +50,28 @@ func (this *McpResponseResult) UnmarshalJSON(b []byte) error {
 	return ExtMcpUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for HeaderMutation
+func (this *HeaderMutation) MarshalJSON() ([]byte, error) {
+	str, err := ExtMcpMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for HeaderMutation
+func (this *HeaderMutation) UnmarshalJSON(b []byte) error {
+	return ExtMcpUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for Header
+func (this *Header) MarshalJSON() ([]byte, error) {
+	str, err := ExtMcpMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for Header
+func (this *Header) UnmarshalJSON(b []byte) error {
+	return ExtMcpUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for Pass
 func (this *Pass) MarshalJSON() ([]byte, error) {
 	str, err := ExtMcpMarshaler.MarshalToString(this)

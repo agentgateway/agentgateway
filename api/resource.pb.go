@@ -12450,9 +12450,17 @@ type BackendPolicySpec_ExtMcp_Remote struct {
 	// Static or CEL-evaluated context, surfaced to the policy server as
 	// fields of the `metadata_context` google.protobuf.Struct, keyed by
 	// config key.
-	Metadata      map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Request headers forwarded to the policy server in `McpRequest.headers`.
+	// Empty means send all headers (modeled on Envoy ext_authz gRPC). When
+	// non-empty, only listed header names are sent. Matching is
+	// case-insensitive.
+	AllowedRequestHeaders []string `protobuf:"bytes,6,rep,name=allowed_request_headers,json=allowedRequestHeaders,proto3" json:"allowed_request_headers,omitempty"`
+	// Header names never forwarded to the policy server, even if they appear
+	// in `allowed_request_headers`. Case-insensitive.
+	DisallowedRequestHeaders []string `protobuf:"bytes,7,rep,name=disallowed_request_headers,json=disallowedRequestHeaders,proto3" json:"disallowed_request_headers,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_ExtMcp_Remote) Reset() {
@@ -12502,6 +12510,20 @@ func (x *BackendPolicySpec_ExtMcp_Remote) GetFailureMode() BackendPolicySpec_Ext
 func (x *BackendPolicySpec_ExtMcp_Remote) GetMetadata() map[string]string {
 	if x != nil {
 		return x.Metadata
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_ExtMcp_Remote) GetAllowedRequestHeaders() []string {
+	if x != nil {
+		return x.AllowedRequestHeaders
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_ExtMcp_Remote) GetDisallowedRequestHeaders() []string {
+	if x != nil {
+		return x.DisallowedRequestHeaders
 	}
 	return nil
 }
@@ -13971,7 +13993,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\x94Q\n" +
+	"\x04kind\"\x8aR\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -14211,14 +14233,16 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"PERMISSIVE\x10\x02B\f\n" +
 	"\n" +
-	"_client_id\x1a\xe1\x05\n" +
+	"_client_id\x1a\xd7\x06\n" +
 	"\x06ExtMcp\x12R\n" +
 	"\x06remote\x18\x01 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.RemoteR\x06remote\x12Z\n" +
-	"\amethods\x18\x02 \x03(\v2@.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntryR\amethods\x1a\xd4\x02\n" +
+	"\amethods\x18\x02 \x03(\v2@.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntryR\amethods\x1a\xca\x03\n" +
 	"\x06Remote\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12b\n" +
 	"\ffailure_mode\x18\x02 \x01(\x0e2?.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureModeR\vfailureMode\x12d\n" +
-	"\bmetadata\x18\x05 \x03(\v2H.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\x05 \x03(\v2H.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntryR\bmetadata\x126\n" +
+	"\x17allowed_request_headers\x18\x06 \x03(\tR\x15allowedRequestHeaders\x12<\n" +
+	"\x1adisallowed_request_headers\x18\a \x03(\tR\x18disallowedRequestHeaders\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1au\n" +

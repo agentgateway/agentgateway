@@ -1349,6 +1349,14 @@ message BackendPolicySpec {
       // fields of the `metadata_context` google.protobuf.Struct, keyed by
       // config key.
       map<string, string> metadata = 5;
+      // Request headers forwarded to the policy server in `McpRequest.headers`.
+      // Empty means send all headers (modeled on Envoy ext_authz gRPC). When
+      // non-empty, only listed header names are sent. Matching is
+      // case-insensitive.
+      repeated string allowed_request_headers = 6;
+      // Header names never forwarded to the policy server, even if they appear
+      // in `allowed_request_headers`. Case-insensitive.
+      repeated string disallowed_request_headers = 7;
     }
 
     Remote remote = 1;

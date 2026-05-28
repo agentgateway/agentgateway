@@ -5,14 +5,16 @@ use prost_wkt_types::Struct;
 use protos::ext_mcp::authorization_error::Code as ErrCode;
 use protos::ext_mcp::ext_mcp_server::{ExtMcp, ExtMcpServer};
 use protos::ext_mcp::{
-	AuthorizationError, McpRequest, McpRequestResult, McpResponse, McpResponseResult, Pass,
-	mcp_request_result, mcp_response_result,
+	AuthorizationError, Header, HeaderMutation, McpRequest, McpRequestResult, McpResponse,
+	McpResponseResult, Pass, mcp_request_result, mcp_response_result,
 };
 use tonic::{Request, Response as TonicResponse, Status};
 
 pub fn pass_request() -> Result<McpRequestResult, Status> {
 	Ok(McpRequestResult {
 		result: Some(mcp_request_result::Result::Pass(Pass {})),
+		header_mutation: None,
+		metadata: None,
 	})
 }
 
@@ -32,6 +34,8 @@ pub fn reject_request(
 			reason: reason.into(),
 			mcp_error: None,
 		})),
+		header_mutation: None,
+		metadata: None,
 	})
 }
 
@@ -51,6 +55,8 @@ pub fn reject_response(
 pub fn mutated_request(body: Struct) -> Result<McpRequestResult, Status> {
 	Ok(McpRequestResult {
 		result: Some(mcp_request_result::Result::Mutated(body)),
+		header_mutation: None,
+		metadata: None,
 	})
 }
 
@@ -58,6 +64,36 @@ pub fn mutated_response(body: Struct) -> Result<McpResponseResult, Status> {
 	Ok(McpResponseResult {
 		result: Some(mcp_response_result::Result::Mutated(body)),
 	})
+}
+
+/// Pass with a side effect: optional header mutation + metadata, applied to
+/// the upstream request that carries this MCP call.
+pub fn pass_request_with(
+	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+	remove_headers: impl IntoIterator<Item = impl Into<String>>,
+	metadata: Option<Struct>,
+) -> Result<McpRequestResult, Status> {
+	Ok(McpRequestResult {
+		result: Some(mcp_request_result::Result::Pass(Pass {})),
+		header_mutation: Some(build_header_mutation(set_headers, remove_headers)),
+		metadata,
+	})
+}
+
+fn build_header_mutation(
+	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+	remove_headers: impl IntoIterator<Item = impl Into<String>>,
+) -> HeaderMutation {
+	HeaderMutation {
+		set: set_headers
+			.into_iter()
+			.map(|(k, v)| Header {
+				key: k.into(),
+				value: v.into(),
+			})
+			.collect(),
+		remove: remove_headers.into_iter().map(Into::into).collect(),
+	}
 }
 
 pub fn mutated_request_json(body: serde_json::Value) -> Result<McpRequestResult, Status> {

@@ -51,6 +51,15 @@ impl IncomingRequestContext {
 			authority: parts.uri.authority().cloned(),
 		}
 	}
+	pub fn headers(&self) -> &http::HeaderMap {
+		&self.headers
+	}
+	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+		&mut self.headers
+	}
+	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
+		&mut self.ext
+	}
 	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
 		req.extensions_mut().extend(self.ext.clone());
 		let explicit_auto_hostname = req

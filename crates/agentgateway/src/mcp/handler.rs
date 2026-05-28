@@ -220,7 +220,7 @@ impl Relay {
 	pub(crate) async fn run_extmcp_call_request(
 		&self,
 		ext_ctx: &mut crate::mcp::extmcp::CallRequestCtx<'_>,
-		ctx: &IncomingRequestContext,
+		ctx: &mut IncomingRequestContext,
 	) -> Result<bool, UpstreamError> {
 		use crate::mcp::extmcp::Outcome;
 		let Some(ext) = self.ext_mcp.as_ref() else {
@@ -250,7 +250,7 @@ impl Relay {
 		backend: &str,
 		method: &str,
 		params: &mut P,
-		ctx: &IncomingRequestContext,
+		ctx: &mut IncomingRequestContext,
 	) -> Result<(), UpstreamError>
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
@@ -613,7 +613,9 @@ impl Relay {
 			.iter_named()
 			.map(|(name, con)| {
 				let r = r.clone();
-				let ctx = &ctx;
+				// Each upstream gets its own ctx clone as we may mutate extMcp CEL metadata
+				// or headers from the extMcp result before forwarding the request to each upstream
+				let mut ctx = ctx.clone();
 				async move {
 					if is_list
 						&& let Some(ext) = self.ext_mcp.as_ref()
@@ -624,21 +626,22 @@ impl Relay {
 								method,
 								params: None,
 							},
-							ctx,
+							&mut ctx,
 							&self.policy_client,
 						)
 						.await
 					{
-						return (name, Err(UpstreamError::ExtMcp(rej)));
+						return (name, ctx, Err(UpstreamError::ExtMcp(rej)));
 					}
-					(name, con.generic_stream(r, ctx).await)
+					let res = con.generic_stream(r, &ctx).await;
+					(name, ctx, res)
 				}
 			})
 			.collect();
 
 		let fut_results = futures::future::join_all(futs).await;
 
-		for (name, result) in fut_results {
+		for (name, ctx, result) in fut_results {
 			match result {
 				Ok(s) => {
 					// apply extmcp wrappers per-upstream so that they see an unmuxed view

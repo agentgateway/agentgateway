@@ -23,6 +23,10 @@ message McpRequest {
   google.protobuf.Struct metadata_context = 3;
   // JSON-RPC `params` for this method.
   google.protobuf.Struct mcp_request = 4;
+  // Incoming HTTP request headers carrying this MCP call, after gateway-side
+  // allow/deny filtering. Multi-value headers appear as repeated entries with
+  // the same key. Non-UTF8 header values are dropped. Empty for stdio upstreams.
+  repeated Header headers = 5;
 }
 
 message McpResponse {
@@ -41,6 +45,13 @@ message McpRequestResult {
     google.protobuf.Struct mutated = 2;
     AuthorizationError error = 3;
   }
+  // Mutations applied to the upstream HTTP request that carries this MCP call.
+  // Honored on Pass and Mutated, ignored on Error and for stdio upstreams.
+  HeaderMutation header_mutation = 4;
+  // Arbitrary key/value bag stashed in request extensions and exposed to CEL as
+  // `extmcp.<key>`. Subsequent backend filters (e.g. `transformation`) can read
+  // from it. Honored on Pass and Mutated; merged with later drivers' metadata.
+  google.protobuf.Struct metadata = 5;
 }
 
 message McpResponseResult {
@@ -49,6 +60,19 @@ message McpResponseResult {
     google.protobuf.Struct mutated = 2;
     AuthorizationError error = 3;
   }
+}
+
+message HeaderMutation {
+  // Headers to overwrite (insert if absent). If the same key is listed multiple
+  // times it is treated as a list (all values replace the existing header).
+  repeated Header set = 1;
+  // Header names to remove (case-insensitive).
+  repeated string remove = 2;
+}
+
+message Header {
+  string key = 1;
+  string value = 2;
 }
 
 message Pass {}

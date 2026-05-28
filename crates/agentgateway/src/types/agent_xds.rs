@@ -574,11 +574,24 @@ fn convert_ext_mcp(
 					Ok::<_, ProtoError>((k.to_owned(), ve))
 				})
 				.collect::<Result<HashMap<_, _>, _>>()?;
+			let request_headers = crate::mcp::extmcp::HeaderFilter {
+				allowed: parse_header_names(
+					diagnostics,
+					"backend.extMcp.remote.allowedRequestHeaders",
+					&r.allowed_request_headers,
+				),
+				disallowed: parse_header_names(
+					diagnostics,
+					"backend.extMcp.remote.disallowedRequestHeaders",
+					&r.disallowed_request_headers,
+				),
+			};
 			Ok(crate::mcp::extmcp::Driver::Remote(
 				crate::mcp::extmcp::Remote {
 					target,
 					failure_mode,
 					metadata,
+					request_headers,
 				},
 			))
 		})
@@ -591,6 +604,25 @@ fn convert_ext_mcp(
 	}
 
 	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })
+}
+
+// Parse configured header names, dropping (with a warning) any that aren't valid
+// HTTP header names rather than failing the whole config.
+fn parse_header_names(
+	diagnostics: &mut Diagnostics,
+	field: &str,
+	names: &[String],
+) -> Vec<::http::HeaderName> {
+	names
+		.iter()
+		.filter_map(|n| match ::http::HeaderName::from_bytes(n.as_bytes()) {
+			Ok(h) => Some(h),
+			Err(_) => {
+				diagnostics.add_warning(format!("{field}: invalid header name {n:?}; ignoring"));
+				None
+			},
+		})
+		.collect()
 }
 
 fn convert_backend_ai_policy(

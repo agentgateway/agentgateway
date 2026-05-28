@@ -356,7 +356,7 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
-				let ctx = IncomingRequestContext::new(&parts);
+				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
@@ -450,7 +450,7 @@ impl Session {
 								service_name,
 								mcp::extmcp::methods::TOOLS_CALL,
 								&mut ctr.params,
-								&ctx,
+								&mut ctx,
 							)
 							.await?;
 						self
@@ -469,7 +469,7 @@ impl Session {
 								service_name,
 								mcp::extmcp::methods::PROMPTS_GET,
 								&mut gpr.params,
-								&ctx,
+								&mut ctx,
 							)
 							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await
@@ -492,7 +492,7 @@ impl Session {
 								service_name,
 								mcp::extmcp::methods::RESOURCES_READ,
 								&mut rrr.params,
-								&ctx,
+								&mut ctx,
 							)
 							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await

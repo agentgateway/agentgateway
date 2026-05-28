@@ -1305,6 +1305,24 @@ async fn setup_proxy_policies(
 	(t, io)
 }
 
+// Like `setup_proxy_policies`, but also attaches `target_policies` to the opaque
+// backend behind the MCP target so they run on the upstream leg.
+async fn setup_proxy_policies_with_target(
+	mock: &MockServer,
+	stateful: bool,
+	legacy_sse: bool,
+	policies: Vec<BackendTrafficPolicy>,
+	target_policies: Vec<BackendTrafficPolicy>,
+) -> (TestBind, SocketAddr) {
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(mock.addr, stateful, legacy_sse, policies, target_policies)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	(t, io)
+}
+
 pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
@@ -1367,6 +1385,21 @@ impl MockServer {
 }
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
+	mock_streamable_http_server_inner(stateful, None).await
+}
+
+type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;
+
+async fn mock_streamable_http_server_with_capture(stateful: bool) -> (MockServer, HeaderCapture) {
+	let capture: HeaderCapture = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let server = mock_streamable_http_server_inner(stateful, Some(capture.clone())).await;
+	(server, capture)
+}
+
+async fn mock_streamable_http_server_inner(
+	stateful: bool,
+	capture: Option<HeaderCapture>,
+) -> MockServer {
 	use mockserver::Counter;
 	use rmcp::transport::streamable_http_server::StreamableHttpService;
 	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
@@ -1387,7 +1420,18 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	);
 
 	let (tx, rx) = tokio::sync::oneshot::channel();
-	let router = axum::Router::new().nest_service("/mcp", service);
+	let mut router = axum::Router::new().nest_service("/mcp", service);
+	if let Some(cap) = capture {
+		router = router.layer(axum::middleware::from_fn(
+			move |req: axum::extract::Request, next: axum::middleware::Next| {
+				let cap = cap.clone();
+				async move {
+					cap.lock().unwrap().push(req.headers().clone());
+					next.run(req).await
+				}
+			},
+		));
+	}
 	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let addr = tcp_listener.local_addr().unwrap();
 	tokio::spawn(async move {
@@ -2883,6 +2927,7 @@ mod extmcp_test_support {
 			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
 			failure_mode,
 			metadata,
+			request_headers: Default::default(),
 		};
 		BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
 			drivers: vec![extmcp::Driver::Remote(remote)],
@@ -3179,6 +3224,179 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 
 	let text = extmcp_test_support::echo_text(&result);
 	assert!(text.contains("\"hi\"") && text.contains("\"world\""));
+}
+
+#[tokio::test]
+async fn mcp_extmcp_header_mutation_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				vec![("x-extmcp-test", "from-policy"), ("x-tenant", "acme")],
+				vec!["user-agent"],
+				None,
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone();
+	let saw_injected = headers.iter().any(|h| {
+		h.get("x-extmcp-test").map(|v| v.as_bytes()) == Some(b"from-policy")
+			&& h.get("x-tenant").map(|v| v.as_bytes()) == Some(b"acme")
+	});
+	assert!(
+		saw_injected,
+		"expected x-extmcp-test+x-tenant headers on upstream request; saw {headers:?}"
+	);
+	let tools_call_req = headers
+		.iter()
+		.rev()
+		.find(|h| h.contains_key("x-extmcp-test"))
+		.expect("found upstream request with injected header");
+	assert!(
+		!tools_call_req.contains_key("user-agent"),
+		"expected user-agent to be removed by header_mutation.remove",
+	);
+}
+
+#[tokio::test]
+async fn mcp_extmcp_request_headers_visible_to_policy_server() {
+	use std::sync::Mutex as StdMutex;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+
+	let captured: Arc<StdMutex<Option<Vec<crate::mcp::extmcp::wire::Header>>>> =
+		Arc::new(StdMutex::new(None));
+	let extmcp_mock = {
+		let store = captured.clone();
+		closure_mock(
+			move |req| {
+				if req.method == "tools/call" {
+					*store.lock().unwrap() = Some(req.headers.clone());
+				}
+				pass_request()
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await
+	};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone().expect("headers captured");
+	// The inbound POST's headers reach the policy server without per-header CEL config.
+	assert!(
+		headers.iter().any(|h| h.key.eq_ignore_ascii_case("content-type")),
+		"expected incoming request headers forwarded to policy server; saw {headers:?}"
+	);
+}
+
+// extMcp driver metadata is readable as `extmcp.*` in an upstream-leg transformation.
+#[tokio::test]
+async fn mcp_extmcp_request_metadata_usable_in_backend_transformation() {
+	use crate::http::transformation_cel::{
+		LocalTransform, LocalTransformationConfig, Transformation,
+	};
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			let md = serde_json::from_value(serde_json::json!({ "tenant": "acme" })).unwrap();
+			pass_request_with(Vec::<(&str, &str)>::new(), Vec::<&str>::new(), Some(md))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let xfm = Transformation::try_from_local_config(
+		LocalTransformationConfig {
+			request: Some(LocalTransform {
+				set: vec![(strng::new("x-from-extmcp"), strng::new("extmcp.tenant"))],
+				..Default::default()
+			}),
+			response: None,
+		},
+		true,
+	)
+	.unwrap();
+	let target_policy = BackendTrafficPolicy::Transformation(Arc::new(xfm));
+
+	let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
+	let (_bind, io) = setup_proxy_policies_with_target(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+		vec![target_policy],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone();
+	let saw_metadata = headers
+		.iter()
+		.any(|h| h.get("x-from-extmcp").map(|v| v.as_bytes()) == Some(b"acme"));
+	assert!(
+		saw_metadata,
+		"expected x-from-extmcp:acme set by a backend transformation reading extmcp.tenant; saw {headers:?}"
+	);
 }
 
 #[tokio::test]

@@ -14,6 +14,20 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
+/// Per-request bag of values that `extMcp` request-phase drivers attach via
+/// `McpRequestResult.metadata`. Merged into the request extensions and exposed
+/// to CEL as `extmcp.<key>` for backend request filters (e.g. `transformation`).
+/// Multiple drivers merge into the same map; later writes win on key collisions.
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
+pub struct ExtMcpDynamicMetadata(serde_json::Map<String, serde_json::Value>);
+
+impl ExtMcpDynamicMetadata {
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
+}
+
 mod client;
 pub mod methods;
 pub mod outcome;
@@ -52,6 +66,45 @@ pub struct Remote {
 	pub failure_mode: FailureMode,
 	#[serde(skip_serializing_if = "HashMap::is_empty", skip_deserializing)]
 	pub metadata: HashMap<String, Arc<cel::Expression>>,
+	/// Which incoming request headers are forwarded to the policy server.
+	#[serde(skip_serializing_if = "HeaderFilter::is_default", skip_deserializing)]
+	pub request_headers: HeaderFilter,
+}
+
+/// Allow/deny filter over request header names. Empty `allowed` forwards every
+/// header (ext_authz gRPC default); `disallowed` always wins. Names are matched
+/// case-insensitively via `HeaderName`.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct HeaderFilter {
+	#[serde(skip_serializing_if = "Vec::is_empty", serialize_with = "ser_header_names")]
+	pub allowed: Vec<::http::HeaderName>,
+	#[serde(skip_serializing_if = "Vec::is_empty", serialize_with = "ser_header_names")]
+	pub disallowed: Vec<::http::HeaderName>,
+}
+
+impl HeaderFilter {
+	fn is_default(&self) -> bool {
+		self.allowed.is_empty() && self.disallowed.is_empty()
+	}
+	/// Whether a header with this name should be sent to the policy server.
+	pub fn allows(&self, name: &::http::HeaderName) -> bool {
+		if self.disallowed.iter().any(|n| n == name) {
+			return false;
+		}
+		self.allowed.is_empty() || self.allowed.iter().any(|n| n == name)
+	}
+}
+
+fn ser_header_names<S: serde::Serializer>(
+	names: &[::http::HeaderName],
+	s: S,
+) -> Result<S::Ok, S::Error> {
+	use serde::ser::SerializeSeq;
+	let mut seq = s.serialize_seq(Some(names.len()))?;
+	for n in names {
+		seq.serialize_element(n.as_str())?;
+	}
+	seq.end()
 }
 
 // Behavior when a driver errors or returns an unhandleable response.
@@ -75,30 +128,20 @@ impl Driver {
 	async fn call_request(
 		&self,
 		ctx: &mut CallRequestCtx<'_>,
-		req_ctx: &IncomingRequestContext,
+		req_ctx: &mut IncomingRequestContext,
 		client: &PolicyClient,
 	) -> Outcome {
 		match self {
 			Driver::Remote(remote) => {
-				let body = ctx.params.as_deref().cloned();
-				match client::check_request(remote, ctx.method, ctx.backend, body, req_ctx, client).await {
-					client::RequestOutcome::Pass => Outcome::Pass,
-					client::RequestOutcome::Mutated(v) => match ctx.params.as_deref_mut() {
-						Some(p) => {
-							*p = v;
-							Outcome::Mutated
-						},
-						None => {
-							tracing::debug!(
-								method = ctx.method,
-								backend = ctx.backend,
-								"extMcp: ignoring mutation on request without body",
-							);
-							Outcome::Pass
-						},
-					},
-					client::RequestOutcome::Reject(e) => Outcome::Reject(e),
-				}
+				client::check_request(
+					remote,
+					ctx.method,
+					ctx.backend,
+					ctx.params.as_deref_mut(),
+					req_ctx,
+					client,
+				)
+				.await
 			},
 		}
 	}
@@ -125,7 +168,7 @@ impl Driver {
 pub async fn run_call_request(
 	ext: &ExtMcp,
 	ctx: &mut CallRequestCtx<'_>,
-	req_ctx: &IncomingRequestContext,
+	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
 	if !phase::resolve(ctx.method, &ext.methods).runs_request() {

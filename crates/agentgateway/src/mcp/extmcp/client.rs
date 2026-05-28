@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use ::http::HeaderName;
 use prost_wkt_types::Struct;
 use rmcp::model::{ErrorCode, ErrorData};
 use serde_json::Value;
@@ -13,48 +14,148 @@ use crate::mcp::extmcp::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::extmcp::wire::{
 	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
 };
-use crate::mcp::extmcp::{FailureMode, Outcome, Remote};
+use crate::mcp::extmcp::{ExtMcpDynamicMetadata, FailureMode, HeaderFilter, Outcome, Remote};
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
-
-pub(crate) enum RequestOutcome {
-	Pass,
-	Mutated(Value),
-	Reject(ErrorData),
-}
 
 pub(crate) async fn check_request(
 	remote: &Remote,
 	method: &str,
 	backend: &str,
-	body: Option<Value>,
-	req_ctx: &IncomingRequestContext,
+	body: Option<&mut Value>,
+	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
-) -> RequestOutcome {
-	let mcp_request = serialize_body(body);
+) -> Outcome {
+	let mcp_request = serialize_body(body.as_deref());
 	let metadata_context = build_metadata(&remote.metadata, req_ctx);
+	let headers = collect_headers(&remote.request_headers, req_ctx.headers());
 	let req = McpRequest {
 		service_name: backend.to_string(),
 		method: method.to_string(),
 		metadata_context,
 		mcp_request,
+		headers,
 	};
 	let mut grpc = build_client(remote, client.clone());
 	let tonic_req = tonic::Request::new(req);
-	let result = match grpc.check_request(tonic_req).await {
-		Ok(resp) => resp.into_inner().result,
-		Err(status) => {
-			return on_grpc_error(remote, method, backend, "checkRequest", status);
-		},
+	let resp = match grpc.check_request(tonic_req).await {
+		Ok(resp) => resp.into_inner(),
+		Err(status) => return on_grpc_error(remote, method, backend, "checkRequest", status),
 	};
+	let wire::McpRequestResult {
+		result,
+		header_mutation,
+		metadata,
+	} = resp;
 	match result {
-		Some(mcp_request_result::Result::Pass(_)) => RequestOutcome::Pass,
+		Some(mcp_request_result::Result::Pass(_)) => {
+			apply_request_side(method, backend, header_mutation, metadata, req_ctx);
+			Outcome::Pass
+		},
 		Some(mcp_request_result::Result::Mutated(s)) => match struct_to_json(&s) {
-			Ok(v) => RequestOutcome::Mutated(v),
+			Ok(v) => {
+				apply_request_side(method, backend, header_mutation, metadata, req_ctx);
+				match body {
+					Some(b) => {
+						*b = v;
+						Outcome::Mutated
+					},
+					// `*/list` carries no params to rewrite; the header/metadata side
+					// effects above still apply. List filtering is a response-phase concern.
+					None => {
+						debug!(method, backend, "extMcp: ignoring mutation on request without body");
+						Outcome::Pass
+					},
+				}
+			},
 			Err(e) => on_protocol_violation(remote, method, backend, &format!("mutated decode: {e}")),
 		},
-		Some(mcp_request_result::Result::Error(e)) => RequestOutcome::Reject(translate_error(e)),
+		Some(mcp_request_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
 		None => on_protocol_violation(remote, method, backend, "missing result oneof"),
+	}
+}
+
+// Header mutations + metadata flow into the request context so they reach the
+// upstream and request-side CEL. Callers skip this on reject: partial side
+// effects on a denied request would surprise.
+fn apply_request_side(
+	method: &str,
+	backend: &str,
+	header_mutation: Option<wire::HeaderMutation>,
+	metadata: Option<Struct>,
+	req_ctx: &mut IncomingRequestContext,
+) {
+	if let Some(hm) = header_mutation {
+		apply_header_mutation(method, backend, hm, req_ctx.headers_mut());
+	}
+	if let Some(m) = metadata {
+		merge_metadata_into_extensions(method, backend, &m, req_ctx.extensions_mut());
+	}
+}
+
+fn apply_header_mutation(
+	method: &str,
+	backend: &str,
+	hm: wire::HeaderMutation,
+	headers: &mut ::http::HeaderMap,
+) {
+	// Multiple `set` entries with the same name replace that header with the list
+	// they form: the first occurrence overwrites any existing values, the rest
+	// append. `seen` is only marked after a successful write, so a skipped (invalid)
+	// first entry doesn't turn a later valid one into a stray append.
+	let mut seen: HashSet<HeaderName> = HashSet::new();
+	for h in hm.set {
+		let name = match HeaderName::from_bytes(h.key.as_bytes()) {
+			Ok(n) => n,
+			Err(_) => {
+				warn!(method, backend, key = %h.key, "extMcp: header_mutation.set: invalid header name");
+				continue;
+			},
+		};
+		let v = match ::http::HeaderValue::from_maybe_shared(h.value) {
+			Ok(v) => v,
+			Err(_) => {
+				warn!(method, backend, key = %name, "extMcp: header_mutation.set: invalid header value");
+				continue;
+			},
+		};
+		if seen.insert(name.clone()) {
+			headers.insert(name, v);
+		} else {
+			headers.append(name, v);
+		}
+	}
+	for name in hm.remove {
+		match HeaderName::from_bytes(name.as_bytes()) {
+			Ok(n) => {
+				headers.remove(&n);
+			},
+			Err(_) => {
+				warn!(method, backend, key = %name, "extMcp: header_mutation.remove: invalid header name");
+			},
+		}
+	}
+}
+
+fn merge_metadata_into_extensions(
+	method: &str,
+	backend: &str,
+	s: &Struct,
+	ext: &mut ::http::Extensions,
+) {
+	let mut acc = ext.remove::<ExtMcpDynamicMetadata>().unwrap_or_default();
+	for (k, v) in &s.fields {
+		match serde_json::to_value(v) {
+			Ok(j) => {
+				acc.0.insert(k.clone(), j);
+			},
+			Err(e) => {
+				warn!(method, backend, key = %k, error = %e, "extMcp: metadata: failed to convert value");
+			},
+		}
+	}
+	if !acc.0.is_empty() {
+		ext.insert(acc);
 	}
 }
 
@@ -66,7 +167,7 @@ pub(crate) async fn check_response(
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
-	let mcp_response = serialize_body(Some(body.clone()));
+	let mcp_response = serialize_body(Some(&*body));
 	let metadata_context = build_metadata(&remote.metadata, req_ctx);
 	let req = McpResponse {
 		service_name: backend.to_string(),
@@ -78,14 +179,7 @@ pub(crate) async fn check_response(
 	let tonic_req = tonic::Request::new(req);
 	let result = match grpc.check_response(tonic_req).await {
 		Ok(resp) => resp.into_inner().result,
-		Err(status) => {
-			return match on_grpc_error(remote, method, backend, "checkResponse", status) {
-				RequestOutcome::Pass => Outcome::Pass,
-				RequestOutcome::Reject(e) => Outcome::Reject(e),
-				// Contract violations on response phase coerce to failure_mode again.
-				_ => fail_outcome(remote),
-			};
-		},
+		Err(status) => return on_grpc_error(remote, method, backend, "checkResponse", status),
 	};
 	match result {
 		Some(mcp_response_result::Result::Pass(_)) => Outcome::Pass,
@@ -146,9 +240,25 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 	})
 }
 
-fn serialize_body(body: Option<Value>) -> Option<Struct> {
+// Snapshot the incoming request headers for the policy server, applying the
+// configured allow/deny filter. Multi-value headers yield one entry per value;
+// non-UTF8 values are dropped (the wire type is a UTF8 string).
+fn collect_headers(filter: &HeaderFilter, headers: &::http::HeaderMap) -> Vec<wire::Header> {
+	headers
+		.iter()
+		.filter(|(name, _)| filter.allows(name))
+		.filter_map(|(name, value)| {
+			value.to_str().ok().map(|v| wire::Header {
+				key: name.as_str().to_string(),
+				value: v.to_string(),
+			})
+		})
+		.collect()
+}
+
+fn serialize_body(body: Option<&Value>) -> Option<Struct> {
 	let v = body?;
-	match json_to_struct(v) {
+	match json_to_struct(v.clone()) {
 		Ok(s) => Some(s),
 		Err(e) => {
 			warn!(error = %e, "extMcp: failed to encode body as Struct; sending empty");
@@ -183,11 +293,11 @@ fn on_grpc_error(
 	backend: &str,
 	rpc: &str,
 	status: tonic::Status,
-) -> RequestOutcome {
+) -> Outcome {
 	debug!(method, backend, rpc, code = ?status.code(), message = %status.message(), "extMcp: gRPC error");
 	match remote.failure_mode {
-		FailureMode::Allow => RequestOutcome::Pass,
-		FailureMode::Deny => RequestOutcome::Reject(ErrorData::new(
+		FailureMode::Allow => Outcome::Pass,
+		FailureMode::Deny => Outcome::Reject(ErrorData::new(
 			ErrorCode(-32603),
 			format!("extMcp {rpc} failed: {}", status.message()),
 			None,
@@ -200,15 +310,121 @@ fn on_protocol_violation(
 	method: &str,
 	backend: &str,
 	reason: &str,
-) -> RequestOutcome {
+) -> Outcome {
 	warn!(method, backend, reason, "extMcp: protocol violation");
 	match remote.failure_mode {
-		FailureMode::Allow => RequestOutcome::Pass,
-		FailureMode::Deny => RequestOutcome::Reject(ErrorData::new(
+		FailureMode::Allow => Outcome::Pass,
+		FailureMode::Deny => Outcome::Reject(ErrorData::new(
 			ErrorCode(-32603),
 			format!("extMcp protocol violation: {reason}"),
 			None,
 		)),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use prost_wkt_types::Struct as ProtoStruct;
+
+	use super::*;
+	use crate::mcp::extmcp::ExtMcpDynamicMetadata;
+	use crate::mcp::extmcp::wire;
+
+	fn struct_from_json(v: serde_json::Value) -> ProtoStruct {
+		serde_json::from_value(v).unwrap()
+	}
+
+	#[test]
+	fn header_mutation_invalid_name_or_value_is_skipped() {
+		let mut headers = ::http::HeaderMap::new();
+		headers.insert("x-keep", "1".parse().unwrap());
+		let hm = wire::HeaderMutation {
+			set: vec![
+				wire::Header {
+					key: "bad name".into(),
+					value: "v".into(),
+				},
+				wire::Header {
+					key: "x-ok".into(),
+					value: "v\nbad".into(),
+				},
+			],
+			remove: vec!["bad name".into()],
+		};
+		apply_header_mutation("tools/call", "be", hm, &mut headers);
+		assert!(headers.contains_key("x-keep"));
+		assert!(!headers.contains_key("x-ok"));
+		assert_eq!(headers.len(), 1);
+	}
+
+	#[test]
+	fn header_mutation_set_replaces_list_with_new_list() {
+		let mut headers = ::http::HeaderMap::new();
+		headers.append("x-multi", "old1".parse().unwrap());
+		headers.append("x-multi", "old2".parse().unwrap());
+		let hm = wire::HeaderMutation {
+			set: vec![
+				wire::Header {
+					key: "x-multi".into(),
+					value: "new1".into(),
+				},
+				wire::Header {
+					key: "x-multi".into(),
+					value: "new2".into(),
+				},
+			],
+			remove: vec![],
+		};
+		apply_header_mutation("tools/call", "be", hm, &mut headers);
+		let got: Vec<_> = headers.get_all("x-multi").iter().collect();
+		assert_eq!(got, vec!["new1", "new2"]);
+	}
+
+	#[test]
+	fn collect_headers_filters_and_preserves_multi_value() {
+		let mut headers = ::http::HeaderMap::new();
+		headers.insert("authorization", "secret".parse().unwrap());
+		headers.append("x-multi", "a".parse().unwrap());
+		headers.append("x-multi", "b".parse().unwrap());
+		headers.insert("x-drop", "1".parse().unwrap());
+
+		// Empty allow = send everything except disallowed.
+		let filter = HeaderFilter {
+			allowed: vec![],
+			disallowed: vec!["authorization".parse().unwrap()],
+		};
+		let out = collect_headers(&filter, &headers);
+		assert!(!out.iter().any(|h| h.key == "authorization"));
+		let multi: Vec<_> = out
+			.iter()
+			.filter(|h| h.key == "x-multi")
+			.map(|h| h.value.as_str())
+			.collect();
+		assert_eq!(multi, vec!["a", "b"]);
+
+		// Non-empty allow = send only listed (minus disallowed).
+		let filter = HeaderFilter {
+			allowed: vec!["x-multi".parse().unwrap(), "authorization".parse().unwrap()],
+			disallowed: vec!["authorization".parse().unwrap()],
+		};
+		let out = collect_headers(&filter, &headers);
+		let keys: HashSet<_> = out.iter().map(|h| h.key.clone()).collect();
+		assert_eq!(keys, HashSet::from(["x-multi".to_string()]));
+	}
+
+	#[test]
+	fn metadata_merge_creates_extension_and_accumulates() {
+		let mut ext = ::http::Extensions::new();
+		let first = struct_from_json(serde_json::json!({ "tenant": "acme", "tier": "gold" }));
+		merge_metadata_into_extensions("tools/call", "be", &first, &mut ext);
+		let second = struct_from_json(serde_json::json!({ "tier": "platinum", "extra": 1 }));
+		merge_metadata_into_extensions("tools/call", "be", &second, &mut ext);
+		let acc = ext
+			.get::<ExtMcpDynamicMetadata>()
+			.expect("extension created");
+		assert_eq!(acc.0.get("tenant").unwrap(), &serde_json::json!("acme"));
+		assert_eq!(acc.0.get("tier").unwrap(), &serde_json::json!("platinum"));
+		assert_eq!(acc.0.get("extra").unwrap(), &serde_json::json!(1.0));
 	}
 }
 
