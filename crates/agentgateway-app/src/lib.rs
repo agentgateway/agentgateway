@@ -8,6 +8,7 @@ use pprof_alloc::Allocator;
 
 mod commands;
 
+#[cfg(target_os = "linux")]
 #[global_allocator]
 static GLOBAL: pprof_alloc::PprofAlloc = pprof_alloc::PprofAlloc::new()
 	.with_default(pprof_alloc::Allocator::Jemalloc)

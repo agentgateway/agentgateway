@@ -80,7 +80,7 @@ else
 fi
 mkdir /out
 mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
-/out/agentgateway --version
+/out/agentgateway --version || exit 1
 # Fail if version is not set
 if /out/agentgateway --version | grep -q '"unknown"'; then
   exit 1
