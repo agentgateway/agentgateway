@@ -480,10 +480,11 @@ fn take_sender(req: &Request) -> Option<Sender<Message>> {
 		HAS_WATCHERS.store(false, Ordering::Release);
 		return None;
 	}
+	let executor = Executor::new_request(req);
 	let index = watchers
 		.iter()
 		.position(|watcher| match &watcher.expression {
-			Some(expression) => Executor::new_request(req).eval_bool(expression),
+			Some(expression) => executor.eval_bool(expression),
 			None => true,
 		})?;
 	let sender = watchers.remove(index).sender;
