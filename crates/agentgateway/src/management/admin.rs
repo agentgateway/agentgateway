@@ -285,7 +285,7 @@ pub async fn handle_debug_trace(req: Request<Incoming>) -> Response {
 			Err(err) => {
 				return plaintext_response(
 					hyper::StatusCode::BAD_REQUEST,
-					format!("invalid expression: {err}\n").into(),
+					format!("invalid expression: {err}\n"),
 				);
 			},
 		},
@@ -310,25 +310,21 @@ fn trace_sse_stream(
 	);
 	let events =
 		futures_util::stream::unfold((rx, keepalive), |(mut rx, mut keepalive)| async move {
-			loop {
-				tokio::select! {
-					msg = rx.next() => {
-						let Some(msg) = msg else {
-							return None;
-						};
-						let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
-							serde_json::json!({
-								"type": "serialization_error",
-								"error": e.to_string(),
-							})
-							.to_string()
-						});
-						return Some((Ok(Bytes::from(format!("data: {payload}\n\n"))), (rx, keepalive)));
-					},
-					_ = keepalive.tick() => {
-						return Some((Ok(Bytes::from_static(b": keepalive\n\n")), (rx, keepalive)));
-					},
-				}
+			tokio::select! {
+				msg = rx.next() => {
+					let msg = msg?;
+					let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+						serde_json::json!({
+							"type": "serialization_error",
+							"error": e.to_string(),
+						})
+						.to_string()
+					});
+					Some((Ok(Bytes::from(format!("data: {payload}\n\n"))), (rx, keepalive)))
+				},
+				_ = keepalive.tick() => {
+					Some((Ok(Bytes::from_static(b": keepalive\n\n")), (rx, keepalive)))
+				},
 			}
 		});
 	futures_util::stream::once(async { Ok(Bytes::from_static(b": ready\n\n")) }).chain(events)
