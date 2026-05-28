@@ -3318,7 +3318,8 @@ async fn mcp_extmcp_fail_closed_on_grpc_error() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert_eq!(
-		e.code.0, -32603,
+		e.code,
+		rmcp::model::ErrorCode::INTERNAL_ERROR,
 		"gRPC failure should map to internal error"
 	);
 	assert!(
@@ -3421,7 +3422,8 @@ async fn mcp_extmcp_protocol_violation_fails_closed() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert_eq!(
-		e.code.0, -32603,
+		e.code,
+		rmcp::model::ErrorCode::INTERNAL_ERROR,
 		"protocol violation should map to internal error"
 	);
 	assert!(

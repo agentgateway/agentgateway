@@ -275,13 +275,19 @@ fn struct_to_json(s: &Struct) -> Result<Value, serde_json::Error> {
 	serde_json::to_value(s)
 }
 
+// extMcp authorization outcomes that have no standard JSON-RPC/MCP code map to
+// application-defined codes in the server-error range (-32000..=-32099).
+// -32002 is intentionally skipped: rmcp assigns it to RESOURCE_NOT_FOUND.
+const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
+const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
+
 fn translate_error(e: AuthorizationError) -> ErrorData {
 	use wire::authorization_error::Code as C;
 	let code = match C::try_from(e.code).unwrap_or(C::Unknown) {
-		C::PermissionDenied => ErrorCode(-32001),
-		C::ResourceExhausted => ErrorCode(-32002),
-		C::Invalid => ErrorCode(-32600),
-		C::Unknown => ErrorCode(-32603),
+		C::PermissionDenied => PERMISSION_DENIED,
+		C::ResourceExhausted => RESOURCE_EXHAUSTED,
+		C::Invalid => ErrorCode::INVALID_REQUEST,
+		C::Unknown => ErrorCode::INTERNAL_ERROR,
 	};
 	let data = e
 		.mcp_error
@@ -301,7 +307,7 @@ fn on_grpc_error(
 	match remote.failure_mode {
 		FailureMode::Allow => Outcome::Pass,
 		FailureMode::Deny => Outcome::Reject(ErrorData::new(
-			ErrorCode(-32603),
+			ErrorCode::INTERNAL_ERROR,
 			format!("extMcp {rpc} failed: {}", status.message()),
 			None,
 		)),
@@ -313,8 +319,19 @@ fn on_protocol_violation(remote: &Remote, method: &str, backend: &str, reason: &
 	match remote.failure_mode {
 		FailureMode::Allow => Outcome::Pass,
 		FailureMode::Deny => Outcome::Reject(ErrorData::new(
-			ErrorCode(-32603),
+			ErrorCode::INTERNAL_ERROR,
 			format!("extMcp protocol violation: {reason}"),
+			None,
+		)),
+	}
+}
+
+fn fail_outcome(remote: &Remote) -> Outcome {
+	match remote.failure_mode {
+		FailureMode::Allow => Outcome::Pass,
+		FailureMode::Deny => Outcome::Reject(ErrorData::new(
+			ErrorCode::INTERNAL_ERROR,
+			"extMcp internal error".to_string(),
 			None,
 		)),
 	}
@@ -422,16 +439,5 @@ mod tests {
 		assert_eq!(acc.0.get("tenant").unwrap(), &serde_json::json!("acme"));
 		assert_eq!(acc.0.get("tier").unwrap(), &serde_json::json!("platinum"));
 		assert_eq!(acc.0.get("extra").unwrap(), &serde_json::json!(1.0));
-	}
-}
-
-fn fail_outcome(remote: &Remote) -> Outcome {
-	match remote.failure_mode {
-		FailureMode::Allow => Outcome::Pass,
-		FailureMode::Deny => Outcome::Reject(ErrorData::new(
-			ErrorCode(-32603),
-			"extMcp internal error".to_string(),
-			None,
-		)),
 	}
 }
