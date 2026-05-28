@@ -4779,7 +4779,8 @@ dependencies = [
 [[package]]
 name = "pprof-alloc"
 version = "0.4.0"
-source = "git+https://github.com/howardjohn/pprof-alloc?rev=07e991cf5ad227d52f92463c0b68f737c6d88ecf#07e991cf5ad227d52f92463c0b68f737c6d88ecf"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a3532cd9e778313972a5649e9f661066fb4de2487048cebab216b684289e678"
 dependencies = [
  "ahash",
  "anyhow",
