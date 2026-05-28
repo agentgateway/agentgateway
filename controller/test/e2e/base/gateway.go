@@ -203,7 +203,8 @@ func (g *Gateway) SendWithResponse(t test.Failer, match *matchers.HttpResponse, 
 	t.Helper()
 
 	address := g.ResolvedAddress()
-	fullOpts := append(GatewayAddressOptions(address), opts...)
+	fullOpts := append(GatewayAddressOptions(address), curl.WithTimeout(30*time.Second))
+	fullOpts = append(fullOpts, opts...)
 	var passedRes http.Response
 	start := time.Now()
 	attempts := 0

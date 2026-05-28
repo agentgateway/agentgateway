@@ -231,8 +231,9 @@ func curlPostOptions(path string, headers map[string]string, body string) []curl
 func execCurl(t base.Test, path string, headers map[string]string, body string) (*http.Response, string, error) {
 	opts := append(
 		base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
-		curlPostOptions(path, headers, body)...,
+		curl.WithTimeout(30*time.Second),
 	)
+	opts = append(opts, curlPostOptions(path, headers, body)...)
 	resp, err := curl.ExecuteRequest(opts...)
 	if err != nil {
 		return nil, "", err
