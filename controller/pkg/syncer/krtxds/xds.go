@@ -1280,6 +1280,35 @@ func (pr *PushRequest) Merge(other *PushRequest) *PushRequest {
 	return pr
 }
 
+// CopyMerge merges two update requests without mutating either input. This should be used after
+// a PushRequest has been fanned out and may be shared by multiple proxy queues or push goroutines.
+func (pr *PushRequest) CopyMerge(other *PushRequest) *PushRequest {
+	if pr == nil {
+		return other
+	}
+	if other == nil {
+		return pr
+	}
+
+	merged := *pr
+	if pr.ConfigsUpdated == nil && other.ConfigsUpdated == nil {
+		return &merged
+	}
+	merged.ConfigsUpdated = make(map[TypeUrl]sets.String, len(pr.ConfigsUpdated)+len(other.ConfigsUpdated))
+	for k, v := range pr.ConfigsUpdated {
+		merged.ConfigsUpdated[k] = v.Copy()
+	}
+	for k, v := range other.ConfigsUpdated {
+		if existing, found := merged.ConfigsUpdated[k]; found {
+			merged.ConfigsUpdated[k] = existing.Merge(v)
+		} else {
+			merged.ConfigsUpdated[k] = v.Copy()
+		}
+	}
+
+	return &merged
+}
+
 // Event represents a config or registry event that results in a push.
 type Event struct {
 	// PushRequest PushRequest to use for the push.
