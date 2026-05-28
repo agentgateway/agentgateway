@@ -46,7 +46,7 @@ pub enum Mode {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(::cel::DynamicType)]
 pub struct Claims {
-	#[dynamic(with_value = "redact_key")]
+	#[dynamic(with_value = "api_key_to_value")]
 	pub key: APIKey,
 	#[serde(default, flatten)]
 	#[dynamic(flatten)]
@@ -59,14 +59,15 @@ pub struct APIKey(
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
 	SecretString,
 );
-pub fn redact_key<'a>(_: &'a APIKey) -> Value<'a> {
-	Value::String("<redacted>".into())
-}
 
 impl APIKey {
 	pub fn new(s: impl Into<Box<str>>) -> Self {
 		APIKey(SecretString::new(s.into()))
 	}
+}
+
+pub fn api_key_to_value<'a>(key: &'a APIKey) -> Value<'a> {
+	crate::cel::secret_string_to_value(&key.0)
 }
 
 type UserMetadata = serde_json::Value;

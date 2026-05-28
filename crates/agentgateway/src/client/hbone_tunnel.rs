@@ -43,6 +43,7 @@ fn apply_hbone_headers(req: &mut ::http::Request<()>, headers: &HboneHeaders, in
 pub async fn handshake(
 	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	ep: SocketAddr,
+	hbone_port: u16,
 	identities: Vec<Identity>,
 	headers: HboneHeaders,
 ) -> Result<Socket, Error> {
@@ -63,7 +64,7 @@ pub async fn handshake(
 
 	let pool_key = Box::new(WorkloadKey {
 		dst_id: identities,
-		dst: SocketAddr::from((ep.ip(), 15008)),
+		dst: SocketAddr::from((ep.ip(), hbone_port)),
 	});
 
 	let upgraded = Box::pin(hbone_pool.send_request_pooled(&pool_key, req))

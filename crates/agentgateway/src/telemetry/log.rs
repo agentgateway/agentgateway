@@ -19,10 +19,8 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::trace::{
-	Span, SpanBuilder, SpanContext, SpanKind, TraceContextExt as _, TraceState, Tracer,
-};
-use opentelemetry::{Context as OtelContext, Key, KeyValue, TraceFlags};
+use opentelemetry::trace::SpanKind;
+use opentelemetry::{Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
@@ -646,11 +644,14 @@ impl RequestLog {
 		SpanWriter { inner }
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
+		// Early return if there is no tracer enabled at all
+		self.tracer.as_ref()?;
 		let tp = self.outgoing_span.clone()?;
-		let tc = self.tracer.clone()?;
+		if !tp.is_sampled() {
+			return None;
+		}
 
 		Some(SpanWriterInner {
-			tracer: tc,
 			parent: tp,
 			inner: self.trace_spans.clone(),
 		})
@@ -673,7 +674,7 @@ pub struct RequestLog {
 	pub tracer: Option<std::sync::Arc<trc::Tracer>>,
 	/// Additional spans created during the request (e.g. upstream call spans).
 	/// These are flushed on drop when tracing is enabled.
-	pub trace_spans: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	pub trace_spans: Arc<Mutex<Vec<BufferedSpan>>>,
 
 	// Set only if OTLP logging is configured
 	pub otel_logger: Option<std::sync::Arc<OtelAccessLogger>>,
@@ -1124,9 +1125,11 @@ impl Drop for DropOnLog {
 			t.send(&log, &end_time, &cel_exec, kv.as_slice());
 			// Flush any buffered spans created during request processing.
 			// Does best effort, if the lock is poisoned, skip flushing.
-			if let Ok(mut spans) = log.trace_spans.lock() {
-				for (sb, context) in spans.drain(..) {
-					sb.start_with_context(t.tracer.as_ref(), &context).end();
+			if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
+				&& let Ok(mut spans) = log.trace_spans.lock()
+			{
+				for buffered_span in spans.drain(..) {
+					t.processor.emit(buffered_span.into_span_data());
 				}
 			}
 		};
@@ -1296,7 +1299,7 @@ impl opentelemetry_sdk::logs::LogExporter for PolicyGrpcLogExporter {
 		let mut client = self.tonic_client.clone();
 		let resource: opentelemetry_proto::transform::common::tonic::ResourceAttributesWithSchema =
 			(&self.resource).into();
-		let resource_logs = group_logs_by_resource_and_scope(batch, &resource);
+		let resource_logs = group_logs_by_resource_and_scope(&batch, &resource);
 		let handle = self.runtime.clone();
 
 		async move {
@@ -1485,7 +1488,7 @@ pub struct SpanWriter {
 
 impl SpanWriter {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
-		match self.inner.clone() {
+		match &self.inner {
 			Some(i) => i.start(name),
 			None => SpanWriteOnDrop::default(),
 		}
@@ -1495,90 +1498,85 @@ impl SpanWriter {
 #[derive(Debug, Clone)]
 pub struct SpanWriterInner {
 	parent: trc::TraceParent,
-	tracer: Arc<trc::Tracer>,
-	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	inner: Arc<Mutex<Vec<BufferedSpan>>>,
 }
 
 impl SpanWriterInner {
-	fn parent_context(&self) -> OtelContext {
-		let parent = SpanContext::new(
-			self.parent.trace_id.into(),
-			self.parent.span_id.into(),
-			TraceFlags::new(self.parent.flags),
-			true,
-			TraceState::default(),
-		);
-		OtelContext::new().with_remote_span_context(parent)
-	}
-
-	#[allow(unused)]
-	pub fn write(
-		&self,
-		name: impl Into<Cow<'static, str>>,
-		f: impl FnOnce(SpanBuilder) -> SpanBuilder,
-	) {
-		// Create a unique child span ID for this recorded span.
-		let child = self.parent.new_span();
-		let mut sb = self
-			.tracer
-			.tracer
-			.span_builder(name)
-			.with_kind(SpanKind::Server)
-			.with_trace_id(child.trace_id.into())
-			.with_span_id(child.span_id.into());
-
-		sb = f(sb);
-		// Capture end time at write time so it measures the intended operation duration.
-		sb = sb.with_end_time(SystemTime::now());
-
-		// Store for later flush when the request log is finalized.
-		if let Ok(mut spans) = self.inner.lock() {
-			spans.push((sb, self.parent_context()));
-		}
-	}
-
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
-		let sb = self
-			.tracer
-			.tracer
-			.span_builder(name)
-			.with_kind(SpanKind::Server)
-			.with_trace_id(child.trace_id.into())
-			.with_span_id(child.span_id.into())
-			.with_start_time(SystemTime::now());
 
 		SpanWriteOnDrop {
-			sb: Some(sb),
-			context: self.parent_context(),
+			name: Some(name.into()),
+			start_time: Some(SystemTime::now()),
 			inner: self.inner.clone(),
+			parent: Some(self.parent.clone()),
+			span: Some(child),
 		}
 	}
 }
 
 #[derive(Default)]
 pub struct SpanWriteOnDrop {
-	sb: Option<SpanBuilder>,
-	context: OtelContext,
-	inner: Arc<Mutex<Vec<(SpanBuilder, OtelContext)>>>,
+	name: Option<Cow<'static, str>>,
+	start_time: Option<SystemTime>,
+	inner: Arc<Mutex<Vec<BufferedSpan>>>,
+	parent: Option<trc::TraceParent>,
+	span: Option<trc::TraceParent>,
 }
 impl SpanWriteOnDrop {
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
-		if let Some(sb) = self.sb.as_mut() {
-			sb.name = name.into();
+		if self.parent.is_some() {
+			self.name = Some(name.into());
 		}
 	}
 }
 impl Drop for SpanWriteOnDrop {
 	fn drop(&mut self) {
-		let Some(mut sb) = self.sb.take() else { return };
-		sb = sb.with_end_time(SystemTime::now());
+		let (Some(name), Some(parent), Some(span)) =
+			(self.name.take(), self.parent.take(), self.span.take())
+		else {
+			return;
+		};
+		let end_time = SystemTime::now();
 
 		// Store for later flush when the request log is finalized.
 		if let Ok(mut spans) = self.inner.lock() {
-			spans.push((sb, self.context.clone()));
+			spans.push(BufferedSpan {
+				name,
+				span_kind: SpanKind::Server,
+				start_time: self.start_time.unwrap_or(end_time),
+				end_time,
+				attributes: Vec::new(),
+				parent,
+				span,
+			});
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct BufferedSpan {
+	name: Cow<'static, str>,
+	span_kind: SpanKind,
+	start_time: SystemTime,
+	end_time: SystemTime,
+	attributes: Vec<KeyValue>,
+	parent: trc::TraceParent,
+	span: trc::TraceParent,
+}
+
+impl BufferedSpan {
+	fn into_span_data(self) -> opentelemetry_sdk::trace::SpanData {
+		trc::trace_span_data(
+			self.name,
+			self.span_kind,
+			&self.span,
+			Some(&self.parent),
+			self.start_time,
+			self.end_time,
+			self.attributes,
+		)
 	}
 }
 
@@ -1589,7 +1587,7 @@ mod tests {
 	use std::sync::{Arc, Mutex};
 	use std::time::Instant;
 
-	use opentelemetry::trace::{SpanKind, TracerProvider};
+	use opentelemetry::trace::SpanKind;
 	use opentelemetry_sdk::error::OTelSdkResult;
 	use opentelemetry_sdk::trace::{SimpleSpanProcessor, SpanData, SpanExporter};
 	use prometheus_client::registry::Registry;
@@ -1622,14 +1620,14 @@ mod tests {
 
 	fn test_tracer() -> (Arc<trc::Tracer>, RecordingSpanExporter) {
 		let exporter = RecordingSpanExporter::default();
+		let processor = trc::SharedSpanProcessor::new(SimpleSpanProcessor::new(exporter.clone()));
 		let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-			.with_span_processor(SimpleSpanProcessor::new(exporter.clone()))
+			.with_span_processor(processor.clone())
 			.build();
-		let tracer = provider.tracer("test-tracer");
 		(
 			Arc::new(trc::Tracer {
-				tracer: Arc::new(tracer),
 				provider,
+				processor,
 				fields: Arc::new(LoggingFields::default()),
 			}),
 			exporter,
@@ -1686,5 +1684,26 @@ mod tests {
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
 		assert!(child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_noops_for_unsampled_outgoing_span() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 0;
+		request.outgoing_span = Some(outgoing);
+
+		{
+			let mut span = request.span_writer().start("buffered child span");
+			span.rename_span("renamed child span");
+		}
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		assert!(exporter.finished_spans().is_empty());
 	}
 }

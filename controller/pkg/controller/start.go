@@ -292,6 +292,9 @@ func GetDefaultClassInfo(
 	}
 	applyGatewayClassParametersRef(classInfos[agwClassName], agwClassName, refOverrides)
 	maps.Copy(classInfos, additionalClassInfos)
+	for name, info := range additionalClassInfos {
+		applyGatewayClassParametersRef(info, name, refOverrides)
+	}
 	return classInfos
 }
 

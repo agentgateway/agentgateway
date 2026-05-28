@@ -1,9 +1,16 @@
 package trace
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestNormalizeTraceRequestStateBodies(t *testing.T) {
@@ -49,6 +56,27 @@ func TestNormalizeTraceRequestStateBodies(t *testing.T) {
 				t.Fatalf("got %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunRawFromTraceFile(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"INFO","message":{"type":"event","message":"hello"}}`
+	filename := filepath.Join(t.TempDir(), "trace.jsonl")
+	if err := os.WriteFile(filename, []byte(line+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err := run(cmd, &traceFlags{traceFile: filename, raw: true}, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != line+"\n" {
+		t.Fatalf("got %q, want %q", got, line+"\n")
 	}
 }
 
@@ -127,5 +155,45 @@ func TestNormalizeTraceEventRequestStateBodiesOnlyTouchesMessageRequestState(t *
 	gotTopLevel := value["requestState"].(map[string]any)["request"].(map[string]any)["body"]
 	if gotTopLevel != encoded {
 		t.Fatalf("got top-level requestState.request.body %#v, want unchanged base64", gotTopLevel)
+	}
+}
+
+func TestSnapshotJSONPrettyPrints(t *testing.T) {
+	got := snapshotJSON([]byte(`{"request":{"body":"eyJoZWxsbyI6IndvcmxkIn0="},"empty":null}`))
+
+	if strings.Contains(got, `"empty"`) {
+		t.Fatalf("got %s, want nil top-level fields omitted", got)
+	}
+	if !strings.Contains(got, "\n  ") {
+		t.Fatalf("got %s, want pretty-printed JSON", got)
+	}
+	if !strings.Contains(got, `"body": {`) || !strings.Contains(got, `"hello": "world"`) {
+		t.Fatalf("got %s, want normalized JSON body", got)
+	}
+}
+
+func TestEventJSONPrettyPrints(t *testing.T) {
+	got := eventJSON(`{"message":{"requestState":{"request":{"body":"aGVsbG8="}}}}`)
+
+	if !strings.Contains(got, "\n  ") {
+		t.Fatalf("got %s, want pretty-printed JSON", got)
+	}
+	if !strings.Contains(got, `"body": "hello"`) {
+		t.Fatalf("got %s, want normalized request body", got)
+	}
+}
+
+func TestHighlightJSON(t *testing.T) {
+	got := highlightJSON("{\n  \"name\": \"agentgateway\",\n  \"count\": 2,\n  \"enabled\": true,\n  \"missing\": null\n}")
+
+	for _, want := range []string{
+		`[teal]"name"[-]: [green]"agentgateway",[-]`,
+		`[teal]"count"[-]: [yellow]2,[-]`,
+		`[teal]"enabled"[-]: [yellow]true,[-]`,
+		`[teal]"missing"[-]: [gray]null[-]`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("got %s, want highlighted fragment %s", got, want)
+		}
 	}
 }

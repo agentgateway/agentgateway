@@ -43,6 +43,9 @@ impl Provider {
 		model: &str,
 	) -> Strng {
 		let model = self.model.as_deref().unwrap_or(model);
+		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
+			&percent_encoding::CONTROLS.add(b'/').add(b'%');
+		let model = percent_encoding::utf8_percent_encode(model, MODEL_SEGMENT);
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),

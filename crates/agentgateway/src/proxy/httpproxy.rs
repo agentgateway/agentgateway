@@ -336,7 +336,6 @@ async fn apply_gateway_policies(
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
 		.await?;
-	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
 	policies
 		.jwt
@@ -1367,6 +1366,7 @@ pub async fn build_transport(
 			if ca.get_identity().await.is_ok() {
 				Transport::Hbone(
 					app_transport,
+					backend_call.hbone_port,
 					idents.clone(),
 					build_hbone_headers(inputs, hbone_source),
 				)
@@ -1451,6 +1451,18 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
+	let host = http::get_host(req)?;
+	let port = req
+		.uri()
+		.port_u16()
+		.unwrap_or_else(|| match req.uri().scheme() {
+			Some(s) if *s == Scheme::HTTPS => 443,
+			_ => 80,
+		});
+	Ok(Target::from((host, port)))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
@@ -1524,7 +1536,7 @@ async fn make_backend_call(
 		inference_failed_open: inference_result.failed_open,
 	};
 
-	let backend_call = match backend {
+	let mut backend_call = match backend {
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
@@ -1562,6 +1574,7 @@ async fn make_backend_call(
 				backend_policies: effective_policies,
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 			}
@@ -1589,6 +1602,7 @@ async fn make_backend_call(
 			target: target.clone(),
 			http_version_override: None,
 			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			network_gateway: None,
 			waypoint: None,
 			backend_policies: policies,
@@ -1619,24 +1633,20 @@ async fn make_backend_call(
 				backend_policies: default_policies.merge(policies),
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 			}
 		},
 		Backend::Dynamic(_, _) => {
-			let host = http::get_host(&req)?;
-			let port = req
-				.uri()
-				.port_u16()
-				.unwrap_or_else(|| match req.uri().scheme() {
-					Some(s) if *s == Scheme::HTTPS => 443,
-					_ => 80,
-				});
-			let target = Target::from((host, port));
+			// Use a preliminary target from the current request URI.
+			// This will be re-resolved after transformations are applied,
+			// so that policies like `:authority` overrides take effect.
 			BackendCall {
-				target,
+				target: target_from_request(&req)?,
 				http_version_override: None,
 				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 				network_gateway: None,
 				waypoint: None,
 				backend_policies: policies,
@@ -1680,6 +1690,13 @@ async fn make_backend_call(
 	)
 	.await?;
 
+	// For Dynamic backends, re-resolve the target from the (now potentially transformed)
+	// request URI. This allows policies like `:authority` overrides (e.g., VPC endpoint
+	// routing) to take effect on the actual upstream connection target.
+	if matches!(backend, Backend::Dynamic(_, _)) {
+		backend_call.target = target_from_request(&req)?;
+	}
+
 	log.add(|l| {
 		l.endpoint = Some(backend_call.target.clone());
 	});
@@ -1709,6 +1726,10 @@ async fn make_backend_call(
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings
 				| RouteType::Detect => {
+					let request_body_limit = crate::http::buffer_limit(&req);
+					let req = req.map(|b| {
+						dtrace::TracingBody::maybe_wrap("llm request before translation", b, request_body_limit)
+					});
 					let r = match route_type {
 						RouteType::Completions => Box::pin(llm.provider.process_completions_request(
 							&backend_info,
@@ -1877,6 +1898,8 @@ async fn make_backend_call(
 	)
 	.await?;
 	dtrace::snapshot!(Request, "final request", &req);
+	let request_body_limit = crate::http::buffer_limit(&req);
+	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
 	let call = client::Call {
 		req,
 		target: backend_call.target,
@@ -1942,6 +1965,8 @@ async fn make_backend_call(
 	if let Some(log) = log.as_ref() {
 		dtrace::snapshot!(Response, "backend response ready", log, &resp);
 	}
+	let response_body_limit = crate::http::response_buffer_limit(&resp);
+	let resp = resp.map(|b| dtrace::TracingBody::maybe_wrap("response", b, response_body_limit));
 	Ok(resp)
 }
 
@@ -1984,13 +2009,15 @@ pub fn build_service_call(
 			target: Target::Address(destination),
 			http_version_override,
 			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			network_gateway: None,
 			waypoint: None,
 			backend_policies,
 		});
 	}
 
-	let workloads = &inputs.stores.read_discovery().workloads;
+	let discovery = inputs.stores.read_discovery();
+	let workloads = &discovery.workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
 		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
@@ -2010,33 +2037,78 @@ pub fn build_service_call(
 	// Check if we need double hbone (workload on remote network with gateway)
 	let network_gateway = if wl.network != inputs.cfg.network {
 		if let Some(gw_addr) = &wl.network_gateway {
-			// Look up the gateway workload to get its identity
-			let gateway_workload = match &gw_addr.destination {
+			match &gw_addr.destination {
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => {
-					workloads.find_address(net_addr)
+					if let Some(gw_wl) = workloads.find_address(net_addr) {
+						let resolved_gw_addr = gw_addr.clone();
+						tracing::debug!(
+							source_network = %inputs.cfg.network,
+							dest_network = %wl.network,
+							gateway = ?resolved_gw_addr,
+							"picked workload on remote network, using double hbone"
+						);
+						Some((resolved_gw_addr, gw_wl.identity()))
+					} else {
+						tracing::warn!(
+							gateway_address = ?net_addr,
+							"network gateway address not found in workload store for remote workload"
+						);
+						None
+					}
 				},
-				types::discovery::gatewayaddress::Destination::Hostname(_hostname) => {
-					// TODO: Implement hostname resolution for gateway
-					// For now, we don't support hostname-based gateways
-					tracing::warn!("hostname-based network gateways not yet supported");
-					None
+				types::discovery::gatewayaddress::Destination::Hostname(hostname) => {
+					// TODO we could support looking up workloads by hostname too
+					let resolved = discovery
+						.services
+						.get_by_namespaced_host(&NamespacedHostname {
+							namespace: hostname.namespace.clone(),
+							hostname: hostname.hostname.clone(),
+						})
+						.and_then(|gw_svc| {
+							let (gw_ep, _gw_handle, gw_wl) = gw_svc.endpoints.select_endpoint(
+								&discovery.workloads,
+								gw_svc.as_ref(),
+								gw_addr.hbone_mtls_port,
+								None,
+							)?;
+							let resolved_port = select_service_target_port(
+								gw_ep.as_ref(),
+								gw_svc.as_ref(),
+								gw_addr.hbone_mtls_port,
+								None,
+								false,
+							)?;
+							let ip = *gw_wl.workload_ips.first()?;
+							Some((
+								GatewayAddress {
+									destination: types::discovery::gatewayaddress::Destination::Address(
+										NetworkAddress {
+											network: gw_wl.network.clone(),
+											address: ip,
+										},
+									),
+									hbone_mtls_port: resolved_port,
+								},
+								gw_wl.identity(),
+							))
+						});
+					if let Some((resolved_gw_addr, gw_identity)) = resolved {
+						tracing::debug!(
+							source_network = %inputs.cfg.network,
+							dest_network = %wl.network,
+							gateway = ?resolved_gw_addr,
+							"picked workload on remote network, using double hbone"
+						);
+						// TODO:wire the gw_handle through to handshake_double to track per-conn health/latency
+						Some((resolved_gw_addr, gw_identity))
+					} else {
+						tracing::warn!(
+							gateway_hostname = ?hostname,
+							"no service / endpoint / IP for hostname-based network gateway"
+						);
+						None
+					}
 				},
-			};
-
-			if let Some(gw_wl) = gateway_workload {
-				tracing::debug!(
-					source_network = % inputs.cfg.network,
-					dest_network = % wl.network,
-					gateway = ? gw_addr,
-					"picked workload on remote network, using double hbone"
-				);
-				Some((gw_addr.clone(), gw_wl.identity()))
-			} else {
-				tracing::warn!(
-					"network gateway {:?} not found for remote workload",
-					gw_addr
-				);
-				None
 			}
 		} else {
 			tracing::warn ! (
@@ -2056,7 +2128,6 @@ pub fn build_service_call(
 	// ingress gateways, never waypoint-to-waypoint traffic.
 	let waypoint = if svc.ingress_use_waypoint && hbone_source != Some(HboneSourceRole::Waypoint) {
 		if let Some(wp) = &svc.waypoint {
-			let discovery = inputs.stores.read_discovery();
 			let wp_ip = match &wp.destination {
 				types::discovery::gatewayaddress::Destination::Address(net_addr) => Some(net_addr.address),
 				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
@@ -2099,7 +2170,6 @@ pub fn build_service_call(
 				};
 				identity.map(|id| (ip, id))
 			});
-			drop(discovery);
 			match waypoint_info {
 				Some((ip, identity)) => {
 					let wp_port = if wp.hbone_mtls_port > 0 {
@@ -2162,10 +2232,17 @@ pub fn build_service_call(
 		}
 	};
 
+	let hbone_port = if wl.hbone_mtls_port > 0 {
+		wl.hbone_mtls_port
+	} else {
+		agent_hbone::DEFAULT_HBONE_PORT
+	};
+
 	Ok(BackendCall {
 		target,
 		http_version_override,
 		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
+		hbone_port,
 		network_gateway,
 		waypoint,
 		backend_policies,
@@ -2571,28 +2648,26 @@ fn sensitive_headers(req: &mut Request) {
 // the rest of the code doesn't need to worry about it
 fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
-	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version()
-		&& req.uri().authority().is_none()
-	{
-		let mut parts = std::mem::take(req.uri_mut()).into_parts();
-		// TODO: handle absolute HTTP/1.1 form
-		let host = req
-			.headers_mut()
-			.remove(http::header::HOST)
-			// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
-			.and_then(|h| Authority::try_from(h.as_bytes()).ok())
-			.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
+	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version() {
+		let host = req.headers_mut().remove(http::header::HOST);
+		if req.uri().authority().is_none() {
+			let mut parts = std::mem::take(req.uri_mut()).into_parts();
+			let host = host
+				// TODO(https://github.com/hyperium/http/pull/811) actually make this shared
+				.and_then(|h| Authority::try_from(h.as_bytes()).ok())
+				.ok_or_else(|| anyhow::anyhow!("no authority or host"))?;
 
-		parts.authority = Some(host);
-		if parts.path_and_query.is_some() {
-			// TODO: or always do this?
-			if tls.is_some() {
-				parts.scheme = Some(Scheme::HTTPS);
-			} else {
-				parts.scheme = Some(Scheme::HTTP);
+			parts.authority = Some(host);
+			if parts.path_and_query.is_some() {
+				// TODO: or always do this?
+				if tls.is_some() {
+					parts.scheme = Some(Scheme::HTTPS);
+				} else {
+					parts.scheme = Some(Scheme::HTTP);
+				}
 			}
+			*req.uri_mut() = Uri::from_parts(parts)?
 		}
-		*req.uri_mut() = Uri::from_parts(parts)?
 	}
 	debug!("request after normalization: {req:?}");
 	Ok(())
@@ -2623,6 +2698,7 @@ pub struct BackendCall {
 	pub target: Target,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
+	pub hbone_port: u16,
 	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
 	pub waypoint: Option<WaypointTarget>,                    // For ingress waypoint routing
 	pub backend_policies: BackendPolicies,
@@ -2797,10 +2873,9 @@ impl PolicyClient {
 	pub async fn call_with_explicit_policies_list(
 		&self,
 		req: Request,
-		backend: SimpleBackend,
+		backend: Backend,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Result<Response, ProxyError> {
-		let backend = Backend::from(backend);
 		let pols = self
 			.inputs
 			.stores

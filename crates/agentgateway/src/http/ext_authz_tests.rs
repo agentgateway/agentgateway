@@ -1,6 +1,8 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
-use ::http::HeaderMap;
+use ::http::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::http::HeaderOrPseudo;
 use crate::http::ext_authz::proto::{
@@ -18,6 +20,8 @@ impl Default for ExtAuthz {
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
+			cache: None,
+			cache_store: super::default_cache_store(),
 			protocol: http::ext_authz::Protocol::Grpc {
 				context: None,
 				metadata: None,
@@ -171,6 +175,318 @@ fn test_process_headers_request_append_action() {
 	assert_eq!(append_values.len(), 2);
 	assert_eq!(append_values[0], "value1");
 	assert_eq!(append_values[1], "value2");
+}
+
+#[test]
+fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![
+				Arc::new(cel::Expression::new_strict(r#"request.headers["authorization"]"#).unwrap()),
+				Arc::new(cel::Expression::new_strict("request.path").unwrap()),
+			],
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
+			max_entries: super::default_cache_entries(),
+		}),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin?debug=true")
+		.header("authorization", "Bearer token")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let key = extauthz.cache_key(&req).unwrap();
+
+	assert_eq!(
+		key.0,
+		vec![
+			super::CacheKeyValue::String(Arc::from("Bearer token")),
+			super::CacheKeyValue::String(Arc::from("/admin")),
+		]
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_store_uses_configured_capacity() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![Arc::new(
+				cel::Expression::new_strict("request.path").unwrap(),
+			)],
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
+			max_entries: 7,
+		}),
+		..Default::default()
+	}
+	.with_configured_cache_store();
+
+	assert_eq!(extauthz.cache_store.capacity(), 7);
+}
+
+#[test]
+fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
+	let extauthz = ExtAuthz {
+		cache: Some(super::CacheConfig {
+			key: vec![Arc::new(
+				cel::Expression::new_strict("request.path").unwrap(),
+			)],
+			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
+			max_entries: 0,
+		}),
+		..Default::default()
+	}
+	.with_configured_cache_store();
+
+	assert_eq!(
+		extauthz.cache_store.capacity(),
+		super::default_cache_store().capacity()
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_refresh_threshold_scales_and_caps() {
+	assert_eq!(
+		super::cache_refresh_threshold(Duration::from_secs(10)),
+		Duration::from_secs(1)
+	);
+	assert_eq!(
+		super::cache_refresh_threshold(Duration::from_secs(1)),
+		Duration::from_millis(100)
+	);
+	assert_eq!(
+		super::cache_refresh_threshold(Duration::from_secs(365 * 24 * 60 * 60)),
+		Duration::from_secs(5)
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_lookup_hits_outside_refresh_window() {
+	let cached = test_cached_grpc_response(Duration::from_secs(5), Duration::from_secs(10));
+
+	let lookup = cached.lookup(Instant::now());
+
+	assert_eq!(lookup, super::CacheLookup::Hit);
+	assert!(!cached.refreshing.load(Ordering::Acquire));
+}
+
+#[test]
+fn test_ext_authz_cache_lookup_refreshes_once_near_expiry() {
+	let cached = test_cached_grpc_response(Duration::from_millis(50), Duration::from_secs(1));
+
+	let lookup = cached.lookup(Instant::now());
+	assert_eq!(lookup, super::CacheLookup::Refresh);
+	assert!(cached.refreshing.load(Ordering::Acquire));
+
+	let lookup = cached.lookup(Instant::now());
+	assert_eq!(lookup, super::CacheLookup::Hit);
+}
+
+#[test]
+fn test_ext_authz_cache_lookup_misses_expired_entry() {
+	let cached = test_cached_grpc_response(Duration::ZERO, Duration::from_secs(1));
+
+	let lookup = cached.lookup(Instant::now() + Duration::from_millis(1));
+
+	assert_eq!(
+		lookup,
+		super::CacheLookup::Miss(super::CacheMissReason::ExpiredEntry)
+	);
+}
+
+fn test_cached_grpc_response(
+	expires_in: Duration,
+	original_ttl: Duration,
+) -> super::CachedGrpcResponse {
+	super::CachedGrpcResponse {
+		expires_at: Instant::now() + expires_in,
+		original_ttl,
+		refreshing: Arc::new(AtomicBool::new(false)),
+		response: super::CachedGrpcPolicyResponse::DenyWithoutResponse {
+			dynamic_metadata: None,
+		},
+	}
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_evaluates_duration() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict(r#"duration("42s")"#).unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(
+		extauthz.cache_ttl(&req, &cache),
+		Some(std::time::Duration::from_secs(42))
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_evaluates_unix_epoch_number() {
+	let extauthz = ExtAuthz::default();
+	let expires_at = chrono::Utc::now().timestamp() + 42;
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict(expires_at.to_string()).unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let ttl = extauthz.cache_ttl(&req, &cache).unwrap();
+
+	assert!(ttl <= std::time::Duration::from_secs(42));
+	assert!(ttl > std::time::Duration::from_secs(30));
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_skips_past_unix_epoch_number() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict("1").unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(extauthz.cache_ttl(&req, &cache), None);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_evaluates_after_response_is_applied() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(
+			cel::Expression::new_strict(r#"duration(request.headers["x-cache-ttl"])"#).unwrap(),
+		),
+		max_entries: super::default_cache_entries(),
+	};
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedGrpcPolicyResponse::Allow {
+		headers: vec![HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-cache-ttl".to_string(),
+				value: "17s".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		}],
+		headers_to_remove: Vec::new(),
+		response_headers: None,
+		query_parameters_to_set: Vec::new(),
+		query_parameters_to_remove: Vec::new(),
+		dynamic_metadata: None,
+	};
+
+	let _ = cached.apply(&mut req).unwrap();
+
+	assert_eq!(
+		extauthz.cache_ttl(&req, &cache),
+		Some(std::time::Duration::from_secs(17))
+	);
+}
+
+#[test]
+fn test_ext_authz_cache_ttl_skips_invalid_type() {
+	let extauthz = ExtAuthz::default();
+	let cache = super::CacheConfig {
+		key: vec![Arc::new(
+			cel::Expression::new_strict("request.path").unwrap(),
+		)],
+		ttl: Arc::new(cel::Expression::new_strict("request.path").unwrap()),
+		max_entries: super::default_cache_entries(),
+	};
+	let req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(extauthz.cache_ttl(&req, &cache), None);
+}
+
+#[test]
+fn test_cached_grpc_allow_replays_request_and_response_mutations() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin?old=true")
+		.header("x-remove", "remove-me")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedGrpcPolicyResponse::Allow {
+		headers: vec![HeaderValueOption {
+			header: Some(ProtoHeaderValue {
+				key: "x-allowed".to_string(),
+				value: "yes".to_string(),
+				raw_value: vec![],
+			}),
+			append: Some(false),
+			append_action: 0,
+		}],
+		headers_to_remove: vec!["x-remove".to_string()],
+		response_headers: Some(HeaderMap::from_iter([(
+			HeaderName::from_static("x-response"),
+			HeaderValue::from_static("cached"),
+		)])),
+		query_parameters_to_set: vec![QueryParameter {
+			key: "new".to_string(),
+			value: "true".to_string(),
+		}],
+		query_parameters_to_remove: vec!["old".to_string()],
+		dynamic_metadata: Some(serde_json::Map::from_iter([(
+			"subject".to_string(),
+			serde_json::Value::String("alice".to_string()),
+		)])),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	assert!(req.headers().get("x-remove").is_none());
+	assert_eq!(req.headers().get("x-allowed").unwrap(), "yes");
+	assert_eq!(
+		req.uri().path_and_query().unwrap().as_str(),
+		"/admin?new=true"
+	);
+	assert_eq!(
+		response
+			.response_headers
+			.unwrap()
+			.get("x-response")
+			.unwrap(),
+		"cached"
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<ExtAuthzDynamicMetadata>()
+			.unwrap()
+			.0
+			.get("subject")
+			.unwrap(),
+		"alice"
+	);
 }
 
 #[test]
@@ -467,6 +783,26 @@ fn test_include_request_headers_empty_includes_all() {
 	assert_eq!(headers.get("content-type").unwrap(), "application/json");
 	assert_eq!(headers.get("x-custom").unwrap(), "v1, v2");
 	assert_eq!(headers.get("cookie").unwrap(), "a=1; b=2");
+}
+
+#[test]
+fn test_get_header_values_sanitizes_non_utf8_values() {
+	use ::http::{HeaderName, HeaderValue, Request};
+
+	let mut req = Request::builder().body(http::Body::empty()).unwrap();
+	req.headers_mut().append(
+		"x-raw",
+		HeaderValue::from_bytes(b"ok-\xff").expect("obs-text should be accepted"),
+	);
+	req
+		.headers_mut()
+		.append("x-raw", HeaderValue::from_static("second"));
+
+	let ext_authz = ExtAuthz::default();
+	let mut headers = std::collections::HashMap::new();
+	ext_authz.get_header_values(&req, &HeaderName::from_static("x-raw"), &mut headers);
+
+	assert_eq!(headers.get("x-raw").unwrap(), "ok-\u{fffd}, second");
 }
 
 #[test]

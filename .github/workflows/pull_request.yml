@@ -137,8 +137,9 @@ jobs:
         go mod tidy
         git diff --exit-code go.mod go.sum
     - name: Gen
-      # TODO: the rest of codegen
-      run: make generate-apis check-clean-repo
+      run: |
+        make generate-apis check-clean-repo
+        make -C controller verify
 
   controller-e2e:
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -175,7 +176,7 @@ jobs:
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
       run: |
-        CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e/tests -run '^TestAgentgatewayIntegration'
+        CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

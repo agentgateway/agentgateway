@@ -100,7 +100,7 @@ pub(super) async fn sign_request(
 					.ok()
 					.map(|v_str| (k.as_str(), v_str))
 			})
-			.filter(|(k, _)| k != &http::header::CONTENT_LENGTH),
+			.filter(|(k, _)| should_sign_header(k)),
 		// SignableBody::UnsignedPayload,
 		SignableBody::Bytes(body.as_ref()),
 	)?;
@@ -116,6 +116,14 @@ pub(super) async fn sign_request(
 
 	trace!("signed AWS request");
 	Ok(())
+}
+
+fn should_sign_header(name: &str) -> bool {
+	name == http::header::HOST.as_str()
+		|| name == http::header::CONTENT_TYPE.as_str()
+		|| name == http::header::DATE.as_str()
+		|| name.starts_with("x-amz-")
+		|| name.starts_with("x-amzn-")
 }
 
 static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();

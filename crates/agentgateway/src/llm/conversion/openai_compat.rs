@@ -373,14 +373,14 @@ pub mod to_responses {
 
 	use crate::http::Body;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::parse::sse::SseJsonEvent;
 	use crate::{json, parse};
 
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp =
-			serde_json::from_slice::<completions::Response>(bytes).map_err(AIError::ResponseParsing)?;
+		let resp = serde_json::from_slice::<completions::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
 		let typed = translate_response_internal(resp, model);
 		let mut passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;

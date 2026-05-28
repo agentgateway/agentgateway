@@ -335,6 +335,7 @@ func (b ByteSize) DeepCopy() ByteSize {
 	return ByteSize{Value: &q}
 }
 
+// +k8s:enum
 type InsecureTLSMode string
 
 const (
@@ -382,7 +383,6 @@ type BackendTLS struct {
 	//   prefer setting `verifySubjectAltNames` to customize the valid hostnames
 	//   if possible.
 	//
-	// +kubebuilder:validation:Enum=All;Hostname
 	// +optional
 	InsecureSkipVerify *InsecureTLSMode `json:"insecureSkipVerify,omitempty"`
 
@@ -458,7 +458,7 @@ type Frontend struct {
 	Metrics *MetricLabels `json:"metrics,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=V1;V2;All
+// +k8s:enum
 type ProxyProtocolVersion string
 
 const (
@@ -467,7 +467,7 @@ const (
 	ProxyProtocolVersionAll ProxyProtocolVersion = "All"
 )
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +k8s:enum
 type ProxyProtocolMode string
 
 const (
@@ -595,7 +595,7 @@ type FrontendTLS struct {
 	// TODO: mirror the tuneables on BackendTLS
 }
 
-// +kubebuilder:validation:Enum="1.2";"1.3"
+// +k8s:enum
 type TLSVersion string
 
 const (
@@ -604,7 +604,7 @@ const (
 	TLSVersion1_3 TLSVersion = "1.3"
 )
 
-// +kubebuilder:validation:Enum=TLS13_AES_256_GCM_SHA384;TLS13_AES_128_GCM_SHA256;TLS13_CHACHA20_POLY1305_SHA256;TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256;TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384;TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+// +k8s:enum
 type CipherSuite string
 
 const (
@@ -623,7 +623,7 @@ const (
 	CipherSuiteTLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 CipherSuite = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
 )
 
-// +kubebuilder:validation:Enum=X25519;P-256;P-384;X25519_MLKEM768
+// +k8s:enum
 type KeyExchangeGroup string
 
 const (
@@ -664,7 +664,7 @@ type Keepalive struct {
 	Interval *metav1.Duration `json:"interval,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=PreRouting;PostRouting
+// +k8s:enum
 type PolicyPhase string
 
 const (
@@ -778,6 +778,8 @@ type Traffic struct {
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.body) && has(self.bodyExpression))",message="body and bodyExpression may not both be set"
 type DirectResponse struct {
 	// StatusCode defines the HTTP status code to return for this route.
 	//
@@ -793,6 +795,22 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
+
+	// BodyExpression is a CEL expression that produces the HTTP response body.
+	// Strings and bytes are written directly; other values are serialized as JSON.
+	// If this field is omitted, no expression body is included in the response.
+	//
+	// +optional
+	BodyExpression *shared.CELExpression `json:"bodyExpression,omitempty"`
+
+	// Headers defines response headers to set on the direct response.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Headers []DirectResponseHeader `json:"headers,omitempty"`
 }
 
 type DirectResponseConditional struct {
@@ -833,7 +851,7 @@ func (d *DirectResponseOrConditional) ConditionalPolicy() (*DirectResponse, iter
 	return &d.DirectResponse, seq
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional;Permissive
+// +k8s:enum
 type JWTAuthenticationMode string
 
 const (
@@ -942,9 +960,14 @@ type JWTMCPConfig struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
 
 	// `provider` specifies the identity provider to use for MCP authentication flows.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak
+	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
+
+	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// +optional
+	ClientID *string `json:"clientId,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline
@@ -982,7 +1005,7 @@ type RemoteJWKS struct {
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional
+// +k8s:enum
 type BasicAuthenticationMode string
 
 const (
@@ -1051,7 +1074,7 @@ type BasicAuthentication struct {
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Strict;Optional;Permissive
+// +k8s:enum
 type APIKeyAuthenticationMode string
 
 const (
@@ -1146,6 +1169,7 @@ type SecretSelector struct {
 	MatchLabels map[string]string `json:"matchLabels"`
 }
 
+// +k8s:enum
 type HostnameRewriteMode string
 
 const (
@@ -1200,7 +1224,7 @@ type BackendAuth struct {
 	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=AccessToken;IdToken
+// +k8s:enum
 type GcpAuthType string
 
 const (
@@ -1328,7 +1352,7 @@ type BackendAI struct {
 
 // RouteType specifies how the AI gateway should process incoming requests
 // based on the URL path and the API format expected.
-// +kubebuilder:validation:Enum=Completions;Messages;Models;Passthrough;Detect;Responses;AnthropicTokenCount;Embeddings;Realtime
+// +k8s:enum
 type RouteType string
 
 const (
@@ -1442,7 +1466,7 @@ type MCPAuthentication struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata"`
 
 	// `provider` specifies the identity provider to use for authentication.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak
+	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
@@ -1469,13 +1493,20 @@ type MCPAuthentication struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
+
+	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// +optional
+	ClientID *string `json:"clientId,omitempty"`
 }
 
+// +k8s:enum
 type McpIDP string
 
 const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
+	Okta     McpIDP = "Okta"
 )
 
 type BackendTunnel struct {
@@ -1497,7 +1528,6 @@ type BackendHTTP struct {
 	// * If the incoming traffic was HTTPS, `HTTP1` will be used. This is
 	//   because most clients will transparently upgrade HTTPS traffic to
 	//   `HTTP2`, even if the backend doesn't support it.
-	// +kubebuilder:validation:Enum=HTTP1;HTTP2
 	// +optional
 	Version *HTTPVersion `json:"version,omitempty"`
 
@@ -1508,6 +1538,7 @@ type BackendHTTP struct {
 	RequestTimeout *metav1.Duration `json:"requestTimeout,omitempty"`
 }
 
+// +k8s:enum
 type HTTPVersion string
 
 const (
@@ -1637,6 +1668,24 @@ type Transform struct {
 // +k8s:deepcopy-gen=false
 type HeaderName string
 
+// An HTTP header name. Unlike HeaderName, this does not allow pseudo-headers.
+//
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=256
+// +kubebuilder:validation:Pattern=`^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$`
+// +k8s:deepcopy-gen=false
+type HTTPHeaderName string
+
+type DirectResponseHeader struct {
+	// The name of the header to set.
+	// +required
+	Name HTTPHeaderName `json:"name"`
+	// `value` is the CEL expression to apply to generate the output value for
+	// the header.
+	// +required
+	Value shared.CELExpression `json:"value"`
+}
+
 type HeaderTransformation struct {
 	// The name of the header to add.
 	// +required
@@ -1647,11 +1696,102 @@ type HeaderTransformation struct {
 	Value shared.CELExpression `json:"value"`
 }
 
+// BodySendMode controls how HTTP bodies are delivered to the external processor.
+// +kubebuilder:validation:Enum=None;Buffered;BufferedPartial;FullDuplexStreamed
+type BodySendMode string
+
+const (
+	// BodySendModeNone does not send the body to the external processor.
+	BodySendModeNone BodySendMode = "None"
+	// BodySendModeBuffered buffers the full body before sending it to the
+	// external processor. It returns an error if the body exceeds 8KB.
+	BodySendModeBuffered BodySendMode = "Buffered"
+	// BodySendModeBufferedPartial buffers up to 8KB. If the body exceeds that
+	// limit, it sends the buffered prefix instead of returning an error.
+	BodySendModeBufferedPartial BodySendMode = "BufferedPartial"
+	// BodySendModeFullDuplexStreamed streams the body to the external processor.
+	BodySendModeFullDuplexStreamed BodySendMode = "FullDuplexStreamed"
+)
+
+// HeaderSendMode controls whether HTTP headers are delivered to the external processor.
+// +kubebuilder:validation:Enum=Send;Skip
+type HeaderSendMode string
+
+const (
+	// HeaderSendModeSend sends headers to the external processor.
+	HeaderSendModeSend HeaderSendMode = "Send"
+	// HeaderSendModeSkip does not send headers to the external processor.
+	HeaderSendModeSkip HeaderSendMode = "Skip"
+)
+
+// TrailerSendMode controls whether HTTP trailers are delivered to the external processor.
+// +kubebuilder:validation:Enum=Skip;Send
+type TrailerSendMode string
+
+const (
+	// TrailerSendModeSkip does not send trailers to the external processor.
+	TrailerSendModeSkip TrailerSendMode = "Skip"
+	// TrailerSendModeSend sends trailers to the external processor.
+	TrailerSendModeSend TrailerSendMode = "Send"
+)
+
+// ProcessingOptions configures how ext_proc handles request and response phases.
+type ProcessingOptions struct {
+	// requestBodyMode controls how request bodies are sent to the external processor.
+	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// +optional
+	// +kubebuilder:default=FullDuplexStreamed
+	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
+
+	// responseBodyMode controls how response bodies are sent to the external processor.
+	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
+	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
+	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// +optional
+	// +kubebuilder:default=FullDuplexStreamed
+	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`
+
+	// requestHeaderMode controls whether request headers are sent to the external processor.
+	// Defaults to `Send`.
+	// +optional
+	// +kubebuilder:default=Send
+	RequestHeaderMode *HeaderSendMode `json:"requestHeaderMode,omitempty"`
+
+	// responseHeaderMode controls whether response headers are sent to the external processor.
+	// Defaults to `Send`.
+	// +optional
+	// +kubebuilder:default=Send
+	ResponseHeaderMode *HeaderSendMode `json:"responseHeaderMode,omitempty"`
+
+	// requestTrailerMode controls whether request trailers are sent to the external processor.
+	// Defaults to `Send`.
+	// +optional
+	// +kubebuilder:default=Send
+	RequestTrailerMode *TrailerSendMode `json:"requestTrailerMode,omitempty"`
+
+	// responseTrailerMode controls whether response trailers are sent to the external processor.
+	// Defaults to `Send`.
+	// +optional
+	// +kubebuilder:default=Send
+	ResponseTrailerMode *TrailerSendMode `json:"responseTrailerMode,omitempty"`
+
+	// allowModeOverride allows ext_proc `mode_override` values from matching headers responses to update
+	// subsequent request/response processing phases for this exchange. Defaults to `false`.
+	// +optional
+	// +kubebuilder:default=false
+	AllowModeOverride bool `json:"allowModeOverride,omitempty"`
+}
+
 type ExtProc struct {
 	// `backendRef` references the External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
 	// +optional // This is actually required, but making it required breaks Conditional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	// processingOptions configures how request and response phases are sent to ext_proc.
+	// +optional
+	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
 }
 
 type ExtProcConditional struct {
@@ -1754,6 +1894,7 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
 type ExtAuth struct {
 	// `backendRef` references the External Authorization server to reach.
 	//
@@ -1783,6 +1924,47 @@ type ExtAuth struct {
 	// If enabled, the request body will be buffered.
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
+
+	// `cache` configures caching of gRPC authorization results.
+	//
+	// WARNING: the safety of this feature depends on the cache key accurately
+	// capturing every request property that the authorization service uses to
+	// make a decision. For example, if the service returns different results
+	// based on both path and authorization header, both must be included in
+	// `key`; otherwise, one request may incorrectly reuse another request's
+	// authorization result.
+	//
+	// If any key expression fails to evaluate or produces an unsupported value,
+	// the request is still sent to the authorization service, but its result is
+	// not read from or written to the cache.
+	//
+	// +optional
+	Cache *ExtAuthCache `json:"cache,omitempty"`
+}
+
+type ExtAuthCache struct {
+	// `key` is an ordered list of CEL expressions evaluated against the request
+	// to construct the cache key.
+	//
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +required
+	Key []shared.CELExpression `json:"key"`
+
+	// `ttl` is either a duration string, such as `5m`, or a CEL expression that
+	// returns the duration that cached authorization results may be reused, or a
+	// timestamp when the cached authorization result expires. The expression is
+	// evaluated after the authorization response has been applied to the request.
+	//
+	// +required
+	TTL shared.CELExpression `json:"ttl"`
+
+	// `maxEntries` is the maximum number of authorization results to keep in
+	// the cache. If unset, this defaults to 10000.
+	//
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 }
 
 type AgentExtAuthHTTP struct {
@@ -1950,6 +2132,7 @@ type GlobalRateLimit struct {
 	Descriptors []RateLimitDescriptor `json:"descriptors"`
 }
 
+// +k8s:enum
 type RateLimitUnit string
 
 const (
@@ -1966,7 +2149,6 @@ type RateLimitDescriptor struct {
 	Entries []RateLimitDescriptorEntry `json:"entries"`
 	// `unit` defines what to use as the cost function. If unspecified,
 	// `Requests` is used.
-	// +kubebuilder:validation:Enum=Requests;Tokens
 	// +optional
 	Unit *RateLimitUnit `json:"unit,omitempty"`
 	// `cost` is a Common Expression Language (`CEL`) expression that determines
@@ -1997,6 +2179,7 @@ type RateLimitDescriptorEntry struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
+// +k8s:enum
 type LocalRateLimitUnit string
 
 const (
@@ -2028,7 +2211,6 @@ type LocalRateLimit struct {
 
 	// `unit` specifies the unit of time that requests are limited on.
 	//
-	// +kubebuilder:validation:Enum=Seconds;Minutes;Hours
 	// +required
 	Unit LocalRateLimitUnit `json:"unit"`
 
@@ -2066,7 +2248,6 @@ type HostnameRewrite struct {
 	// This setting defaults to `Auto` when connecting to hostname-based
 	// `Backend` types, and `None` otherwise, for `Service` or IP-based
 	// backends.
-	// +kubebuilder:validation:Enum=Auto;None
 	// +required
 	Mode HostnameRewriteMode `json:"mode"`
 }
@@ -2115,7 +2296,6 @@ type OtlpAccessLog struct {
 
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
-	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
@@ -2176,6 +2356,7 @@ type MetricAttributes struct {
 	Add []AttributeAdd `json:"add,omitempty"`
 }
 
+// +k8s:enum
 type OTLPProtocol string
 
 const (
@@ -2192,7 +2373,6 @@ type Tracing struct {
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
-	// +kubebuilder:validation:Enum=HTTP;GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 

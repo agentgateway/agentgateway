@@ -122,7 +122,7 @@ pub struct HboneHeaders {
 pub enum Transport {
 	Plain(ApplicationTransport),
 	Tunnel(ApplicationTransport, TunnelConfig),
-	Hbone(ApplicationTransport, Vec<Identity>, HboneHeaders),
+	Hbone(ApplicationTransport, u16, Vec<Identity>, HboneHeaders),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
 		gateway_identity: Identity,  // Identity of network gateway
@@ -157,7 +157,7 @@ impl Transport {
 		match self {
 			Transport::Plain(inner) => inner,
 			Transport::Tunnel(inner, _) => inner,
-			Transport::Hbone(inner, _, _) => inner,
+			Transport::Hbone(inner, _, _, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
 			Transport::HboneWaypoint { inner, .. } => inner,
 		}
@@ -175,8 +175,8 @@ impl Transport {
 
 	pub fn name(&self) -> &'static str {
 		match self {
-			Transport::Hbone(ApplicationTransport::Plaintext, _, _) => "hbone",
-			Transport::Hbone(ApplicationTransport::Tls(_), _, _) => "hbone-tls",
+			Transport::Hbone(ApplicationTransport::Plaintext, _, _, _) => "hbone",
+			Transport::Hbone(ApplicationTransport::Tls(_), _, _, _) => "hbone-tls",
 			Transport::Plain(ApplicationTransport::Plaintext) => "plaintext",
 			Transport::Plain(ApplicationTransport::Tls(_)) => "tls",
 			Transport::Tunnel(ApplicationTransport::Plaintext, _) => "tunnel",
@@ -316,10 +316,9 @@ impl Connector {
 					.map_err(crate::http::Error::new)?;
 				let dest = target.to_string();
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
-				let mut con =
-					Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
+				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
 
-				connect_tunnel::handshake(&mut con, &dest, tcfg.token)
+				let con = connect_tunnel::handshake(con, &dest, tcfg.token)
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
@@ -339,12 +338,12 @@ impl Connector {
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
-			Transport::Hbone(_, identities, headers) => {
+			Transport::Hbone(_, hbone_port, identities, headers) => {
 				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-				hbone_tunnel::handshake(pool, ep, identities, headers).await?
+				hbone_tunnel::handshake(pool, ep, hbone_port, identities, headers).await?
 			},
 
 			Transport::DoubleHbone {

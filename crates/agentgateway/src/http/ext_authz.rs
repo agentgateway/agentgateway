@@ -1,10 +1,14 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ::http::{HeaderMap, HeaderValue, StatusCode, Uri, header};
+use agent_core::durfmt;
 use prost_types::Timestamp;
+use quick_cache::sync::Cache;
 use serde_json::Value as JsonValue;
 
 use crate::cel::{BufferedBody, Expression, Value};
@@ -29,6 +33,7 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
 
 const TRACE_POLICY_KIND: &str = "ext_auth";
+const DEFAULT_CACHE_ENTRIES: usize = 10_000;
 
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
@@ -123,6 +128,38 @@ impl Default for Protocol {
 }
 
 #[apply(schema!)]
+pub struct CacheConfig {
+	/// Non-empty list of CEL expressions that make up the cache key.
+	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
+	pub key: Vec<Arc<cel::Expression>>,
+	/// CEL expression that returns how long cached authorization results are reused.
+	/// The expression is evaluated after the authorization response has been applied
+	/// to the request, and must return either a duration or timestamp.
+	#[serde(deserialize_with = "deserialize_cache_ttl")]
+	pub ttl: Arc<cel::Expression>,
+	/// Maximum number of authorization results to keep in the cache.
+	#[serde(default = "default_cache_entries")]
+	pub max_entries: usize,
+}
+
+fn deserialize_cache_ttl<'de, D>(deserializer: D) -> Result<Arc<cel::Expression>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	use serde::Deserialize;
+
+	let raw = String::deserialize(deserializer)?;
+	let expression = if agent_core::durfmt::parse(&raw).is_ok() {
+		format!("duration({raw:?})")
+	} else {
+		raw
+	};
+	cel::Expression::new_strict(&expression)
+		.map(Arc::new)
+		.map_err(serde::de::Error::custom)
+}
+
+#[apply(schema!)]
 pub struct ExtAuthz {
 	/// Reference to the external authorization service backend
 	#[serde(flatten)]
@@ -148,9 +185,49 @@ pub struct ExtAuthz {
 	/// Options for including the request body in the authorization request
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<BodyOptions>,
+	/// Cache gRPC authorization results by CEL-derived request key.
+	///
+	/// Warning: the safety of this feature depends on the cache key accurately capturing the fields
+	/// the server operates on. For example, if you return a different result based on header A but only
+	/// cache header B, users may get incorrect cache hits.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub cache: Option<CacheConfig>,
+	#[serde(skip, default = "default_cache_store")]
+	pub(crate) cache_store: Arc<Cache<CacheKey, CachedGrpcResponse>>,
 }
 
 impl ExtAuthz {
+	pub fn with_configured_cache_store(mut self) -> Self {
+		self.cache_store = self
+			.cache
+			.as_ref()
+			.map(|cache| cache_store(effective_cache_entries(cache.max_entries)))
+			.unwrap_or_else(default_cache_store);
+		self
+	}
+
+	fn cache_key(&self, req: &Request) -> Result<CacheKey, CacheMissReason> {
+		let Some(cache) = &self.cache else {
+			return Err(CacheMissReason::Disabled);
+		};
+		if cache.key.is_empty() {
+			return Err(CacheMissReason::EmptyKey);
+		}
+		let exec = cel::Executor::new_request(req);
+		let values = cache
+			.key
+			.iter()
+			.enumerate()
+			.map(|(index, expr)| {
+				exec
+					.eval(expr)
+					.and_then(CacheKeyValue::try_from_cel)
+					.map_err(|_| CacheMissReason::KeyEvaluationFailed { index })
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+		Ok(CacheKey(values))
+	}
+
 	async fn buffer_request_body(
 		req: &mut Request,
 		body_opts: &BodyOptions,
@@ -219,8 +296,7 @@ impl ExtAuthz {
 			.headers()
 			.get_all(name)
 			.iter()
-			.filter_map(|v| v.to_str().ok())
-			.map(|s| s.to_string())
+			.map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned())
 			.collect();
 
 		if !values.is_empty() {
@@ -248,6 +324,34 @@ impl ExtAuthz {
 		let Protocol::Grpc { context, metadata } = &self.protocol else {
 			unreachable!();
 		};
+		let (cache_key, cache_lookup) = match self.cache_key(req) {
+			Ok(cache_key) => match self.cache_store.get(&cache_key) {
+				Some(cached) => {
+					let now = Instant::now();
+					let lookup = cached.lookup(now);
+					match lookup {
+						CacheLookup::Hit => {
+							pol_result_timed!(start, Severity::Info, Apply, "{}", lookup);
+							return cached.response.apply(req);
+						},
+						CacheLookup::Refresh => (Some(cache_key), CacheLookup::Refresh),
+						CacheLookup::Miss(CacheMissReason::ExpiredEntry) => {
+							self
+								.cache_store
+								.remove_if(&cache_key, |cached| cached.is_expired(now));
+							(
+								Some(cache_key),
+								CacheLookup::Miss(CacheMissReason::ExpiredEntry),
+							)
+						},
+						CacheLookup::Miss(reason) => (Some(cache_key), CacheLookup::Miss(reason)),
+					}
+				},
+				None => (Some(cache_key), CacheLookup::Miss(CacheMissReason::NoEntry)),
+			},
+			Err(reason) => (None, CacheLookup::Miss(reason)),
+		};
+		pol_event!(Severity::Info, "{}", cache_lookup);
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			policies: Arc::new(self.policies.clone()),
@@ -443,20 +547,17 @@ impl ExtAuthz {
 		let cr = cr.into_inner();
 		let status = cr.status.as_ref().map(|status| status.code).unwrap_or(0);
 
-		// Process dynamic metadata if present (for both allow and deny)
-		if let Some(metadata) = cr.dynamic_metadata {
-			let mut dynamic_metadata = ExtAuthzDynamicMetadata::default();
-
-			for (key, value) in metadata.fields {
-				dynamic_metadata
-					.0
-					.insert(key, envoy_proto_common::prost_value_to_json(&value)?);
-			}
-
-			if !dynamic_metadata.0.is_empty() {
-				req.extensions_mut().insert(dynamic_metadata);
-			}
-		}
+		let dynamic_metadata = cr
+			.dynamic_metadata
+			.map(|metadata| {
+				metadata
+					.fields
+					.into_iter()
+					.map(|(key, value)| Ok((key, envoy_proto_common::prost_value_to_json(&value)?)))
+					.collect::<Result<serde_json::Map<_, _>, ProxyError>>()
+			})
+			.transpose()?
+			.filter(|m| !m.is_empty());
 
 		if status != 0 {
 			pol_result_timed!(start, Severity::Error, Apply, "denied: {status}");
@@ -474,56 +575,123 @@ impl ExtAuthz {
 					.body(http::Body::from(body))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
 				process_headers(RequestOrResponse::Response(&mut resp), headers, None);
-				return Ok(PolicyResponse {
-					direct_response: Some(resp),
-					response_headers: None,
-				});
+				let (parts, body) = crate::http::read_response_body(resp)
+					.await
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+				let cached = CachedGrpcPolicyResponse::Denied {
+					status,
+					headers: parts.headers,
+					body,
+					dynamic_metadata,
+				};
+				let response = cached.clone().apply(req)?;
+				self.insert_cache(cache_key, req, cached);
+				return Ok(response);
 			}
-			return Err(ProxyError::ExternalAuthorizationFailed(None));
+			let cached = CachedGrpcPolicyResponse::DenyWithoutResponse { dynamic_metadata };
+			let response = cached.clone().apply(req);
+			self.insert_cache(cache_key, req, cached);
+			return response;
 		}
 
-		let mut res = PolicyResponse::default();
-		pol_result_timed!(start, Severity::Info, Apply, "allowed");
-		let Some(resp) = cr.http_response else {
-			return Ok(res);
-		};
-
-		match resp {
-			HttpResponse::DeniedResponse(_) => {
-				pol_event!("Received DeniedResponse with OK status");
+		let cached = match cr.http_response {
+			None => CachedGrpcPolicyResponse::Allow {
+				headers: Vec::new(),
+				headers_to_remove: Vec::new(),
+				response_headers: None,
+				query_parameters_to_set: Vec::new(),
+				query_parameters_to_remove: Vec::new(),
+				dynamic_metadata,
 			},
-			HttpResponse::OkResponse(OkHttpResponse {
+			Some(HttpResponse::DeniedResponse(_)) => {
+				pol_event!("Received DeniedResponse with OK status");
+				CachedGrpcPolicyResponse::Allow {
+					headers: Vec::new(),
+					headers_to_remove: Vec::new(),
+					response_headers: None,
+					query_parameters_to_set: Vec::new(),
+					query_parameters_to_remove: Vec::new(),
+					dynamic_metadata,
+				}
+			},
+			Some(HttpResponse::OkResponse(OkHttpResponse {
 				headers,
 				headers_to_remove,
 				response_headers_to_add,
 				query_parameters_to_set,
 				query_parameters_to_remove,
 				..
-			}) => {
-				for header_name in headers_to_remove {
-					if !header_name.starts_with(':') && header_name.to_lowercase() != "host" {
-						req.headers_mut().remove(header_name);
-					}
-				}
-
-				process_headers(req.into(), headers, None);
-
-				apply_query_parameters_to_request(
-					req,
-					&query_parameters_to_set,
-					&query_parameters_to_remove,
-				)?;
-
-				if !response_headers_to_add.is_empty() {
-					let mut hm = HeaderMap::new();
-					process_raw_headers(&mut hm, response_headers_to_add);
-					if !hm.is_empty() {
-						res.response_headers = Some(hm);
-					}
+			})) => {
+				let mut response_headers = HeaderMap::new();
+				process_raw_headers(&mut response_headers, response_headers_to_add);
+				CachedGrpcPolicyResponse::Allow {
+					headers,
+					headers_to_remove,
+					response_headers: (!response_headers.is_empty()).then_some(response_headers),
+					query_parameters_to_set,
+					query_parameters_to_remove,
+					dynamic_metadata,
 				}
 			},
+		};
+
+		pol_result_timed!(start, Severity::Info, Apply, "allowed");
+		let response = cached.clone().apply(req)?;
+		self.insert_cache(cache_key, req, cached);
+		Ok(response)
+	}
+
+	fn insert_cache(&self, key: Option<CacheKey>, req: &Request, response: CachedGrpcPolicyResponse) {
+		let Some(key) = key else {
+			return;
+		};
+		let Some(cache) = &self.cache else {
+			return;
+		};
+		let Some(ttl) = self.cache_ttl(req, cache) else {
+			pol_event!(
+				Severity::Warn,
+				"skip inserting {key:?} into cache; invalid TTL"
+			);
+			return;
+		};
+		let Some(expires_at) = Instant::now().checked_add(ttl) else {
+			pol_event!(
+				Severity::Warn,
+				"skip inserting {key:?} into cache; invalid TTL overflow"
+			);
+			return;
+		};
+		pol_event!(
+			Severity::Info,
+			"inserting {key:?} into cache with TTL {}",
+			durfmt::format(ttl)
+		);
+		self.cache_store.insert(
+			key,
+			CachedGrpcResponse {
+				expires_at,
+				original_ttl: ttl,
+				refreshing: Arc::new(AtomicBool::new(false)),
+				response,
+			},
+		);
+	}
+
+	fn cache_ttl(&self, req: &Request, cache: &CacheConfig) -> Option<Duration> {
+		let exec = cel::Executor::new_request(req);
+		let value = exec.eval(&cache.ttl).ok()?;
+		match value {
+			Value::Duration(ttl) => ttl.to_std().ok(),
+			Value::Timestamp(expires_at) => expires_at
+				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
+				.to_std()
+				.ok(),
+			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
+			_ => None,
 		}
-		Ok(res)
 	}
 
 	pub async fn check_http(
@@ -798,7 +966,14 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
-		let iter: Box<dyn Iterator<Item = &cel::Expression>> = match &self.protocol {
+		let cache_iter = self.cache.iter().flat_map(|cache| {
+			cache
+				.key
+				.iter()
+				.map(|v| v.as_ref())
+				.chain(Some(cache.ttl.as_ref()))
+		});
+		let protocol_iter: Box<dyn Iterator<Item = &cel::Expression>> = match &self.protocol {
 			Protocol::Grpc {
 				metadata: Some(m), ..
 			} => Box::new(m.values().map(|v| v.as_ref())),
@@ -820,8 +995,266 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 			),
 			_ => Box::new(std::iter::empty()),
 		};
-		iter
+		protocol_iter.chain(cache_iter)
 	}
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub(crate) struct CacheKey(Vec<CacheKeyValue>);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CacheLookup {
+	Hit,
+	Refresh,
+	Miss(CacheMissReason),
+}
+
+impl std::fmt::Display for CacheLookup {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Hit => f.write_str("cache hit: valid cached response"),
+			Self::Refresh => f.write_str("cache refresh: cached response within refresh window"),
+			Self::Miss(reason) => write!(f, "cache miss: {reason}"),
+		}
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum CacheMissReason {
+	Disabled,
+	EmptyKey,
+	KeyEvaluationFailed { index: usize },
+	NoEntry,
+	ExpiredEntry,
+}
+
+impl std::fmt::Display for CacheMissReason {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Disabled => f.write_str("cache is not configured"),
+			Self::EmptyKey => f.write_str("cache key has no expressions"),
+			Self::KeyEvaluationFailed { index } => {
+				write!(
+					f,
+					"cache key expression {index} did not evaluate to a supported value"
+				)
+			},
+			Self::NoEntry => f.write_str("no cached response for key"),
+			Self::ExpiredEntry => f.write_str("cached response expired"),
+		}
+	}
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+enum CacheKeyValue {
+	Null,
+	Bool(bool),
+	Int(i64),
+	UInt(u64),
+	Float(u64),
+	String(Arc<str>),
+	Bytes(BytesKey),
+}
+
+impl CacheKeyValue {
+	fn try_from_cel(value: Value<'_>) -> Result<Self, cel::Error> {
+		Ok(match value {
+			Value::Null => Self::Null,
+			Value::Bool(v) => Self::Bool(v),
+			Value::Int(v) => Self::Int(v),
+			Value::UInt(v) => Self::UInt(v),
+			Value::Float(v) => Self::Float(v.to_bits()),
+			Value::String(v) => Self::String(v.as_owned()),
+			Value::Bytes(v) => Self::Bytes(match v {
+				::cel::objects::BytesValue::Borrowed(v) => BytesKey::Arc(Arc::from(v)),
+				::cel::objects::BytesValue::Owned(v) => BytesKey::Arc(v),
+				::cel::objects::BytesValue::Bytes(v) => BytesKey::Bytes(v),
+			}),
+			_ => return Err(cel::Error::JsonConvert),
+		})
+	}
+}
+
+#[derive(Clone, Debug)]
+enum BytesKey {
+	Arc(Arc<[u8]>),
+	Bytes(Bytes),
+}
+
+impl AsRef<[u8]> for BytesKey {
+	fn as_ref(&self) -> &[u8] {
+		match self {
+			Self::Arc(v) => v.as_ref(),
+			Self::Bytes(v) => v.as_ref(),
+		}
+	}
+}
+
+impl PartialEq for BytesKey {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_ref() == other.as_ref()
+	}
+}
+
+impl Eq for BytesKey {}
+
+impl Hash for BytesKey {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_ref().hash(state);
+	}
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CachedGrpcResponse {
+	expires_at: Instant,
+	original_ttl: Duration,
+	refreshing: Arc<AtomicBool>,
+	response: CachedGrpcPolicyResponse,
+}
+
+impl CachedGrpcResponse {
+	fn is_expired(&self, now: Instant) -> bool {
+		self.expires_at <= now
+	}
+
+	fn lookup(&self, now: Instant) -> CacheLookup {
+		let Some(remaining) = self.expires_at.checked_duration_since(now) else {
+			return CacheLookup::Miss(CacheMissReason::ExpiredEntry);
+		};
+		if remaining > cache_refresh_threshold(self.original_ttl) {
+			return CacheLookup::Hit;
+		}
+		if self
+			.refreshing
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+			.is_ok()
+		{
+			CacheLookup::Refresh
+		} else {
+			CacheLookup::Hit
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
+enum CachedGrpcPolicyResponse {
+	Allow {
+		headers: Vec<HeaderValueOption>,
+		headers_to_remove: Vec<String>,
+		response_headers: Option<HeaderMap>,
+		query_parameters_to_set: Vec<proto::QueryParameter>,
+		query_parameters_to_remove: Vec<String>,
+		dynamic_metadata: Option<serde_json::Map<String, JsonValue>>,
+	},
+	Denied {
+		status: StatusCode,
+		headers: HeaderMap,
+		body: Bytes,
+		dynamic_metadata: Option<serde_json::Map<String, JsonValue>>,
+	},
+	DenyWithoutResponse {
+		dynamic_metadata: Option<serde_json::Map<String, JsonValue>>,
+	},
+}
+
+impl CachedGrpcPolicyResponse {
+	fn apply(self, req: &mut Request) -> Result<PolicyResponse, ProxyError> {
+		match self {
+			Self::Allow {
+				headers,
+				headers_to_remove,
+				response_headers,
+				query_parameters_to_set,
+				query_parameters_to_remove,
+				dynamic_metadata,
+			} => {
+				insert_dynamic_metadata(req, dynamic_metadata);
+				for header_name in headers_to_remove {
+					if !header_name.starts_with(':') && header_name.to_lowercase() != "host" {
+						req.headers_mut().remove(header_name);
+					}
+				}
+				process_headers(req.into(), headers, None);
+				apply_query_parameters_to_request(
+					req,
+					&query_parameters_to_set,
+					&query_parameters_to_remove,
+				)?;
+				Ok(PolicyResponse {
+					direct_response: None,
+					response_headers,
+				})
+			},
+			Self::Denied {
+				status,
+				headers,
+				body,
+				dynamic_metadata,
+			} => {
+				insert_dynamic_metadata(req, dynamic_metadata);
+				let mut resp = ::http::Response::builder()
+					.status(status)
+					.body(http::Body::from(body))
+					.map_err(|e| ProxyError::Processing(e.into()))?;
+				*resp.headers_mut() = headers;
+				Ok(PolicyResponse {
+					direct_response: Some(resp),
+					response_headers: None,
+				})
+			},
+			Self::DenyWithoutResponse { dynamic_metadata } => {
+				insert_dynamic_metadata(req, dynamic_metadata);
+				Err(ProxyError::ExternalAuthorizationFailed(None))
+			},
+		}
+	}
+}
+
+fn insert_dynamic_metadata(
+	req: &mut Request,
+	dynamic_metadata: Option<serde_json::Map<String, JsonValue>>,
+) {
+	if let Some(dynamic_metadata) = dynamic_metadata
+		&& !dynamic_metadata.is_empty()
+	{
+		req
+			.extensions_mut()
+			.insert(ExtAuthzDynamicMetadata(dynamic_metadata));
+	}
+}
+
+fn unix_epoch_ttl(expires_at: f64) -> Option<Duration> {
+	if expires_at.is_sign_negative() || !expires_at.is_finite() {
+		return None;
+	}
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.ok()?
+		.as_secs_f64();
+	Duration::try_from_secs_f64(expires_at - now).ok()
+}
+
+fn cache_refresh_threshold(ttl: Duration) -> Duration {
+	std::cmp::min(ttl / 10, Duration::from_secs(5))
+}
+
+pub(crate) fn default_cache_entries() -> usize {
+	DEFAULT_CACHE_ENTRIES
+}
+
+pub(crate) fn effective_cache_entries(max_entries: usize) -> usize {
+	match max_entries {
+		0 => DEFAULT_CACHE_ENTRIES,
+		max_entries => max_entries,
+	}
+}
+
+pub(crate) fn cache_store(max_entries: usize) -> Arc<Cache<CacheKey, CachedGrpcResponse>> {
+	Arc::new(Cache::new(max_entries))
+}
+
+pub(crate) fn default_cache_store() -> Arc<Cache<CacheKey, CachedGrpcResponse>> {
+	cache_store(DEFAULT_CACHE_ENTRIES)
 }
 
 struct BufferedRequestBody {

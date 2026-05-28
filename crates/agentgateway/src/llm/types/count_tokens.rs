@@ -4,7 +4,10 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::types::{RequestType, messages};
-use crate::llm::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion};
+use crate::llm::{
+	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion,
+	logged_response_parsing,
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Request {
@@ -76,7 +79,7 @@ pub struct Response {
 
 impl Response {
 	pub fn translate_response(bytes: Bytes) -> Result<(Bytes, u64), AIError> {
-		let resp: Self = serde_json::from_slice(&bytes).map_err(AIError::ResponseParsing)?;
+		let resp: Self = serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
 		Ok((bytes, resp.input_tokens))
 	}
 }

@@ -64,7 +64,7 @@ type Message struct {
 // Built-in regex patterns for specific types of strings in prompts.
 // For example, if you specify `CreditCard`, any credit card numbers
 // in the request or response are matched.
-// +kubebuilder:validation:Enum=Ssn;CreditCard;PhoneNumber;Email;CaSin
+// +k8s:enum
 type BuiltIn string
 
 const (
@@ -87,7 +87,7 @@ const (
 // Action to take if a regex pattern is matched in a request or response.
 // This setting applies only to request matches. `PromptguardResponse`
 // matches are always masked by default.
-// +kubebuilder:validation:Enum=Mask;Reject
+// +k8s:enum
 type Action string
 
 const (

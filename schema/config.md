@@ -143,8 +143,12 @@
 |`binds[].listeners[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.conditional[].headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.conditional[].status`|integer||
 |`binds[].listeners[].routes[].policies.directResponse.body`|array||
+|`binds[].listeners[].routes[].policies.directResponse.bodyExpression`|string||
+|`binds[].listeners[].routes[].policies.directResponse.headers`|object||
 |`binds[].listeners[].routes[].policies.directResponse.status`|integer||
 |`binds[].listeners[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`binds[].listeners[].routes[].policies.cors.allowCredentials`|boolean||
@@ -163,6 +167,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -180,6 +185,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string||
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object||
@@ -264,14 +270,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -371,14 +374,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -478,14 +478,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -583,14 +580,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -724,14 +718,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -831,14 +822,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -936,14 +924,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1062,14 +1047,11 @@
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1166,14 +1148,11 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1285,14 +1264,11 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1357,17 +1333,6 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`binds[].listeners[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location.header`|object||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.header.name`|string||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.header.prefix`|string||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter`|object||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|object||
-|`binds[].listeners[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object||
@@ -1489,14 +1454,11 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1550,6 +1512,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -1616,14 +1582,11 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1677,6 +1640,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`binds[].listeners[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].service`|object||
@@ -1746,14 +1713,11 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1794,6 +1758,14 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].routes[].policies.extProc.service`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name`|object||
 |`binds[].listeners[].routes[].policies.extProc.service.name.namespace`|string||
@@ -1860,14 +1832,11 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -1908,6 +1877,14 @@
 |`binds[].listeners[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions`|object||
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].routes[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify requests and responses|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -2038,14 +2015,11 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2176,14 +2150,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2308,14 +2279,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2369,6 +2337,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -2465,14 +2437,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2572,14 +2541,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2679,14 +2645,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2784,14 +2747,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -2925,14 +2885,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3032,14 +2989,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3137,14 +3091,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3303,14 +3254,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3435,14 +3383,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3496,6 +3441,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -3592,14 +3541,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3699,14 +3645,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3806,14 +3749,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -3911,14 +3851,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4052,14 +3989,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4159,14 +4093,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4264,14 +4195,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4405,14 +4333,11 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4537,14 +4462,11 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4598,6 +4520,10 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -4694,14 +4620,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4801,14 +4724,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -4908,14 +4828,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5013,14 +4930,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5154,14 +5068,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5261,14 +5172,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5366,14 +5274,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5523,17 +5428,6 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`binds[].listeners[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`binds[].listeners[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`binds[].listeners[].policies.jwtAuth.location.header`|object||
-|`binds[].listeners[].policies.jwtAuth.location.header.name`|string||
-|`binds[].listeners[].policies.jwtAuth.location.header.prefix`|string||
-|`binds[].listeners[].policies.jwtAuth.location.queryParameter`|object||
-|`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string||
-|`binds[].listeners[].policies.jwtAuth.location.cookie`|object||
-|`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string||
-|`binds[].listeners[].policies.jwtAuth.location.expression`|object||
-|`binds[].listeners[].policies.jwtAuth.location.expression.expression`|string||
 |`binds[].listeners[].policies.jwtAuth.issuer`|string||
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string||
 |`binds[].listeners[].policies.jwtAuth.jwks`|object||
@@ -5610,14 +5504,11 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5671,6 +5562,10 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extAuthz.service`|object||
 |`binds[].listeners[].policies.extAuthz.service.name`|object||
 |`binds[].listeners[].policies.extAuthz.service.name.namespace`|string||
@@ -5737,14 +5632,11 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5798,6 +5690,10 @@
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`binds[].listeners[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`binds[].listeners[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`binds[].listeners[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.extProc.conditional[].service`|object||
@@ -5867,14 +5763,11 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -5915,6 +5808,14 @@
 |`binds[].listeners[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions`|object||
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].policies.extProc.service`|object||
 |`binds[].listeners[].policies.extProc.service.name`|object||
 |`binds[].listeners[].policies.extProc.service.name.namespace`|string||
@@ -5981,14 +5882,11 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6029,6 +5927,14 @@
 |`binds[].listeners[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`binds[].listeners[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`binds[].listeners[].policies.extProc.processingOptions`|object||
+|`binds[].listeners[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`binds[].listeners[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`binds[].listeners[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`binds[].listeners[].policies.transformations`|object|Modify requests and responses|
 |`binds[].listeners[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -6188,14 +6094,11 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.accessKeyId`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.secretAccessKey`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.region`|string||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.sessionToken`|string||
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6301,14 +6204,11 @@
 |`frontendPolicies.tracing.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`frontendPolicies.tracing.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`frontendPolicies.tracing.policies.backendAuth.gcp.credential.file`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws`|object||
 |`frontendPolicies.tracing.policies.backendAuth.aws.accessKeyId`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.secretAccessKey`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.region`|string||
 |`frontendPolicies.tracing.policies.backendAuth.aws.sessionToken`|string||
-|`frontendPolicies.tracing.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.tracing.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`frontendPolicies.tracing.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6422,8 +6322,12 @@
 |`policies[].policy.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.directResponse.conditional[].body`|array||
+|`policies[].policy.directResponse.conditional[].bodyExpression`|string||
+|`policies[].policy.directResponse.conditional[].headers`|object||
 |`policies[].policy.directResponse.conditional[].status`|integer||
 |`policies[].policy.directResponse.body`|array||
+|`policies[].policy.directResponse.bodyExpression`|string||
+|`policies[].policy.directResponse.headers`|object||
 |`policies[].policy.directResponse.status`|integer||
 |`policies[].policy.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`policies[].policy.cors.allowCredentials`|boolean||
@@ -6442,6 +6346,7 @@
 |`policies[].policy.mcpAuthentication.provider`|object||
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
+|`policies[].policy.mcpAuthentication.provider.okta`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object||
 |`policies[].policy.mcpAuthentication.jwks`|object||
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
@@ -6459,6 +6364,7 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`policies[].policy.mcpAuthentication.clientId`|string||
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object||
@@ -6543,14 +6449,11 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6650,14 +6553,11 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6757,14 +6657,11 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -6862,14 +6759,11 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7003,14 +6897,11 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7110,14 +7001,11 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7215,14 +7103,11 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7341,14 +7226,11 @@
 |`policies[].policy.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.backendAuth.aws`|object||
 |`policies[].policy.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.backendAuth.aws.region`|string||
 |`policies[].policy.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7445,14 +7327,11 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7564,14 +7443,11 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7636,17 +7512,6 @@
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`policies[].policy.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`policies[].policy.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`policies[].policy.jwtAuth.location.header`|object||
-|`policies[].policy.jwtAuth.location.header.name`|string||
-|`policies[].policy.jwtAuth.location.header.prefix`|string||
-|`policies[].policy.jwtAuth.location.queryParameter`|object||
-|`policies[].policy.jwtAuth.location.queryParameter.name`|string||
-|`policies[].policy.jwtAuth.location.cookie`|object||
-|`policies[].policy.jwtAuth.location.cookie.name`|string||
-|`policies[].policy.jwtAuth.location.expression`|object||
-|`policies[].policy.jwtAuth.location.expression.expression`|string||
 |`policies[].policy.jwtAuth.issuer`|string||
 |`policies[].policy.jwtAuth.audiences`|[]string||
 |`policies[].policy.jwtAuth.jwks`|object||
@@ -7768,14 +7633,11 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7829,6 +7691,10 @@
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extAuthz.service`|object||
 |`policies[].policy.extAuthz.service.name`|object||
 |`policies[].policy.extAuthz.service.name.namespace`|string||
@@ -7895,14 +7761,11 @@
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.region`|string||
 |`policies[].policy.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -7956,6 +7819,10 @@
 |`policies[].policy.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`policies[].policy.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`policies[].policy.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`policies[].policy.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`policies[].policy.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`policies[].policy.extProc`|object|Extend agentgateway with an external processor|
 |`policies[].policy.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extProc.conditional[].service`|object||
@@ -8025,14 +7892,11 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8073,6 +7937,14 @@
 |`policies[].policy.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.conditional[].processingOptions`|object||
+|`policies[].policy.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`policies[].policy.extProc.service`|object||
 |`policies[].policy.extProc.service.name`|object||
 |`policies[].policy.extProc.service.name.namespace`|string||
@@ -8139,14 +8011,11 @@
 |`policies[].policy.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`policies[].policy.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`policies[].policy.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`policies[].policy.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws`|object||
 |`policies[].policy.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.region`|string||
 |`policies[].policy.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`policies[].policy.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`policies[].policy.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8187,6 +8056,14 @@
 |`policies[].policy.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`policies[].policy.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`policies[].policy.extProc.processingOptions`|object||
+|`policies[].policy.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`policies[].policy.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`policies[].policy.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`policies[].policy.transformations`|object|Modify requests and responses|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -8312,14 +8189,11 @@
 |`backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
-|`backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8450,14 +8324,11 @@
 |`backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8582,14 +8453,11 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8643,6 +8511,10 @@
 |`backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -8739,14 +8611,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8846,14 +8715,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -8953,14 +8819,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9058,14 +8921,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9199,14 +9059,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9306,14 +9163,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9411,14 +9265,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9577,14 +9428,11 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9709,14 +9557,11 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9770,6 +9615,10 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -9866,14 +9715,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -9973,14 +9819,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10080,14 +9923,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10185,14 +10025,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10326,14 +10163,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10433,14 +10267,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10538,14 +10369,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10678,14 +10506,11 @@
 |`backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.backendAuth.aws`|object||
 |`backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.backendAuth.aws.region`|string||
 |`backends[].policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10810,14 +10635,11 @@
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -10871,6 +10693,10 @@
 |`backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -10967,14 +10793,11 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11074,14 +10897,11 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11181,14 +11001,11 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11286,14 +11103,11 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11427,14 +11241,11 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11534,14 +11345,11 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11639,14 +11447,11 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -11779,8 +11584,12 @@
 |`routeGroups[].routes[].policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.directResponse.conditional[].body`|array||
+|`routeGroups[].routes[].policies.directResponse.conditional[].bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.conditional[].headers`|object||
 |`routeGroups[].routes[].policies.directResponse.conditional[].status`|integer||
 |`routeGroups[].routes[].policies.directResponse.body`|array||
+|`routeGroups[].routes[].policies.directResponse.bodyExpression`|string||
+|`routeGroups[].routes[].policies.directResponse.headers`|object||
 |`routeGroups[].routes[].policies.directResponse.status`|integer||
 |`routeGroups[].routes[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`routeGroups[].routes[].policies.cors.allowCredentials`|boolean||
@@ -11799,6 +11608,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -11816,6 +11626,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string||
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object||
@@ -11900,14 +11711,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12007,14 +11815,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12114,14 +11919,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12219,14 +12021,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12360,14 +12159,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12467,14 +12263,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12572,14 +12365,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12698,14 +12488,11 @@
 |`routeGroups[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12802,14 +12589,11 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12921,14 +12705,11 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -12993,17 +12774,6 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`routeGroups[].routes[].policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`routeGroups[].routes[].policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`routeGroups[].routes[].policies.jwtAuth.location.header`|object||
-|`routeGroups[].routes[].policies.jwtAuth.location.header.name`|string||
-|`routeGroups[].routes[].policies.jwtAuth.location.header.prefix`|string||
-|`routeGroups[].routes[].policies.jwtAuth.location.queryParameter`|object||
-|`routeGroups[].routes[].policies.jwtAuth.location.queryParameter.name`|string||
-|`routeGroups[].routes[].policies.jwtAuth.location.cookie`|object||
-|`routeGroups[].routes[].policies.jwtAuth.location.cookie.name`|string||
-|`routeGroups[].routes[].policies.jwtAuth.location.expression`|object||
-|`routeGroups[].routes[].policies.jwtAuth.location.expression.expression`|string||
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string||
 |`routeGroups[].routes[].policies.jwtAuth.audiences`|[]string||
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object||
@@ -13125,14 +12895,11 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13186,6 +12953,10 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extAuthz.service`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name`|object||
 |`routeGroups[].routes[].policies.extAuthz.service.name.namespace`|string||
@@ -13252,14 +13023,11 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13313,6 +13081,10 @@
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].policies.extProc`|object|Extend agentgateway with an external processor|
 |`routeGroups[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extProc.conditional[].service`|object||
@@ -13382,14 +13154,11 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13430,6 +13199,14 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`routeGroups[].routes[].policies.extProc.service`|object||
 |`routeGroups[].routes[].policies.extProc.service.name`|object||
 |`routeGroups[].routes[].policies.extProc.service.name.namespace`|string||
@@ -13496,14 +13273,11 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13544,6 +13318,14 @@
 |`routeGroups[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`routeGroups[].routes[].policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`routeGroups[].routes[].policies.extProc.processingOptions`|object||
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`routeGroups[].routes[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify requests and responses|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -13674,14 +13456,11 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13812,14 +13591,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -13944,14 +13720,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14005,6 +13778,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -14101,14 +13878,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14208,14 +13982,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14315,14 +14086,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14420,14 +14188,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14561,14 +14326,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14668,14 +14430,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14773,14 +14532,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -14939,14 +14695,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15071,14 +14824,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15132,6 +14882,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -15228,14 +14982,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15335,14 +15086,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15442,14 +15190,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15547,14 +15292,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15688,14 +15430,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15795,14 +15534,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -15900,14 +15636,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16041,14 +15774,11 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16173,14 +15903,11 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16234,6 +15961,10 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -16330,14 +16061,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16437,14 +16165,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16544,14 +16269,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16649,14 +16371,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16790,14 +16509,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -16897,14 +16613,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17002,14 +16715,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17151,14 +16861,11 @@
 |`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].auth.gcp.credential.file`|string||
 |`llm.models[].auth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].auth.gcp.credential.file`|string||
 |`llm.models[].auth.aws`|object||
 |`llm.models[].auth.aws.accessKeyId`|string||
 |`llm.models[].auth.aws.secretAccessKey`|string||
 |`llm.models[].auth.aws.region`|string||
 |`llm.models[].auth.aws.sessionToken`|string||
-|`llm.models[].auth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].auth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].auth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].auth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17272,14 +16979,11 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17379,14 +17083,11 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17486,14 +17187,11 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17591,14 +17289,11 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17732,14 +17427,11 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17839,14 +17531,11 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -17944,14 +17633,11 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18044,17 +17730,6 @@
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`llm.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`llm.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`llm.policies.jwtAuth.location.header`|object||
-|`llm.policies.jwtAuth.location.header.name`|string||
-|`llm.policies.jwtAuth.location.header.prefix`|string||
-|`llm.policies.jwtAuth.location.queryParameter`|object||
-|`llm.policies.jwtAuth.location.queryParameter.name`|string||
-|`llm.policies.jwtAuth.location.cookie`|object||
-|`llm.policies.jwtAuth.location.cookie.name`|string||
-|`llm.policies.jwtAuth.location.expression`|object||
-|`llm.policies.jwtAuth.location.expression.expression`|string||
 |`llm.policies.jwtAuth.issuer`|string||
 |`llm.policies.jwtAuth.audiences`|[]string||
 |`llm.policies.jwtAuth.jwks`|object||
@@ -18131,14 +17806,11 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18192,6 +17864,10 @@
 |`llm.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extAuthz.service`|object||
 |`llm.policies.extAuthz.service.name`|object||
 |`llm.policies.extAuthz.service.name.namespace`|string||
@@ -18258,14 +17934,11 @@
 |`llm.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws`|object||
 |`llm.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`llm.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`llm.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18319,6 +17992,10 @@
 |`llm.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`llm.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`llm.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`llm.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`llm.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`llm.policies.extProc`|object|Extend agentgateway with an external processor|
 |`llm.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.extProc.conditional[].service`|object||
@@ -18388,14 +18065,11 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`llm.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18436,6 +18110,14 @@
 |`llm.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.conditional[].processingOptions`|object||
+|`llm.policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`llm.policies.extProc.service`|object||
 |`llm.policies.extProc.service.name`|object||
 |`llm.policies.extProc.service.name.namespace`|string||
@@ -18502,14 +18184,11 @@
 |`llm.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.extProc.policies.backendAuth.aws`|object||
 |`llm.policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.region`|string||
 |`llm.policies.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`llm.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18550,6 +18229,14 @@
 |`llm.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`llm.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`llm.policies.extProc.processingOptions`|object||
+|`llm.policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`llm.policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`llm.policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`llm.policies.transformations`|object|Modify requests and responses|
 |`llm.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -18682,14 +18369,11 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
-|`llm.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18820,14 +18504,11 @@
 |`mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.targets[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.targets[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.targets[].policies.backendAuth.aws`|object||
 |`mcp.targets[].policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.targets[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.targets[].policies.backendAuth.aws.region`|string||
 |`mcp.targets[].policies.backendAuth.aws.sessionToken`|string||
-|`mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.targets[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.targets[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -18910,8 +18591,12 @@
 |`mcp.policies.directResponse.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.directResponse.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.directResponse.conditional[].body`|array||
+|`mcp.policies.directResponse.conditional[].bodyExpression`|string||
+|`mcp.policies.directResponse.conditional[].headers`|object||
 |`mcp.policies.directResponse.conditional[].status`|integer||
 |`mcp.policies.directResponse.body`|array||
+|`mcp.policies.directResponse.bodyExpression`|string||
+|`mcp.policies.directResponse.headers`|object||
 |`mcp.policies.directResponse.status`|integer||
 |`mcp.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
 |`mcp.policies.cors.allowCredentials`|boolean||
@@ -18930,6 +18615,7 @@
 |`mcp.policies.mcpAuthentication.provider`|object||
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
+|`mcp.policies.mcpAuthentication.provider.okta`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object||
 |`mcp.policies.mcpAuthentication.jwks`|object||
 |`mcp.policies.mcpAuthentication.jwks.file`|string||
@@ -18947,6 +18633,7 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.expression.expression`|string||
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`mcp.policies.mcpAuthentication.clientId`|string||
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object||
@@ -19031,14 +18718,11 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19138,14 +18822,11 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19245,14 +18926,11 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19350,14 +19028,11 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19491,14 +19166,11 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19598,14 +19270,11 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19703,14 +19372,11 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.region`|string||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19829,14 +19495,11 @@
 |`mcp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.backendAuth.aws`|object||
 |`mcp.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.backendAuth.aws.region`|string||
 |`mcp.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -19933,14 +19596,11 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20052,14 +19712,11 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.region`|string||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20124,17 +19781,6 @@
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|JWT validation options controlling which claims must be present in a token.<br><br>The `required_claims` set specifies which RFC 7519 registered claims must<br>exist in the token payload before validation proceeds. Only the following<br>values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered<br>claims such as `iat` and `jti` are **not** enforced by the underlying<br>`jsonwebtoken` library and will be silently ignored.<br><br>This only enforces **presence**. Standard claims like `exp` and `nbf`<br>have their values validated independently (e.g., expiry is always checked<br>when the `exp` claim is present, regardless of this setting).<br><br>Defaults to `["exp"]`.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`mcp.policies.jwtAuth.mode`|enum|Possible values: `strict`, `optional`, `permissive`.|
-|`mcp.policies.jwtAuth.location`|object|Exactly one of header, queryParameter, cookie, or expression may be set.|
-|`mcp.policies.jwtAuth.location.header`|object||
-|`mcp.policies.jwtAuth.location.header.name`|string||
-|`mcp.policies.jwtAuth.location.header.prefix`|string||
-|`mcp.policies.jwtAuth.location.queryParameter`|object||
-|`mcp.policies.jwtAuth.location.queryParameter.name`|string||
-|`mcp.policies.jwtAuth.location.cookie`|object||
-|`mcp.policies.jwtAuth.location.cookie.name`|string||
-|`mcp.policies.jwtAuth.location.expression`|object||
-|`mcp.policies.jwtAuth.location.expression.expression`|string||
 |`mcp.policies.jwtAuth.issuer`|string||
 |`mcp.policies.jwtAuth.audiences`|[]string||
 |`mcp.policies.jwtAuth.jwks`|object||
@@ -20256,14 +19902,11 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20317,6 +19960,10 @@
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.extAuthz.conditional[].cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.conditional[].cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extAuthz.service`|object||
 |`mcp.policies.extAuthz.service.name`|object||
 |`mcp.policies.extAuthz.service.name.namespace`|string||
@@ -20383,14 +20030,11 @@
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.extAuthz.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.region`|string||
 |`mcp.policies.extAuthz.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extAuthz.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20444,6 +20088,10 @@
 |`mcp.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum size of request body to buffer (default: 8192)|
 |`mcp.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|If true, send partial body when max_request_bytes is reached|
 |`mcp.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|If true, pack body as raw bytes in gRPC|
+|`mcp.policies.extAuthz.cache`|object|Cache gRPC authorization results by CEL-derived request key.<br><br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.cache.key`|[]string|Non-empty list of CEL expressions that make up the cache key.|
+|`mcp.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`mcp.policies.extProc`|object|Extend agentgateway with an external processor|
 |`mcp.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extProc.conditional[].service`|object||
@@ -20513,14 +20161,11 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.region`|string||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20561,6 +20206,14 @@
 |`mcp.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.conditional[].requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.conditional[].responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.conditional[].processingOptions`|object||
+|`mcp.policies.extProc.conditional[].processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.conditional[].processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.conditional[].processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`mcp.policies.extProc.service`|object||
 |`mcp.policies.extProc.service.name`|object||
 |`mcp.policies.extProc.service.name.namespace`|string||
@@ -20627,14 +20280,11 @@
 |`mcp.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
 |`mcp.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.policies.extProc.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.policies.extProc.policies.backendAuth.gcp.credential.file`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws`|object||
 |`mcp.policies.extProc.policies.backendAuth.aws.accessKeyId`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.secretAccessKey`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.region`|string||
 |`mcp.policies.extProc.policies.backendAuth.aws.sessionToken`|string||
-|`mcp.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
 |`mcp.policies.extProc.policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
@@ -20675,6 +20325,14 @@
 |`mcp.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.requestAttributes`|object|Maps to the request `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
 |`mcp.policies.extProc.responseAttributes`|object|Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.|
+|`mcp.policies.extProc.processingOptions`|object||
+|`mcp.policies.extProc.processingOptions.requestBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.processingOptions.responseBodyMode`|enum|Possible values: `none`, `buffered`, `bufferedPartial`, `fullDuplexStreamed`.|
+|`mcp.policies.extProc.processingOptions.requestHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.responseHeaderMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
+|`mcp.policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
 |`mcp.policies.transformations`|object|Modify requests and responses|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|

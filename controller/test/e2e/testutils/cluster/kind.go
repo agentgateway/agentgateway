@@ -7,14 +7,12 @@ import (
 
 	kubelib "istio.io/istio/pkg/kube"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/kubectl"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
@@ -30,13 +28,8 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 		clusterName = "kind"
 	}
 
-	kubeCtx := os.Getenv(testutils.KubeCtx)
+	kubeCtx := testutils.KubeContextValue()
 	restCfg, err := kubeutils.GetRestConfigWithKubeContext(kubeCtx)
-	if err != nil {
-		panic(err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
 		panic(err)
 	}
@@ -57,12 +50,9 @@ func MustKindContextWithScheme(clusterName string, scheme *runtime.Scheme) *Cont
 	istio.SetDefaultApplyNamespace("default")
 
 	return &Context{
-		Name:        clusterName,
-		KubeContext: kubeCtx,
-		RestConfig:  restCfg,
-		Cli:         kubectl.NewCli().WithKubeContext(kubeCtx).WithReceiver(os.Stdout),
-		Client:      clt,
-		IstioClient: istio,
-		Clientset:   clientset,
+		Name:             clusterName,
+		KubeContext:      kubeCtx,
+		ControllerClient: clt,
+		Client:           istio,
 	}
 }

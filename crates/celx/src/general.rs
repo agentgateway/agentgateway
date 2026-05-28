@@ -9,6 +9,7 @@ use cel::ExecutionError;
 use cel::context::{SingleVarResolver, VariableResolver};
 use cel::objects::KeyRef;
 use md5::Md5;
+use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, percent_encode};
 use rand::random_range;
 use serde::Deserializer;
 use sha1::Sha1;
@@ -42,6 +43,8 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("base64Decode", base64_decode);
 	ctx.add_qualified_function("base64", "encode", base64_encode);
 	ctx.add_qualified_function("base64", "decode", base64_decode);
+	ctx.add_qualified_function("url", "encode", url_encode);
+	ctx.add_qualified_function("url", "decode", url_decode);
 	ctx.add_qualified_function("form", "decode", form_decode);
 	ctx.add_qualified_function("form", "encode", form_encode);
 	ctx.add_qualified_function("sha1", "encode", sha1_encode);
@@ -80,6 +83,57 @@ pub fn base64_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Reso
 	STANDARD_MAYBE_PADDED
 		.decode(v.as_bytes_pre_materialized()?)
 		.map(|v| v.into())
+		.map_err(|e| ftx.error(e))
+}
+
+const URL_COMPONENT_ENCODE_SET: &AsciiSet = &CONTROLS
+	.add(b' ')
+	.add(b'"')
+	.add(b'#')
+	.add(b'$')
+	.add(b'%')
+	.add(b'&')
+	.add(b'\'')
+	.add(b'(')
+	.add(b')')
+	.add(b'*')
+	.add(b'+')
+	.add(b',')
+	.add(b'/')
+	.add(b':')
+	.add(b';')
+	.add(b'<')
+	.add(b'=')
+	.add(b'>')
+	.add(b'?')
+	.add(b'@')
+	.add(b'[')
+	.add(b'\\')
+	.add(b']')
+	.add(b'^')
+	.add(b'`')
+	.add(b'{')
+	.add(b'|')
+	.add(b'}')
+	.add(b'!');
+
+pub fn url_encode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v = v.load(ftx)?.always_materialize_owned();
+	Ok(
+		percent_encode(v.as_bytes_pre_materialized()?, URL_COMPONENT_ENCODE_SET)
+			.to_string()
+			.into(),
+	)
+}
+
+pub fn url_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> ResolveResult<'a> {
+	let v = v.load(ftx)?.always_materialize_owned();
+	let v = v
+		.as_str()
+		.map_err(|e| ftx.error(format!("invalid url-encoded value: {e}")))?;
+	percent_decode_str(v.as_ref())
+		.decode_utf8()
+		.map(|v| v.into_owned().into())
 		.map_err(|e| ftx.error(e))
 }
 

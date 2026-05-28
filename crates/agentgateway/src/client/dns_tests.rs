@@ -25,6 +25,11 @@ impl Mock {
 		responses.insert(host.to_string(), (ips.into_boxed_slice(), expiry));
 	}
 
+	pub fn remove_response(&self, host: &str) {
+		let mut responses = self.responses.lock().unwrap();
+		responses.remove(host);
+	}
+
 	pub async fn resolve(&self, host: &str) -> Result<(Box<[IpAddr]>, Instant), NetError> {
 		let responses = self.responses.lock().unwrap();
 		responses
@@ -108,6 +113,27 @@ async fn test_ip_error() {
 	tokio::time::sleep(ERROR_BACKOFF_BASE + Duration::from_secs(1)).await;
 	// Now we should get the IP
 	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_ip_error_retains_last_known_good() {
+	agent_core::telemetry::testing::setup_test_logging();
+	let mock = Arc::new(Mock::new());
+	mock.add_response("example.com", vec![IP1], 60);
+
+	let resolver = CachedResolver {
+		dns: Arc::new(Resolver::Mock(mock.clone())),
+		entries: Arc::new(Mutex::new(HashMap::new())),
+	};
+
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
+	tokio::time::sleep(Duration::from_secs(30)).await;
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
+	mock.remove_response("example.com");
+	tokio::time::sleep(Duration::from_secs(30)).await;
+	tokio::task::yield_now().await;
+
+	assert_eq!(resolver.resolve("example.com".into()).await.unwrap(), IP1);
 }
 
 #[tokio::test]

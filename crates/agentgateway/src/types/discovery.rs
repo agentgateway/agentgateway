@@ -281,6 +281,9 @@ pub struct Workload {
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub services: HashMap<NamespacedHostname, HashMap<u16, u16>>,
 
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub hbone_mtls_port: u16,
+
 	#[serde(default = "default_capacity")]
 	pub capacity: u32,
 }
@@ -314,6 +317,7 @@ impl Default for Workload {
 			cluster_id: Default::default(),
 			locality: Default::default(),
 			services: Default::default(),
+			hbone_mtls_port: Default::default(),
 
 			// default capacity to 1, as 0 means this workload should not receive traffic
 			capacity: default_capacity(),
@@ -864,6 +868,7 @@ impl Workload {
 			},
 
 			capacity: resource.capacity.unwrap_or(1),
+			hbone_mtls_port: Default::default(),
 			services,
 		};
 		// Return back part we did not use (service) so it can be consumed without cloning

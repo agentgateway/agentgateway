@@ -569,20 +569,40 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 	if directResponse.StatusCode == nil {
 		return nil, fmt.Errorf("failed to build directResponse: status is required")
 	}
+	var errs []error
+	if directResponse.Body != nil && directResponse.BodyExpression != nil {
+		errs = append(errs, fmt.Errorf("directResponse body and bodyExpression may not both be set"))
+	}
+	dr := &api.DirectResponse{
+		Status: uint32(*directResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
 	tp := &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_DirectResponse{
-			DirectResponse: &api.DirectResponse{
-				Status: uint32(*directResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
-			},
+			DirectResponse: dr,
 		},
 	}
 
 	// Add body if specified
 	if directResponse.Body != nil {
-		tp.GetDirectResponse().Body = []byte(*directResponse.Body)
+		dr.Body = []byte(*directResponse.Body)
+	}
+	if directResponse.BodyExpression != nil {
+		if !isCEL(*directResponse.BodyExpression) {
+			errs = append(errs, fmt.Errorf("directResponse bodyExpression is not a valid CEL expression: %s", *directResponse.BodyExpression))
+		}
+		dr.BodyExpression = string(*directResponse.BodyExpression)
+	}
+	for _, header := range directResponse.Headers {
+		if !isCEL(header.Value) {
+			errs = append(errs, fmt.Errorf("directResponse header %q is not a valid CEL expression: %s", header.Name, header.Value))
+		}
+		dr.Headers = append(dr.Headers, &api.ExpressionHeader{
+			Name:       string(header.Name),
+			Expression: string(header.Value),
+		})
 	}
 
-	return &api.Policy_Traffic{Traffic: tp}, nil
+	return &api.Policy_Traffic{Traffic: tp}, errors.Join(errs...)
 }
 
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
@@ -1093,6 +1113,19 @@ func buildExtAuthSpec(
 			PackAsBytes: false,
 		}
 	}
+	if cache := extAuth.Cache; cache != nil {
+		key := castCELSlice(cache.Key, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
+		})
+		ttl := castExtAuthCacheTTL(cache.TTL, func(expr shared.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
+		})
+		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
+			Key:        key,
+			Ttl:        ttl,
+			MaxEntries: ptr.OrDefault(cache.MaxEntries, 0),
+		}
+	}
 
 	return spec, errors.Join(errs...)
 }
@@ -1120,6 +1153,31 @@ func processExtProcTraffic(
 		// always use FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
 		FailureMode: api.TrafficPolicySpec_ExtProc_FAIL_CLOSED,
 	}
+	if extProc.ProcessingOptions != nil {
+		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
+			RequestBodyMode:   api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			ResponseBodyMode:  api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			AllowModeOverride: extProc.ProcessingOptions.AllowModeOverride,
+		}
+		if extProc.ProcessingOptions.RequestBodyMode != nil {
+			spec.ProcessingOptions.RequestBodyMode = toBodySendMode(*extProc.ProcessingOptions.RequestBodyMode)
+		}
+		if extProc.ProcessingOptions.ResponseBodyMode != nil {
+			spec.ProcessingOptions.ResponseBodyMode = toBodySendMode(*extProc.ProcessingOptions.ResponseBodyMode)
+		}
+		if extProc.ProcessingOptions.RequestHeaderMode != nil {
+			spec.ProcessingOptions.RequestHeaderMode = toHeaderSendMode(*extProc.ProcessingOptions.RequestHeaderMode)
+		}
+		if extProc.ProcessingOptions.ResponseHeaderMode != nil {
+			spec.ProcessingOptions.ResponseHeaderMode = toHeaderSendMode(*extProc.ProcessingOptions.ResponseHeaderMode)
+		}
+		if extProc.ProcessingOptions.RequestTrailerMode != nil {
+			spec.ProcessingOptions.RequestTrailerMode = toTrailerSendMode(*extProc.ProcessingOptions.RequestTrailerMode)
+		}
+		if extProc.ProcessingOptions.ResponseTrailerMode != nil {
+			spec.ProcessingOptions.ResponseTrailerMode = toTrailerSendMode(*extProc.ProcessingOptions.ResponseTrailerMode)
+		}
+	}
 
 	return &api.Policy_Traffic{
 		Traffic: &api.TrafficPolicySpec{
@@ -1128,6 +1186,41 @@ func processExtProcTraffic(
 			},
 		},
 	}, backendErr
+}
+
+func toBodySendMode(mode agentgateway.BodySendMode) api.TrafficPolicySpec_ExtProc_BodySendMode {
+	switch mode {
+	case agentgateway.BodySendModeBuffered:
+		return api.TrafficPolicySpec_ExtProc_BUFFERED
+	case agentgateway.BodySendModeBufferedPartial:
+		return api.TrafficPolicySpec_ExtProc_BUFFERED_PARTIAL
+	case agentgateway.BodySendModeFullDuplexStreamed:
+		return api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED
+	default:
+		return api.TrafficPolicySpec_ExtProc_NONE
+	}
+}
+
+func toHeaderSendMode(mode agentgateway.HeaderSendMode) api.TrafficPolicySpec_ExtProc_HeaderTrailerSendMode {
+	switch mode {
+	case agentgateway.HeaderSendModeSkip:
+		return api.TrafficPolicySpec_ExtProc_SKIP
+	case agentgateway.HeaderSendModeSend:
+		return api.TrafficPolicySpec_ExtProc_SEND
+	default:
+		return api.TrafficPolicySpec_ExtProc_SEND
+	}
+}
+
+func toTrailerSendMode(mode agentgateway.TrailerSendMode) api.TrafficPolicySpec_ExtProc_HeaderTrailerSendMode {
+	switch mode {
+	case agentgateway.TrailerSendModeSend:
+		return api.TrafficPolicySpec_ExtProc_SEND
+	case agentgateway.TrailerSendModeSkip:
+		return api.TrafficPolicySpec_ExtProc_SKIP
+	default:
+		return api.TrafficPolicySpec_ExtProc_SEND
+	}
 }
 
 func phase(policyPhase *agentgateway.PolicyPhase) api.TrafficPolicySpec_PolicyPhase {
@@ -1186,6 +1279,21 @@ func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) 
 		invalid(*item)
 	}
 	return res
+}
+
+func castCEL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+	if !isCEL(item) {
+		invalid(item)
+	}
+	return string(item)
+}
+
+func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+	raw := string(item)
+	if _, err := time.ParseDuration(raw); err == nil {
+		return "duration(" + strconv.Quote(raw) + ")"
+	}
+	return castCEL(item, invalid)
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies

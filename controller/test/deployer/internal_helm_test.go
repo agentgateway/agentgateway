@@ -255,9 +255,9 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				assert.Contains(t, outputYaml, "service-overlay-annotation: from-overlay",
 					"service annotation from overlay should be present")
 
-				// Label nulled to empty string
+				// Label set to empty string
 				assert.Contains(t, outputYaml, `app.kubernetes.io/managed-by: ""`,
-					"label should be nulled to empty string")
+					"label should be set to empty string")
 
 				// Volume mount added via merge
 				assert.Contains(t, outputYaml, "mountPath: /etc/custom-config",

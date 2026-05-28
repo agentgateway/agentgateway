@@ -1,3 +1,0 @@
-controller:
-  extraEnv:
-    AGW_DISCOVERY_NAMESPACE_SELECTORS: '[{"matchLabels":{"agentgateway.dev/discovery":"enabled"}}]'

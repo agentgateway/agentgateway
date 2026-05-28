@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ::cel::Value;
 use ::cel::objects::{KeyRef, MapValue};
 use serde::{Deserialize, Serialize};
@@ -20,11 +22,13 @@ impl McpAuthorization {
 	}
 }
 
-pub struct CelExecWrapper(::http::Request<()>);
+/// Cheap clone via Arc; this API treats the request as read-only after construction.
+#[derive(Clone)]
+pub struct CelExecWrapper(Arc<::http::Request<()>>);
 
 impl CelExecWrapper {
 	pub fn new(req: ::http::Request<()>) -> CelExecWrapper {
-		CelExecWrapper(req)
+		CelExecWrapper(Arc::new(req))
 	}
 }
 #[derive(Clone, Debug)]
@@ -35,9 +39,12 @@ impl McpAuthorizationSet {
 		Self(rs)
 	}
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
+		if !self.0.has_rules() {
+			return true;
+		}
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
 		let mcp = crate::mcp::MCPInfo::from(res);
-		let exec = crate::cel::Executor::new_mcp_request(&cel.0, &mcp);
+		let exec = crate::cel::Executor::new_mcp_request(cel.0.as_ref(), &mcp);
 		self.0.validate(&exec)
 	}
 
@@ -151,6 +158,19 @@ mod tests {
 			vec![],
 		);
 		McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(policies)]))
+	}
+
+	#[test]
+	fn test_mcp_authorization_empty_rules_short_circuits() {
+		let res = tool_resource("server", "increment");
+
+		let no_rule_sets = McpAuthorizationSet::new(RuleSets::from(vec![]));
+		assert!(no_rule_sets.validate(&res, &CelExecWrapper::new(req_without_claims())));
+
+		let empty_rule_set = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(
+			PolicySet::new(vec![], vec![], vec![]),
+		)]));
+		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
 	}
 
 	#[test]

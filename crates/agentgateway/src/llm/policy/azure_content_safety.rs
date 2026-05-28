@@ -8,7 +8,7 @@ use crate::http::jwt::Claims;
 use crate::llm::RequestType;
 use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendTrafficPolicy, ResourceName, SimpleBackend, Target};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 // ---------------------------------------------------------------------------
 // Analyze Text types
@@ -234,12 +234,12 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(body)?))?;
 
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(
 			strng::literal!("_azure-content-safety"),
 			strng::literal!(""),
 		),
-		Target::Hostname(host, 443),
+		(),
 	);
 
 	let resp = client

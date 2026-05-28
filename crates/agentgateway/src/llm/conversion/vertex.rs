@@ -1,5 +1,5 @@
 use crate::llm::types::ResponseType;
-use crate::llm::{AIError, types};
+use crate::llm::{AIError, logged_response_parsing, types};
 
 #[cfg(test)]
 #[path = "vertex_tests.rs"]
@@ -57,7 +57,7 @@ pub mod from_embeddings {
 
 	pub fn translate_response(bytes: &[u8], model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: types::vertex::PredictResponse =
-			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
 		let mut total_prompt_tokens = 0;
 		let mut data = Vec::new();

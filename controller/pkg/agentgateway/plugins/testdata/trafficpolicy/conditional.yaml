@@ -79,7 +79,10 @@ spec:
         - condition: "request.path == '/direct'"
           policy:
             status: 403
-            body: denied
+            bodyExpression: "'denied ' + request.path"
+            headers:
+              - name: x-direct
+                value: "'direct'"
         - condition: "request.path == '/gone'"
           policy:
             status: 410
@@ -123,7 +126,10 @@ output:
         - condition: request.path == '/direct'
           traffic:
             directResponse:
-              body: ZGVuaWVk
+              bodyExpression: '''denied '' + request.path'
+              headers:
+              - expression: '''direct'''
+                name: x-direct
               status: 403
         - condition: request.path == '/gone'
           traffic:
