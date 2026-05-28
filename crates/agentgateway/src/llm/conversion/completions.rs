@@ -986,6 +986,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.cached_tokens);
+								r.response.cache_creation_input_tokens = u.cache_creation_input_tokens;
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()
