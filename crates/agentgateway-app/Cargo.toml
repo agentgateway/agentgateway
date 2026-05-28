@@ -21,7 +21,7 @@ schema = ["agentgateway/schema"]
 [dependencies]
 pprof-alloc.workspace = true
 agent-core.workspace = true
-agentgateway.workspace = true
+agentgateway = { path = "../agentgateway", default-features = false }
 anyhow.workspace = true
 clap.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
