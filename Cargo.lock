@@ -4778,9 +4778,9 @@ dependencies = [
 
 [[package]]
 name = "pprof-alloc"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "469175fbbeed6be4d77f5cda3fdb1884ca02998a58f7a66d24738e0719737962"
+checksum = "edbea12d84a77fa20f39672bbc53c9d59a9a583732fa65dc8d0758920c974346"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4792,6 +4792,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libmimalloc-sys",
+ "mimalloc",
  "num",
  "once_cell",
  "paste",
@@ -4803,6 +4804,7 @@ dependencies = [
  "smallvec",
  "thiserror 1.0.69",
  "tikv-jemalloc-ctl",
+ "tikv-jemallocator",
  "tracing",
 ]
 

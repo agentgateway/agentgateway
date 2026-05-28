@@ -133,7 +133,7 @@ phonenumber = "0.3"
 pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
-pprof-alloc = "0.2"
+pprof-alloc = "0.3"
 pprof = { version = "0.15", features = [
     "protobuf",
     "protobuf-codec",

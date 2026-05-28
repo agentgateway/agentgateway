@@ -9,8 +9,7 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = []
-glibc = []
+default = ["jemalloc", "mimalloc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
