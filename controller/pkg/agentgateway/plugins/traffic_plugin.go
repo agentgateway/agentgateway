@@ -89,8 +89,7 @@ func ConvertStatusCollection[T controllers.Object, S any](
 	}, toOptions(originalName+"/mapped")...)
 }
 
-// NewAgentPlugin creates an AgentgatewayPolicy plugin. Credential resolvers are
-// consulted before the built-in Secret fallback.
+// NewAgentPlugin creates a new AgentgatewayPolicy plugin
 func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
