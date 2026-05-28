@@ -12450,15 +12450,15 @@ type BackendPolicySpec_ExtMcp_Remote struct {
 	// Static or CEL-evaluated context, surfaced to the policy server as
 	// fields of the `metadata_context` google.protobuf.Struct, keyed by
 	// config key.
-	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Metadata map[string]string `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Request headers forwarded to the policy server in `McpRequest.headers`.
 	// Empty means send all headers (modeled on Envoy ext_authz gRPC). When
 	// non-empty, only listed header names are sent. Matching is
 	// case-insensitive.
-	AllowedRequestHeaders []string `protobuf:"bytes,6,rep,name=allowed_request_headers,json=allowedRequestHeaders,proto3" json:"allowed_request_headers,omitempty"`
+	AllowedRequestHeaders []string `protobuf:"bytes,4,rep,name=allowed_request_headers,json=allowedRequestHeaders,proto3" json:"allowed_request_headers,omitempty"`
 	// Header names never forwarded to the policy server, even if they appear
 	// in `allowed_request_headers`. Case-insensitive.
-	DisallowedRequestHeaders []string `protobuf:"bytes,7,rep,name=disallowed_request_headers,json=disallowedRequestHeaders,proto3" json:"disallowed_request_headers,omitempty"`
+	DisallowedRequestHeaders []string `protobuf:"bytes,5,rep,name=disallowed_request_headers,json=disallowedRequestHeaders,proto3" json:"disallowed_request_headers,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -14240,9 +14240,9 @@ const file_resource_proto_rawDesc = "" +
 	"\x06Remote\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12b\n" +
 	"\ffailure_mode\x18\x02 \x01(\x0e2?.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureModeR\vfailureMode\x12d\n" +
-	"\bmetadata\x18\x05 \x03(\v2H.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntryR\bmetadata\x126\n" +
-	"\x17allowed_request_headers\x18\x06 \x03(\tR\x15allowedRequestHeaders\x12<\n" +
-	"\x1adisallowed_request_headers\x18\a \x03(\tR\x18disallowedRequestHeaders\x1a;\n" +
+	"\bmetadata\x18\x03 \x03(\v2H.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntryR\bmetadata\x126\n" +
+	"\x17allowed_request_headers\x18\x04 \x03(\tR\x15allowedRequestHeaders\x12<\n" +
+	"\x1adisallowed_request_headers\x18\x05 \x03(\tR\x18disallowedRequestHeaders\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1au\n" +

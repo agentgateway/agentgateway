@@ -87,7 +87,7 @@ type McpRequest struct {
 	// Incoming HTTP request headers carrying this MCP call, after gateway-side
 	// allow/deny filtering. Multi-value headers appear as repeated entries with
 	// the same key. Non-UTF8 header values are dropped. Empty for stdio upstreams.
-	Headers       []*Header `protobuf:"bytes,5,rep,name=headers,proto3" json:"headers,omitempty"`
+	Headers       []*McpHeader `protobuf:"bytes,5,rep,name=headers,proto3" json:"headers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,7 +150,7 @@ func (x *McpRequest) GetMcpRequest() *structpb.Struct {
 	return nil
 }
 
-func (x *McpRequest) GetHeaders() []*Header {
+func (x *McpRequest) GetHeaders() []*McpHeader {
 	if x != nil {
 		return x.Headers
 	}
@@ -449,7 +449,7 @@ type HeaderMutation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Headers to overwrite (insert if absent). If the same key is listed multiple
 	// times it is treated as a list (all values replace the existing header).
-	Set []*Header `protobuf:"bytes,1,rep,name=set,proto3" json:"set,omitempty"`
+	Set []*McpHeader `protobuf:"bytes,1,rep,name=set,proto3" json:"set,omitempty"`
 	// Header names to remove (case-insensitive).
 	Remove        []string `protobuf:"bytes,2,rep,name=remove,proto3" json:"remove,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -486,7 +486,7 @@ func (*HeaderMutation) Descriptor() ([]byte, []int) {
 	return file_ext_mcp_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *HeaderMutation) GetSet() []*Header {
+func (x *HeaderMutation) GetSet() []*McpHeader {
 	if x != nil {
 		return x.Set
 	}
@@ -500,7 +500,7 @@ func (x *HeaderMutation) GetRemove() []string {
 	return nil
 }
 
-type Header struct {
+type McpHeader struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
@@ -508,20 +508,20 @@ type Header struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Header) Reset() {
-	*x = Header{}
+func (x *McpHeader) Reset() {
+	*x = McpHeader{}
 	mi := &file_ext_mcp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Header) String() string {
+func (x *McpHeader) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Header) ProtoMessage() {}
+func (*McpHeader) ProtoMessage() {}
 
-func (x *Header) ProtoReflect() protoreflect.Message {
+func (x *McpHeader) ProtoReflect() protoreflect.Message {
 	mi := &file_ext_mcp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -533,19 +533,19 @@ func (x *Header) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Header.ProtoReflect.Descriptor instead.
-func (*Header) Descriptor() ([]byte, []int) {
+// Deprecated: Use McpHeader.ProtoReflect.Descriptor instead.
+func (*McpHeader) Descriptor() ([]byte, []int) {
 	return file_ext_mcp_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *Header) GetKey() string {
+func (x *McpHeader) GetKey() string {
 	if x != nil {
 		return x.Key
 	}
 	return ""
 }
 
-func (x *Header) GetValue() string {
+func (x *McpHeader) GetValue() string {
 	if x != nil {
 		return x.Value
 	}
@@ -653,15 +653,15 @@ var File_ext_mcp_proto protoreflect.FileDescriptor
 
 const file_ext_mcp_proto_rawDesc = "" +
 	"\n" +
-	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x81\x02\n" +
+	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x84\x02\n" +
 	"\n" +
 	"McpRequest\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
 	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x128\n" +
 	"\vmcp_request\x18\x04 \x01(\v2\x17.google.protobuf.StructR\n" +
-	"mcpRequest\x12:\n" +
-	"\aheaders\x18\x05 \x03(\v2 .agentgateway.dev.ext_mcp.HeaderR\aheaders\"\xc8\x01\n" +
+	"mcpRequest\x12=\n" +
+	"\aheaders\x18\x05 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\aheaders\"\xc8\x01\n" +
 	"\vMcpResponse\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
@@ -678,11 +678,11 @@ const file_ext_mcp_proto_rawDesc = "" +
 	"\x04pass\x18\x01 \x01(\v2\x1e.agentgateway.dev.ext_mcp.PassH\x00R\x04pass\x123\n" +
 	"\amutated\x18\x02 \x01(\v2\x17.google.protobuf.StructH\x00R\amutated\x12D\n" +
 	"\x05error\x18\x03 \x01(\v2,.agentgateway.dev.ext_mcp.AuthorizationErrorH\x00R\x05errorB\b\n" +
-	"\x06result\"\\\n" +
-	"\x0eHeaderMutation\x122\n" +
-	"\x03set\x18\x01 \x03(\v2 .agentgateway.dev.ext_mcp.HeaderR\x03set\x12\x16\n" +
-	"\x06remove\x18\x02 \x03(\tR\x06remove\"0\n" +
-	"\x06Header\x12\x10\n" +
+	"\x06result\"_\n" +
+	"\x0eHeaderMutation\x125\n" +
+	"\x03set\x18\x01 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\x03set\x12\x16\n" +
+	"\x06remove\x18\x02 \x03(\tR\x06remove\"3\n" +
+	"\tMcpHeader\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"\x06\n" +
 	"\x04Pass\"\xfa\x01\n" +
@@ -720,7 +720,7 @@ var file_ext_mcp_proto_goTypes = []any{
 	(*McpRequestResult)(nil),     // 3: agentgateway.dev.ext_mcp.McpRequestResult
 	(*McpResponseResult)(nil),    // 4: agentgateway.dev.ext_mcp.McpResponseResult
 	(*HeaderMutation)(nil),       // 5: agentgateway.dev.ext_mcp.HeaderMutation
-	(*Header)(nil),               // 6: agentgateway.dev.ext_mcp.Header
+	(*McpHeader)(nil),            // 6: agentgateway.dev.ext_mcp.McpHeader
 	(*Pass)(nil),                 // 7: agentgateway.dev.ext_mcp.Pass
 	(*AuthorizationError)(nil),   // 8: agentgateway.dev.ext_mcp.AuthorizationError
 	(*structpb.Struct)(nil),      // 9: google.protobuf.Struct
@@ -728,7 +728,7 @@ var file_ext_mcp_proto_goTypes = []any{
 var file_ext_mcp_proto_depIdxs = []int32{
 	9,  // 0: agentgateway.dev.ext_mcp.McpRequest.metadata_context:type_name -> google.protobuf.Struct
 	9,  // 1: agentgateway.dev.ext_mcp.McpRequest.mcp_request:type_name -> google.protobuf.Struct
-	6,  // 2: agentgateway.dev.ext_mcp.McpRequest.headers:type_name -> agentgateway.dev.ext_mcp.Header
+	6,  // 2: agentgateway.dev.ext_mcp.McpRequest.headers:type_name -> agentgateway.dev.ext_mcp.McpHeader
 	9,  // 3: agentgateway.dev.ext_mcp.McpResponse.metadata_context:type_name -> google.protobuf.Struct
 	9,  // 4: agentgateway.dev.ext_mcp.McpResponse.mcp_response:type_name -> google.protobuf.Struct
 	7,  // 5: agentgateway.dev.ext_mcp.McpRequestResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
@@ -739,7 +739,7 @@ var file_ext_mcp_proto_depIdxs = []int32{
 	7,  // 10: agentgateway.dev.ext_mcp.McpResponseResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
 	9,  // 11: agentgateway.dev.ext_mcp.McpResponseResult.mutated:type_name -> google.protobuf.Struct
 	8,  // 12: agentgateway.dev.ext_mcp.McpResponseResult.error:type_name -> agentgateway.dev.ext_mcp.AuthorizationError
-	6,  // 13: agentgateway.dev.ext_mcp.HeaderMutation.set:type_name -> agentgateway.dev.ext_mcp.Header
+	6,  // 13: agentgateway.dev.ext_mcp.HeaderMutation.set:type_name -> agentgateway.dev.ext_mcp.McpHeader
 	0,  // 14: agentgateway.dev.ext_mcp.AuthorizationError.code:type_name -> agentgateway.dev.ext_mcp.AuthorizationError.Code
 	9,  // 15: agentgateway.dev.ext_mcp.AuthorizationError.mcp_error:type_name -> google.protobuf.Struct
 	1,  // 16: agentgateway.dev.ext_mcp.ExtMcp.CheckRequest:input_type -> agentgateway.dev.ext_mcp.McpRequest

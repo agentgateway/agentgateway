@@ -26,7 +26,7 @@ message McpRequest {
   // Incoming HTTP request headers carrying this MCP call, after gateway-side
   // allow/deny filtering. Multi-value headers appear as repeated entries with
   // the same key. Non-UTF8 header values are dropped. Empty for stdio upstreams.
-  repeated Header headers = 5;
+  repeated McpHeader headers = 5;
 }
 
 message McpResponse {
@@ -65,12 +65,12 @@ message McpResponseResult {
 message HeaderMutation {
   // Headers to overwrite (insert if absent). If the same key is listed multiple
   // times it is treated as a list (all values replace the existing header).
-  repeated Header set = 1;
+  repeated McpHeader set = 1;
   // Header names to remove (case-insensitive).
   repeated string remove = 2;
 }
 
-message Header {
+message McpHeader {
   string key = 1;
   string value = 2;
 }

@@ -5,7 +5,7 @@ use prost_wkt_types::Struct;
 use protos::ext_mcp::authorization_error::Code as ErrCode;
 use protos::ext_mcp::ext_mcp_server::{ExtMcp, ExtMcpServer};
 use protos::ext_mcp::{
-	AuthorizationError, Header, HeaderMutation, McpRequest, McpRequestResult, McpResponse,
+	AuthorizationError, HeaderMutation, McpHeader, McpRequest, McpRequestResult, McpResponse,
 	McpResponseResult, Pass, mcp_request_result, mcp_response_result,
 };
 use tonic::{Request, Response as TonicResponse, Status};
@@ -87,7 +87,7 @@ fn build_header_mutation(
 	HeaderMutation {
 		set: set_headers
 			.into_iter()
-			.map(|(k, v)| Header {
+			.map(|(k, v)| McpHeader {
 				key: k.into(),
 				value: v.into(),
 			})

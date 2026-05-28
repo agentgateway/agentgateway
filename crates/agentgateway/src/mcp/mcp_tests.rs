@@ -3497,7 +3497,7 @@ async fn mcp_extmcp_request_headers_visible_to_policy_server() {
 
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
 
-	let captured: Arc<StdMutex<Option<Vec<crate::mcp::extmcp::wire::Header>>>> =
+	let captured: Arc<StdMutex<Option<Vec<crate::mcp::extmcp::wire::McpHeader>>>> =
 		Arc::new(StdMutex::new(None));
 	let extmcp_mock = {
 		let store = captured.clone();

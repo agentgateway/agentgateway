@@ -246,12 +246,12 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 // Snapshot the incoming request headers for the policy server, applying the
 // configured allow/deny filter. Multi-value headers yield one entry per value;
 // non-UTF8 values are dropped (the wire type is a UTF8 string).
-fn collect_headers(filter: &HeaderFilter, headers: &::http::HeaderMap) -> Vec<wire::Header> {
+fn collect_headers(filter: &HeaderFilter, headers: &::http::HeaderMap) -> Vec<wire::McpHeader> {
 	headers
 		.iter()
 		.filter(|(name, _)| filter.allows(name))
 		.filter_map(|(name, value)| {
-			value.to_str().ok().map(|v| wire::Header {
+			value.to_str().ok().map(|v| wire::McpHeader {
 				key: name.as_str().to_string(),
 				value: v.to_string(),
 			})
@@ -354,11 +354,11 @@ mod tests {
 		headers.insert("x-keep", "1".parse().unwrap());
 		let hm = wire::HeaderMutation {
 			set: vec![
-				wire::Header {
+				wire::McpHeader {
 					key: "bad name".into(),
 					value: "v".into(),
 				},
-				wire::Header {
+				wire::McpHeader {
 					key: "x-ok".into(),
 					value: "v\nbad".into(),
 				},
@@ -378,11 +378,11 @@ mod tests {
 		headers.append("x-multi", "old2".parse().unwrap());
 		let hm = wire::HeaderMutation {
 			set: vec![
-				wire::Header {
+				wire::McpHeader {
 					key: "x-multi".into(),
 					value: "new1".into(),
 				},
-				wire::Header {
+				wire::McpHeader {
 					key: "x-multi".into(),
 					value: "new2".into(),
 				},
