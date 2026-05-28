@@ -8,14 +8,33 @@ use pprof_alloc::Allocator;
 
 mod commands;
 
-#[cfg(target_os = "linux")]
-#[global_allocator]
-static GLOBAL: pprof_alloc::PprofAlloc = pprof_alloc::PprofAlloc::new()
-	.with_default(pprof_alloc::Allocator::Jemalloc)
-	.with_pprof()
-	.with_stats();
+cfg_select! {
+	all(target_os = "linux", target_env = "musl", target_arch = "aarch64") => {
+		#[global_allocator]
+		static GLOBAL:  pprof_alloc::PprofAlloc = pprof_alloc::PprofAlloc::new()
+							.with_default(pprof_alloc::Allocator::Mimalloc);
+	}
+	target_os = "linux" => {
+		#[global_allocator]
+		static GLOBAL:  pprof_alloc::PprofAlloc = pprof_alloc::PprofAlloc::new()
+							.with_default(pprof_alloc::Allocator::Jemalloc)
+							.with_pprof()
+							.with_stats();
+	}
+	_ => {
+		#[global_allocator]
+		static GLOBAL:  pprof_alloc::PprofAlloc = pprof_alloc::PprofAlloc::new()
+							.with_default(pprof_alloc::Allocator::System);
+	}
+}
 
-#[cfg(all(feature = "jemalloc", target_os = "linux"))]
+#[cfg(all(feature = "jemalloc", target_os = "linux", target_env = "musl"))]
+#[allow(non_upper_case_globals)]
+#[unsafe(export_name = "malloc_conf")]
+pub static malloc_conf: &[u8] =
+	b"thp:never,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000\0";
+
+#[cfg(all(feature = "jemalloc", target_os = "linux", not(target_env = "musl")))]
 #[allow(non_upper_case_globals)]
 #[unsafe(export_name = "malloc_conf")]
 pub static malloc_conf: &[u8] =
@@ -95,7 +114,17 @@ struct Cli {
 }
 
 pub fn run() -> anyhow::Result<()> {
-	pprof_alloc::configure_with_default(Allocator::Jemalloc)?;
+	cfg_select! {
+		all(target_os = "linux", target_env = "musl", target_arch = "aarch64") => {
+			pprof_alloc::configure_with_default(Allocator::Mimalloc)?;
+		}
+		target_os = "linux" => {
+			pprof_alloc::configure_with_default(Allocator::Jemalloc)?;
+		}
+		_ => {
+			pprof_alloc::configure_with_default(Allocator::System)?;
+		}
+	}
 	let args = Cli::parse();
 	match args.command {
 		#[cfg(target_os = "linux")]
