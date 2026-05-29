@@ -73,6 +73,11 @@ RUN --mount=type=cache,target=/app/target \
     <<EOF
 export VERSION="${VERSION}"
 export GIT_REVISION="${GIT_REVISION}"
+# Build jemalloc for 64KB pages on arm64 so the image runs on hosts with any page
+# size <= 64KB (4KB/16KB/64KB).
+if [ "${TARGETARCH}" = "arm64" ]; then
+  export JEMALLOC_SYS_WITH_LG_PAGE=16
+fi
 if [ "${CARGO_NO_DEFAULT_FEATURES}" = "true" ]; then
   cargo build --no-default-features --features "${CARGO_FEATURES}" --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
 else
