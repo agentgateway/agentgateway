@@ -791,6 +791,25 @@ spec:
         methods:
           tools/call: Full
 ---
+_err: 'backendRef: Required'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-extmcp-no-backend-ref
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      extMcp:
+        processors:
+        - remote:
+            failureMode: FailClosed
+        methods:
+          tools/call: Full
+---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

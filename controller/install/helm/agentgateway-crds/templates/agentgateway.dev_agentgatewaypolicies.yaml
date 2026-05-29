@@ -4417,7 +4417,6 @@ spec:
                                       description: |-
                                         `backendRef` references the remote ExtMcp policy server.
                                         Supported types: `Service` and `Backend`.
-                                        Required; translator rejects an absent ref.
                                       properties:
                                         group:
                                           default: ""
@@ -4508,6 +4507,8 @@ spec:
                                         keyed by config key. Values are CEL expressions.
                                       maxProperties: 64
                                       type: object
+                                  required:
+                                  - backendRef
                                   type: object
                               type: object
                               x-kubernetes-validations:

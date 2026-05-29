@@ -1454,9 +1454,8 @@ type ExtMcpProcessor struct {
 type ExtMcpRemote struct {
 	// `backendRef` references the remote ExtMcp policy server.
 	// Supported types: `Service` and `Backend`.
-	// Required; translator rejects an absent ref.
-	// +optional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
 	// `failureMode` controls behavior when the policy server is unreachable
 	// or returns an error. `FailOpen` allows the request; `FailClosed`

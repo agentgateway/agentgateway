@@ -220,15 +220,9 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 			// ExactlyOneOf guards this at admission; skip defensively.
 			continue
 		}
-		var be *api.BackendReference
-		if p.Remote.BackendRef == nil {
-			errs = append(errs, fmt.Errorf("failed to build extMcp: backendRef is required"))
-		} else {
-			var err error
-			be, err = buildBackendRef(ctx, *p.Remote.BackendRef, policy.Namespace)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
-			}
+		be, err := buildBackendRef(ctx, p.Remote.BackendRef, policy.Namespace)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
 		}
 		metadata := castCELMap(p.Remote.Metadata, func(key string, expr shared.CELExpression) {
 			errs = append(errs, fmt.Errorf("extMcp metadata %q is not a valid CEL expression: %s", key, expr))
