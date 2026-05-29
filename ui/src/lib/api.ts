@@ -52,7 +52,16 @@ export async function fetchConfig(): Promise<LocalConfig> {
       }
       throw new Error(`Failed to fetch config: ${r.status}`);
     }
-    return (await r.json()) as LocalConfig;
+    const raw = await r.json();
+    // The simplified `mcp:`/`llm:` top-level config formats are expanded into
+    // binds/listeners/routes/backends by the backend at runtime, but `/config`
+    // returns the raw file which has no `binds` in that case. Fall back to
+    // `/config_dump`, which returns the fully expanded representation (the same
+    // path used in XDS mode), so the UI doesn't render an empty config.
+    if (!raw.binds && (raw.mcp || raw.llm)) {
+      return fetchViaDump();
+    }
+    return { ...raw, binds: raw.binds || [] } as LocalConfig;
   }
 }
 
