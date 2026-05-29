@@ -420,7 +420,7 @@ impl Session {
 					ClientRequest::ListToolsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_tools(cel))
+							.send_fanout(r, ctx, self.relay.merge_tools())
 							.await
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
@@ -434,19 +434,19 @@ impl Session {
 					ClientRequest::ListPromptsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
+							.send_fanout(r, ctx, self.relay.merge_prompts())
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_resources(cel))
+							.send_fanout(r, ctx, self.relay.merge_resources())
 							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
+							.send_fanout(r, ctx, self.relay.merge_resource_templates())
 							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {

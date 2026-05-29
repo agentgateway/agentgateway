@@ -2522,7 +2522,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		),
 	];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &Default::default()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2583,7 +2583,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &Default::default()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2634,7 +2634,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &Default::default()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2671,12 +2671,20 @@ async fn test_runtime_fanout_fail_open() {
 
 	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
 
-	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
-		// Just return the first one for simplicity in this test
-		Ok(results.into_iter().next().unwrap().1)
-	});
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cels: &_| {
+			// Just return the first one for simplicity in this test
+			Ok(results.into_iter().next().unwrap().1)
+		},
+	);
 
-	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		Default::default(),
+		FailureMode::FailOpen,
+	);
 
 	let res = ms.next().await;
 	assert!(res.is_some());
@@ -2700,20 +2708,28 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 
 	let streams = vec![("bad1".into(), err_stream1), ("bad2".into(), err_stream2)];
 
-	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
-		// All failed, so results should be empty.
-		// Return an empty success result (idiomatic for FailOpen).
-		assert!(results.is_empty());
-		Ok(rmcp::model::ServerResult::ListToolsResult(
-			ListToolsResult {
-				tools: vec![],
-				next_cursor: None,
-				meta: None,
-			},
-		))
-	});
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cels: &_| {
+			// All failed, so results should be empty.
+			// Return an empty success result (idiomatic for FailOpen).
+			assert!(results.is_empty());
+			Ok(rmcp::model::ServerResult::ListToolsResult(
+				ListToolsResult {
+					tools: vec![],
+					next_cursor: None,
+					meta: None,
+				},
+			))
+		},
+	);
 
-	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		Default::default(),
+		FailureMode::FailOpen,
+	);
 
 	let res = ms.next().await;
 	assert!(res.is_some());
@@ -3274,6 +3290,67 @@ async fn mcp_extmcp_metadata_consumed_by_authz() {
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
 	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+}
+
+// Simiilar to mcp_extmcp_metadata_consumed_by_authz but for the fanout path.
+#[tokio::test]
+async fn mcp_extmcp_metadata_consumed_by_list_authz() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"tier": "free"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extmcp.tier == "free""#).unwrap(),
+		)],
+		vec![],
+	)));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_free_tier),
+			extmcp_test_support::policy(extmcp_mock.address),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let tool_names: Vec<String> = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed")
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect();
+
+	// `echo` is filtered only because list authz saw extMcp's `tier=free` metadata;
+	// without it the deny rule would not match and `echo` would remain.
+	assert!(
+		!tool_names.contains(&"echo".to_string()),
+		"echo should be filtered when extMcp marks the caller free-tier: {tool_names:?}"
+	);
+	assert!(
+		tool_names.contains(&"increment".to_string()),
+		"non-denied tools should remain: {tool_names:?}"
+	);
 }
 
 #[tokio::test]

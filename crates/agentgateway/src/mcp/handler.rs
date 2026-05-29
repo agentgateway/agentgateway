@@ -283,10 +283,10 @@ impl Relay {
 		Ok(())
 	}
 
-	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cels| {
 			let tools = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -294,17 +294,20 @@ impl Relay {
 						ServerResult::ListToolsResult(ltr) => ltr.tools,
 						_ => vec![],
 					};
+					let cel = cels.get(&server_name);
 					tools
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
-							policies.validate(
-								&rbac::ResourceType::Tool(rbac::ResourceId::new(
-									server_name.to_string(),
-									t.name.to_string(),
-								)),
-								&cel,
-							)
+							cel.is_some_and(|cel| {
+								policies.validate(
+									&rbac::ResourceType::Tool(rbac::ResourceId::new(
+										server_name.to_string(),
+										t.name.to_string(),
+									)),
+									cel,
+								)
+							})
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
@@ -330,7 +333,7 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
-		Box::new(move |s| {
+		Box::new(move |s, _cels| {
 			if !multiplexing {
 				// Happy case: we can forward everything
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
@@ -367,10 +370,10 @@ impl Relay {
 		})
 	}
 
-	pub fn merge_prompts(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cels| {
 			let prompts = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -378,16 +381,19 @@ impl Relay {
 						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
 						_ => vec![],
 					};
+					let cel = cels.get(&server_name);
 					prompts
 						.into_iter()
 						.filter(|p| {
-							policies.validate(
-								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-									server_name.to_string(),
-									p.name.to_string(),
-								)),
-								&cel,
-							)
+							cel.is_some_and(|cel| {
+								policies.validate(
+									&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+										server_name.to_string(),
+										p.name.to_string(),
+									)),
+									cel,
+								)
+							})
 						})
 						.map(|mut p| {
 							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
@@ -406,10 +412,10 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resources(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cels| {
 			let resources = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -417,16 +423,19 @@ impl Relay {
 						ServerResult::ListResourcesResult(lrr) => lrr.resources,
 						_ => vec![],
 					};
+					let cel = cels.get(&server_name);
 					resources
 						.into_iter()
 						.filter(|r| {
-							policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									server_name.to_string(),
-									r.uri.to_string(),
-								)),
-								&cel,
-							)
+							cel.is_some_and(|cel| {
+								policies.validate(
+									&rbac::ResourceType::Resource(rbac::ResourceId::new(
+										server_name.to_string(),
+										r.uri.to_string(),
+									)),
+									cel,
+								)
+							})
 						})
 						// Prefix URI with service name when multiplexing to avoid conflicts
 						.map(|mut r| {
@@ -446,10 +455,10 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resource_templates(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cels| {
 			let resource_templates = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -457,16 +466,19 @@ impl Relay {
 						ServerResult::ListResourceTemplatesResult(lrr) => lrr.resource_templates,
 						_ => vec![],
 					};
+					let cel = cels.get(&server_name);
 					resource_templates
 						.into_iter()
 						.filter(|rt| {
-							policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									server_name.to_string(),
-									rt.uri_template.to_string(),
-								)),
-								&cel,
-							)
+							cel.is_some_and(|cel| {
+								policies.validate(
+									&rbac::ResourceType::Resource(rbac::ResourceId::new(
+										server_name.to_string(),
+										rt.uri_template.to_string(),
+									)),
+									cel,
+								)
+							})
 						})
 						// Prefix uri_template with service name when multiplexing
 						.map(|mut rt| {
@@ -491,7 +503,7 @@ impl Relay {
 		})
 	}
 	pub fn merge_empty(&self) -> Box<MergeFn> {
-		Box::new(move |_| Ok(rmcp::model::ServerResult::empty(())))
+		Box::new(move |_, _| Ok(rmcp::model::ServerResult::empty(())))
 	}
 	pub async fn send_single(
 		&self,
@@ -656,12 +668,20 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
-		for (name, ctx, result) in fut_results {
+		// each upstream request has its own CEL context, modified by the
+		// per-upstream call to extmcp
+		let mut cels = HashMap::new();
+		for (name, octx, result) in fut_results {
 			match result {
 				Ok(s) => {
+					let req_ctx = octx.as_ref().unwrap_or(&ctx);
+					cels.insert(
+						name.clone(),
+						CelExecWrapper::new(req_ctx.as_request().map(|_| ())),
+					);
 					// apply extmcp wrappers per-upstream so that they see an unmuxed view
 					// TODO this is consistent with extauth but has a huge latency cost
-					let msg = match ctx
+					let msg = match octx
 						.as_ref()
 						.and_then(|c| self.build_extmcp_ctx(&r, c, &name))
 					{
@@ -691,7 +711,13 @@ impl Relay {
 			));
 		}
 
-		let ms = mergestream::MergeStream::new(streams, id.clone(), merge, self.upstreams.failure_mode);
+		let ms = mergestream::MergeStream::new(
+			streams,
+			id.clone(),
+			merge,
+			cels,
+			self.upstreams.failure_mode,
+		);
 		messages_to_response(id, ms, None)
 	}
 	pub async fn send_notification(

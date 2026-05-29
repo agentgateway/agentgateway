@@ -6,6 +6,9 @@ use itertools::Itertools;
 use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
 use tracing::warn;
 
+use std::collections::HashMap;
+
+use crate::mcp::rbac::CelExecWrapper;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{ClientError, FailureMode};
 use crate::*;
@@ -93,7 +96,11 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 	}
 }
 
-pub type MergeFn = dyn FnOnce(Vec<(Strng, ServerResult)>) -> Result<ServerResult, ClientError>
+pub type MergeFn = dyn FnOnce(
+		Vec<(Strng, ServerResult)>,
+		// per-upstream CEL context
+		&HashMap<Strng, CelExecWrapper>,
+	) -> Result<ServerResult, ClientError>
 	+ Send
 	+ Sync
 	+ 'static;
@@ -105,25 +112,34 @@ pub struct MergeStream {
 	complete: bool,
 	req_id: RequestId,
 	merge: Option<Box<MergeFn>>,
+	cels: HashMap<Strng, CelExecWrapper>,
 	failure_mode: FailureMode,
 }
 
 impl MergeStream {
 	pub fn new_without_merge(streams: Vec<(Strng, Messages)>, failure_mode: FailureMode) -> Self {
-		Self::new_internal(streams, RequestId::Number(0), None, failure_mode)
+		Self::new_internal(
+			streams,
+			RequestId::Number(0),
+			None,
+			HashMap::new(),
+			failure_mode,
+		)
 	}
 	pub fn new(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Box<MergeFn>,
+		cels: HashMap<Strng, CelExecWrapper>,
 		failure_mode: FailureMode,
 	) -> Self {
-		Self::new_internal(streams, req_id, Some(merge), failure_mode)
+		Self::new_internal(streams, req_id, Some(merge), cels, failure_mode)
 	}
 	fn new_internal(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Option<Box<MergeFn>>,
+		cels: HashMap<Strng, CelExecWrapper>,
 		failure_mode: FailureMode,
 	) -> Self {
 		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
@@ -133,6 +149,7 @@ impl MergeStream {
 			req_id,
 			complete: false,
 			merge,
+			cels,
 			failure_mode,
 		}
 	}
@@ -146,10 +163,11 @@ impl MergeStream {
 			.filter_map(Option::take)
 			.collect_vec();
 
-		let res = self
+		let merge = self
 			.merge
 			.take()
-			.expect("merge_terminal_messages called twice")(msgs)?;
+			.expect("merge_terminal_messages called twice");
+		let res = merge(msgs, &self.cels)?;
 		Ok(ServerJsonRpcMessage::response(res, self.req_id.clone()))
 	}
 }
