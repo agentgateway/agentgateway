@@ -2,16 +2,16 @@
     helm.sh/chart: kgateway-0.0.2
 --
     app.kubernetes.io/instance: foobar
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
 --
   labels:
     helm.sh/chart: kgateway-0.0.2
 --
     app.kubernetes.io/instance: foobar
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
 --
   labels:
     helm.sh/chart: kgateway-0.0.2
 --
     app.kubernetes.io/instance: foobar
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
