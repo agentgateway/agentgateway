@@ -797,8 +797,8 @@ impl Store {
 				TrafficPolicy::CORS(p) => {
 					pol.cors.set_if_unset(p);
 				},
-				TrafficPolicy::Buffering(request_policy) => {
-					pol.buffering.set_if_unset(request_policy);
+				TrafficPolicy::Buffering(p) => {
+					pol.buffering.set_if_unset(p);
 				},
 			}
 		}
