@@ -313,7 +313,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		mtls := tls.MtlsCertificateRef[0]
 		nn := types.NamespacedName{
 			Namespace: policy.Namespace,
-			Name:      mtls.Name,
+			Name:      string(mtls.Name),
 		}
 		data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
 		if err != nil {
@@ -956,7 +956,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 	return nil, errors.Join(errs...)
 }
 
-func credentialRefConfigured(ref agentgateway.LocalCredentialRef) bool {
+func credentialRefConfigured(ref shared.LocalSecretObjectRef) bool {
 	return ref.Name != ""
 }
 

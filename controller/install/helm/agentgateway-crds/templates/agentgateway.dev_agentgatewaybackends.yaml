@@ -573,6 +573,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -651,6 +652,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -711,6 +713,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -847,6 +850,7 @@ spec:
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                               required:
@@ -1070,7 +1074,7 @@ spec:
                                                                 If unspecified, no client certificate will be used.
                                                               items:
                                                                 description: |-
-                                                                  LocalCredentialRef references a same-namespace credential.
+                                                                  LocalSecretObjectRef references a same-namespace credential.
                                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                                 properties:
                                                                   group:
@@ -1092,6 +1096,7 @@ spec:
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    maxLength: 253
                                                                     minLength: 1
                                                                     type: string
                                                                 required:
@@ -1321,6 +1326,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -1399,6 +1405,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -1459,6 +1466,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -1595,6 +1603,7 @@ spec:
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                               required:
@@ -1818,7 +1827,7 @@ spec:
                                                                 If unspecified, no client certificate will be used.
                                                               items:
                                                                 description: |-
-                                                                  LocalCredentialRef references a same-namespace credential.
+                                                                  LocalSecretObjectRef references a same-namespace credential.
                                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                                 properties:
                                                                   group:
@@ -1840,6 +1849,7 @@ spec:
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    maxLength: 253
                                                                     minLength: 1
                                                                     type: string
                                                                 required:
@@ -2065,6 +2075,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -2143,6 +2154,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -2203,6 +2215,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -2339,6 +2352,7 @@ spec:
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                               required:
@@ -2562,7 +2576,7 @@ spec:
                                                                 If unspecified, no client certificate will be used.
                                                               items:
                                                                 description: |-
-                                                                  LocalCredentialRef references a same-namespace credential.
+                                                                  LocalSecretObjectRef references a same-namespace credential.
                                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                                 properties:
                                                                   group:
@@ -2584,6 +2598,7 @@ spec:
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    maxLength: 253
                                                                     minLength: 1
                                                                     type: string
                                                                 required:
@@ -3035,6 +3050,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -3113,6 +3129,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -3173,6 +3190,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -3309,6 +3327,7 @@ spec:
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                               required:
@@ -3532,7 +3551,7 @@ spec:
                                                                 If unspecified, no client certificate will be used.
                                                               items:
                                                                 description: |-
-                                                                  LocalCredentialRef references a same-namespace credential.
+                                                                  LocalSecretObjectRef references a same-namespace credential.
                                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                                 properties:
                                                                   group:
@@ -3554,6 +3573,7 @@ spec:
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    maxLength: 253
                                                                     minLength: 1
                                                                     type: string
                                                                 required:
@@ -3783,6 +3803,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -3861,6 +3882,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -3921,6 +3943,7 @@ spec:
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      maxLength: 253
                                                                       minLength: 1
                                                                       type: string
                                                                   required:
@@ -4057,6 +4080,7 @@ spec:
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                               required:
@@ -4280,7 +4304,7 @@ spec:
                                                                 If unspecified, no client certificate will be used.
                                                               items:
                                                                 description: |-
-                                                                  LocalCredentialRef references a same-namespace credential.
+                                                                  LocalSecretObjectRef references a same-namespace credential.
                                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                                 properties:
                                                                   group:
@@ -4302,6 +4326,7 @@ spec:
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    maxLength: 253
                                                                     minLength: 1
                                                                     type: string
                                                                 required:
@@ -4803,6 +4828,7 @@ spec:
                                               name:
                                                 description: Name of the referenced
                                                   credential.
+                                                maxLength: 253
                                                 minLength: 1
                                                 type: string
                                             required:
@@ -4866,6 +4892,7 @@ spec:
                                               name:
                                                 description: Name of the referenced
                                                   credential.
+                                                maxLength: 253
                                                 minLength: 1
                                                 type: string
                                             required:
@@ -4913,6 +4940,7 @@ spec:
                                               name:
                                                 description: Name of the referenced
                                                   credential.
+                                                maxLength: 253
                                                 minLength: 1
                                                 type: string
                                             required:
@@ -5030,6 +5058,7 @@ spec:
                                             type: string
                                           name:
                                             description: Name of the referenced credential.
+                                            maxLength: 253
                                             minLength: 1
                                             type: string
                                         required:
@@ -5290,7 +5319,7 @@ spec:
                                           If unspecified, no client certificate will be used.
                                         items:
                                           description: |-
-                                            LocalCredentialRef references a same-namespace credential.
+                                            LocalSecretObjectRef references a same-namespace credential.
                                             A name-only ref preserves the previous Secret reference wire shape.
                                           properties:
                                             group:
@@ -5305,6 +5334,7 @@ spec:
                                             name:
                                               description: Name of the referenced
                                                 credential.
+                                              maxLength: 253
                                               minLength: 1
                                               type: string
                                           required:
@@ -6263,6 +6293,7 @@ spec:
                                             name:
                                               description: Name of the referenced
                                                 credential.
+                                              maxLength: 253
                                               minLength: 1
                                               type: string
                                           required:
@@ -6325,6 +6356,7 @@ spec:
                                             name:
                                               description: Name of the referenced
                                                 credential.
+                                              maxLength: 253
                                               minLength: 1
                                               type: string
                                           required:
@@ -6371,6 +6403,7 @@ spec:
                                             name:
                                               description: Name of the referenced
                                                 credential.
+                                              maxLength: 253
                                               minLength: 1
                                               type: string
                                           required:
@@ -6487,6 +6520,7 @@ spec:
                                           type: string
                                         name:
                                           description: Name of the referenced credential.
+                                          maxLength: 253
                                           minLength: 1
                                           type: string
                                       required:
@@ -6674,7 +6708,7 @@ spec:
                                         If unspecified, no client certificate will be used.
                                       items:
                                         description: |-
-                                          LocalCredentialRef references a same-namespace credential.
+                                          LocalSecretObjectRef references a same-namespace credential.
                                           A name-only ref preserves the previous Secret reference wire shape.
                                         properties:
                                           group:
@@ -6687,6 +6721,7 @@ spec:
                                             type: string
                                           name:
                                             description: Name of the referenced credential.
+                                            maxLength: 253
                                             minLength: 1
                                             type: string
                                         required:
@@ -7114,6 +7149,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7178,6 +7214,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7226,6 +7263,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7348,6 +7386,7 @@ spec:
                                                 name:
                                                   description: Name of the referenced
                                                     credential.
+                                                  maxLength: 253
                                                   minLength: 1
                                                   type: string
                                               required:
@@ -7543,7 +7582,7 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalCredentialRef references a same-namespace credential.
+                                                  LocalSecretObjectRef references a same-namespace credential.
                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                 properties:
                                                   group:
@@ -7559,6 +7598,7 @@ spec:
                                                   name:
                                                     description: Name of the referenced
                                                       credential.
+                                                    maxLength: 253
                                                     minLength: 1
                                                     type: string
                                                 required:
@@ -7760,6 +7800,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7824,6 +7865,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7872,6 +7914,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -7994,6 +8037,7 @@ spec:
                                                 name:
                                                   description: Name of the referenced
                                                     credential.
+                                                  maxLength: 253
                                                   minLength: 1
                                                   type: string
                                               required:
@@ -8189,7 +8233,7 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalCredentialRef references a same-namespace credential.
+                                                  LocalSecretObjectRef references a same-namespace credential.
                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                 properties:
                                                   group:
@@ -8205,6 +8249,7 @@ spec:
                                                   name:
                                                     description: Name of the referenced
                                                       credential.
+                                                    maxLength: 253
                                                     minLength: 1
                                                     type: string
                                                 required:
@@ -8403,6 +8448,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -8467,6 +8513,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -8515,6 +8562,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -8637,6 +8685,7 @@ spec:
                                                 name:
                                                   description: Name of the referenced
                                                     credential.
+                                                  maxLength: 253
                                                   minLength: 1
                                                   type: string
                                               required:
@@ -8832,7 +8881,7 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalCredentialRef references a same-namespace credential.
+                                                  LocalSecretObjectRef references a same-namespace credential.
                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                 properties:
                                                   group:
@@ -8848,6 +8897,7 @@ spec:
                                                   name:
                                                     description: Name of the referenced
                                                       credential.
+                                                    maxLength: 253
                                                     minLength: 1
                                                     type: string
                                                 required:
@@ -9263,6 +9313,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -9327,6 +9378,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -9375,6 +9427,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -9497,6 +9550,7 @@ spec:
                                                 name:
                                                   description: Name of the referenced
                                                     credential.
+                                                  maxLength: 253
                                                   minLength: 1
                                                   type: string
                                               required:
@@ -9692,7 +9746,7 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalCredentialRef references a same-namespace credential.
+                                                  LocalSecretObjectRef references a same-namespace credential.
                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                 properties:
                                                   group:
@@ -9708,6 +9762,7 @@ spec:
                                                   name:
                                                     description: Name of the referenced
                                                       credential.
+                                                    maxLength: 253
                                                     minLength: 1
                                                     type: string
                                                 required:
@@ -9909,6 +9964,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -9973,6 +10029,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -10021,6 +10078,7 @@ spec:
                                                     name:
                                                       description: Name of the referenced
                                                         credential.
+                                                      maxLength: 253
                                                       minLength: 1
                                                       type: string
                                                   required:
@@ -10143,6 +10201,7 @@ spec:
                                                 name:
                                                   description: Name of the referenced
                                                     credential.
+                                                  maxLength: 253
                                                   minLength: 1
                                                   type: string
                                               required:
@@ -10338,7 +10397,7 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalCredentialRef references a same-namespace credential.
+                                                  LocalSecretObjectRef references a same-namespace credential.
                                                   A name-only ref preserves the previous Secret reference wire shape.
                                                 properties:
                                                   group:
@@ -10354,6 +10413,7 @@ spec:
                                                   name:
                                                     description: Name of the referenced
                                                       credential.
+                                                    maxLength: 253
                                                     minLength: 1
                                                     type: string
                                                 required:
@@ -10825,6 +10885,7 @@ spec:
                                 type: string
                               name:
                                 description: Name of the referenced credential.
+                                maxLength: 253
                                 minLength: 1
                                 type: string
                             required:
@@ -10884,6 +10945,7 @@ spec:
                                 type: string
                               name:
                                 description: Name of the referenced credential.
+                                maxLength: 253
                                 minLength: 1
                                 type: string
                             required:
@@ -10928,6 +10990,7 @@ spec:
                                 type: string
                               name:
                                 description: Name of the referenced credential.
+                                maxLength: 253
                                 minLength: 1
                                 type: string
                             required:
@@ -11043,6 +11106,7 @@ spec:
                             type: string
                           name:
                             description: Name of the referenced credential.
+                            maxLength: 253
                             minLength: 1
                             type: string
                         required:
@@ -11785,7 +11849,7 @@ spec:
                           If unspecified, no client certificate will be used.
                         items:
                           description: |-
-                            LocalCredentialRef references a same-namespace credential.
+                            LocalSecretObjectRef references a same-namespace credential.
                             A name-only ref preserves the previous Secret reference wire shape.
                           properties:
                             group:
@@ -11798,6 +11862,7 @@ spec:
                               type: string
                             name:
                               description: Name of the referenced credential.
+                              maxLength: 253
                               minLength: 1
                               type: string
                           required:

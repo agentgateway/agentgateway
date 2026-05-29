@@ -158,7 +158,7 @@ func NewPolicyCtx(
 
 // ResolveCredentialRef applies the context's credential resolvers with the
 // built-in Secret fallback.
-func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+func (ctx PolicyCtx) ResolveCredentialRef(ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
 	if ctx.resolvedCredentialResolver == nil {
 		return nil, errors.New("credential resolver is not configured")
 	}
@@ -797,7 +797,7 @@ func processAPIKeyAuthenticationPolicy(
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			dataSets = []apiKeyData{{name: s.Name, data: data}}
+			dataSets = []apiKeyData{{name: string(s.Name), data: data}}
 		}
 	}
 	if s := ak.SecretSelector; s != nil {

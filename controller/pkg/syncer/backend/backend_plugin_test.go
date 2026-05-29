@@ -17,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -486,7 +487,7 @@ func TestBuildAIBackend(t *testing.T) {
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Policies: &agentgateway.BackendFull{
 						BackendSimple: agentgateway.BackendSimple{
-							Auth: &agentgateway.BackendAuth{SecretRef: &agentgateway.LocalCredentialRef{
+							Auth: &agentgateway.BackendAuth{SecretRef: &shared.LocalSecretObjectRef{
 								Name: "openai-secret",
 							}},
 						},

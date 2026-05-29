@@ -10,7 +10,7 @@ import (
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // ErrUnsupportedCredentialKind signals that a resolver does not own the
@@ -23,7 +23,7 @@ var ErrUnsupportedCredentialKind = errors.New("unsupported credential kind")
 // ErrUnsupportedCredentialKind for group/kind pairs they do not handle; missing
 // data for a handled ref should return a normal error.
 type CredentialResolver interface {
-	ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error)
+	ResolveCredentialRef(krtctx krt.HandlerContext, ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error)
 }
 
 // NewChainedCredentialResolver returns a resolver that tries resolvers in order
@@ -63,7 +63,7 @@ func NewChainedCredentialResolver(resolvers ...CredentialResolver) CredentialRes
 
 type chainedCredentialResolver []CredentialResolver
 
-func (r chainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+func (r chainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
 	for _, resolver := range r {
 		if resolver == nil {
 			continue
@@ -98,7 +98,7 @@ func GetSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext
 }
 
 // ResolveCredentialRef fetches Secret-backed credential bytes for a CredentialRef.
-func (r secretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+func (r secretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
 	if ref.Group != "" || (ref.Kind != "" && ref.Kind != "Secret") {
 		return nil, fmt.Errorf("%w: %q/%q", ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 	}
@@ -108,7 +108,7 @@ func (r secretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext
 	if r.secrets == nil {
 		return nil, errors.New("credential secret collection is not configured")
 	}
-	secret, err := GetSecret(r.secrets, krtctx, ref.Name, namespace)
+	secret, err := GetSecret(r.secrets, krtctx, string(ref.Name), namespace)
 	if err != nil {
 		return nil, err
 	}
