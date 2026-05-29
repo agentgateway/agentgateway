@@ -57,6 +57,7 @@ const (
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
+	bufferingSuffix          = ":buffering"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -504,6 +505,10 @@ func translateTrafficPolicyToAgw(
 		))
 	}
 
+	if traffic.Buffering != nil {
+		appendPolicy("buffering")(processBufferingPolicy(traffic.Buffering, basePolicyName, policyName))
+	}
+
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
@@ -516,6 +521,27 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
+}
+
+func processBufferingPolicy(buffering *agentgateway.Buffering, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
+	var errs []error
+	if buffering.RequestBodyBuffering == nil {
+		errs = append(errs, fmt.Errorf("buffering policy requires requestBodyBuffering field to be set"))
+	}
+	bufferingPolicy := &api.Policy{
+		Key:  basePolicyName + bufferingSuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Buffering{
+					Buffering: &api.Buffering{
+						RequestBodyBuffering: *buffering.RequestBodyBuffering,
+					},
+				},
+			},
+		},
+	}
+	return bufferingPolicy, errors.Join(errs...)
 }
 
 func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
