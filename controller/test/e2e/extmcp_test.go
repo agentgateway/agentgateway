@@ -23,16 +23,14 @@ var (
 
 func TestExtMCP(tt *testing.T) {
 	t := New(tt)
+	t.Apply(extMcpSetupManifest)
 	t.Run("RequestDeniesForbiddenTool", func(t base.Test) {
-		t.Apply(extMcpSetupManifest)
 		testExtMcpRequestDeniesForbiddenTool(t)
 	})
 	t.Run("RequestAllowsAllowedTool", func(t base.Test) {
-		t.Apply(extMcpSetupManifest)
 		testExtMcpRequestAllowsAllowedTool(t)
 	})
 	t.Run("ResponseMutatesToolsListDesc", func(t base.Test) {
-		t.Apply(extMcpSetupManifest)
 		testExtMcpResponseMutatesToolsListDesc(t)
 	})
 }
