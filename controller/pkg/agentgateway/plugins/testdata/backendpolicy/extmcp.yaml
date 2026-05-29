@@ -11,13 +11,14 @@ spec:
   backend:
     mcp:
       extMcp:
-        remote:
-          backendRef:
-            name: extmcp-srv
-            port: 4317
-          failureMode: FailClosed
-          metadata:
-            tenant: 'jwt.sub'
+        processors:
+        - remote:
+            backendRef:
+              name: extmcp-srv
+              port: 4317
+            failureMode: FailClosed
+            metadata:
+              tenant: 'jwt.sub'
         methods:
           tools/call: Both
           tools/list: Request
@@ -44,14 +45,15 @@ output:
           methods:
             tools/call: BOTH
             tools/list: REQUEST
-          remote:
-            metadata:
-              tenant: jwt.sub
-            target:
-              port: 4317
-              service:
-                hostname: extmcp-srv.default.svc.cluster.local
-                namespace: default
+          processors:
+          - remote:
+              metadata:
+                tenant: jwt.sub
+              target:
+                port: 4317
+                service:
+                  hostname: extmcp-srv.default.svc.cluster.local
+                  namespace: default
       key: backend/default/extmcp:mcp-extmcp:default/test
       name:
         kind: AgentgatewayPolicy

@@ -553,54 +553,64 @@ fn convert_ext_mcp(
 		})
 		.collect();
 
-	let remote = em
-		.remote
-		.as_ref()
-		.map(|r: &ProtoRemote| -> Result<_, ProtoError> {
-			let failure_mode = match ProtoFailureMode::try_from(r.failure_mode).ok() {
-				Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::Allow,
-				_ => crate::mcp::extmcp::FailureMode::Deny,
-			};
-			let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
-			let metadata = r
-				.metadata
-				.iter()
-				.map(|(k, v)| {
-					let ve = permissive_cel_expression_arc(
-						diagnostics,
-						format!("backend.extMcp.remote.metadata.{k}"),
-						v,
-					);
-					Ok::<_, ProtoError>((k.to_owned(), ve))
-				})
-				.collect::<Result<HashMap<_, _>, _>>()?;
-			let request_headers = crate::mcp::extmcp::HeaderFilter {
-				allowed: parse_header_names(
-					diagnostics,
-					"backend.extMcp.remote.allowedRequestHeaders",
-					&r.allowed_request_headers,
-				),
-				disallowed: parse_header_names(
-					diagnostics,
-					"backend.extMcp.remote.disallowedRequestHeaders",
-					&r.disallowed_request_headers,
-				),
-			};
-			Ok(crate::mcp::extmcp::Driver::Remote(
-				crate::mcp::extmcp::Remote {
-					target,
-					failure_mode,
-					metadata,
-					request_headers,
-				},
-			))
-		})
-		.transpose()?;
+	use proto::agent::backend_policy_spec::ext_mcp::processor::Kind as ProtoProcessorKind;
 
-	let drivers = remote.map(|d| vec![d]).unwrap_or_default();
+	fn convert_remote(
+		r: &ProtoRemote,
+		diagnostics: &mut Diagnostics,
+	) -> Result<crate::mcp::extmcp::Remote, ProtoError> {
+		let failure_mode = match ProtoFailureMode::try_from(r.failure_mode).ok() {
+			Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::Allow,
+			_ => crate::mcp::extmcp::FailureMode::Deny,
+		};
+		let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
+		let metadata = r
+			.metadata
+			.iter()
+			.map(|(k, v)| {
+				let ve = permissive_cel_expression_arc(
+					diagnostics,
+					format!("backend.extMcp.remote.metadata.{k}"),
+					v,
+				);
+				Ok::<_, ProtoError>((k.to_owned(), ve))
+			})
+			.collect::<Result<HashMap<_, _>, _>>()?;
+		let request_headers = crate::mcp::extmcp::HeaderFilter {
+			allowed: parse_header_names(
+				diagnostics,
+				"backend.extMcp.remote.allowedRequestHeaders",
+				&r.allowed_request_headers,
+			),
+			disallowed: parse_header_names(
+				diagnostics,
+				"backend.extMcp.remote.disallowedRequestHeaders",
+				&r.disallowed_request_headers,
+			),
+		};
+		Ok(crate::mcp::extmcp::Remote {
+			target,
+			failure_mode,
+			metadata,
+			request_headers,
+		})
+	}
+
+	let mut drivers = Vec::with_capacity(em.processors.len());
+	for processor in &em.processors {
+		match processor.kind.as_ref() {
+			Some(ProtoProcessorKind::Remote(r)) => {
+				drivers.push(crate::mcp::extmcp::Driver::Remote(convert_remote(
+					r,
+					diagnostics,
+				)?));
+			},
+			None => diagnostics.add_warning("extMcp processor has no driver set; ignoring"),
+		}
+	}
 
 	if !drivers.is_empty() && methods.is_empty() {
-		diagnostics.add_warning("extMcp configured with drivers but no methods; no hooks will run");
+		diagnostics.add_warning("extMcp configured with processors but no methods; no hooks will run");
 	}
 
 	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })

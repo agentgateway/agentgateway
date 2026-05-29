@@ -11,10 +11,11 @@ spec:
   backend:
     mcp:
       extMcp:
-        remote:
-          failureMode: FailClosed
-          metadata:
-            tenant: 'jwt.sub'
+        processors:
+        - remote:
+            failureMode: FailClosed
+            metadata:
+              tenant: 'jwt.sub'
         methods:
           tools/call: Both
 
@@ -30,9 +31,10 @@ output:
         extMcp:
           methods:
             tools/call: BOTH
-          remote:
-            metadata:
-              tenant: jwt.sub
+          processors:
+          - remote:
+              metadata:
+                tenant: jwt.sub
       key: backend/default/extmcp-no-backend-ref:mcp-extmcp:default/test
       name:
         kind: AgentgatewayPolicy

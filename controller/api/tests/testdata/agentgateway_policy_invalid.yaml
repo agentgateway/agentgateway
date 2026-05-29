@@ -783,10 +783,11 @@ spec:
   backend:
     mcp:
       extMcp:
-        remote:
-          backendRef:
-            name: extmcp-srv
-            port: 4317
+        processors:
+        - remote:
+            backendRef:
+              name: extmcp-srv
+              port: 4317
         methods:
           tools/call: Both
 ---

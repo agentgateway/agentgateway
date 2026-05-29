@@ -1423,20 +1423,32 @@ const (
 	MCPMethodPhaseBoth     MCPMethodPhase = "Both"
 )
 
-// ExtMcp is the MCP-layer analog of Envoy ext_authz: a remote gRPC server
-// invoked per JSON-RPC method.
+// ExtMcp is the MCP-layer analog of Envoy ext_authz: an ordered chain of
+// policy processors invoked per JSON-RPC method.
 type ExtMcp struct {
-	// `remote` configures the gRPC policy server.
-	// +optional
-	Remote *ExtMcpRemote `json:"remote,omitempty"`
+	// `processors` is the ordered list of policy processors applied to matched
+	// methods. Processors run in the order listed; the first to reject a request
+	// short-circuits the chain.
+	// +required
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	Processors []ExtMcpProcessor `json:"processors"`
 
 	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
-	// `tools/list`) routed through the policy server. Methods not listed
+	// `tools/list`) routed through the processor chain. Methods not listed
 	// here, including unknown ones, bypass extMcp entirely.
 	// +required
 	// +kubebuilder:validation:MinProperties=1
 	// +kubebuilder:validation:MaxProperties=64
 	Methods map[string]MCPMethodPhase `json:"methods"`
+}
+
+// ExtMcpProcessor selects a single policy processor. Exactly one variant must be set.
+// +kubebuilder:validation:ExactlyOneOf=remote
+type ExtMcpProcessor struct {
+	// `remote` configures a gRPC policy server.
+	// +optional
+	Remote *ExtMcpRemote `json:"remote,omitempty"`
 }
 
 type ExtMcpRemote struct {

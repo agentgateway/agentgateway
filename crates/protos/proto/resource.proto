@@ -1322,8 +1322,9 @@ message BackendPolicySpec {
     optional string client_id = 9;
   }
 
-  // ExtMcp is a backend-phase policy for MCP traffic. Today only the `remote`
-  // slot is defined — a custom gRPC policy server modeled on Envoy ext_authz.
+  // ExtMcp is a backend-phase policy for MCP traffic: an ordered chain of
+  // policy processors. Today only the `remote` processor is defined — a custom
+  // gRPC policy server modeled on Envoy ext_authz.
   message ExtMcp {
     // Phase controls whether the request side, response side, or both of a
     // method are run through the extMcp pipeline.
@@ -1359,12 +1360,24 @@ message BackendPolicySpec {
       repeated string disallowed_request_headers = 5;
     }
 
-    Remote remote = 1;
+    // Processor is a single policy processor. Today only `remote` is defined.
+    message Processor {
+      oneof kind {
+        Remote remote = 1;
+      }
+    }
+
+    // Ordered list of processors applied to matched methods. Processors run in
+    // the order listed; the first to reject a request short-circuits the chain.
+    repeated Processor processors = 3;
 
     // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that
     // run through the extMcp pipeline, keyed by method name. Methods not
     // listed here — including unknown ones — bypass extMcp entirely.
     map<string, Phase> methods = 2;
+
+    reserved 1;
+    reserved "remote";
   }
 
   oneof kind {

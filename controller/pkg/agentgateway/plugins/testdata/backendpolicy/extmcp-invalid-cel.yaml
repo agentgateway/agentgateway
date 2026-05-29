@@ -11,12 +11,13 @@ spec:
   backend:
     mcp:
       extMcp:
-        remote:
-          backendRef:
-            name: extmcp-srv
-            port: 4317
-          metadata:
-            tenant: 'foolen_{{jwt.sub}}'
+        processors:
+        - remote:
+            backendRef:
+              name: extmcp-srv
+              port: 4317
+            metadata:
+              tenant: 'foolen_{{jwt.sub}}'
         methods:
           tools/call: Both
 ---
@@ -41,14 +42,15 @@ output:
         extMcp:
           methods:
             tools/call: BOTH
-          remote:
-            metadata:
-              tenant: foolen_{{jwt.sub}}
-            target:
-              port: 4317
-              service:
-                hostname: extmcp-srv.default.svc.cluster.local
-                namespace: default
+          processors:
+          - remote:
+              metadata:
+                tenant: foolen_{{jwt.sub}}
+              target:
+                port: 4317
+                service:
+                  hostname: extmcp-srv.default.svc.cluster.local
+                  namespace: default
       key: backend/default/extmcp-invalid-cel:mcp-extmcp:default/test
       name:
         kind: AgentgatewayPolicy

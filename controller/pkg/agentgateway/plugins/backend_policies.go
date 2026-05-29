@@ -213,26 +213,35 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 	var errs []error
 	em := policy.Spec.Backend.MCP.ExtMcp
 
-	var remote *api.BackendPolicySpec_ExtMcp_Remote
-	if em.Remote != nil {
+	processors := make([]*api.BackendPolicySpec_ExtMcp_Processor, 0, len(em.Processors))
+	for i := range em.Processors {
+		p := &em.Processors[i]
+		if p.Remote == nil {
+			// ExactlyOneOf guards this at admission; skip defensively.
+			continue
+		}
 		var be *api.BackendReference
-		if em.Remote.BackendRef == nil {
+		if p.Remote.BackendRef == nil {
 			errs = append(errs, fmt.Errorf("failed to build extMcp: backendRef is required"))
 		} else {
 			var err error
-			be, err = buildBackendRef(ctx, *em.Remote.BackendRef, policy.Namespace)
+			be, err = buildBackendRef(ctx, *p.Remote.BackendRef, policy.Namespace)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
 			}
 		}
-		metadata := castCELMap(em.Remote.Metadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(p.Remote.Metadata, func(key string, expr shared.CELExpression) {
 			errs = append(errs, fmt.Errorf("extMcp metadata %q is not a valid CEL expression: %s", key, expr))
 		})
-		remote = &api.BackendPolicySpec_ExtMcp_Remote{
-			Target:      be,
-			FailureMode: extMcpFailureMode(em.Remote.FailureMode),
-			Metadata:    metadata,
-		}
+		processors = append(processors, &api.BackendPolicySpec_ExtMcp_Processor{
+			Kind: &api.BackendPolicySpec_ExtMcp_Processor_Remote{
+				Remote: &api.BackendPolicySpec_ExtMcp_Remote{
+					Target:      be,
+					FailureMode: extMcpFailureMode(p.Remote.FailureMode),
+					Metadata:    metadata,
+				},
+			},
+		})
 	}
 
 	methods := make(map[string]api.BackendPolicySpec_ExtMcp_Phase, len(em.Methods))
@@ -240,7 +249,7 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		methods[name] = mcpMethodPhase(p)
 	}
 
-	spec := &api.BackendPolicySpec_ExtMcp{Remote: remote, Methods: methods}
+	spec := &api.BackendPolicySpec_ExtMcp{Processors: processors, Methods: methods}
 
 	return &api.Policy{
 		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + extMcpPolicySuffix,

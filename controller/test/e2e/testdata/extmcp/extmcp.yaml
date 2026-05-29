@@ -43,11 +43,12 @@ spec:
   backend:
     mcp:
       extMcp:
-        remote:
-          backendRef:
-            name: ext-mcp
-            port: 4445
-          failureMode: FailClosed
+        processors:
+        - remote:
+            backendRef:
+              name: ext-mcp
+              port: 4445
+            failureMode: FailClosed
         methods:
           tools/call: Request
           tools/list: Response
