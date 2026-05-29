@@ -60,7 +60,7 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	}, nil)
 
 	_, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
-		SecretRef: agentgateway.LocalCredentialRef{
+		SecretRef: &agentgateway.LocalCredentialRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
 			Name:  "file",

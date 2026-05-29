@@ -570,11 +570,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -646,11 +648,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -704,11 +708,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -838,11 +844,13 @@ spec:
                                                                     defaults to Secret.
                                                                   type: string
                                                                 name:
-                                                                  default: ""
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  minLength: 1
                                                                   type: string
+                                                              required:
+                                                              - name
                                                               type: object
                                                               x-kubernetes-map-type: atomic
                                                               x-kubernetes-validations:
@@ -1081,11 +1089,13 @@ spec:
                                                                       to Secret.
                                                                     type: string
                                                                   name:
-                                                                    default: ""
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    minLength: 1
                                                                     type: string
+                                                                required:
+                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
@@ -1308,11 +1318,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -1384,11 +1396,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -1442,11 +1456,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -1576,11 +1592,13 @@ spec:
                                                                     defaults to Secret.
                                                                   type: string
                                                                 name:
-                                                                  default: ""
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  minLength: 1
                                                                   type: string
+                                                              required:
+                                                              - name
                                                               type: object
                                                               x-kubernetes-map-type: atomic
                                                               x-kubernetes-validations:
@@ -1819,11 +1837,13 @@ spec:
                                                                       to Secret.
                                                                     type: string
                                                                   name:
-                                                                    default: ""
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    minLength: 1
                                                                     type: string
+                                                                required:
+                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
@@ -2042,11 +2062,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -2118,11 +2140,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -2176,11 +2200,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -2310,11 +2336,13 @@ spec:
                                                                     defaults to Secret.
                                                                   type: string
                                                                 name:
-                                                                  default: ""
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  minLength: 1
                                                                   type: string
+                                                              required:
+                                                              - name
                                                               type: object
                                                               x-kubernetes-map-type: atomic
                                                               x-kubernetes-validations:
@@ -2553,11 +2581,13 @@ spec:
                                                                       to Secret.
                                                                     type: string
                                                                   name:
-                                                                    default: ""
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    minLength: 1
                                                                     type: string
+                                                                required:
+                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
@@ -3002,11 +3032,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -3078,11 +3110,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -3136,11 +3170,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -3270,11 +3306,13 @@ spec:
                                                                     defaults to Secret.
                                                                   type: string
                                                                 name:
-                                                                  default: ""
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  minLength: 1
                                                                   type: string
+                                                              required:
+                                                              - name
                                                               type: object
                                                               x-kubernetes-map-type: atomic
                                                               x-kubernetes-validations:
@@ -3513,11 +3551,13 @@ spec:
                                                                       to Secret.
                                                                     type: string
                                                                   name:
-                                                                    default: ""
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    minLength: 1
                                                                     type: string
+                                                                required:
+                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
@@ -3740,11 +3780,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -3816,11 +3858,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -3874,11 +3918,13 @@ spec:
                                                                         to Secret.
                                                                       type: string
                                                                     name:
-                                                                      default: ""
                                                                       description: Name
                                                                         of the referenced
                                                                         credential.
+                                                                      minLength: 1
                                                                       type: string
+                                                                  required:
+                                                                  - name
                                                                   type: object
                                                                   x-kubernetes-map-type: atomic
                                                                   x-kubernetes-validations:
@@ -4008,11 +4054,13 @@ spec:
                                                                     defaults to Secret.
                                                                   type: string
                                                                 name:
-                                                                  default: ""
                                                                   description: Name
                                                                     of the referenced
                                                                     credential.
+                                                                  minLength: 1
                                                                   type: string
+                                                              required:
+                                                              - name
                                                               type: object
                                                               x-kubernetes-map-type: atomic
                                                               x-kubernetes-validations:
@@ -4251,11 +4299,13 @@ spec:
                                                                       to Secret.
                                                                     type: string
                                                                   name:
-                                                                    default: ""
                                                                     description: Name
                                                                       of the referenced
                                                                       credential.
+                                                                    minLength: 1
                                                                     type: string
+                                                                required:
+                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
@@ -4751,10 +4801,12 @@ spec:
                                                   credential. Empty defaults to Secret.
                                                 type: string
                                               name:
-                                                default: ""
                                                 description: Name of the referenced
                                                   credential.
+                                                minLength: 1
                                                 type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                             x-kubernetes-validations:
@@ -4812,10 +4864,12 @@ spec:
                                                   credential. Empty defaults to Secret.
                                                 type: string
                                               name:
-                                                default: ""
                                                 description: Name of the referenced
                                                   credential.
+                                                minLength: 1
                                                 type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                             x-kubernetes-validations:
@@ -4857,10 +4911,12 @@ spec:
                                                   credential. Empty defaults to Secret.
                                                 type: string
                                               name:
-                                                default: ""
                                                 description: Name of the referenced
                                                   credential.
+                                                minLength: 1
                                                 type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                             x-kubernetes-validations:
@@ -4973,9 +5029,11 @@ spec:
                                               Empty defaults to Secret.
                                             type: string
                                           name:
-                                            default: ""
                                             description: Name of the referenced credential.
+                                            minLength: 1
                                             type: string
+                                        required:
+                                        - name
                                         type: object
                                         x-kubernetes-map-type: atomic
                                         x-kubernetes-validations:
@@ -5245,10 +5303,12 @@ spec:
                                                 credential. Empty defaults to Secret.
                                               type: string
                                             name:
-                                              default: ""
                                               description: Name of the referenced
                                                 credential.
+                                              minLength: 1
                                               type: string
+                                          required:
+                                          - name
                                           type: object
                                           x-kubernetes-map-type: atomic
                                           x-kubernetes-validations:
@@ -6201,10 +6261,12 @@ spec:
                                                 credential. Empty defaults to Secret.
                                               type: string
                                             name:
-                                              default: ""
                                               description: Name of the referenced
                                                 credential.
+                                              minLength: 1
                                               type: string
+                                          required:
+                                          - name
                                           type: object
                                           x-kubernetes-map-type: atomic
                                           x-kubernetes-validations:
@@ -6261,10 +6323,12 @@ spec:
                                                 credential. Empty defaults to Secret.
                                               type: string
                                             name:
-                                              default: ""
                                               description: Name of the referenced
                                                 credential.
+                                              minLength: 1
                                               type: string
+                                          required:
+                                          - name
                                           type: object
                                           x-kubernetes-map-type: atomic
                                           x-kubernetes-validations:
@@ -6305,10 +6369,12 @@ spec:
                                                 credential. Empty defaults to Secret.
                                               type: string
                                             name:
-                                              default: ""
                                               description: Name of the referenced
                                                 credential.
+                                              minLength: 1
                                               type: string
+                                          required:
+                                          - name
                                           type: object
                                           x-kubernetes-map-type: atomic
                                           x-kubernetes-validations:
@@ -6420,9 +6486,11 @@ spec:
                                             Empty defaults to Secret.
                                           type: string
                                         name:
-                                          default: ""
                                           description: Name of the referenced credential.
+                                          minLength: 1
                                           type: string
+                                      required:
+                                      - name
                                       type: object
                                       x-kubernetes-map-type: atomic
                                       x-kubernetes-validations:
@@ -6618,9 +6686,11 @@ spec:
                                               Empty defaults to Secret.
                                             type: string
                                           name:
-                                            default: ""
                                             description: Name of the referenced credential.
+                                            minLength: 1
                                             type: string
+                                        required:
+                                        - name
                                         type: object
                                         x-kubernetes-map-type: atomic
                                         x-kubernetes-validations:
@@ -7042,10 +7112,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7104,10 +7176,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7150,10 +7224,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7270,10 +7346,12 @@ spec:
                                                     Secret.
                                                   type: string
                                                 name:
-                                                  default: ""
                                                   description: Name of the referenced
                                                     credential.
+                                                  minLength: 1
                                                   type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
                                               x-kubernetes-validations:
@@ -7479,10 +7557,12 @@ spec:
                                                       Secret.
                                                     type: string
                                                   name:
-                                                    default: ""
                                                     description: Name of the referenced
                                                       credential.
+                                                    minLength: 1
                                                     type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
@@ -7678,10 +7758,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7740,10 +7822,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7786,10 +7870,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -7906,10 +7992,12 @@ spec:
                                                     Secret.
                                                   type: string
                                                 name:
-                                                  default: ""
                                                   description: Name of the referenced
                                                     credential.
+                                                  minLength: 1
                                                   type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
                                               x-kubernetes-validations:
@@ -8115,10 +8203,12 @@ spec:
                                                       Secret.
                                                     type: string
                                                   name:
-                                                    default: ""
                                                     description: Name of the referenced
                                                       credential.
+                                                    minLength: 1
                                                     type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
@@ -8311,10 +8401,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -8373,10 +8465,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -8419,10 +8513,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -8539,10 +8635,12 @@ spec:
                                                     Secret.
                                                   type: string
                                                 name:
-                                                  default: ""
                                                   description: Name of the referenced
                                                     credential.
+                                                  minLength: 1
                                                   type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
                                               x-kubernetes-validations:
@@ -8748,10 +8846,12 @@ spec:
                                                       Secret.
                                                     type: string
                                                   name:
-                                                    default: ""
                                                     description: Name of the referenced
                                                       credential.
+                                                    minLength: 1
                                                     type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
@@ -9161,10 +9261,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -9223,10 +9325,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -9269,10 +9373,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -9389,10 +9495,12 @@ spec:
                                                     Secret.
                                                   type: string
                                                 name:
-                                                  default: ""
                                                   description: Name of the referenced
                                                     credential.
+                                                  minLength: 1
                                                   type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
                                               x-kubernetes-validations:
@@ -9598,10 +9706,12 @@ spec:
                                                       Secret.
                                                     type: string
                                                   name:
-                                                    default: ""
                                                     description: Name of the referenced
                                                       credential.
+                                                    minLength: 1
                                                     type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
@@ -9797,10 +9907,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -9859,10 +9971,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -9905,10 +10019,12 @@ spec:
                                                         to Secret.
                                                       type: string
                                                     name:
-                                                      default: ""
                                                       description: Name of the referenced
                                                         credential.
+                                                      minLength: 1
                                                       type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
                                                   x-kubernetes-validations:
@@ -10025,10 +10141,12 @@ spec:
                                                     Secret.
                                                   type: string
                                                 name:
-                                                  default: ""
                                                   description: Name of the referenced
                                                     credential.
+                                                  minLength: 1
                                                   type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
                                               x-kubernetes-validations:
@@ -10234,10 +10352,12 @@ spec:
                                                       Secret.
                                                     type: string
                                                   name:
-                                                    default: ""
                                                     description: Name of the referenced
                                                       credential.
+                                                    minLength: 1
                                                     type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
@@ -10704,9 +10824,11 @@ spec:
                                   defaults to Secret.
                                 type: string
                               name:
-                                default: ""
                                 description: Name of the referenced credential.
+                                minLength: 1
                                 type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
                             x-kubernetes-validations:
@@ -10761,9 +10883,11 @@ spec:
                                   defaults to Secret.
                                 type: string
                               name:
-                                default: ""
                                 description: Name of the referenced credential.
+                                minLength: 1
                                 type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
                             x-kubernetes-validations:
@@ -10803,9 +10927,11 @@ spec:
                                   defaults to Secret.
                                 type: string
                               name:
-                                default: ""
                                 description: Name of the referenced credential.
+                                minLength: 1
                                 type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
                             x-kubernetes-validations:
@@ -10916,9 +11042,11 @@ spec:
                               defaults to Secret.
                             type: string
                           name:
-                            default: ""
                             description: Name of the referenced credential.
+                            minLength: 1
                             type: string
+                        required:
+                        - name
                         type: object
                         x-kubernetes-map-type: atomic
                         x-kubernetes-validations:
@@ -11669,9 +11797,11 @@ spec:
                                 defaults to Secret.
                               type: string
                             name:
-                              default: ""
                               description: Name of the referenced credential.
+                              minLength: 1
                               type: string
+                          required:
+                          - name
                           type: object
                           x-kubernetes-map-type: atomic
                           x-kubernetes-validations:

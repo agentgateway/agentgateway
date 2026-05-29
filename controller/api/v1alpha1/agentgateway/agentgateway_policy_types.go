@@ -1267,7 +1267,7 @@ type AzureAuth struct {
 	// `clientSecret`.
 	//
 	// +optional
-	SecretRef LocalCredentialRef `json:"secretRef,omitempty"`
+	SecretRef *LocalCredentialRef `json:"secretRef,omitempty"`
 
 	// Details for managed identity authentication
 	//

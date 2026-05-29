@@ -913,7 +913,7 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 
 func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
-	if credentialRefConfigured(auth.SecretRef) {
+	if auth.SecretRef != nil {
 		return buildAzureClientSecret(ctx, auth, namespace, errs)
 	}
 
@@ -962,7 +962,7 @@ func credentialRefConfigured(ref agentgateway.LocalCredentialRef) bool {
 
 func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
 	var clientID, tenantID, clientSecret string
-	data, err := ctx.ResolveCredentialRef(auth.SecretRef, namespace)
+	data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
 	if err != nil {
 		errs = append(errs, err)
 	} else {
