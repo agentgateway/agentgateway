@@ -1365,19 +1365,19 @@ message BackendPolicySpec {
       oneof kind {
         Remote remote = 1;
       }
+
+      // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
+      // through this processor, keyed by method name with the phase it runs in.
+      // Methods not listed here — including unknown ones — bypass this processor.
+      map<string, Phase> methods = 2;
     }
 
     // Ordered list of processors applied to matched methods. Processors run in
     // the order listed; the first to reject a request short-circuits the chain.
     repeated Processor processors = 3;
 
-    // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that
-    // run through the extMcp pipeline, keyed by method name. Methods not
-    // listed here — including unknown ones — bypass extMcp entirely.
-    map<string, Phase> methods = 2;
-
-    reserved 1;
-    reserved "remote";
+    reserved 1, 2;
+    reserved "remote", "methods";
   }
 
   oneof kind {

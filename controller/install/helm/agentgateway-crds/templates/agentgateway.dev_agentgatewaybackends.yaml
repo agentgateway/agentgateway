@@ -10316,23 +10316,6 @@ spec:
                         description: '`extMcp` routes selected JSON-RPC methods through
                           a remote policy server.'
                         properties:
-                          methods:
-                            additionalProperties:
-                              description: MCPMethodPhase controls when an MCP method
-                                is run through the extMcp pipeline.
-                              enum:
-                              - Full
-                              - "Off"
-                              - Request
-                              - Response
-                              type: string
-                            description: |-
-                              `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
-                              `tools/list`) routed through the processor chain. Methods not listed
-                              here, including unknown ones, bypass extMcp entirely.
-                            maxProperties: 64
-                            minProperties: 1
-                            type: object
                           processors:
                             description: |-
                               `processors` is the ordered list of policy processors applied to matched
@@ -10342,6 +10325,24 @@ spec:
                               description: ExtMcpProcessor selects a single policy
                                 processor. Exactly one variant must be set.
                               properties:
+                                methods:
+                                  additionalProperties:
+                                    description: MCPMethodPhase controls when an MCP
+                                      method is run through the extMcp pipeline.
+                                    enum:
+                                    - Full
+                                    - "Off"
+                                    - Request
+                                    - Response
+                                    type: string
+                                  description: |-
+                                    `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
+                                    `tools/list`) routed through this processor, keyed by method name with the
+                                    phase it runs in. Methods not listed here, including unknown ones, bypass
+                                    this processor.
+                                  maxProperties: 64
+                                  minProperties: 1
+                                  type: object
                                 remote:
                                   description: '`remote` configures a gRPC policy
                                     server.'
@@ -10443,6 +10444,8 @@ spec:
                                   required:
                                   - backendRef
                                   type: object
+                              required:
+                              - methods
                               type: object
                               x-kubernetes-validations:
                               - message: exactly one of the fields in [remote] must
@@ -10453,7 +10456,6 @@ spec:
                             minItems: 1
                             type: array
                         required:
-                        - methods
                         - processors
                         type: object
                     type: object

@@ -45,16 +45,35 @@ pub mod wire {
 pub struct ExtMcp {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub drivers: Vec<Driver>,
-	/// Allowlist: only methods listed here run through the pipeline, at the
-	/// configured phase. Methods absent from the map bypass extMcp entirely.
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Driver {
+	/// Allowlist: only methods listed here run through this driver, at the
+	/// configured phase. Methods absent from the map bypass this driver.
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
+	#[serde(flatten)]
+	pub kind: DriverKind,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
-pub enum Driver {
+pub enum DriverKind {
 	Remote(Remote),
+}
+
+impl ExtMcp {
+	/// Whether any driver runs the request side for `method`.
+	pub fn runs_request(&self, method: &str) -> bool {
+		self.drivers.iter().any(|d| d.runs_request(method))
+	}
+
+	/// Whether any driver runs the response side for `method`.
+	pub fn runs_response(&self, method: &str) -> bool {
+		self.drivers.iter().any(|d| d.runs_response(method))
+	}
 }
 
 // TLS, retries, and load balancing come from the backend referenced by `target`.
@@ -131,14 +150,22 @@ pub struct CallRequestCtx<'a> {
 }
 
 impl Driver {
+	fn runs_request(&self, method: &str) -> bool {
+		phase::resolve(method, &self.methods).runs_request()
+	}
+
+	fn runs_response(&self, method: &str) -> bool {
+		phase::resolve(method, &self.methods).runs_response()
+	}
+
 	async fn call_request(
 		&self,
 		ctx: &mut CallRequestCtx<'_>,
 		req_ctx: &mut IncomingRequestContext,
 		client: &PolicyClient,
 	) -> Outcome {
-		match self {
-			Driver::Remote(remote) => {
+		match &self.kind {
+			DriverKind::Remote(remote) => {
 				client::check_request(
 					remote,
 					ctx.method,
@@ -160,8 +187,8 @@ impl Driver {
 		req_ctx: &IncomingRequestContext,
 		client: &PolicyClient,
 	) -> Outcome {
-		match self {
-			Driver::Remote(remote) => {
+		match &self.kind {
+			DriverKind::Remote(remote) => {
 				client::check_response(remote, method, backend, body, req_ctx, client).await
 			},
 		}
@@ -177,11 +204,11 @@ pub async fn run_call_request(
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
-	if !phase::resolve(ctx.method, &ext.methods).runs_request() {
-		return Outcome::Pass;
-	}
 	let mut composed = Outcome::Pass;
 	for driver in &ext.drivers {
+		if !driver.runs_request(ctx.method) {
+			continue;
+		}
 		match driver.call_request(ctx, req_ctx, client).await {
 			Outcome::Pass => {},
 			Outcome::Mutated => composed = Outcome::Mutated,
@@ -200,11 +227,11 @@ pub async fn run_response(
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
-	if !phase::resolve(method, &ext.methods).runs_response() {
-		return Outcome::Pass;
-	}
 	let mut composed = Outcome::Pass;
 	for driver in &ext.drivers {
+		if !driver.runs_response(method) {
+			continue;
+		}
 		match driver
 			.response(method, backend, body, req_ctx, client)
 			.await

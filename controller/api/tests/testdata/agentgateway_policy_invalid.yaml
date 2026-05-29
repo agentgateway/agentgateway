@@ -788,8 +788,8 @@ spec:
             backendRef:
               name: extmcp-srv
               port: 4317
-        methods:
-          tools/call: Full
+          methods:
+            tools/call: Full
 ---
 _err: 'backendRef: Required'
 apiVersion: agentgateway.dev/v1alpha1
@@ -807,8 +807,8 @@ spec:
         processors:
         - remote:
             failureMode: FailClosed
-        methods:
-          tools/call: Full
+          methods:
+            tools/call: Full
 ---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1

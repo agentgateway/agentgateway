@@ -19,9 +19,9 @@ spec:
             failureMode: FailClosed
             metadata:
               tenant: 'jwt.sub'
-        methods:
-          tools/call: Full
-          tools/list: Request
+          methods:
+            tools/call: Full
+            tools/list: Request
 ---
 apiVersion: v1
 kind: Service
@@ -42,11 +42,11 @@ output:
     policy:
       backend:
         extMcp:
-          methods:
-            tools/call: FULL
-            tools/list: REQUEST
           processors:
-          - remote:
+          - methods:
+              tools/call: FULL
+              tools/list: REQUEST
+            remote:
               metadata:
                 tenant: jwt.sub
               target:

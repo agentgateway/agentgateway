@@ -11289,11 +11289,7 @@ type BackendPolicySpec_ExtMcp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Ordered list of processors applied to matched methods. Processors run in
 	// the order listed; the first to reject a request short-circuits the chain.
-	Processors []*BackendPolicySpec_ExtMcp_Processor `protobuf:"bytes,3,rep,name=processors,proto3" json:"processors,omitempty"`
-	// Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that
-	// run through the extMcp pipeline, keyed by method name. Methods not
-	// listed here — including unknown ones — bypass extMcp entirely.
-	Methods       map[string]BackendPolicySpec_ExtMcp_Phase `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_Phase"`
+	Processors    []*BackendPolicySpec_ExtMcp_Processor `protobuf:"bytes,3,rep,name=processors,proto3" json:"processors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11331,13 +11327,6 @@ func (*BackendPolicySpec_ExtMcp) Descriptor() ([]byte, []int) {
 func (x *BackendPolicySpec_ExtMcp) GetProcessors() []*BackendPolicySpec_ExtMcp_Processor {
 	if x != nil {
 		return x.Processors
-	}
-	return nil
-}
-
-func (x *BackendPolicySpec_ExtMcp) GetMethods() map[string]BackendPolicySpec_ExtMcp_Phase {
-	if x != nil {
-		return x.Methods
 	}
 	return nil
 }
@@ -12537,7 +12526,11 @@ type BackendPolicySpec_ExtMcp_Processor struct {
 	// Types that are valid to be assigned to Kind:
 	//
 	//	*BackendPolicySpec_ExtMcp_Processor_Remote
-	Kind          isBackendPolicySpec_ExtMcp_Processor_Kind `protobuf_oneof:"kind"`
+	Kind isBackendPolicySpec_ExtMcp_Processor_Kind `protobuf_oneof:"kind"`
+	// Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
+	// through this processor, keyed by method name with the phase it runs in.
+	// Methods not listed here — including unknown ones — bypass this processor.
+	Methods       map[string]BackendPolicySpec_ExtMcp_Phase `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_Phase"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12584,6 +12577,13 @@ func (x *BackendPolicySpec_ExtMcp_Processor) GetRemote() *BackendPolicySpec_ExtM
 		if x, ok := x.Kind.(*BackendPolicySpec_ExtMcp_Processor_Remote); ok {
 			return x.Remote
 		}
+	}
+	return nil
+}
+
+func (x *BackendPolicySpec_ExtMcp_Processor) GetMethods() map[string]BackendPolicySpec_ExtMcp_Phase {
+	if x != nil {
+		return x.Methods
 	}
 	return nil
 }
@@ -14063,7 +14063,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\x8eS\n" +
+	"\x04kind\"\xa8S\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -14303,12 +14303,11 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"PERMISSIVE\x10\x02B\f\n" +
 	"\n" +
-	"_client_id\x1a\xdb\a\n" +
+	"_client_id\x1a\xf5\a\n" +
 	"\x06ExtMcp\x12]\n" +
 	"\n" +
 	"processors\x18\x03 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.ProcessorR\n" +
-	"processors\x12Z\n" +
-	"\amethods\x18\x02 \x03(\v2@.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntryR\amethods\x1a\xca\x03\n" +
+	"processors\x1a\xca\x03\n" +
 	"\x06Remote\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12b\n" +
 	"\ffailure_mode\x18\x02 \x01(\x0e2?.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureModeR\vfailureMode\x12d\n" +
@@ -14317,13 +14316,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x1adisallowed_request_headers\x18\x05 \x03(\tR\x18disallowedRequestHeaders\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1ai\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xc6\x02\n" +
 	"\tProcessor\x12T\n" +
-	"\x06remote\x18\x01 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.RemoteH\x00R\x06remoteB\x06\n" +
-	"\x04kind\x1au\n" +
+	"\x06remote\x18\x01 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.RemoteH\x00R\x06remote\x12d\n" +
+	"\amethods\x18\x02 \x03(\v2J.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntryR\amethods\x1au\n" +
 	"\fMethodsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12O\n" +
-	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.PhaseR\x05value:\x028\x01\"5\n" +
+	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.PhaseR\x05value:\x028\x01B\x06\n" +
+	"\x04kind\"5\n" +
 	"\x05Phase\x12\a\n" +
 	"\x03OFF\x10\x00\x12\v\n" +
 	"\aREQUEST\x10\x01\x12\f\n" +
@@ -14331,7 +14331,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04FULL\x10\x03\"\"\n" +
 	"\vFailureMode\x12\b\n" +
 	"\x04DENY\x10\x00\x12\t\n" +
-	"\x05ALLOW\x10\x01J\x04\b\x01\x10\x02R\x06remoteB\x06\n" +
+	"\x05ALLOW\x10\x01J\x04\b\x01\x10\x02J\x04\b\x02\x10\x03R\x06remoteR\amethodsB\x06\n" +
 	"\x04kind\"T\n" +
 	"\rStaticBackend\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
@@ -14674,8 +14674,8 @@ var file_resource_proto_goTypes = []any{
 	nil,                                     // 192: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
 	(*BackendPolicySpec_ExtMcp_Remote)(nil), // 193: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote
 	(*BackendPolicySpec_ExtMcp_Processor)(nil), // 194: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor
-	nil,                                    // 195: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntry
-	nil,                                    // 196: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
+	nil,                                    // 195: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
+	nil,                                    // 196: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry
 	(*AIBackend_HostOverride)(nil),         // 197: agentgateway.dev.resource.AIBackend.HostOverride
 	(*AIBackend_OpenAI)(nil),               // 198: agentgateway.dev.resource.AIBackend.OpenAI
 	(*AIBackend_Gemini)(nil),               // 199: agentgateway.dev.resource.AIBackend.Gemini
@@ -14940,41 +14940,41 @@ var file_resource_proto_depIdxs = []int32{
 	88,  // 242: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
 	57,  // 243: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
 	194, // 244: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.processors:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor
-	195, // 245: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.methods:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntry
-	172, // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	172, // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	24,  // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
-	25,  // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
-	174, // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
-	98,  // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
-	75,  // 252: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
-	90,  // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	90,  // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	90,  // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	90,  // 256: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	181, // 257: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	175, // 258: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	176, // 259: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	179, // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	178, // 261: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	180, // 262: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	181, // 263: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	175, // 264: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	176, // 265: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	177, // 266: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
-	179, // 267: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	178, // 268: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	180, // 269: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	183, // 270: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
-	182, // 271: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
-	26,  // 272: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
-	192, // 273: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	213, // 274: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	98,  // 275: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.target:type_name -> agentgateway.dev.resource.BackendReference
-	33,  // 276: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureMode
-	196, // 277: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
-	193, // 278: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.remote:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote
-	32,  // 279: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.MethodsEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Phase
+	172, // 245: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	172, // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	24,  // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
+	25,  // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
+	174, // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
+	98,  // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
+	75,  // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
+	90,  // 252: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	181, // 256: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	175, // 257: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	176, // 258: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	179, // 259: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	178, // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	180, // 261: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	181, // 262: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	175, // 263: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	176, // 264: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	177, // 265: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
+	179, // 266: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	178, // 267: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	180, // 268: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	183, // 269: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
+	182, // 270: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
+	26,  // 271: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
+	192, // 272: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	213, // 273: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
+	98,  // 274: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.target:type_name -> agentgateway.dev.resource.BackendReference
+	33,  // 275: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureMode
+	195, // 276: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
+	193, // 277: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.remote:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote
+	196, // 278: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.methods:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry
+	32,  // 279: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Phase
 	34,  // 280: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
 	197, // 281: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
 	198, // 282: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI

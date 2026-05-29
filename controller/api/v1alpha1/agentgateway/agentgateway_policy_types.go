@@ -1433,14 +1433,6 @@ type ExtMcp struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	Processors []ExtMcpProcessor `json:"processors"`
-
-	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
-	// `tools/list`) routed through the processor chain. Methods not listed
-	// here, including unknown ones, bypass extMcp entirely.
-	// +required
-	// +kubebuilder:validation:MinProperties=1
-	// +kubebuilder:validation:MaxProperties=64
-	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 
 // ExtMcpProcessor selects a single policy processor. Exactly one variant must be set.
@@ -1449,6 +1441,15 @@ type ExtMcpProcessor struct {
 	// `remote` configures a gRPC policy server.
 	// +optional
 	Remote *ExtMcpRemote `json:"remote,omitempty"`
+
+	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
+	// `tools/list`) routed through this processor, keyed by method name with the
+	// phase it runs in. Methods not listed here, including unknown ones, bypass
+	// this processor.
+	// +required
+	// +kubebuilder:validation:MinProperties=1
+	// +kubebuilder:validation:MaxProperties=64
+	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 
 type ExtMcpRemote struct {

@@ -2952,8 +2952,10 @@ mod extmcp_test_support {
 			request_headers: Default::default(),
 		};
 		BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
-			drivers: vec![extmcp::Driver::Remote(remote)],
-			methods,
+			drivers: vec![extmcp::Driver {
+				methods,
+				kind: extmcp::DriverKind::Remote(remote),
+			}],
 		}))
 	}
 

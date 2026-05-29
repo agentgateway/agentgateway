@@ -535,25 +535,27 @@ fn convert_ext_mcp(
 	em: &proto::agent::backend_policy_spec::ExtMcp,
 	diagnostics: &mut Diagnostics,
 ) -> Result<crate::mcp::extmcp::ExtMcp, ProtoError> {
+	use proto::agent::backend_policy_spec::ext_mcp::processor::Kind as ProtoProcessorKind;
 	use proto::agent::backend_policy_spec::ext_mcp::{
 		FailureMode as ProtoFailureMode, Phase as ProtoPhase, Remote as ProtoRemote,
 	};
 
-	let methods: std::collections::HashMap<String, crate::mcp::extmcp::Phase> = em
-		.methods
-		.iter()
-		.map(|(k, v)| {
-			let phase = match ProtoPhase::try_from(*v).unwrap_or(ProtoPhase::Off) {
-				ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
-				ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
-				ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
-				ProtoPhase::Full => crate::mcp::extmcp::Phase::Full,
-			};
-			(k.clone(), phase)
-		})
-		.collect();
-
-	use proto::agent::backend_policy_spec::ext_mcp::processor::Kind as ProtoProcessorKind;
+	fn convert_methods(
+		methods: &std::collections::HashMap<String, i32>,
+	) -> std::collections::HashMap<String, crate::mcp::extmcp::Phase> {
+		methods
+			.iter()
+			.map(|(k, v)| {
+				let phase = match ProtoPhase::try_from(*v).unwrap_or(ProtoPhase::Off) {
+					ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
+					ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
+					ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
+					ProtoPhase::Full => crate::mcp::extmcp::Phase::Full,
+				};
+				(k.clone(), phase)
+			})
+			.collect()
+	}
 
 	fn convert_remote(
 		r: &ProtoRemote,
@@ -598,22 +600,24 @@ fn convert_ext_mcp(
 
 	let mut drivers = Vec::with_capacity(em.processors.len());
 	for processor in &em.processors {
-		match processor.kind.as_ref() {
+		let kind = match processor.kind.as_ref() {
 			Some(ProtoProcessorKind::Remote(r)) => {
-				drivers.push(crate::mcp::extmcp::Driver::Remote(convert_remote(
-					r,
-					diagnostics,
-				)?));
+				crate::mcp::extmcp::DriverKind::Remote(convert_remote(r, diagnostics)?)
 			},
-			None => diagnostics.add_warning("extMcp processor has no driver set; ignoring"),
+			None => {
+				diagnostics.add_warning("extMcp processor has no driver set; ignoring");
+				continue;
+			},
+		};
+		let methods = convert_methods(&processor.methods);
+		if methods.is_empty() {
+			diagnostics
+				.add_warning("extMcp processor configured with no methods; it will never run");
 		}
+		drivers.push(crate::mcp::extmcp::Driver { methods, kind });
 	}
 
-	if !drivers.is_empty() && methods.is_empty() {
-		diagnostics.add_warning("extMcp configured with processors but no methods; no hooks will run");
-	}
-
-	Ok(crate::mcp::extmcp::ExtMcp { drivers, methods })
+	Ok(crate::mcp::extmcp::ExtMcp { drivers })
 }
 
 // Parse configured header names, dropping (with a warning) any that aren't valid

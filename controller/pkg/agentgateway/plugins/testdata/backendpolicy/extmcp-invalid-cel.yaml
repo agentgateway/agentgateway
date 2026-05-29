@@ -18,8 +18,8 @@ spec:
               port: 4317
             metadata:
               tenant: 'foolen_{{jwt.sub}}'
-        methods:
-          tools/call: Full
+          methods:
+            tools/call: Full
 ---
 apiVersion: v1
 kind: Service
@@ -40,10 +40,10 @@ output:
     policy:
       backend:
         extMcp:
-          methods:
-            tools/call: FULL
           processors:
-          - remote:
+          - methods:
+              tools/call: FULL
+            remote:
               metadata:
                 tenant: foolen_{{jwt.sub}}
               target:

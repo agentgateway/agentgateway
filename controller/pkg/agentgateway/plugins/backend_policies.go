@@ -227,6 +227,10 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		metadata := castCELMap(p.Remote.Metadata, func(key string, expr shared.CELExpression) {
 			errs = append(errs, fmt.Errorf("extMcp metadata %q is not a valid CEL expression: %s", key, expr))
 		})
+		methods := make(map[string]api.BackendPolicySpec_ExtMcp_Phase, len(p.Methods))
+		for name, phase := range p.Methods {
+			methods[name] = mcpMethodPhase(phase)
+		}
 		processors = append(processors, &api.BackendPolicySpec_ExtMcp_Processor{
 			Kind: &api.BackendPolicySpec_ExtMcp_Processor_Remote{
 				Remote: &api.BackendPolicySpec_ExtMcp_Remote{
@@ -235,15 +239,11 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 					Metadata:    metadata,
 				},
 			},
+			Methods: methods,
 		})
 	}
 
-	methods := make(map[string]api.BackendPolicySpec_ExtMcp_Phase, len(em.Methods))
-	for name, p := range em.Methods {
-		methods[name] = mcpMethodPhase(p)
-	}
-
-	spec := &api.BackendPolicySpec_ExtMcp{Processors: processors, Methods: methods}
+	spec := &api.BackendPolicySpec_ExtMcp{Processors: processors}
 
 	return &api.Policy{
 		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + extMcpPolicySuffix,

@@ -17,10 +17,10 @@ spec:
               name: extmcp-srv
               port: 4317
             failureMode: FailOpen
-        methods:
-          tools/call: "Off"
-          tools/list: Response
-          prompts/list: Request
+          methods:
+            tools/call: "Off"
+            tools/list: Response
+            prompts/list: Request
 ---
 apiVersion: v1
 kind: Service
@@ -41,12 +41,12 @@ output:
     policy:
       backend:
         extMcp:
-          methods:
-            prompts/list: REQUEST
-            tools/call: "OFF"
-            tools/list: RESPONSE
           processors:
-          - remote:
+          - methods:
+              prompts/list: REQUEST
+              tools/call: "OFF"
+              tools/list: RESPONSE
+            remote:
               failureMode: ALLOW
               target:
                 port: 4317

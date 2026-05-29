@@ -204,7 +204,7 @@ impl Relay {
 	) -> Option<ExtMcpCtx> {
 		let ext = self.ext_mcp.as_ref()?;
 		let method = r.request.method().to_string();
-		if !crate::mcp::extmcp::phase::resolve(&method, &ext.methods).runs_response() {
+		if !ext.runs_response(&method) {
 			// we only need an ExtMcpCtx for response-phase extmcp hooks
 			return None;
 		}
@@ -260,7 +260,7 @@ impl Relay {
 		};
 		// Skip the (potentially expensive) params serialization when this method
 		// has no request-phase hook configured.
-		if !crate::mcp::extmcp::phase::resolve(method, &ext.methods).runs_request() {
+		if !ext.runs_request(method) {
 			return Ok(());
 		}
 		let mut params_v = serde_json::to_value(&*params)
