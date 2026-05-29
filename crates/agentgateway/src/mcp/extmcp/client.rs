@@ -218,7 +218,7 @@ fn build_metadata(
 		.filter_map(|(k, expr)| match eval_to_value(&exec, expr) {
 			Ok(v) => Some((k.clone(), v)),
 			Err(e) => {
-				warn!(key = %k, error = %e, "extMcp: metadata CEL expression failed; skipping");
+				debug!(key = %k, error = %e, "extMcp: metadata CEL expression failed; skipping");
 				None
 			},
 		})
