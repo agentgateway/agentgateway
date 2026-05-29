@@ -4388,10 +4388,10 @@ spec:
                               description: MCPMethodPhase controls when an MCP method
                                 is run through the extMcp pipeline.
                               enum:
+                              - Full
                               - "Off"
                               - Request
                               - Response
-                              - Full
                               type: string
                             description: |-
                               `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,

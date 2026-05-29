@@ -1413,7 +1413,7 @@ type BackendMCP struct {
 }
 
 // MCPMethodPhase controls when an MCP method is run through the extMcp pipeline.
-// +kubebuilder:validation:Enum=Off;Request;Response;Full
+// +k8s:enum
 type MCPMethodPhase string
 
 const (
