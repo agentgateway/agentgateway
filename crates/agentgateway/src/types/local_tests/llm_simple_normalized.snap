@@ -195,6 +195,31 @@ policies:
             tokensPerFill: 10
             type: tokens
         phase: route
+  - key: listener/3
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        cors:
+          allowCredentials: false
+          allowHeaders:
+            - content-type
+            - cache-control
+          allowMethods:
+            - GET
+            - POST
+            - DELETE
+            - OPTIONS
+          allowOrigins:
+            - "http://localhost:15000"
+            - "http://127.0.0.1:15000"
+            - "http://[::1]:15000"
+          maxAge: ~
+        phase: route
   - key: "llm:transformation"
     name:
       kind: Local

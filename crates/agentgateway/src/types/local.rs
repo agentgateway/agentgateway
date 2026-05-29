@@ -2034,7 +2034,7 @@ async fn convert_llm_config(
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
-		let route_policies = split_policies(
+		let mut route_policies = split_policies(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
@@ -2046,6 +2046,9 @@ async fn convert_llm_config(
 			None,
 		)
 		.await?;
+		route_policies.ensure_default_cors(http::cors::CorsSerde::default_admin(
+			config.admin_addr.port(),
+		))?;
 		let gateway_policies = split_policies(
 			client.clone(),
 			gateway.into(),
@@ -2057,7 +2060,11 @@ async fn convert_llm_config(
 			route_policies.route_policies,
 		)
 	} else {
-		(vec![], vec![])
+		let mut default = ResolvedPolicies::default();
+		default.ensure_default_cors(http::cors::CorsSerde::default_admin(
+			config.admin_addr.port(),
+		))?;
+		(vec![], default.route_policies)
 	};
 
 	// Create transformation policy to set x-gateway-model-name header from request body
@@ -2462,11 +2469,15 @@ async fn convert_mcp_config(
 	let port = port.unwrap_or(DEFAULT_MCP_PORT);
 	let route_key = strng::new("mcp:default");
 
-	let resolved_policies = if let Some(pol) = policies {
+	let mut resolved_policies = if let Some(pol) = policies {
 		split_policies(client.clone(), pol, config.as_policy_context(&route_key)).await?
 	} else {
 		ResolvedPolicies::default()
 	};
+
+	resolved_policies.ensure_default_cors(http::cors::CorsSerde::default_mcp_admin(
+		config.admin_addr.port(),
+	))?;
 
 	let mut routes = Vec::new();
 	let route = Route {
@@ -2783,6 +2794,28 @@ pub async fn convert_route(
 pub(crate) struct ResolvedPolicies {
 	pub(crate) backend_policies: Vec<BackendTrafficPolicy>,
 	pub(crate) route_policies: Vec<TrafficPolicy>,
+}
+
+impl ResolvedPolicies {
+	/// Inject a default CORS policy so the admin UI can reach the proxy port,
+	/// unless the user already specified one.
+	pub(crate) fn ensure_default_cors(
+		&mut self,
+		default_cors: http::cors::CorsSerde,
+	) -> anyhow::Result<()> {
+		let has_cors = self
+			.route_policies
+			.iter()
+			.any(|p| matches!(p, TrafficPolicy::CORS(_)));
+		if !has_cors {
+			self
+				.route_policies
+				.push(TrafficPolicy::CORS(RequestPolicy::single(
+					http::cors::Cors::try_from(default_cors)?,
+				)));
+		}
+		Ok(())
+	}
 }
 
 pub struct AttachedPolicyContext<'a> {

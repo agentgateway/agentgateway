@@ -118,6 +118,52 @@ pub struct CorsSerde {
 	pub max_age: Option<Duration>,
 }
 
+impl CorsSerde {
+	/// Default CORS policy that allows the admin UI (served on `admin_port`) to
+	/// reach a proxy port. Contains common headers shared by all simplified configs.
+	///
+	/// NOTE: Origins use `http://` because the admin server is plaintext-only.
+	/// If the admin UI is accessed behind a TLS-terminating reverse proxy,
+	/// users should configure an explicit CORS policy with the appropriate origins.
+	pub fn default_admin(admin_port: u16) -> Self {
+		Self {
+			allow_origins: vec![
+				format!("http://localhost:{admin_port}"),
+				format!("http://127.0.0.1:{admin_port}"),
+				format!("http://[::1]:{admin_port}"),
+			],
+			allow_methods: vec![
+				"GET".to_string(),
+				"POST".to_string(),
+				"DELETE".to_string(),
+				"OPTIONS".to_string(),
+			],
+			allow_headers: vec!["content-type".to_string(), "cache-control".to_string()],
+			expose_headers: vec![],
+			allow_credentials: false,
+			max_age: None,
+		}
+	}
+
+	/// Default CORS policy for the MCP simplified config. Extends [`Self::default_admin`]
+	/// with MCP-specific headers (`mcp-protocol-version`, `mcp-session-id`).
+	///
+	/// NOTE: Exposing `mcp-session-id` in CORS headers is required for the MCP Streamable
+	/// HTTP protocol to work cross-origin from the playground UI. This does not introduce
+	/// new server-side exposure — the MCP proxy port binds to `0.0.0.0` and any network
+	/// client can already read session IDs from HTTP responses directly. The CORS headers
+	/// only make them visible to browser JS running on the admin UI origin.
+	pub fn default_mcp_admin(admin_port: u16) -> Self {
+		let mut cors = Self::default_admin(admin_port);
+		cors.allow_headers.extend([
+			"mcp-protocol-version".to_string(),
+			"mcp-session-id".to_string(),
+		]);
+		cors.expose_headers.push("mcp-session-id".to_string());
+		cors
+	}
+}
+
 impl TryFrom<CorsSerde> for Cors {
 	type Error = anyhow::Error;
 	fn try_from(value: CorsSerde) -> Result<Self, Self::Error> {

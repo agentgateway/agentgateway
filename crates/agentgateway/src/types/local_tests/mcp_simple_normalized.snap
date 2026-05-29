@@ -21,6 +21,26 @@ listener_routes:
     - - backends:
           - backend: /mcp
             weight: 1
+        inlinePolicies:
+          - cors:
+              allowCredentials: false
+              allowHeaders:
+                - content-type
+                - cache-control
+                - mcp-protocol-version
+                - mcp-session-id
+              allowMethods:
+                - GET
+                - POST
+                - DELETE
+                - OPTIONS
+              allowOrigins:
+                - "http://localhost:15000"
+                - "http://127.0.0.1:15000"
+                - "http://[::1]:15000"
+              exposeHeaders:
+                - mcp-session-id
+              maxAge: ~
         key: "mcp:default"
         matches:
           - path:
