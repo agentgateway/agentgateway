@@ -5,7 +5,7 @@ import { useServer } from "@/lib/server-context";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Shield } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import { fetchBinds, fetchConfig } from "@/lib/api";
+import { fetchBinds, fetchAppliedPolicies } from "@/lib/api";
 import { useXdsMode } from "@/hooks/use-xds-mode";
 import { AppliedPolicy } from "@/lib/types";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -114,8 +114,8 @@ export default function PoliciesPage() {
     setAppliedLoading(true);
     setAppliedError(null);
     try {
-      const cfg = await fetchConfig();
-      const nonRoute = (cfg.appliedPolicies || []).filter((p) => !p.target?.route);
+      const policies = await fetchAppliedPolicies();
+      const nonRoute = policies.filter((p) => !p.target?.route);
       setAppliedPolicies(nonRoute);
     } catch (e: any) {
       console.error("Error loading applied policies:", e);

@@ -1,4 +1,13 @@
-import { Target, Listener, LocalConfig, Bind, Backend, Route, McpStatefulMode } from "./types";
+import {
+  Target,
+  Listener,
+  LocalConfig,
+  Bind,
+  Backend,
+  Route,
+  McpStatefulMode,
+  AppliedPolicy,
+} from "./types";
 
 // Mapping utilities are centralized in configMapper
 import { configDumpToLocalConfig } from "./configMapper";
@@ -159,6 +168,14 @@ export async function updateConfig(config: LocalConfig): Promise<void> {
     console.error("Error updating configuration:", error);
     throw error;
   }
+}
+
+/**
+ * Fetches applied policies from config_dump (XDS mode only).
+ */
+export async function fetchAppliedPolicies(): Promise<AppliedPolicy[]> {
+  const dumpJson = await fetchConfigDump(API_URL);
+  return (dumpJson.policies || []) as AppliedPolicy[];
 }
 
 /**

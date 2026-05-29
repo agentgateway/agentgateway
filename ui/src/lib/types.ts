@@ -5,7 +5,6 @@ export interface LocalConfig {
   binds: Bind[];
   workloads?: any[];
   services?: any[];
-  appliedPolicies?: AppliedPolicy[];
 }
 
 export interface Bind {
