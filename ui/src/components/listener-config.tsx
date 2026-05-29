@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Listener, ListenerProtocol, Bind } from "@/lib/types";
+import { getListenerHostname } from "@/lib/listener-utils";
 import {
   Trash2,
   Lock,
@@ -355,7 +356,7 @@ export function ListenerConfig({
   const getDisplayEndpoint = (listener: ListenerWithBackendsAndRoutes, port: number) => {
     const listenerProtocol = listener.protocol || ListenerProtocol.HTTP;
     const protocol = listenerProtocol === ListenerProtocol.HTTPS ? "https" : "http";
-    const hostname = listener.hostname || "localhost";
+    const hostname = getListenerHostname(listener.hostname);
     return `${protocol}://${hostname}:${port}`;
   };
 
@@ -513,7 +514,11 @@ export function ListenerConfig({
                                     {getProtocolString(listener.protocol)}
                                   </Badge>
                                 </TableCell>
-                                <TableCell>{listener.hostname || "localhost"}</TableCell>
+                                <TableCell>
+                                  {!listener.hostname || listener.hostname === "*"
+                                    ? "localhost"
+                                    : listener.hostname}
+                                </TableCell>
                                 <TableCell className="font-mono text-sm">
                                   {getDisplayEndpoint(
                                     {

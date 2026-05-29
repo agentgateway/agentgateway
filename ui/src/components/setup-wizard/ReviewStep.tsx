@@ -12,6 +12,7 @@ import {
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
 import { ArrowLeft, CheckCircle, Network, Route, Globe, Shield } from "lucide-react";
 import { LocalConfig } from "@/lib/types";
+import { getListenerHostname } from "@/lib/listener-utils";
 import { Badge } from "@/components/ui/badge";
 import { updateConfig } from "@/lib/api";
 
@@ -157,7 +158,7 @@ export function ReviewStep({ onNext, onPrevious, config }: ReviewStepProps) {
                           <Badge variant="outline">{listener.protocol}</Badge>
                           <span className="text-sm">{listener.name}</span>
                           <span className="text-xs text-muted-foreground">
-                            {listener.hostname || "localhost"}
+                            {getListenerHostname(listener.hostname)}
                           </span>
                         </div>
 

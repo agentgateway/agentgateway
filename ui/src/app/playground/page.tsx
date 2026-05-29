@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getBackendName } from "@/lib/backend-utils";
+import { getListenerHostname } from "@/lib/listener-utils";
 import { v4 as uuidv4 } from "uuid";
 
 import { CapabilitiesList } from "@/components/playground/CapabilitiesList";
@@ -274,7 +275,7 @@ export default function PlaygroundPage() {
         if (listener.routes) {
           listener.routes.forEach((route: Route, routeIndex: number) => {
             const protocol = listener.protocol === ListenerProtocol.HTTPS ? "https" : "http";
-            const hostname = listener.hostname || "localhost";
+            const hostname = getListenerHostname(listener.hostname);
             const port = bind.port; // Use the actual port from the bind configuration
             const baseEndpoint = `${protocol}://${hostname}:${port}`;
 
@@ -1082,9 +1083,7 @@ export default function PlaygroundPage() {
                     <span className="font-medium text-sm">Request URL</span>
                   </div>
                   <div className="font-mono text-sm break-all">
-                    {selectedRoute.protocol}://{selectedRoute.listener.hostname || "localhost"}:
-                    {selectedRoute.bindPort}
-                    {request.path}
+                    {`${selectedRoute.protocol}://${getListenerHostname(selectedRoute.listener.hostname)}:${selectedRoute.bindPort}${request.path}`}
                   </div>
                 </div>
 
