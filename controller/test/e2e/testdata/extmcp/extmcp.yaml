@@ -49,6 +49,23 @@ spec:
               name: ext-mcp
               port: 4445
             failureMode: FailClosed
-        methods:
-          tools/call: Request
-          tools/list: Response
+          methods:
+            tools/call: Request
+            tools/list: Response
+---
+# Bound the gRPC call to the ext-mcp policy server. Without a timeout the call has
+# no deadline, so a slow/cold policy backend hangs the request instead of letting
+# failureMode (FailClosed) engage.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-mcp-timeout
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: ext-mcp
+  backend:
+    http:
+      requestTimeout: 5s

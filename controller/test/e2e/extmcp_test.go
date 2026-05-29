@@ -41,6 +41,11 @@ func testExtMcpRequestDeniesForbiddenTool(t base.Test) {
 	headers := withSessionID(mcpHeaders(extMcpHostHeader), sid)
 	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":%q,"arguments":{}}}`, "forbidden-tool")
 
+	// Gate on the ext-mcp policy backend being reachable before asserting the body:
+	// the retrying Send warms up the (otherwise cold) gRPC connection, mirroring the
+	// allowed/mutate cases. Without it, the first extmcp call in the suite can hang on
+	// connect until curl's timeout.
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: http.StatusBadRequest}, headers, body)
 	resp, raw, err := execCurlMCP(t, headers, body)
 	if err != nil {
 		t.Fatalf("tools/call: %v", err)
