@@ -194,6 +194,35 @@ impl Session {
 		Ok(())
 	}
 
+	async fn authorize_with_ctx<P>(
+		&self,
+		backend: &str,
+		method: &str,
+		params: &mut P,
+		ctx: &mut IncomingRequestContext,
+		res: rbac::ResourceType,
+		resource_type: &str,
+		resource_name: &str,
+	) -> Result<(), UpstreamError>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned,
+	{
+		// run extmcp before other policies, as it may add context to CEL
+		self
+			.relay
+			.maybe_run_extmcp_call_request(backend, method, params, ctx)
+			.await?;
+		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		if self.relay.policies.validate(&res, &cel) {
+			Ok(())
+		} else {
+			Err(UpstreamError::Authorization {
+				resource_type: resource_type.to_string(),
+				resource_name: resource_name.to_string(),
+			})
+		}
+	}
+
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
@@ -429,28 +458,20 @@ impl Session {
 							l.set_tool(service_name.to_string(), tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							&cel,
-						) {
-							return Err(UpstreamError::Authorization {
-								resource_type: "tool".to_string(),
-								resource_name: name.to_string(),
-							});
-						}
-
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
 						self
-							.relay
-							.maybe_run_extmcp_call_request(
+							.authorize_with_ctx(
 								service_name,
 								mcp::extmcp::methods::TOOLS_CALL,
 								&mut ctr.params,
 								&mut ctx,
+								rbac::ResourceType::Tool(rbac::ResourceId::new(
+									service_name.to_string(),
+									tool.to_string(),
+								)),
+								"tool",
+								&name,
 							)
 							.await?;
 						self
@@ -460,16 +481,24 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) =
-							self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_prompt(service_name.to_string(), prompt.to_string());
+						});
 						gpr.params.name = prompt.to_string();
 						self
-							.relay
-							.maybe_run_extmcp_call_request(
+							.authorize_with_ctx(
 								service_name,
 								mcp::extmcp::methods::PROMPTS_GET,
 								&mut gpr.params,
 								&mut ctx,
+								rbac::ResourceType::Prompt(rbac::ResourceId::new(
+									service_name.to_string(),
+									prompt.to_string(),
+								)),
+								"prompt",
+								&name,
 							)
 							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await
@@ -477,22 +506,23 @@ impl Session {
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
-							service_name,
-							&original_uri,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
-						rrr.params.uri = original_uri;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), original_uri.to_string());
+						});
+						rrr.params.uri = original_uri.clone();
 						self
-							.relay
-							.maybe_run_extmcp_call_request(
+							.authorize_with_ctx(
 								service_name,
 								mcp::extmcp::methods::RESOURCES_READ,
 								&mut rrr.params,
 								&mut ctx,
+								rbac::ResourceType::Resource(rbac::ResourceId::new(
+									service_name.to_string(),
+									original_uri,
+								)),
+								"resource",
+								&uri,
 							)
 							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await

@@ -3045,6 +3045,76 @@ async fn mcp_extmcp_reject_surfaces_jsonrpc_error() {
 }
 
 #[tokio::test]
+async fn mcp_extmcp_denies_tool_by_name() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_request,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			let name = req
+				.mcp_request
+				.as_ref()
+				.and_then(|s| serde_json::to_value(s).ok())
+				.and_then(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_owned))
+				.unwrap_or_default();
+			if name.contains("forbidden") {
+				reject_request(Code::PermissionDenied, format!("tool {name} is forbidden"))
+			} else {
+				pass_request()
+			}
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![extmcp_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	// Forbidden tool is rejected at the request phase, before reaching upstream.
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("forbidden-tool")
+				.with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect_err("forbidden tool call should be denied by extMcp");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+	assert!(
+		e.message.contains("forbidden-tool"),
+		"deny message should name the tool: {}",
+		e.message
+	);
+
+	// An allowed tool passes the request phase through to the upstream.
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("allowed tool call should pass through extMcp");
+	assert!(!result.content.is_empty(), "echo should return content");
+}
+
+#[tokio::test]
 async fn mcp_extmcp_mutated_request_reaches_upstream() {
 	use crate::test_helpers::extmcpmock::{
 		closure_mock, mutated_request_json, pass_request, pass_response,
@@ -3151,6 +3221,59 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 		serde_json::to_value(entry).unwrap(),
 		serde_json::json!({"path": "/mcp"}),
 	);
+}
+
+// extMcp returns metadata in its request result; an MCP authorization rule then
+// denies a tool based on that metadata (the inbound metadata -> CEL authz path).
+#[tokio::test]
+async fn mcp_extmcp_metadata_consumed_by_authz() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"tier": "free"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extmcp.tier == "free""#).unwrap(),
+		)],
+		vec![],
+	)));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_free_tier),
+			extmcp_test_support::policy(extmcp_mock.address),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect_err("echo should be denied when extMcp marks the caller free-tier");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
+	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
 }
 
 #[tokio::test]
