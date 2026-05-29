@@ -26,12 +26,44 @@ type CredentialResolver interface {
 	ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error)
 }
 
-// ChainedCredentialResolver tries resolvers in order until one supports the
-// CredentialRef group/kind. Resolvers should return ErrUnsupportedCredentialKind
-// for refs they do not handle so the chain can fall through.
-type ChainedCredentialResolver []CredentialResolver
+// NewChainedCredentialResolver returns a resolver that tries resolvers in order
+// until one supports the CredentialRef group/kind. Nil resolvers are ignored,
+// nested chains created by this function are flattened, and duplicate Secret
+// resolvers are skipped.
+func NewChainedCredentialResolver(resolvers ...CredentialResolver) CredentialResolver {
+	chain := make(chainedCredentialResolver, 0, len(resolvers))
+	hasSecretResolver := false
+	var appendResolver func(CredentialResolver)
+	appendResolver = func(r CredentialResolver) {
+		if r == nil {
+			return
+		}
+		if nested, ok := r.(chainedCredentialResolver); ok {
+			for _, resolver := range nested {
+				appendResolver(resolver)
+			}
+			return
+		}
+		if _, ok := r.(secretCredentialResolver); ok {
+			if hasSecretResolver {
+				return
+			}
+			hasSecretResolver = true
+		}
+		chain = append(chain, r)
+	}
+	for _, resolver := range resolvers {
+		appendResolver(resolver)
+	}
+	if len(chain) == 0 {
+		return nil
+	}
+	return chain
+}
 
-func (r ChainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+type chainedCredentialResolver []CredentialResolver
+
+func (r chainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
 	for _, resolver := range r {
 		if resolver == nil {
 			continue
@@ -45,10 +77,14 @@ func (r ChainedCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContex
 	return nil, fmt.Errorf("%w: %q/%q", ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 }
 
-// SecretCredentialResolver handles core Secret refs: empty group with empty or
-// Secret kind.
-type SecretCredentialResolver struct {
-	Secrets krt.Collection[*corev1.Secret]
+// NewSecretCredentialResolver returns the built-in resolver for core Secret
+// refs: empty group with empty or Secret kind.
+func NewSecretCredentialResolver(secrets krt.Collection[*corev1.Secret]) CredentialResolver {
+	return secretCredentialResolver{secrets: secrets}
+}
+
+type secretCredentialResolver struct {
+	secrets krt.Collection[*corev1.Secret]
 }
 
 // GetSecret fetches a Kubernetes secret by name and namespace using krt collection.
@@ -62,17 +98,17 @@ func GetSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext
 }
 
 // ResolveCredentialRef fetches Secret-backed credential bytes for a CredentialRef.
-func (r SecretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
+func (r secretCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalCredentialRef, namespace string) (map[string][]byte, error) {
 	if ref.Group != "" || (ref.Kind != "" && ref.Kind != "Secret") {
 		return nil, fmt.Errorf("%w: %q/%q", ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 	}
 	if ref.Name == "" {
 		return nil, errors.New("credential ref name is required")
 	}
-	if r.Secrets == nil {
+	if r.secrets == nil {
 		return nil, errors.New("credential secret collection is not configured")
 	}
-	secret, err := GetSecret(r.Secrets, krtctx, ref.Name, namespace)
+	secret, err := GetSecret(r.secrets, krtctx, ref.Name, namespace)
 	if err != nil {
 		return nil, err
 	}

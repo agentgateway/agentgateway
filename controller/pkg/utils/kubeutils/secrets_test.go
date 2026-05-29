@@ -23,7 +23,7 @@ func TestResolveCredentialRef(t *testing.T) {
 		},
 	}
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("kubeutils/TestResolveCredentialRef"))
-	secretCredResolver := SecretCredentialResolver{Secrets: secrets}
+	secretCredResolver := NewSecretCredentialResolver(secrets)
 
 	tests := []struct {
 		name            string
@@ -103,18 +103,21 @@ func TestResolveCredentialRef(t *testing.T) {
 }
 
 func TestChainedCredentialResolver(t *testing.T) {
-	resolver := ChainedCredentialResolver{
+	resolver := NewChainedCredentialResolver(
 		staticCredentialResolver{
 			group: "example.agentgateway.dev",
 			kind:  "FileCredential",
 			data:  map[string][]byte{"token": []byte("custom")},
 		},
-		staticCredentialResolver{
-			group: "",
-			kind:  "Secret",
-			data:  map[string][]byte{"token": []byte("secret")},
-		},
-	}
+		NewChainedCredentialResolver(
+			nil,
+			staticCredentialResolver{
+				group: "",
+				kind:  "Secret",
+				data:  map[string][]byte{"token": []byte("secret")},
+			},
+		),
+	)
 
 	tests := []struct {
 		name      string

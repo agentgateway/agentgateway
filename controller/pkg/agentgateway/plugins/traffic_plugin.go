@@ -115,36 +115,13 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 
 // defaultCredentialResolver composes an optional custom override ahead of the
 // built-in Secret resolver, so name-only Secret refs keep resolving when a
-// custom resolver is installed. The override is flattened and deduped against
-// the Secret resolver so the resolved chain stays a single flat pass.
+// custom resolver is installed.
 func defaultCredentialResolver(agw *AgwCollections, override kubeutils.CredentialResolver) kubeutils.CredentialResolver {
-	resolvers := make(kubeutils.ChainedCredentialResolver, 0, 2)
-	hasSecretResolver := false
-	var appendResolver func(kubeutils.CredentialResolver)
-	appendResolver = func(r kubeutils.CredentialResolver) {
-		if r == nil {
-			return
-		}
-		if chain, ok := r.(kubeutils.ChainedCredentialResolver); ok {
-			for _, nested := range chain {
-				appendResolver(nested)
-			}
-			return
-		}
-		switch r.(type) {
-		case kubeutils.SecretCredentialResolver, *kubeutils.SecretCredentialResolver:
-			hasSecretResolver = true
-		}
-		resolvers = append(resolvers, r)
+	resolvers := []kubeutils.CredentialResolver{override}
+	if agw != nil {
+		resolvers = append(resolvers, kubeutils.NewSecretCredentialResolver(agw.Secrets))
 	}
-	appendResolver(override)
-	if agw != nil && !hasSecretResolver {
-		resolvers = append(resolvers, kubeutils.SecretCredentialResolver{Secrets: agw.Secrets})
-	}
-	if len(resolvers) == 0 {
-		return nil
-	}
-	return resolvers
+	return kubeutils.NewChainedCredentialResolver(resolvers...)
 }
 
 type PolicyCtx struct {
