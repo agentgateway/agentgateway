@@ -570,12 +570,7 @@ impl HTTPProxy {
 
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
-		log.with(|l| {
-			l.status = Some(resp.status());
-			l.reason = Some(reason);
-			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
-			l.response_snapshot = l.cel.cel_context.maybe_snapshot_response(&mut resp);
-		});
+		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
 
 		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
 			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
@@ -770,11 +765,6 @@ impl HTTPProxy {
 		backend_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.health_policy = backend_policies.health.clone();
-		if let Some(ev) = &backend_policies.health
-			&& let Some(expr) = &ev.unhealthy_expression
-		{
-			log.cel.ctx().register_expression(expr.as_ref());
-		}
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
@@ -874,7 +864,7 @@ impl HTTPProxy {
 				);
 			}
 			let req = Request::from_parts(head, http::Body::new(this));
-			let res = self
+			let mut res = self
 				.attempt_upstream(
 					log,
 					&mut req_upgrade,
@@ -897,6 +887,7 @@ impl HTTPProxy {
 				res.is_err(),
 				res.as_ref().map(|r| r.status())
 			);
+			finalize_attempt_for_retry(log, &mut res);
 			last_res = Some(res);
 			if let Some(bo) = retry_backoff {
 				let fut = if let Some(request_timeout) = request_timeout {
@@ -1663,6 +1654,12 @@ async fn make_backend_call(
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
+	log.add(|l| l.health_policy = backend_call.backend_policies.health.clone());
+	if let Some(log) = log.as_mut() {
+		backend_call
+			.backend_policies
+			.register_cel_expressions(log.cel.ctx());
+	}
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -2298,6 +2295,43 @@ fn resolved_workload_target_hostname<'a>(
 	}
 }
 
+fn set_final_response_fields(
+	log: &mut RequestLog,
+	reason: &ProxyResponseReason,
+	resp: &mut Response,
+) {
+	log.status = Some(resp.status());
+	log.reason = Some(*reason);
+	log.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
+	log.response_snapshot = log.cel.cel_context.maybe_snapshot_response(resp);
+}
+
+fn finalize_attempt_for_retry(
+	log: &mut RequestLog,
+	res: &mut Result<Response, SnapshottedProxyResponse>,
+) {
+	let (status, retry_after, response_snapshot) = match res {
+		Ok(resp) => (
+			Some(resp.status()),
+			http::outlierdetection::retry_after(resp.status(), resp.headers()),
+			log.cel.cel_context.maybe_snapshot_response(resp),
+		),
+		Err(SnapshottedProxyResponse(_)) => (None, None, None),
+	};
+	let end_time = agent_core::Timestamp::now();
+	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
+	let llm_response = log.llm_response.load_clone().map(Into::into);
+	let mcp = log.mcp_status.load_clone();
+	log.finalize_request_handle_for_attempt(
+		end_time,
+		status,
+		retry_after,
+		response_snapshot.as_ref(),
+		llm_response.as_ref(),
+		mcp.as_ref(),
+	);
+}
+
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
@@ -2311,14 +2345,20 @@ mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
 
+	use ::http::Method;
+	use serde_json::json;
+	use wiremock::{Mock, ResponseTemplate};
+
 	use super::{
 		apply_auto_hostname, hop_by_hop_headers, resolved_workload_target_hostname,
 		select_service_target_port,
 	};
 	use crate::http;
 	use crate::http::filters::AutoHostname;
-	use crate::types::agent::Target;
+	use crate::test_helpers::proxymock;
+	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+	use crate::types::local::LocalAIBackend;
 
 	#[test]
 	fn apply_auto_hostname_rewrites_authority_when_enabled() {
@@ -2516,6 +2556,115 @@ mod tests {
 			Some("trailers")
 		);
 		assert!(!req.headers().contains_key("x-original-url"));
+	}
+
+	#[tokio::test]
+	async fn llm_retry_evicts_failed_priority_group_before_next_attempt() {
+		let primary = wiremock::MockServer::start().await;
+		Mock::given(wiremock::matchers::any())
+			.respond_with(ResponseTemplate::new(429))
+			.mount(&primary)
+			.await;
+
+		let fallback = wiremock::MockServer::start().await;
+		Mock::given(wiremock::matchers::any())
+			.respond_with(ResponseTemplate::new(200).set_body_raw(
+				include_bytes!("../llm/tests/response/completions/basic.json").to_vec(),
+				"application/json",
+			))
+			.mount(&fallback)
+			.await;
+
+		let mut bind = proxymock::setup_proxy_test("{}").expect("proxy test harness");
+		let local_backend: LocalAIBackend = serde_json::from_value(json!({
+			"groups": [
+				{
+					"providers": [{
+						"name": "primary",
+						"hostOverride": primary.address().to_string(),
+						"provider": {
+							"openAI": {
+								"model": null
+							}
+						},
+						"policies": {
+							"health": {
+								"unhealthyExpression": "response.code == 429"
+							}
+						}
+					}]
+				},
+				{
+					"providers": [{
+						"name": "fallback",
+						"hostOverride": fallback.address().to_string(),
+						"provider": {
+							"openAI": {
+								"model": null
+							}
+						}
+					}]
+				}
+			]
+		}))
+		.expect("local AI backend");
+		let backend = Backend::AI(
+			ResourceName::new("llm".into(), "".into()),
+			local_backend.translate().expect("translated backend"),
+		);
+		bind
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend.name(), backend.into());
+		bind = bind
+			.with_bind(proxymock::simple_bind())
+			.with_route(proxymock::basic_named_route("/llm".into()));
+		bind
+			.attach_route_policy(json!({
+				"retry": {
+					"attempts": 1,
+					"backoff": "10ms",
+					"codes": [429]
+				},
+				"ai": {
+					"routes": {
+						"/v1/chat/completions": "completions"
+					}
+				}
+			}))
+			.await;
+		let io = bind.serve_http(proxymock::BIND_KEY);
+
+		let res = proxymock::send_request_body(
+			io,
+			Method::POST,
+			"http://lo/v1/chat/completions",
+			include_bytes!("../llm/tests/requests/completions/basic.json"),
+		)
+		.await;
+
+		assert_eq!(res.status(), 200);
+
+		let primary_requests = primary
+			.received_requests()
+			.await
+			.expect("primary request recording");
+		assert_eq!(primary_requests.len(), 1);
+
+		let fallback_requests = fallback
+			.received_requests()
+			.await
+			.expect("fallback request recording");
+		assert_eq!(fallback_requests.len(), 1);
+		assert_eq!(
+			fallback_requests[0]
+				.headers
+				.get("x-retry-attempt")
+				.and_then(|v| v.to_str().ok()),
+			Some("1")
+		);
 	}
 }
 

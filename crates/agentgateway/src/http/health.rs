@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::cel::Expression;
+use crate::cel::{ContextBuilder, Expression};
 use crate::{serde_dur_option, *};
 
 /// Eviction sub-policy: how long to remove a backend from the active set after an unhealthy response.
@@ -63,6 +63,12 @@ pub struct Policy {
 const DEFAULT_EVICTION_SECS: u64 = 3;
 
 impl Policy {
+	pub fn register_expressions(&self, ctx: &mut ContextBuilder) {
+		if let Some(expr) = self.unhealthy_expression.as_ref() {
+			ctx.register_expression(expr.as_ref());
+		}
+	}
+
 	/// Returns the configured base eviction duration, if any.
 	pub fn eviction_duration(&self) -> Option<Duration> {
 		self.eviction.as_ref().and_then(|e| e.duration)
