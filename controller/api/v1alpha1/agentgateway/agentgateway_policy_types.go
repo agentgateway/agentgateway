@@ -1413,14 +1413,14 @@ type BackendMCP struct {
 }
 
 // MCPMethodPhase controls when an MCP method is run through the extMcp pipeline.
-// +kubebuilder:validation:Enum=Off;Request;Response;Both
+// +kubebuilder:validation:Enum=Off;Request;Response;Full
 type MCPMethodPhase string
 
 const (
 	MCPMethodPhaseOff      MCPMethodPhase = "Off"
 	MCPMethodPhaseRequest  MCPMethodPhase = "Request"
 	MCPMethodPhaseResponse MCPMethodPhase = "Response"
-	MCPMethodPhaseBoth     MCPMethodPhase = "Both"
+	MCPMethodPhaseFull     MCPMethodPhase = "Full"
 )
 
 // ExtMcp is the MCP-layer analog of Envoy ext_authz: an ordered chain of

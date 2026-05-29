@@ -17,7 +17,7 @@ spec:
             metadata:
               tenant: 'jwt.sub'
         methods:
-          tools/call: Both
+          tools/call: Full
 
 ---
 # Output
@@ -30,7 +30,7 @@ output:
       backend:
         extMcp:
           methods:
-            tools/call: BOTH
+            tools/call: FULL
           processors:
           - remote:
               metadata:

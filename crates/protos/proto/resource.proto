@@ -1332,7 +1332,7 @@ message BackendPolicySpec {
       OFF = 0;
       REQUEST = 1;
       RESPONSE = 2;
-      BOTH = 3;
+      FULL = 3;
     }
 
     enum FailureMode {

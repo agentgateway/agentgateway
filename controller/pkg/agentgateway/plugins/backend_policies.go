@@ -275,8 +275,8 @@ func mcpMethodPhase(p agentgateway.MCPMethodPhase) api.BackendPolicySpec_ExtMcp_
 		return api.BackendPolicySpec_ExtMcp_REQUEST
 	case agentgateway.MCPMethodPhaseResponse:
 		return api.BackendPolicySpec_ExtMcp_RESPONSE
-	case agentgateway.MCPMethodPhaseBoth:
-		return api.BackendPolicySpec_ExtMcp_BOTH
+	case agentgateway.MCPMethodPhaseFull:
+		return api.BackendPolicySpec_ExtMcp_FULL
 	default:
 		return api.BackendPolicySpec_ExtMcp_OFF
 	}

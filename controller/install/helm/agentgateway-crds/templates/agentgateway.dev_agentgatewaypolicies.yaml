@@ -4391,7 +4391,7 @@ spec:
                               - "Off"
                               - Request
                               - Response
-                              - Both
+                              - Full
                               type: string
                             description: |-
                               `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
@@ -4404,8 +4404,7 @@ spec:
                             description: |-
                               `processors` is the ordered list of policy processors applied to matched
                               methods. Processors run in the order listed; the first to reject a request
-                              short-circuits the chain. Today only the `remote` processor is available;
-                              others (e.g. local regex matching) may be added in the future.
+                              short-circuits the chain.
                             items:
                               description: ExtMcpProcessor selects a single policy
                                 processor. Exactly one variant must be set.

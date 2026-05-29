@@ -547,7 +547,7 @@ fn convert_ext_mcp(
 				ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
 				ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
 				ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
-				ProtoPhase::Both => crate::mcp::extmcp::Phase::Both,
+				ProtoPhase::Full => crate::mcp::extmcp::Phase::Full,
 			};
 			(k.clone(), phase)
 		})

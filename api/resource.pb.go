@@ -1684,7 +1684,7 @@ const (
 	BackendPolicySpec_ExtMcp_OFF      BackendPolicySpec_ExtMcp_Phase = 0
 	BackendPolicySpec_ExtMcp_REQUEST  BackendPolicySpec_ExtMcp_Phase = 1
 	BackendPolicySpec_ExtMcp_RESPONSE BackendPolicySpec_ExtMcp_Phase = 2
-	BackendPolicySpec_ExtMcp_BOTH     BackendPolicySpec_ExtMcp_Phase = 3
+	BackendPolicySpec_ExtMcp_FULL     BackendPolicySpec_ExtMcp_Phase = 3
 )
 
 // Enum value maps for BackendPolicySpec_ExtMcp_Phase.
@@ -1693,13 +1693,13 @@ var (
 		0: "OFF",
 		1: "REQUEST",
 		2: "RESPONSE",
-		3: "BOTH",
+		3: "FULL",
 	}
 	BackendPolicySpec_ExtMcp_Phase_value = map[string]int32{
 		"OFF":      0,
 		"REQUEST":  1,
 		"RESPONSE": 2,
-		"BOTH":     3,
+		"FULL":     3,
 	}
 )
 
@@ -14328,7 +14328,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03OFF\x10\x00\x12\v\n" +
 	"\aREQUEST\x10\x01\x12\f\n" +
 	"\bRESPONSE\x10\x02\x12\b\n" +
-	"\x04BOTH\x10\x03\"\"\n" +
+	"\x04FULL\x10\x03\"\"\n" +
 	"\vFailureMode\x12\b\n" +
 	"\x04DENY\x10\x00\x12\t\n" +
 	"\x05ALLOW\x10\x01J\x04\b\x01\x10\x02R\x06remoteB\x06\n" +

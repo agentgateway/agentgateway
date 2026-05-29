@@ -7,15 +7,15 @@ pub enum Phase {
 	Off,
 	Request,
 	Response,
-	Both,
+	Full,
 }
 
 impl Phase {
 	pub fn runs_request(self) -> bool {
-		matches!(self, Phase::Request | Phase::Both)
+		matches!(self, Phase::Request | Phase::Full)
 	}
 	pub fn runs_response(self) -> bool {
-		matches!(self, Phase::Response | Phase::Both)
+		matches!(self, Phase::Response | Phase::Full)
 	}
 }
 

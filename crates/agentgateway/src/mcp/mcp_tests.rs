@@ -2906,11 +2906,11 @@ mod extmcp_test_support {
 	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 
 	// Default test allowlist: every method exercised in this module's tests,
-	// all at Phase::Both. Tests that need narrower coverage build their own.
+	// all at Phase::Full. Tests that need narrower coverage build their own.
 	pub fn default_methods() -> HashMap<String, extmcp::Phase> {
 		["tools/call", "tools/list", "prompts/get", "resources/read"]
 			.into_iter()
-			.map(|m| (m.to_string(), extmcp::Phase::Both))
+			.map(|m| (m.to_string(), extmcp::Phase::Full))
 			.collect()
 	}
 

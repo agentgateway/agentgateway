@@ -19,7 +19,7 @@ spec:
             metadata:
               tenant: 'foolen_{{jwt.sub}}'
         methods:
-          tools/call: Both
+          tools/call: Full
 ---
 apiVersion: v1
 kind: Service
@@ -41,7 +41,7 @@ output:
       backend:
         extMcp:
           methods:
-            tools/call: BOTH
+            tools/call: FULL
           processors:
           - remote:
               metadata:

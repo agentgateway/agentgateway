@@ -789,7 +789,7 @@ spec:
               name: extmcp-srv
               port: 4317
         methods:
-          tools/call: Both
+          tools/call: Full
 ---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1
