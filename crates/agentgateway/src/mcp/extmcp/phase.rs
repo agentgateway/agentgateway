@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+use crate::*;
+
+#[apply(schema_enum!)]
+#[derive(Default)]
 pub enum Phase {
 	#[default]
 	Off,

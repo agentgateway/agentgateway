@@ -114,8 +114,8 @@ fn ser_header_names<S: serde::Serializer>(
 }
 
 // Behavior when a driver errors or returns an unhandleable response.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
+#[apply(schema_enum!)]
+#[derive(Default)]
 pub enum FailureMode {
 	Allow,
 	#[default]
