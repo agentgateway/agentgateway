@@ -319,6 +319,7 @@ pub struct RoutePolicies {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub cors: RequestPolicy<http::cors::Cors>,
+	pub buffering: RequestPolicy<http::buffering::Buffering>,
 }
 
 #[derive(Debug, Default)]
@@ -330,6 +331,7 @@ pub struct GatewayPolicies {
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub buffering: RequestPolicy<http::buffering::Buffering>,
 }
 
 impl GatewayPolicies {
@@ -795,6 +797,9 @@ impl Store {
 				TrafficPolicy::CORS(p) => {
 					pol.cors.set_if_unset(p);
 				},
+				TrafficPolicy::Buffering(request_policy) => {
+					pol.buffering.set_if_unset(request_policy);
+				},
 			}
 		}
 		if !authz.is_empty() {
@@ -852,6 +857,9 @@ impl Store {
 				},
 				TrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
+				},
+				TrafficPolicy::Buffering(b) => {
+					pol.buffering.set_if_unset(b);
 				},
 				other => {
 					warn!("unexpected gateway policy: {:?}", other);

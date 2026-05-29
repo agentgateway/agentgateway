@@ -2094,6 +2094,12 @@ fn traffic_policy_from_proto(
 				Mode::Auto => agent::HostRedirectOverride::Auto,
 			})
 		},
+		Some(tps::Kind::Buffering(buffering)) => TrafficPolicy::Buffering(RequestPolicy::single(
+			http::buffering::Buffering::try_from(http::buffering::BufferingSerde {
+				buffer_request_body: buffering.request_body_buffering,
+			})
+			.map_err(|e| ProtoError::Generic(e.to_string()))?,
+		)),
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -2788,6 +2794,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::UrlRewrite(_) => build!(UrlRewrite),
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
+		TrafficPolicy::Buffering(_) => build!(Buffering),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -2818,6 +2825,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::HostRewrite(_) => "hostRewrite",
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
+		TrafficPolicy::Buffering(_) => "buffering",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }

@@ -775,6 +775,10 @@ type Traffic struct {
 	// client.
 	// +optional
 	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
+
+	// `buffering` defines the policy for buffering requests and responses.
+	// +optional
+	Buffering *Buffering `json:"buffering,omitempty"`
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
@@ -1161,6 +1165,12 @@ type APIKeyAuthentication struct {
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
+}
+
+type Buffering struct {
+	// `bufferRequestBody` controls whether the request body should be buffered.
+	// +optional
+	RequestBodyBuffering *bool `json:"bufferRequestBody,omitempty"`
 }
 
 type SecretSelector struct {
