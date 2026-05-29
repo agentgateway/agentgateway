@@ -194,6 +194,7 @@ impl Session {
 		Ok(())
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn authorize_with_ctx<P>(
 		&self,
 		backend: &str,
