@@ -31,6 +31,16 @@ pub enum Error {
 	JsonConvert,
 }
 
+impl Error {
+	// An undeclared reference is a static config error: the expression can never resolve for any input.
+	pub fn undeclared_reference(&self) -> Option<&str> {
+		match self {
+			Error::Resolve(ExecutionError::UndeclaredReference(name)) => Some(name.as_str()),
+			_ => None,
+		}
+	}
+}
+
 impl From<Box<dyn std::error::Error>> for Error {
 	fn from(value: Box<dyn std::error::Error>) -> Self {
 		Self::Variable(value.to_string())

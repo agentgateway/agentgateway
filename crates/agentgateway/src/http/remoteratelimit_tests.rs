@@ -55,10 +55,12 @@ fn build_request_all_descriptors_evaluate_returns_some() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
+		matches!(&result, Ok(Some(_))),
 		"expected Some when all descriptors evaluate"
 	);
-	let request = result.unwrap().0;
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries.len(), 2);
 	assert_eq!(request.descriptors[0].entries[0].key, "user");
@@ -85,8 +87,10 @@ fn build_request_header_descriptor_evaluates() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_some());
-	let request = result.unwrap().0;
+	assert!(matches!(&result, Ok(Some(_))));
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors[0].entries[0].value, "my-client");
 }
 
@@ -109,7 +113,7 @@ fn build_request_missing_header_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None when descriptor evaluation fails"
 	);
 }
@@ -134,10 +138,12 @@ fn build_request_second_descriptor_fails_sends_successful_only() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
+		matches!(&result, Ok(Some(_))),
 		"expected Some with the successful descriptor when only one fails"
 	);
-	let request = result.unwrap().0;
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -167,10 +173,12 @@ fn build_request_first_descriptor_fails_sends_successful_only() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
+		matches!(&result, Ok(Some(_))),
 		"expected Some with the successful descriptor when only the first fails"
 	);
-	let request = result.unwrap().0;
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -198,7 +206,7 @@ fn build_request_no_matching_type_returns_none() {
 	// Ask for Requests type -- no candidates
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None when no candidates match the requested type"
 	);
 }
@@ -215,10 +223,9 @@ fn build_request_cost_propagated_to_hits_addend() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 
-	let result = rl
-		.build_request(&req, RateLimitType::Tokens, Some(42))
-		.unwrap()
-		.0;
+	let Ok(Some((result, _))) = rl.build_request(&req, RateLimitType::Tokens, Some(42)) else {
+		panic!("expected a built request");
+	};
 	assert_eq!(result.descriptors[0].hits_addend, Some(42));
 }
 
@@ -276,10 +283,9 @@ fn build_request_limit_override_evaluates() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 
-	let result = rl
-		.build_request(&req, RateLimitType::Requests, None)
-		.unwrap()
-		.0;
+	let Ok(Some((result, _))) = rl.build_request(&req, RateLimitType::Requests, None) else {
+		panic!("expected a built request");
+	};
 	let limit = result.descriptors[0]
 		.limit
 		.as_ref()
@@ -310,7 +316,7 @@ fn build_request_delete_disconnect_skips_ratelimit() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None for DELETE disconnect with missing descriptor headers"
 	);
 }
@@ -331,8 +337,10 @@ fn build_request_multiple_entries_all_succeed() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_some());
-	let request = result.unwrap().0;
+	assert!(matches!(&result, Ok(Some(_))));
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors.len(), 3);
 	assert_eq!(request.descriptors[0].entries[0].value, "alice");
 	assert_eq!(request.descriptors[1].entries[0].value, "echo");
@@ -357,7 +365,7 @@ fn build_request_tokens_type_missing_header_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Tokens, Some(100));
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None for Tokens type when descriptor fails"
 	);
 }
@@ -375,8 +383,10 @@ fn build_request_tokens_type_all_succeed() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Tokens, Some(50));
-	assert!(result.is_some());
-	let request = result.unwrap().0;
+	assert!(matches!(&result, Ok(Some(_))));
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries[0].value, "test-user");
 	assert_eq!(request.descriptors[0].hits_addend, Some(50));
@@ -404,7 +414,7 @@ fn build_request_all_descriptors_fail_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None when all descriptor entries fail evaluation"
 	);
 }
@@ -457,8 +467,10 @@ fn build_request_two_descriptors_multi_entry_all_succeed() {
 		.unwrap();
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
-	assert!(result.is_some());
-	let request = result.unwrap().0;
+	assert!(matches!(&result, Ok(Some(_))));
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors.len(), 2);
 	// First descriptor: path + remote_address
 	assert_eq!(request.descriptors[0].entries.len(), 2);
@@ -503,10 +515,12 @@ fn build_request_two_descriptors_first_partially_fails_sends_second() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
+		matches!(&result, Ok(Some(_))),
 		"expected Some — second descriptor should still be sent"
 	);
-	let request = result.unwrap().0;
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(
 		request.descriptors.len(),
 		1,
@@ -547,7 +561,7 @@ fn build_request_two_descriptors_both_partially_fail_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None when all descriptors have at least one failing entry"
 	);
 }
@@ -569,9 +583,75 @@ fn build_request_non_string_cel_result_returns_none() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_none(),
+		matches!(result, Ok(None)),
 		"expected None when CEL result is not string-convertible"
 	);
+}
+
+// --- config error (undeclared variable) tests ---
+
+/// A descriptor value referencing an undeclared variable (`users` is parsed as a CEL
+/// identifier, not a literal) can never resolve, so `build_request` surfaces it as a
+/// config error instead of silently skipping like a missing-header (NoSuchKey) case.
+#[test]
+fn build_request_undeclared_variable_returns_config_error() {
+	let entry = make_descriptor_entry(vec![("database", "users")], RateLimitType::Requests);
+	let rl = make_rate_limit(vec![entry]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let Err(err) = rl.build_request(&req, RateLimitType::Requests, None) else {
+		panic!("expected a config error for an undeclared variable");
+	};
+	assert_eq!(err.key, "database");
+	assert_eq!(err.reference, "users");
+}
+
+/// A config error in any descriptor is surfaced even when another descriptor would build.
+#[test]
+fn build_request_undeclared_variable_overrides_successful_descriptor() {
+	let good = make_descriptor_entry(vec![("user", r#""alice""#)], RateLimitType::Requests);
+	let bad = make_descriptor_entry(vec![("database", "users")], RateLimitType::Requests);
+	let rl = make_rate_limit(vec![good, bad]);
+
+	let req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/mcp")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let result = rl.build_request(&req, RateLimitType::Requests, None);
+	assert!(result.is_err(), "config error should take precedence");
+}
+
+/// With failClosed (the default), a misconfigured descriptor denies the request (500).
+#[test]
+fn config_error_fails_closed_denies() {
+	let rl = make_rate_limit(vec![]);
+	let err = DescriptorConfigError {
+		key: "database".to_string(),
+		reference: "users".to_string(),
+	};
+	assert!(matches!(
+		rl.on_config_error(err),
+		Err(ProxyError::RateLimitFailed)
+	));
+}
+
+/// With failOpen, a misconfigured descriptor allows the request through.
+#[test]
+fn config_error_fails_open_allows() {
+	let mut rl = make_rate_limit(vec![]);
+	rl.failure_mode = FailureMode::FailOpen;
+	let err = DescriptorConfigError {
+		key: "database".to_string(),
+		reference: "users".to_string(),
+	};
+	assert!(rl.on_config_error(err).is_ok());
 }
 
 // --- FailureMode tests ---
@@ -810,10 +890,12 @@ fn build_request_jwt_sub_descriptor_evaluates_with_materialization() {
 
 	let result = rl.build_request(&req, RateLimitType::Requests, None);
 	assert!(
-		result.is_some(),
+		matches!(&result, Ok(Some(_))),
 		"expected Some when jwt.sub evaluates (with materialization) to a string"
 	);
-	let request = result.unwrap().0;
+	let Ok(Some((request, _))) = result else {
+		unreachable!("asserted Ok(Some) above")
+	};
 	assert_eq!(request.descriptors.len(), 1);
 	assert_eq!(request.descriptors[0].entries.len(), 1);
 	assert_eq!(request.descriptors[0].entries[0].key, "user");

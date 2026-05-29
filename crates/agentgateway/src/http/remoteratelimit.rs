@@ -179,20 +179,33 @@ impl LLMResponseAmend {
 	}
 }
 
+// A descriptor whose CEL references an undeclared variable can never resolve; treated as a config error, not a skip.
+#[derive(Debug)]
+struct DescriptorConfigError {
+	key: String,
+	reference: String,
+}
+
+// The built gRPC request paired with each descriptor's optional cost expression (used for the token amend).
+type BuiltRateLimitRequest = (RateLimitRequest, Vec<Option<Arc<cel::Expression>>>);
+
 impl RemoteRateLimit {
 	/// Build a rate-limit request by evaluating all descriptor entries of the
 	/// given `limit_type` against the incoming HTTP request.
 	///
 	/// Individual descriptors whose CEL expressions fail to evaluate are
 	/// silently dropped (matching Envoy's per-descriptor "all-or-nothing"
-	/// semantics). Returns `None` only when **no** descriptor could be
+	/// semantics). Returns `Ok(None)` when **no** descriptor could be
 	/// successfully resolved, so the gRPC call is skipped entirely.
+	///
+	/// Returns `Err` when a descriptor references an undeclared variable, since
+	/// that expression can never resolve and the policy is misconfigured.
 	fn build_request(
 		&self,
 		req: &http::Request,
 		limit_type: RateLimitType,
 		default_cost: Option<u64>,
-	) -> Option<(RateLimitRequest, Vec<Option<Arc<cel::Expression>>>)> {
+	) -> Result<Option<BuiltRateLimitRequest>, DescriptorConfigError> {
 		let mut descriptors = Vec::with_capacity(self.descriptors.0.len());
 		let exec = Executor::new_request(req);
 		let candidate_count = self
@@ -213,7 +226,8 @@ impl RemoteRateLimit {
 			.iter()
 			.filter(|e| e.limit_type == limit_type)
 		{
-			if let Some(rl_entries) = Self::eval_descriptor(&exec, &desc_entry.entries) {
+			let rl_entries_opt = Self::eval_descriptor(&exec, &desc_entry.entries)?;
+			if let Some(rl_entries) = rl_entries_opt {
 				// Rate limit servers require each descriptor to have at least one entry.
 				if rl_entries.is_empty() {
 					trace!(
@@ -284,7 +298,7 @@ impl RemoteRateLimit {
 				"ratelimit all descriptors failed evaluation for domain={}, type={:?}, skipping rate-limit call",
 				self.domain, limit_type,
 			);
-			return None;
+			return Ok(None);
 		}
 
 		trace!(
@@ -294,7 +308,7 @@ impl RemoteRateLimit {
 			descriptors.len()
 		);
 
-		Some((
+		Ok(Some((
 			proto::RateLimitRequest {
 				domain: self.domain.clone(),
 				descriptors,
@@ -302,8 +316,30 @@ impl RemoteRateLimit {
 				hits_addend: 0,
 			},
 			descriptor_costs,
-		))
+		)))
 	}
+
+	// A misconfigured descriptor follows the configured failureMode, like a rate-limit service failure does.
+	fn on_config_error(&self, err: DescriptorConfigError) -> Result<(), ProxyError> {
+		let deny = self.failure_mode != FailureMode::FailOpen;
+		warn!(
+			"ratelimit descriptor '{}' references undeclared variable '{}' (domain: {}); {}",
+			err.key,
+			err.reference,
+			self.domain,
+			if deny {
+				"denying request (failure_mode: failClosed)"
+			} else {
+				"allowing request (failure_mode: failOpen)"
+			}
+		);
+		if deny {
+			Err(ProxyError::RateLimitFailed)
+		} else {
+			Ok(())
+		}
+	}
+
 	pub async fn check_llm(
 		&self,
 		client: PolicyClient,
@@ -327,11 +363,15 @@ impl RemoteRateLimit {
 		// If they have an explicit `cost` expression, it is specified to be on output; send only a '0' cost here.
 		// If they have tokenization enabled, we have an explicit cost to send, so we can send it.
 		// Else send '0'.
-		let Some((request, descriptor_costs)) =
-			self.build_request(req, RateLimitType::Tokens, Some(default_cost))
-		else {
-			return Ok((PolicyResponse::default(), None));
-		};
+		let (request, descriptor_costs) =
+			match self.build_request(req, RateLimitType::Tokens, Some(default_cost)) {
+				Ok(Some(v)) => v,
+				Ok(None) => return Ok((PolicyResponse::default(), None)),
+				Err(cfg) => {
+					self.on_config_error(cfg)?;
+					return Ok((PolicyResponse::default(), None));
+				},
+			};
 		let cr = self.check_internal(client.clone(), request.clone()).await;
 		let r = LLMResponseAmend {
 			base: self.clone(),
@@ -371,8 +411,13 @@ impl RemoteRateLimit {
 			);
 			return Ok(PolicyResponse::default());
 		}
-		let Some((request, _)) = self.build_request(req, RateLimitType::Requests, None) else {
-			return Ok(PolicyResponse::default());
+		let request = match self.build_request(req, RateLimitType::Requests, None) {
+			Ok(Some((request, _))) => request,
+			Ok(None) => return Ok(PolicyResponse::default()),
+			Err(cfg) => {
+				self.on_config_error(cfg)?;
+				return Ok(PolicyResponse::default());
+			},
 		};
 		match self.check_internal(client, request).await {
 			Ok(cr) => Self::apply(req, cr),
@@ -488,7 +533,10 @@ impl RemoteRateLimit {
 		}))
 	}
 
-	fn eval_descriptor(exec: &cel::Executor<'_>, entries: &Vec<Descriptor>) -> Option<Vec<Entry>> {
+	fn eval_descriptor(
+		exec: &cel::Executor<'_>,
+		entries: &Vec<Descriptor>,
+	) -> Result<Option<Vec<Entry>>, DescriptorConfigError> {
 		let mut rl_entries = Vec::with_capacity(entries.len());
 		for Descriptor(k, lookup) in entries {
 			// We drop the entire set if we cannot eval one; emit trace to aid debugging
@@ -499,7 +547,7 @@ impl RemoteRateLimit {
 							"ratelimit descriptor value not convertible to string: key={}, expr={:?}",
 							k, lookup
 						);
-						return None;
+						return Ok(None);
 					};
 					let entry = Entry {
 						key: k.clone(),
@@ -508,15 +556,21 @@ impl RemoteRateLimit {
 					rl_entries.push(entry);
 				},
 				Err(e) => {
+					if let Some(reference) = e.undeclared_reference() {
+						return Err(DescriptorConfigError {
+							key: k.clone(),
+							reference: reference.to_string(),
+						});
+					}
 					trace!(
 						"ratelimit failed to evaluate expression: key={}, expr={:?}, error={}",
 						k, lookup, e
 					);
-					return None;
+					return Ok(None);
 				},
 			}
 		}
-		Some(rl_entries)
+		Ok(Some(rl_entries))
 	}
 
 	pub fn expressions(&self) -> impl Iterator<Item = &Expression> {
