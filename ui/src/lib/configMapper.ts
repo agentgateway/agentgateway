@@ -26,7 +26,6 @@ export function configDumpToLocalConfig(configDump: any): LocalConfig {
     binds: [],
     workloads: configDump.workloads || [],
     services: configDump.services || [],
-    appliedPolicies: configDump.policies || [],
   };
 
   const backends = (configDump.backends || [])
@@ -221,8 +220,8 @@ function mapToMatches(matchesData: any): Match[] {
     if (matchData.path) {
       if (matchData.path.exact) {
         match.path.exact = matchData.path.exact;
-      } else if (matchData.path.prefix) {
-        match.path.pathPrefix = matchData.path.prefix;
+      } else if (matchData.path.pathPrefix != null || matchData.path.prefix != null) {
+        match.path.pathPrefix = matchData.path.pathPrefix ?? matchData.path.prefix;
       } else if (matchData.path.regex) {
         match.path.regex = matchData.path.regex;
       }
@@ -253,14 +252,27 @@ function mapToBackend(backendData: any): Backend | undefined {
 }
 
 function mapToRouteBackend(rb: any, backends: Backend[]): Backend | undefined {
+  let backend: Backend | undefined;
+
   // Route backend reference is a string in "namespace/name" format
   if (typeof rb.backend === "string") {
-    const found = backends.find((b) => getBackendName(b) === rb.backend);
-    if (found) return found;
+    backend = backends.find((b) => getBackendName(b) === rb.backend);
   }
 
   // Fallback: instantiate a backend in-place based on the route backend data
-  return mapToBackend(rb);
+  if (!backend) {
+    backend = mapToBackend(rb);
+  }
+
+  // mcp.name is injected by the server (ResourceName flattening) and used
+  // for lookup above, but is not part of the write schema. Return a clone
+  // without it so the backends array keeps names for future lookups.
+  if (backend?.mcp?.name) {
+    const { name: _, ...mcpRest } = backend.mcp;
+    return { ...backend, mcp: mcpRest as McpBackend };
+  }
+
+  return backend;
 }
 
 function getBackendName(backend: Backend): string {
@@ -314,9 +326,11 @@ function mapToServiceBackend(data: any): ServiceBackend | undefined {
 }
 
 function mapToHostBackend(data: any): HostBackend | undefined {
-  if (!data) return undefined;
-  // Include namespace in name to match route backend reference format "namespace/name"
-  const fullName = data.namespace && data.name ? `${data.namespace}/${data.name}` : data.name;
+  if (!data || typeof data.name !== "string") return undefined;
+  // Format as "namespace/name" to match route backend reference keys
+  // (mirrors Rust Display for ResourceName: "{namespace}/{name}").
+  const namespace = typeof data.namespace === "string" ? data.namespace : "";
+  const fullName = `${namespace}/${data.name}`;
   if (typeof data.target === "string") {
     const [host, portStr] = data.target.split(":");
     const port = Number(portStr);
@@ -337,8 +351,10 @@ function mapToHostBackend(data: any): HostBackend | undefined {
 function mapToMcpBackend(data: any): McpBackend | undefined {
   if (typeof data?.name !== "string" || !Array.isArray(data?.target?.targets)) return undefined;
   const targets = data.target.targets.map(mapToMcpTarget).filter(Boolean) as McpTarget[];
-  // Include namespace in name to match route backend reference format "namespace/name"
-  const fullName = data.namespace ? `${data.namespace}/${data.name}` : data.name;
+  // Format as "namespace/name" to match route backend reference keys
+  // (mirrors Rust Display for ResourceName: "{namespace}/{name}").
+  const namespace = typeof data.namespace === "string" ? data.namespace : "";
+  const fullName = `${namespace}/${data.name}`;
   return {
     name: fullName,
     targets, // Flat structure for UI and write path
