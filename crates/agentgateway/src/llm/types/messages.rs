@@ -113,6 +113,70 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Request {
+	/// Normalize Claude Code's non-standard `messages[*].role == "system"` shape
+	/// into the canonical Anthropic Messages API form, where only `user` and
+	/// `assistant` roles live in `messages` and system prompt content lives in
+	/// the top-level `system` field.
+	///
+	/// Claude Code 2.1.157+ injects in-conversation system messages this way;
+	/// strict spec implementations (e.g. vLLM's Anthropic endpoint, see
+	/// vllm-project/vllm#44048) reject the request before conversion. The same
+	/// payload also fails our typed `Role` enum during `to_openai` and friends.
+	///
+	/// Position is lost in this merge: every in-conversation system block is
+	/// appended after existing top-level system content. Preserving position
+	/// would require provider-aware translation and is intentionally out of
+	/// scope here.
+	pub fn normalize_system_messages(&mut self) {
+		let drained: Vec<RequestMessage> = std::mem::take(&mut self.messages);
+		let mut kept = Vec::with_capacity(drained.len());
+		let mut extracted: Vec<TextPart> = Vec::new();
+		for msg in drained {
+			if msg.role != "system" {
+				kept.push(msg);
+				continue;
+			}
+			let Some(content) = msg.content else { continue };
+			match content {
+				ContentBlock::Text(text) => {
+					if !text.is_empty() {
+						extracted.push(TextPart::Text {
+							r#type: "text".to_string(),
+							text,
+							rest: Default::default(),
+						});
+					}
+				},
+				ContentBlock::Array(parts) => {
+					for part in parts {
+						if let ContentPart::Text { r#type, text, rest } = part {
+							extracted.push(TextPart::Text { r#type, text, rest });
+						}
+					}
+				},
+			}
+		}
+		self.messages = kept;
+
+		if extracted.is_empty() {
+			return;
+		}
+
+		let mut items: Vec<TextPart> = match std::mem::take(&mut self.system) {
+			Some(TextBlock::Array(existing)) => existing,
+			Some(TextBlock::Text(text)) => vec![TextPart::Text {
+				r#type: "text".to_string(),
+				text,
+				rest: Default::default(),
+			}],
+			None => Vec::new(),
+		};
+		items.extend(extracted);
+		self.system = Some(TextBlock::Array(items));
+	}
+}
+
 pub fn get_messages_helper(
 	messages: &[RequestMessage],
 	system: &Option<TextBlock>,
@@ -254,7 +318,11 @@ impl RequestType for Request {
 	}
 
 	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
+		// Defensive normalize for direct library callers; the proxy entry point
+		// (process_messages_request) already normalizes before dispatch.
+		let mut req = self.clone();
+		req.normalize_system_messages();
+		serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
 	}
 
 	fn to_bedrock(
@@ -1069,6 +1137,175 @@ pub mod typed {
 
 		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 			serde_json::to_vec(&self)
+		}
+	}
+}
+
+#[cfg(test)]
+mod normalize_system_messages_tests {
+	use super::*;
+
+	fn user_msg(text: &str) -> RequestMessage {
+		RequestMessage {
+			role: "user".to_string(),
+			content: Some(ContentBlock::Text(text.to_string())),
+			rest: Default::default(),
+		}
+	}
+
+	fn system_msg_text(text: &str) -> RequestMessage {
+		RequestMessage {
+			role: "system".to_string(),
+			content: Some(ContentBlock::Text(text.to_string())),
+			rest: Default::default(),
+		}
+	}
+
+	fn system_msg_array(texts: &[&str]) -> RequestMessage {
+		RequestMessage {
+			role: "system".to_string(),
+			content: Some(ContentBlock::Array(
+				texts
+					.iter()
+					.map(|t| ContentPart::Text {
+						r#type: "text".to_string(),
+						text: t.to_string(),
+						rest: Default::default(),
+					})
+					.collect(),
+			)),
+			rest: Default::default(),
+		}
+	}
+
+	fn collect_system_texts(req: &Request) -> Vec<String> {
+		match &req.system {
+			None => vec![],
+			Some(TextBlock::Text(t)) => vec![t.clone()],
+			Some(TextBlock::Array(parts)) => parts
+				.iter()
+				.filter_map(|p| match p {
+					TextPart::Text { text, .. } => Some(text.clone()),
+					_ => None,
+				})
+				.collect(),
+		}
+	}
+
+	#[test]
+	fn extracts_in_conversation_system_into_top_level() {
+		let mut req = Request {
+			messages: vec![
+				user_msg("hi"),
+				system_msg_text("reminder: tools updated"),
+				user_msg("continue"),
+			],
+			..Default::default()
+		};
+
+		req.normalize_system_messages();
+
+		assert_eq!(req.messages.len(), 2);
+		assert!(req.messages.iter().all(|m| m.role != "system"));
+		assert_eq!(collect_system_texts(&req), vec!["reminder: tools updated"]);
+	}
+
+	#[test]
+	fn preserves_existing_top_level_system_first() {
+		let mut req = Request {
+			messages: vec![user_msg("hi"), system_msg_text("in-convo system")],
+			system: Some(TextBlock::Text("anchor system".to_string())),
+			..Default::default()
+		};
+
+		req.normalize_system_messages();
+
+		assert_eq!(
+			collect_system_texts(&req),
+			vec!["anchor system", "in-convo system"],
+		);
+	}
+
+	#[test]
+	fn merges_array_top_level_system_with_extracted() {
+		let mut req = Request {
+			messages: vec![user_msg("hi"), system_msg_array(&["a", "b"])],
+			system: Some(TextBlock::Array(vec![TextPart::Text {
+				r#type: "text".to_string(),
+				text: "anchor".to_string(),
+				rest: Default::default(),
+			}])),
+			..Default::default()
+		};
+
+		req.normalize_system_messages();
+
+		assert_eq!(collect_system_texts(&req), vec!["anchor", "a", "b"]);
+	}
+
+	#[test]
+	fn noop_without_system_in_messages() {
+		let mut req = Request {
+			messages: vec![user_msg("hi"), user_msg("again")],
+			system: Some(TextBlock::Text("anchor".to_string())),
+			..Default::default()
+		};
+		let before = req.clone();
+
+		req.normalize_system_messages();
+
+		assert_eq!(req.messages.len(), before.messages.len());
+		assert_eq!(collect_system_texts(&req), vec!["anchor"]);
+	}
+
+	#[test]
+	fn drops_system_with_no_extractable_text() {
+		let mut req = Request {
+			messages: vec![
+				user_msg("hi"),
+				RequestMessage {
+					role: "system".to_string(),
+					content: None,
+					rest: Default::default(),
+				},
+				user_msg("again"),
+			],
+			..Default::default()
+		};
+
+		req.normalize_system_messages();
+
+		assert_eq!(req.messages.len(), 2);
+		assert!(req.system.is_none());
+	}
+
+	#[test]
+	fn fixes_to_openai_conversion_for_claude_code_payload() {
+		// Without normalization this payload trips the strict typed::Role enum
+		// during the messages -> completions conversion.
+		let req = Request {
+			messages: vec![
+				user_msg("first user"),
+				system_msg_text("in-convo reminder"),
+				user_msg("second user"),
+			],
+			model: Some("local-vllm-model".to_string()),
+			max_tokens: Some(64),
+			..Default::default()
+		};
+
+		let bytes = crate::llm::conversion::completions::from_messages::translate(&req)
+			.expect("translate should succeed after normalization");
+		let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+		let messages = value["messages"].as_array().expect("messages array");
+
+		// First entry must be the top-level system folded into OpenAI's messages[0].
+		assert_eq!(messages[0]["role"], "system");
+		assert_eq!(messages[0]["content"], "in-convo reminder");
+
+		// No subsequent system entries — only user turns survive in conversation.
+		for msg in messages.iter().skip(1) {
+			assert_ne!(msg["role"], "system");
 		}
 	}
 }

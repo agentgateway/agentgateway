@@ -626,9 +626,16 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, req) = self
+		let (parts, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
 			.await?;
+
+		// Claude Code 2.1.157+ sends in-conversation system messages inside the
+		// `messages` array. Anthropic spec puts system prompt in the top-level
+		// `system` field, and our typed `Role` enum is strict. Normalize at the
+		// protocol boundary so every downstream conversion path sees a valid
+		// shape.
+		req.normalize_system_messages();
 
 		self
 			.process_request(

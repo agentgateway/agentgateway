@@ -139,7 +139,11 @@ pub mod from_messages {
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		// Defensive normalize for direct library callers; the proxy entry point
+		// (process_messages_request) already normalizes before dispatch.
+		let mut req = req.clone();
+		req.normalize_system_messages();
+		let typed = json::convert::<_, messages::Request>(&req).map_err(AIError::RequestMarshal)?;
 		let xlated = translate_internal(typed);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
