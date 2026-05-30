@@ -617,6 +617,7 @@ fn uuid() {
 		"Multiple uuid() calls should return different values"
 	);
 }
+
 fn assert(want: serde_json::Value, expr: &str) {
 	assert_eq!(
 		want,

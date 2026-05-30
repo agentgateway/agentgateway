@@ -1,0 +1,60 @@
+llm:
+  port: 4000
+  policies:
+    # Compute a routing tier from request data before the model is selected.
+    # This only writes a temporary header that is used for matching, then the
+    # header is stripped before the request is forwarded upstream.
+    transformations:
+      request:
+        set:
+          # Requests with small output budgets land in the economy bucket.
+          # Callers can override the derived class with metadata.cost_tier.
+          x-gateway-cost-class: 'default(json(request.body).metadata.cost_tier, "") != "" ? default(json(request.body).metadata.cost_tier, "") : (default(json(request.body).max_tokens, 1024) > 4096 ? "premium" : default(json(request.body).max_tokens, 1024) > 1024 ? "balanced" : "economy")'
+  models:
+  # Same public model name, lower-cost upstream model.
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o-mini
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: economy
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class
+  # Same public model name, default higher-capability upstream model.
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: premium
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class
+  # Same public model name, premium bucket. This example maps it to the same
+  # upstream model as balanced so the routing signal stays visible without
+  # forcing a third provider account.
+  - name: smart-model
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+    matches:
+    - headers:
+      - name: x-gateway-cost-class
+        value:
+          exact: balanced
+    requestHeaders:
+      remove:
+      - x-gateway-cost-class
