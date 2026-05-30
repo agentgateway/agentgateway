@@ -545,3 +545,113 @@ fn prompt_block_synthesizes_content_filter_choice() {
 	assert_eq!(r["choices"][0]["message"]["content"], "");
 	assert_eq!(r["usage"]["prompt_tokens"], 12);
 }
+
+// ---------- Streaming ----------
+
+/// Feed one Gemini stream chunk through the per-stream translator and return the
+/// emitted OpenAI chunk as JSON (`None` when the chunk produces nothing).
+fn stream_chunk(state: &mut to_completions::StreamState, v: Value) -> Option<Value> {
+	let chunk: vg::GenerateContentResponse =
+		serde_json::from_value(v).expect("valid gemini stream chunk");
+	state
+		.translate(&chunk)
+		.map(|sr| serde_json::to_value(sr).expect("serialize stream response"))
+}
+
+#[test]
+fn streaming_role_emitted_once() {
+	let mut s = to_completions::StreamState::new();
+	let c1 = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "a" }] } }] }),
+	)
+	.unwrap();
+	let c2 = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "b" }] } }] }),
+	)
+	.unwrap();
+	assert_eq!(c1["object"], "chat.completion.chunk");
+	assert_eq!(c1["choices"][0]["delta"]["role"], "assistant");
+	assert_eq!(c1["choices"][0]["delta"]["content"], "a");
+	// role appears on the first chunk only.
+	assert!(c2["choices"][0]["delta"].get("role").is_none());
+	assert_eq!(c2["choices"][0]["delta"]["content"], "b");
+}
+
+#[test]
+fn streaming_thought_and_answer_split() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [
+			{ "text": "thinking", "thought": true },
+			{ "text": "answer" }
+		]}}]}),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["delta"]["reasoning_content"], "thinking");
+	assert_eq!(c["choices"][0]["delta"]["content"], "answer");
+}
+
+#[test]
+fn streaming_tool_call_has_id_index_and_overrides_finish() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({
+			"responseId": "r1",
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } } }
+			]}, "finishReason": "STOP" }]
+		}),
+	)
+	.unwrap();
+	let tc = &c["choices"][0]["delta"]["tool_calls"][0];
+	assert_eq!(tc["index"], 0);
+	assert_eq!(tc["id"], "call_r1_0");
+	assert_eq!(tc["function"]["name"], "get_weather");
+	assert_eq!(tc["function"]["arguments"], "{\"city\":\"Berlin\"}");
+	// STOP is overridden to tool_calls when the candidate carries a function call.
+	assert_eq!(c["choices"][0]["finish_reason"], "tool_calls");
+}
+
+#[test]
+fn streaming_preserves_native_tool_call_id() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [
+			{ "functionCall": { "id": "fc_native", "name": "a", "args": {} } }
+		]}}]}),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["delta"]["tool_calls"][0]["id"], "fc_native");
+}
+
+#[test]
+fn streaming_trailing_usage_chunk_has_empty_choices() {
+	let mut s = to_completions::StreamState::new();
+	// Consume the role on a content chunk, then a usage-only trailing chunk.
+	stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] } }] }),
+	);
+	let c = stream_chunk(
+		&mut s,
+		json!({ "usageMetadata": {
+			"promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7,
+			"thoughtsTokenCount": 1, "cachedContentTokenCount": 3
+		}}),
+	)
+	.unwrap();
+	assert!(c["choices"].as_array().unwrap().is_empty());
+	assert_eq!(c["usage"]["prompt_tokens"], 5);
+	assert_eq!(c["usage"]["completion_tokens"], 2);
+	assert_eq!(c["usage"]["total_tokens"], 7);
+	assert_eq!(
+		c["usage"]["completion_tokens_details"]["reasoning_tokens"],
+		1
+	);
+	assert_eq!(c["usage"]["prompt_tokens_details"]["cached_tokens"], 3);
+}

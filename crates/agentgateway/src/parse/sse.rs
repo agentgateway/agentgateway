@@ -123,6 +123,30 @@ where
 	})
 }
 
+pub fn append_done_on_close<S>(stream: S) -> http::Body
+where
+	S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+{
+	use futures_util::StreamExt;
+	use futures_util::stream::{self, BoxStream};
+	let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+	let stream = stream::unfold(
+		(Some(stream.boxed()), Some(done)),
+		|(stream, done): (
+			Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+			Option<Bytes>,
+		)| async move {
+			let mut stream = stream?;
+			match stream.next().await {
+				Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+				Some(Err(err)) => Some((Err(err), (None, None))),
+				None => done.map(|done| (Ok(done), (None, None))),
+			}
+		},
+	);
+	http::Body::from_stream(stream)
+}
+
 fn unwrap_sse_data(frame: Frame<Bytes>) -> Option<Bytes> {
 	let Frame::Event(Event::<Bytes> { data, .. }) = frame else {
 		return None;

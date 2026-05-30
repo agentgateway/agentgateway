@@ -555,9 +555,15 @@ pub mod from_completions {
 }
 
 pub mod to_completions {
+	use std::time::Instant;
+
 	use serde_json::{Value, json};
 
 	use super::*;
+	use crate::http::Body;
+	use crate::llm::AmendOnDrop;
+	use crate::llm::types::completions::typed as completions;
+	use crate::parse;
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
@@ -645,9 +651,8 @@ pub mod to_completions {
 		}
 
 		let mut finish = map_finish_reason(cand.finish_reason.as_deref());
-
-		if finish == "stop" && !tool_calls.is_empty() {
-			finish = "tool_calls";
+		if matches!(finish, completions::FinishReason::Stop) && !tool_calls.is_empty() {
+			finish = completions::FinishReason::ToolCalls;
 		}
 
 		let mut message = serde_json::Map::new();
@@ -694,10 +699,11 @@ pub mod to_completions {
 		}
 	}
 
-	// Unknown Gemini finishReason values map to "stop".
-	pub(crate) fn map_finish_reason(reason: Option<&str>) -> &'static str {
+	// Unknown Gemini finishReason values map to Stop.
+	pub(crate) fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
+		use completions::FinishReason;
 		match reason {
-			Some("MAX_TOKENS") => "length",
+			Some("MAX_TOKENS") => FinishReason::Length,
 			Some(
 				"SAFETY"
 				| "RECITATION"
@@ -710,17 +716,15 @@ pub mod to_completions {
 				| "IMAGE_SAFETY"
 				| "IMAGE_PROHIBITED_CONTENT"
 				| "IMAGE_RECITATION",
-			) => "content_filter",
+			) => FinishReason::ContentFilter,
 			// STOP, MALFORMED_FUNCTION_CALL, IMAGE_OTHER, NO_IMAGE, OTHER,
 			// FINISH_REASON_UNSPECIFIED, None, and any future value.
-			_ => "stop",
+			_ => FinishReason::Stop,
 		}
 	}
 
 	fn build_usage(um: &vg::UsageMetadata) -> Value {
-		let prompt = um.prompt_token_count.unwrap_or(0);
-		let completion = um.candidates_token_count.unwrap_or(0);
-		let total = um.total_token_count.unwrap_or(prompt + completion);
+		let (prompt, completion, total) = usage_counts(um);
 
 		let mut usage = serde_json::Map::new();
 		usage.insert("prompt_tokens".into(), json!(prompt));
@@ -739,5 +743,233 @@ pub mod to_completions {
 			);
 		}
 		Value::Object(usage)
+	}
+
+	/// Per-stream state for translating native Gemini SSE chunks into OpenAI
+	/// `chat.completion.chunk`s. Carries the cross-chunk invariants: `role` is emitted
+	/// once, tool-call ids/indices are assigned in order, and the finish reason gets the
+	/// tool-call override if any function call was seen in the stream.
+	pub(super) struct StreamState {
+		created: u32,
+		stream_id: Option<String>,
+		model_version: String,
+		role_emitted: bool,
+		saw_function_call: bool,
+		tool_index: u32,
+	}
+
+	impl StreamState {
+		pub(super) fn new() -> Self {
+			Self {
+				created: chrono::Utc::now().timestamp() as u32,
+				stream_id: None,
+				model_version: String::new(),
+				role_emitted: false,
+				saw_function_call: false,
+				tool_index: 0,
+			}
+		}
+
+		/// Translate one Gemini stream chunk, or `None` when it carries nothing to emit.
+		pub(super) fn translate(
+			&mut self,
+			chunk: &vg::GenerateContentResponse,
+		) -> Option<completions::StreamResponse> {
+			let id = self
+				.stream_id
+				.get_or_insert_with(|| {
+					chunk
+						.response_id
+						.clone()
+						.unwrap_or_else(|| format!("vertex-gemini-{}", self.created))
+				})
+				.clone();
+			if self.model_version.is_empty()
+				&& let Some(m) = &chunk.model_version
+			{
+				self.model_version = m.clone();
+			}
+
+			let mut delta = completions::StreamResponseDelta::default();
+			if !self.role_emitted {
+				self.role_emitted = true;
+				delta.role = Some(completions::Role::Assistant);
+			}
+
+			let mut content = String::new();
+			let mut reasoning = String::new();
+			let mut tool_calls = Vec::new();
+			let mut finish = None;
+			if let Some(cand) = chunk.candidates.first() {
+				if let Some(c) = &cand.content {
+					for part in &c.parts {
+						match part {
+							vg::Part::Text(t) => {
+								if is_thought(t) {
+									reasoning.push_str(strip_thought_prefix(&t.text));
+								} else {
+									content.push_str(&t.text);
+								}
+							},
+							vg::Part::FunctionCall(fc) => {
+								self.saw_function_call = true;
+								let idx = self.tool_index;
+								self.tool_index += 1;
+								let call_id = fc
+									.function_call
+									.id
+									.clone()
+									.unwrap_or_else(|| format!("call_{id}_{idx}"));
+								let args = serde_json::to_string(&fc.function_call.args)
+									.unwrap_or_else(|_| "{}".to_string());
+								tool_calls.push(completions::ChatCompletionMessageToolCallChunk {
+									index: idx,
+									id: Some(call_id),
+									r#type: Some(completions::FunctionType::Function),
+									function: Some(completions::FunctionCallStream {
+										name: Some(fc.function_call.name.clone()),
+										arguments: Some(args),
+									}),
+								});
+							},
+							_ => {},
+						}
+					}
+				}
+				if let Some(reason) = &cand.finish_reason {
+					let mut mapped = map_finish_reason(Some(reason.as_str()));
+					if matches!(mapped, completions::FinishReason::Stop) && self.saw_function_call {
+						mapped = completions::FinishReason::ToolCalls;
+					}
+					finish = Some(mapped);
+				}
+			}
+
+			if !content.is_empty() {
+				delta.content = Some(content);
+			}
+			if !reasoning.is_empty() {
+				delta.reasoning_content = Some(reasoning);
+			}
+			if !tool_calls.is_empty() {
+				delta.tool_calls = Some(tool_calls);
+			}
+
+			let usage = chunk.usage_metadata.as_ref().map(stream_usage);
+
+			let has_delta = delta.role.is_some()
+				|| delta.content.is_some()
+				|| delta.reasoning_content.is_some()
+				|| delta.tool_calls.is_some();
+			let choices = if has_delta || finish.is_some() {
+				vec![completions::ChatChoiceStream {
+					index: 0,
+					delta,
+					finish_reason: finish,
+					logprobs: None,
+				}]
+			} else {
+				vec![]
+			};
+			if choices.is_empty() && usage.is_none() {
+				return None;
+			}
+
+			Some(completions::StreamResponse {
+				id,
+				choices,
+				created: self.created,
+				model: self.model_version.clone(),
+				service_tier: None,
+				system_fingerprint: None,
+				object: "chat.completion.chunk".to_string(),
+				usage,
+			})
+		}
+	}
+
+	/// Translate a native Gemini `:streamGenerateContent?alt=sse` stream into OpenAI
+	/// `chat.completion.chunk` SSE. Gemini ends the HTTP stream without a `[DONE]`
+	/// sentinel, so one is appended on successful close.
+	pub fn translate_stream(b: Body, buffer_limit: usize, mut log: AmendOnDrop) -> Body {
+		let mut state = StreamState::new();
+		let mut saw_token = false;
+		let body = parse::sse::json_transform_multi::<
+			vg::GenerateContentResponse,
+			completions::StreamResponse,
+			_,
+		>(b, buffer_limit, move |ev| {
+			let chunk = match ev {
+				parse::sse::SseJsonEvent::Data(Ok(c)) => c,
+				parse::sse::SseJsonEvent::Data(Err(e)) => {
+					tracing::debug!("failed to parse gemini stream chunk: {e}");
+					return vec![];
+				},
+				parse::sse::SseJsonEvent::Done => return vec![],
+			};
+
+			if !saw_token {
+				saw_token = true;
+				log.non_atomic_mutate(|r| r.response.first_token = Some(Instant::now()));
+			}
+			if let Some(m) = &chunk.model_version {
+				log.non_atomic_mutate(|r| {
+					if r.response.provider_model.is_none() {
+						r.response.provider_model = Some(strng::new(m));
+					}
+				});
+			}
+			if let Some(um) = &chunk.usage_metadata {
+				let (prompt, completion, total) = usage_counts(um);
+				log.non_atomic_mutate(|r| {
+					r.response.input_tokens = Some(prompt);
+					r.response.output_tokens = Some(completion);
+					r.response.total_tokens = Some(total);
+					r.response.cached_input_tokens = um.cached_content_token_count;
+					r.response.reasoning_tokens = um.thoughts_token_count;
+				});
+				log.report_rate_limit();
+			}
+
+			match state.translate(&chunk) {
+				Some(sr) => vec![("", sr)],
+				None => vec![],
+			}
+		});
+		parse::sse::append_done_on_close(body.into_data_stream())
+	}
+
+	/// Prompt, completion, and total token counts from Gemini usage metadata
+	/// (total falls back to prompt + completion when absent).
+	fn usage_counts(um: &vg::UsageMetadata) -> (u64, u64, u64) {
+		let prompt = um.prompt_token_count.unwrap_or(0);
+		let completion = um.candidates_token_count.unwrap_or(0);
+		let total = um.total_token_count.unwrap_or(prompt + completion);
+		(prompt, completion, total)
+	}
+
+	fn stream_usage(um: &vg::UsageMetadata) -> completions::Usage {
+		let (prompt, completion, total) = usage_counts(um);
+		completions::Usage {
+			prompt_tokens: prompt as u32,
+			completion_tokens: completion as u32,
+			total_tokens: total as u32,
+			prompt_tokens_details: um.cached_content_token_count.map(|c| {
+				completions::UsagePromptDetails {
+					cached_tokens: Some(c),
+					audio_tokens: None,
+					rest: Value::Null,
+				}
+			}),
+			completion_tokens_details: um.thoughts_token_count.map(|t| {
+				completions::UsageCompletionDetails {
+					reasoning_tokens: Some(t),
+					audio_tokens: None,
+					rest: Value::Null,
+				}
+			}),
+			cache_read_input_tokens: None,
+			cache_creation_input_tokens: None,
+		}
 	}
 }

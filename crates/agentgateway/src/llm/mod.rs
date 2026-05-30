@@ -916,9 +916,7 @@ impl AIProvider {
 						let body = req.to_anthropic()?;
 						p.prepare_anthropic_message_body(body)?
 					} else if original_format == InputFormat::Completions
-						&& p
-							.gemini_native_model(Some(request_model), llm_info.streaming)
-							.is_some()
+						&& p.is_gemini_model(Some(request_model))
 					{
 						req.to_vertex_gemini(p)?
 					} else {
@@ -1243,6 +1241,10 @@ impl AIProvider {
 			AIProvider::Vertex(p) => p.is_anthropic_model(Some(&req.request_model)),
 			_ => false,
 		};
+		let is_vertex_gemini = match self {
+			AIProvider::Vertex(p) => p.is_gemini_model(Some(&req.request_model)),
+			_ => false,
+		};
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		// Store an empty response, as we stream in info we will parse into it
@@ -1285,6 +1287,9 @@ impl AIProvider {
 			// Vertex completions: passthrough for OpenAI-compatible models, translate for Anthropic models
 			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_anthropic => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
+			},
+			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_gemini => {
+				resp.map(|b| conversion::vertex_gemini::to_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Vertex(_), InputFormat::Completions) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)

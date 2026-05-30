@@ -33,18 +33,6 @@ impl Provider {
 		self.gemini_model(request_model).is_some()
 	}
 
-	pub(crate) fn gemini_native_model(
-		&self,
-		request_model: Option<&str>,
-		streaming: bool,
-	) -> Option<Strng> {
-		if streaming {
-			None
-		} else {
-			self.gemini_model(request_model)
-		}
-	}
-
 	pub fn prepare_anthropic_message_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
 		self.prepare_anthropic_body(body, |b| {
 			b.remove("model");
@@ -95,7 +83,7 @@ impl Provider {
 		match (
 			route,
 			self.anthropic_model(request_model),
-			self.gemini_native_model(request_model, streaming),
+			self.gemini_model(request_model),
 		) {
 			(RouteType::AnthropicTokenCount, _, _) => {
 				strng::format!(
@@ -126,14 +114,21 @@ impl Provider {
 					}
 				)
 			},
-			// gemini_native_model gates out streaming; the RouteType::Completions check
-			// keeps Gemini models on the Anthropic-format (Messages) route on the compat shim.
+
+			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
+			// JSON array rather than an SSE stream.
 			(RouteType::Completions, None, Some(model)) => {
+				let method = if streaming {
+					"streamGenerateContent?alt=sse"
+				} else {
+					"generateContent"
+				};
 				strng::format!(
-					"/v1/projects/{}/locations/{}/publishers/google/models/{}:generateContent",
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
 					self.project_id,
 					location,
-					model
+					model,
+					method
 				)
 			},
 			_ => {
@@ -372,26 +367,37 @@ mod tests {
 	#[case::flash(
 		None,
 		Some("gemini-2.5-flash"),
+		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+	)]
+	#[case::flash_streaming(
+		None,
+		Some("gemini-2.5-flash"),
+		true,
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
 	)]
 	#[case::pro_regional(
 		Some("us-central1"),
 		Some("gemini-3-pro"),
+		false,
 		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:generateContent"
 	)]
 	#[case::path_prefix_normalized(
 		None,
 		Some("publishers/google/models/gemini-2.5-flash"),
+		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
 	)]
 	#[case::models_prefix_normalized(
 		None,
 		Some("models/gemini-2.5-flash"),
+		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
 	)]
 	fn test_get_path_for_gemini_native(
 		#[case] region: Option<&str>,
 		#[case] req_model: Option<&str>,
+		#[case] streaming: bool,
 		#[case] expected: &str,
 	) {
 		let p = Provider {
@@ -399,28 +405,24 @@ mod tests {
 			model: None,
 			region: region.map(strng::new),
 		};
-		let got = p.get_path_for_model(RouteType::Completions, req_model, false);
+		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming);
 		assert_eq!(got.as_str(), expected);
 	}
 
 	#[rstest::rstest]
-	#[case::streaming_completions(RouteType::Completions, true)]
-	#[case::messages_non_streaming(RouteType::Messages, false)]
-	#[case::messages_streaming(RouteType::Messages, true)]
-	fn test_gemini_uses_compat_shim_for_streaming_and_messages(
-		#[case] route: RouteType,
-		#[case] streaming: bool,
-	) {
+	#[case::non_streaming(false)]
+	#[case::streaming(true)]
+	fn test_gemini_messages_route_uses_compat_shim(#[case] streaming: bool) {
 		let p = Provider {
 			project_id: strng::new("p"),
 			model: None,
 			region: None,
 		};
-		let got = p.get_path_for_model(route, Some("gemini-2.5-flash"), streaming);
+		let got = p.get_path_for_model(RouteType::Messages, Some("gemini-2.5-flash"), streaming);
 		assert_eq!(
 			got.as_str(),
 			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
-			"gemini must use the compat shim for streaming and Messages routes"
+			"Gemini on the Messages route uses the compat shim until messages translation exists"
 		);
 	}
 

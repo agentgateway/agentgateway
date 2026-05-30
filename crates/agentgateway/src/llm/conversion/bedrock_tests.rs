@@ -12,7 +12,7 @@ use crate::llm::types;
 
 #[tokio::test]
 async fn test_append_done_on_success_omits_done_after_error() {
-	let mut body = super::from_completions::append_done_on_success(futures_util::stream::iter(vec![
+	let mut body = crate::parse::sse::append_done_on_close(futures_util::stream::iter(vec![
 		Ok::<_, axum_core::Error>(Bytes::from_static(b"data: chunk\n\n")),
 		Err(axum_core::Error::new(io::Error::other("boom"))),
 	]));
