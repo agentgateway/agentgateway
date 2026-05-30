@@ -915,6 +915,12 @@ impl AIProvider {
 					if p.is_anthropic_model(Some(request_model)) {
 						let body = req.to_anthropic()?;
 						p.prepare_anthropic_message_body(body)?
+					} else if original_format == InputFormat::Completions
+						&& p
+							.gemini_native_model(Some(request_model), llm_info.streaming)
+							.is_some()
+					{
+						req.to_vertex_gemini(p)?
 					} else {
 						req.to_vertex(p)?
 					}
@@ -1197,6 +1203,8 @@ impl AIProvider {
 			(AIProvider::Vertex(p), InputFormat::Completions) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {
 					conversion::messages::from_completions::translate_response(bytes)
+				} else if p.is_gemini_model(Some(&req.request_model)) {
+					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				} else {
 					Ok(Box::new(
 						serde_json::from_slice::<types::completions::Response>(bytes)
