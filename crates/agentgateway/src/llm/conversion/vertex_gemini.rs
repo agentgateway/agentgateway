@@ -115,24 +115,11 @@ pub mod from_completions {
 
 		let labels = req.rest.get("labels").and_then(|v| v.as_object().cloned());
 
-		let mut out = vg::GenerateContentRequest {
-			contents,
-			system_instruction,
-			tools,
-			tool_config,
-			generation_config,
-			safety_settings,
-			cached_content,
-			labels,
-			rest: Value::Null,
-		};
-
-		// Invariant: cachedContent is mutually exclusive with systemInstruction, tools, and toolConfig
-		if out.cached_content.is_some() {
+		let (system_instruction, tools, tool_config) = if cached_content.is_some() {
 			let dropped: Vec<&str> = [
-				("systemInstruction", out.system_instruction.take().is_some()),
-				("tools", !std::mem::take(&mut out.tools).is_empty()),
-				("toolConfig", out.tool_config.take().is_some()),
+				("systemInstruction", system_instruction.is_some()),
+				("tools", !tools.is_empty()),
+				("toolConfig", tool_config.is_some()),
 			]
 			.into_iter()
 			.filter_map(|(name, present)| present.then_some(name))
@@ -143,9 +130,22 @@ pub mod from_completions {
 					"cachedContent is set; dropped cache-incompatible fields"
 				);
 			}
-		}
+			(None, Vec::new(), None)
+		} else {
+			(system_instruction, tools, tool_config)
+		};
 
-		Ok(out)
+		Ok(vg::GenerateContentRequest {
+			contents,
+			system_instruction,
+			tools,
+			tool_config,
+			generation_config,
+			safety_settings,
+			cached_content,
+			labels,
+			rest: Value::Null,
+		})
 	}
 
 	fn messages_to_contents(
@@ -275,9 +275,7 @@ pub mod from_completions {
 		}
 
 		if url.starts_with("gs://") {
-			// Vertex's fileData requires a mimeType for gs:// objects and won't infer one;
-			// take an explicit client hint or the path extension, else reject before egress
-			// rather than letting Vertex 400.
+			// Vertex's fileData requires a mimeType for gs:// objects and won't infer one
 			let Some(mime) =
 				explicit_mime_hint(image_url).or_else(|| mime_from_extension(url).map(str::to_string))
 			else {
@@ -557,42 +555,113 @@ pub mod from_completions {
 pub mod to_completions {
 	use std::time::Instant;
 
-	use serde_json::{Value, json};
+	use serde_json::Value;
 
 	use super::*;
 	use crate::http::Body;
 	use crate::llm::AmendOnDrop;
 	use crate::llm::types::completions::typed as completions;
-	use crate::parse;
+	use crate::{json, parse};
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-		let value = build_response_value(&resp);
-		let out: types::completions::Response =
-			serde_json::from_value(value).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(out))
+
+		// Convert the typed builder output into the untyped `Response`, which is what implements `ResponseType`.
+		let typed = build_response(&resp);
+		let inner =
+			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(inner))
 	}
 
-	fn build_response_value(resp: &vg::GenerateContentResponse) -> Value {
+	#[derive(Default)]
+	struct DecodedParts<'a> {
+		content: String,
+		reasoning: String,
+		calls: Vec<DecodedCall<'a>>,
+	}
+
+	/// Borrows the function-call fields from the source content; the callers own the single
+	/// `String`/`Value` allocation the typed message requires, so the decode itself clones nothing.
+	struct DecodedCall<'a> {
+		id: Option<&'a str>,
+		name: &'a str,
+		args: &'a Value,
+	}
+
+	fn decode_parts<'a>(content: Option<&'a vg::Content>) -> DecodedParts<'a> {
+		let mut out = DecodedParts::default();
+		let Some(content) = content else {
+			return out;
+		};
+		for part in &content.parts {
+			match part {
+				vg::Part::Text(t) if is_thought(t) => out.reasoning.push_str(strip_thought_prefix(&t.text)),
+				vg::Part::Text(t) => out.content.push_str(&t.text),
+				vg::Part::FunctionCall(fc) => out.calls.push(DecodedCall {
+					id: fc.function_call.id.as_deref(),
+					name: &fc.function_call.name,
+					args: &fc.function_call.args,
+				}),
+				_ => {},
+			}
+		}
+		out
+	}
+
+	fn encode_args(args: &Value) -> String {
+		serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string())
+	}
+
+	fn tool_call_id(native: Option<&str>, seed: &str, index: u32) -> String {
+		native
+			.map(str::to_string)
+			.unwrap_or_else(|| format!("call_{seed}_{index}"))
+	}
+
+	fn assistant_message(
+		content: Option<String>,
+		reasoning_content: Option<String>,
+		tool_calls: Option<Vec<completions::MessageToolCalls>>,
+	) -> completions::ResponseMessage {
+		completions::ResponseMessage {
+			role: completions::Role::Assistant,
+			content,
+			reasoning_content,
+			tool_calls,
+			#[allow(deprecated)]
+			function_call: None,
+			refusal: None,
+			audio: None,
+			extra: None,
+		}
+	}
+
+	fn build_response(resp: &vg::GenerateContentResponse) -> completions::Response {
 		let model = resp.model_version.clone().unwrap_or_default();
 		let id = resp
 			.response_id
 			.clone()
 			.unwrap_or_else(|| format!("vertex-gemini-{}", chrono::Utc::now().timestamp_millis()));
-		let created = chrono::Utc::now().timestamp();
+		let created = chrono::Utc::now().timestamp() as u32;
 
 		let choices = if resp.candidates.is_empty() {
-			// Prompt-level block (promptFeedback.blockReason) with no candidate.
-			let block = resp
+			let blocked = resp
 				.prompt_feedback
 				.as_ref()
-				.and_then(|pf| pf.block_reason.clone());
-			vec![json!({
-				"index": 0,
-				"message": { "role": "assistant", "content": "" },
-				"finish_reason": if block.is_some() { "content_filter" } else { "stop" },
-			})]
+				.and_then(|pf| pf.block_reason.as_ref())
+				.is_some();
+			let finish = if blocked {
+				completions::FinishReason::ContentFilter
+			} else {
+				completions::FinishReason::Stop
+			};
+			vec![completions::ChatChoice {
+				index: 0,
+				message: assistant_message(Some(String::new()), None, None),
+				finish_reason: Some(finish),
+				logprobs: None,
+			}]
 		} else {
 			resp
 				.candidates
@@ -602,82 +671,57 @@ pub mod to_completions {
 				.collect()
 		};
 
-		let usage = resp.usage_metadata.as_ref().map(build_usage);
-
-		json!({
-			"id": id,
-			"object": "chat.completion",
-			"created": created,
-			"model": model,
-			"choices": choices,
-			"usage": usage,
-		})
+		completions::Response {
+			id,
+			object: "chat.completion".to_string(),
+			created,
+			model,
+			choices,
+			usage: resp.usage_metadata.as_ref().map(build_usage),
+			service_tier: None,
+			system_fingerprint: None,
+		}
 	}
 
-	fn build_choice(index: u32, cand: &vg::Candidate, request_id: &str) -> Value {
-		let mut content = String::new();
-		let mut reasoning = String::new();
-		let mut tool_calls: Vec<Value> = Vec::new();
+	fn build_choice(index: u32, cand: &vg::Candidate, request_id: &str) -> completions::ChatChoice {
+		let decoded = decode_parts(cand.content.as_ref());
 
-		if let Some(c) = &cand.content {
-			for part in &c.parts {
-				match part {
-					vg::Part::Text(t) => {
-						if is_thought(t) {
-							reasoning.push_str(strip_thought_prefix(&t.text));
-						} else {
-							content.push_str(&t.text);
-						}
+		let tool_calls: Vec<completions::MessageToolCalls> = decoded
+			.calls
+			.iter()
+			.enumerate()
+			.map(|(idx, call)| {
+				completions::MessageToolCalls::Function(completions::MessageToolCall {
+					id: tool_call_id(call.id, request_id, idx as u32),
+					function: completions::FunctionCall {
+						name: call.name.to_string(),
+						arguments: encode_args(call.args),
 					},
-					vg::Part::FunctionCall(fc) => {
-						let idx = tool_calls.len();
-						let id = fc
-							.function_call
-							.id
-							.clone()
-							.unwrap_or_else(|| format!("call_{request_id}_{idx}"));
-						let args =
-							serde_json::to_string(&fc.function_call.args).unwrap_or_else(|_| "{}".to_string());
-						tool_calls.push(json!({
-							"index": idx,
-							"id": id,
-							"type": "function",
-							"function": { "name": fc.function_call.name, "arguments": args },
-						}));
-					},
-					_ => {},
-				}
-			}
-		}
+				})
+			})
+			.collect();
 
-		let mut finish = map_finish_reason(cand.finish_reason.as_deref());
-		if matches!(finish, completions::FinishReason::Stop) && !tool_calls.is_empty() {
-			finish = completions::FinishReason::ToolCalls;
-		}
+		let has_tool_calls = !tool_calls.is_empty();
+		let finish = finish_with_tool_override(cand.finish_reason.as_deref(), has_tool_calls);
+		let content = if decoded.content.is_empty() && has_tool_calls {
+			None
+		} else {
+			Some(decoded.content)
+		};
+		let reasoning = (!decoded.reasoning.is_empty()).then_some(decoded.reasoning);
+		let tool_calls = has_tool_calls.then_some(tool_calls);
 
-		let mut message = serde_json::Map::new();
-		message.insert("role".into(), json!("assistant"));
-		message.insert(
-			"content".into(),
-			if content.is_empty() && !tool_calls.is_empty() {
-				Value::Null
-			} else {
-				json!(content)
-			},
-		);
-		if !reasoning.is_empty() {
-			message.insert("reasoning_content".into(), json!(reasoning));
+		completions::ChatChoice {
+			index,
+			message: assistant_message(content, reasoning, tool_calls),
+			finish_reason: Some(finish),
+			logprobs: None,
 		}
-		if !tool_calls.is_empty() {
-			message.insert("tool_calls".into(), json!(tool_calls));
-		}
-
-		json!({
-			"index": index,
-			"message": Value::Object(message),
-			"finish_reason": finish,
-		})
 	}
+
+	/// Some Gemini configs surface reasoning as a leading `THOUGHT:` text marker rather than a
+	/// `thought: true` flag; both are routed to reasoning content.
+	const THOUGHT_PREFIX: &str = "THOUGHT:";
 
 	fn is_thought(t: &vg::TextPart) -> bool {
 		t.thought == Some(true) || starts_with_thought_prefix(&t.text)
@@ -686,21 +730,20 @@ pub mod to_completions {
 	fn starts_with_thought_prefix(text: &str) -> bool {
 		text
 			.trim_start()
-			.to_ascii_uppercase()
-			.starts_with("THOUGHT:")
+			.get(..THOUGHT_PREFIX.len())
+			.is_some_and(|prefix| prefix.eq_ignore_ascii_case(THOUGHT_PREFIX))
 	}
 
 	fn strip_thought_prefix(text: &str) -> &str {
 		if starts_with_thought_prefix(text) {
 			let trimmed = text.trim_start();
-			trimmed[8..].trim_start()
+			trimmed[THOUGHT_PREFIX.len()..].trim_start()
 		} else {
 			text
 		}
 	}
 
-	// Unknown Gemini finishReason values map to Stop.
-	pub(crate) fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
+	fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
 		use completions::FinishReason;
 		match reason {
 			Some("MAX_TOKENS") => FinishReason::Length,
@@ -723,26 +766,16 @@ pub mod to_completions {
 		}
 	}
 
-	fn build_usage(um: &vg::UsageMetadata) -> Value {
-		let (prompt, completion, total) = usage_counts(um);
-
-		let mut usage = serde_json::Map::new();
-		usage.insert("prompt_tokens".into(), json!(prompt));
-		usage.insert("completion_tokens".into(), json!(completion));
-		usage.insert("total_tokens".into(), json!(total));
-		if let Some(cached) = um.cached_content_token_count {
-			usage.insert(
-				"prompt_tokens_details".into(),
-				json!({ "cached_tokens": cached }),
-			);
+	fn finish_with_tool_override(
+		reason: Option<&str>,
+		saw_tool_call: bool,
+	) -> completions::FinishReason {
+		let mapped = map_finish_reason(reason);
+		if saw_tool_call && matches!(mapped, completions::FinishReason::Stop) {
+			completions::FinishReason::ToolCalls
+		} else {
+			mapped
 		}
-		if let Some(reasoning) = um.thoughts_token_count {
-			usage.insert(
-				"completion_tokens_details".into(),
-				json!({ "reasoning_tokens": reasoning }),
-			);
-		}
-		Value::Object(usage)
 	}
 
 	/// Per-stream state for translating native Gemini SSE chunks into OpenAI
@@ -769,8 +802,6 @@ pub mod to_completions {
 				tool_index: 0,
 			}
 		}
-
-		/// Translate one Gemini stream chunk, or `None` when it carries nothing to emit.
 		pub(super) fn translate(
 			&mut self,
 			chunk: &vg::GenerateContentResponse,
@@ -796,66 +827,42 @@ pub mod to_completions {
 				delta.role = Some(completions::Role::Assistant);
 			}
 
-			let mut content = String::new();
-			let mut reasoning = String::new();
+			let cand = chunk.candidates.first();
+			let decoded = decode_parts(cand.and_then(|c| c.content.as_ref()));
+
 			let mut tool_calls = Vec::new();
-			let mut finish = None;
-			if let Some(cand) = chunk.candidates.first() {
-				if let Some(c) = &cand.content {
-					for part in &c.parts {
-						match part {
-							vg::Part::Text(t) => {
-								if is_thought(t) {
-									reasoning.push_str(strip_thought_prefix(&t.text));
-								} else {
-									content.push_str(&t.text);
-								}
-							},
-							vg::Part::FunctionCall(fc) => {
-								self.saw_function_call = true;
-								let idx = self.tool_index;
-								self.tool_index += 1;
-								let call_id = fc
-									.function_call
-									.id
-									.clone()
-									.unwrap_or_else(|| format!("call_{id}_{idx}"));
-								let args = serde_json::to_string(&fc.function_call.args)
-									.unwrap_or_else(|_| "{}".to_string());
-								tool_calls.push(completions::ChatCompletionMessageToolCallChunk {
-									index: idx,
-									id: Some(call_id),
-									r#type: Some(completions::FunctionType::Function),
-									function: Some(completions::FunctionCallStream {
-										name: Some(fc.function_call.name.clone()),
-										arguments: Some(args),
-									}),
-								});
-							},
-							_ => {},
-						}
-					}
-				}
-				if let Some(reason) = &cand.finish_reason {
-					let mut mapped = map_finish_reason(Some(reason.as_str()));
-					if matches!(mapped, completions::FinishReason::Stop) && self.saw_function_call {
-						mapped = completions::FinishReason::ToolCalls;
-					}
-					finish = Some(mapped);
-				}
+			for call in &decoded.calls {
+				self.saw_function_call = true;
+				let idx = self.tool_index;
+				self.tool_index += 1;
+				tool_calls.push(completions::ChatCompletionMessageToolCallChunk {
+					index: idx,
+					id: Some(tool_call_id(call.id, &id, idx)),
+					r#type: Some(completions::FunctionType::Function),
+					function: Some(completions::FunctionCallStream {
+						name: Some(call.name.to_string()),
+						arguments: Some(encode_args(call.args)),
+					}),
+				});
 			}
 
-			if !content.is_empty() {
-				delta.content = Some(content);
+			// `saw_function_call` carries across chunks, so a finish reason in a later chunk still
+			// upgrades to `tool_calls` when an earlier chunk emitted the call.
+			let finish = cand
+				.and_then(|c| c.finish_reason.as_deref())
+				.map(|reason| finish_with_tool_override(Some(reason), self.saw_function_call));
+
+			if !decoded.content.is_empty() {
+				delta.content = Some(decoded.content);
 			}
-			if !reasoning.is_empty() {
-				delta.reasoning_content = Some(reasoning);
+			if !decoded.reasoning.is_empty() {
+				delta.reasoning_content = Some(decoded.reasoning);
 			}
 			if !tool_calls.is_empty() {
 				delta.tool_calls = Some(tool_calls);
 			}
 
-			let usage = chunk.usage_metadata.as_ref().map(stream_usage);
+			let usage = chunk.usage_metadata.as_ref().map(build_usage);
 
 			let has_delta = delta.role.is_some()
 				|| delta.content.is_some()
@@ -948,7 +955,7 @@ pub mod to_completions {
 		(prompt, completion, total)
 	}
 
-	fn stream_usage(um: &vg::UsageMetadata) -> completions::Usage {
+	fn build_usage(um: &vg::UsageMetadata) -> completions::Usage {
 		let (prompt, completion, total) = usage_counts(um);
 		completions::Usage {
 			prompt_tokens: prompt as u32,

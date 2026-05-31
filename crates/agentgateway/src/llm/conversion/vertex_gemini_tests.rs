@@ -454,8 +454,11 @@ fn response_function_call_overrides_finish_reason_to_tool_calls() {
 	}));
 	assert_eq!(r["choices"][0]["finish_reason"], "tool_calls");
 	let tc = &r["choices"][0]["message"]["tool_calls"][0];
+	assert_eq!(tc["type"], "function");
 	assert_eq!(tc["function"]["name"], "get_weather");
-	assert_eq!(tc["index"], 0);
+	// Non-streaming tool calls carry no `index` (it is a streaming-delta-only field in the
+	// OpenAI schema); the typed message representation omits it.
+	assert!(tc.get("index").is_none());
 }
 
 #[test]
