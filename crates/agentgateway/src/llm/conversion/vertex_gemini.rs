@@ -107,12 +107,17 @@ pub mod from_completions {
 			.and_then(Value::as_str)
 			.map(str::to_string);
 
-		let safety_settings = req
+		let safety_settings = match req
 			.rest
 			.get("safetySettings")
 			.or_else(|| req.rest.get("safety_settings"))
-			.and_then(|v| Vec::<vg::SafetySetting>::deserialize(v).ok())
-			.unwrap_or_default();
+		{
+			Some(v) => Vec::<vg::SafetySetting>::deserialize(v).unwrap_or_else(|e| {
+				tracing::warn!(error = %e, "ignoring malformed safetySettings");
+				Vec::new()
+			}),
+			None => Vec::new(),
+		};
 
 		let labels = req.rest.get("labels").and_then(|v| v.as_object().cloned());
 
@@ -196,9 +201,10 @@ pub mod from_completions {
 						.cloned()
 						.or_else(|| m.name.clone())
 						.unwrap_or_default();
+
 					let response = content_text(&m.content)
 						.map(|t| json!({ "content": t }))
-						.unwrap_or(Value::Null);
+						.unwrap_or_else(|| json!({}));
 					let part = vg::Part::FunctionResponse(vg::FunctionResponsePart {
 						function_response: vg::FunctionResponse {
 							name,
@@ -324,7 +330,7 @@ pub mod from_completions {
 			.and_then(|f| f.get("arguments"))
 			.and_then(Value::as_str)
 			.and_then(|s| serde_json::from_str::<Value>(s).ok())
-			.unwrap_or(Value::Null);
+			.unwrap_or_else(|| json!({}));
 		let id = call.get("id").and_then(Value::as_str).map(str::to_string);
 		vg::Part::FunctionCall(vg::FunctionCallPart {
 			function_call: vg::FunctionCall {
@@ -569,8 +575,7 @@ pub mod to_completions {
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 		let upstream_finish_reason = raw_finish_reason(&resp);
 
-		// Convert the typed builder output into the untyped `Response`, which is what implements `ResponseType`.
-		// TODO Consider whether NativeResponse could hold the typed Response directly to drop the round-trip.
+		// TODO Consider implementing `ResponseType` for `typed::Response` directly.
 		let typed = build_response(&resp);
 		let inner =
 			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
@@ -734,13 +739,19 @@ pub mod to_completions {
 	fn build_choice(index: u32, cand: &vg::Candidate, request_id: &str) -> completions::ChatChoice {
 		let decoded = decode_parts(cand.content.as_ref());
 
+		// as parallel candidates reuse call indices starting at 0, incorporate the candidate index into the seed
+		let seed = if index == 0 {
+			request_id.to_string()
+		} else {
+			format!("{request_id}_{index}")
+		};
 		let tool_calls: Vec<completions::MessageToolCalls> = decoded
 			.calls
 			.iter()
 			.enumerate()
 			.map(|(idx, call)| {
 				completions::MessageToolCalls::Function(completions::MessageToolCall {
-					id: tool_call_id(call.id, request_id, idx as u32),
+					id: tool_call_id(call.id, &seed, idx as u32),
 					function: completions::FunctionCall {
 						name: call.name.to_string(),
 						arguments: encode_args(call.args),
@@ -751,7 +762,8 @@ pub mod to_completions {
 
 		let has_tool_calls = !tool_calls.is_empty();
 		let finish = finish_with_tool_override(cand.finish_reason.as_deref(), has_tool_calls);
-		let content = if decoded.content.is_empty() && has_tool_calls {
+		let content = if decoded.content.is_empty() && (has_tool_calls || !decoded.reasoning.is_empty())
+		{
 			None
 		} else {
 			Some(decoded.content)
@@ -776,10 +788,11 @@ pub mod to_completions {
 	}
 
 	fn starts_with_thought_prefix(text: &str) -> bool {
+		// Should be case sensitive to avoid accidentally treating "thought" in the middle of normal content as reasoning.
 		text
 			.trim_start()
 			.get(..THOUGHT_PREFIX.len())
-			.is_some_and(|prefix| prefix.eq_ignore_ascii_case(THOUGHT_PREFIX))
+			.is_some_and(|prefix| prefix == THOUGHT_PREFIX)
 	}
 
 	fn strip_thought_prefix(text: &str) -> &str {
@@ -896,9 +909,23 @@ pub mod to_completions {
 
 			// `saw_function_call` carries across chunks, so a finish reason in a later chunk still
 			// upgrades to `tool_calls` when an earlier chunk emitted the call.
-			let finish = cand
-				.and_then(|c| c.finish_reason.as_deref())
-				.map(|reason| finish_with_tool_override(Some(reason), self.saw_function_call));
+			let finish = match cand.and_then(|c| c.finish_reason.as_deref()) {
+				Some(reason) => Some(finish_with_tool_override(
+					Some(reason),
+					self.saw_function_call,
+				)),
+				None
+					if chunk.candidates.is_empty()
+						&& chunk
+							.prompt_feedback
+							.as_ref()
+							.and_then(|pf| pf.block_reason.as_ref())
+							.is_some() =>
+				{
+					Some(completions::FinishReason::ContentFilter)
+				},
+				None => None,
+			};
 
 			if !decoded.content.is_empty() {
 				delta.content = Some(decoded.content);
@@ -910,12 +937,20 @@ pub mod to_completions {
 				delta.tool_calls = Some(tool_calls);
 			}
 
-			let usage = chunk.usage_metadata.as_ref().map(build_usage);
-
 			let has_delta = delta.role.is_some()
 				|| delta.content.is_some()
 				|| delta.reasoning_content.is_some()
 				|| delta.tool_calls.is_some();
+			// Gemini attaches cumulative usageMetadata to interim content chunks too; only surface it
+			// on a terminal chunk (one carrying finish_reason, or a usage-only chunk with no delta) so
+			// the client sees a single OpenAI-style final usage rather than a growing total on every
+			// chunk. Telemetry and rate-limit accounting read the cumulative counts separately in
+			// translate_stream, so suppressing it here does not affect them.
+			let usage = chunk
+				.usage_metadata
+				.as_ref()
+				.filter(|_| finish.is_some() || !has_delta)
+				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
 					index: 0,
@@ -946,7 +981,7 @@ pub mod to_completions {
 	/// Translate a native Gemini `:streamGenerateContent?alt=sse` stream into OpenAI
 	/// `chat.completion.chunk` SSE. Gemini ends the HTTP stream without a `[DONE]`
 	/// sentinel, so one is appended on successful close.
-	pub fn translate_stream(b: Body, buffer_limit: usize, mut log: AmendOnDrop) -> Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, model: Strng, log: AmendOnDrop) -> Body {
 		let mut state = StreamState::new();
 		let mut saw_token = false;
 		let body = parse::sse::json_transform_multi::<
@@ -983,14 +1018,19 @@ pub mod to_completions {
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
 				});
-				log.report_rate_limit();
 			}
 			if let Some(reason) = raw_finish_reason(&chunk) {
 				log.non_atomic_mutate(|r| r.response.upstream_finish_reason = Some(reason.clone()));
 			}
 
 			match state.translate(&chunk) {
-				Some(sr) => vec![("", sr)],
+				// Gemini may omit modelVersion on a chunk
+				Some(mut sr) => {
+					if sr.model.is_empty() {
+						sr.model = model.to_string();
+					}
+					vec![("", sr)]
+				},
 				None => vec![],
 			}
 		});

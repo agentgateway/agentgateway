@@ -755,3 +755,36 @@ fn streaming_trailing_usage_chunk_has_empty_choices() {
 	);
 	assert_eq!(c["usage"]["prompt_tokens_details"]["cached_tokens"], 3);
 }
+
+#[test]
+fn streaming_usage_suppressed_on_interim_content_chunks() {
+	let mut s = to_completions::StreamState::new();
+	// Real Gemini shape: cumulative usageMetadata rides on an interim content chunk. The client must
+	// not see usage there, or clients that sum per-chunk usage over-count.
+	let c1 = stream_chunk(
+		&mut s,
+		json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] } }],
+			"usageMetadata": { "promptTokenCount": 5, "candidatesTokenCount": 1, "totalTokenCount": 6 }
+		}),
+	)
+	.unwrap();
+	assert!(
+		c1["usage"].is_null(),
+		"interim content chunk must not carry usage"
+	);
+	assert_eq!(c1["choices"][0]["delta"]["content"], "hi");
+
+	// The final chunk (carrying finish_reason) surfaces the single, final cumulative usage.
+	let c2 = stream_chunk(
+		&mut s,
+		json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "!" }] },
+				"finishReason": "STOP" }],
+			"usageMetadata": { "promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7 }
+		}),
+	)
+	.unwrap();
+	assert_eq!(c2["usage"]["total_tokens"], 7);
+	assert_eq!(c2["choices"][0]["finish_reason"], "stop");
+}

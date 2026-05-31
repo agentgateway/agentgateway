@@ -1293,9 +1293,9 @@ impl AIProvider {
 			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_anthropic => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
-			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_gemini => {
-				resp.map(|b| conversion::vertex_gemini::to_completions::translate_stream(b, buffer, logger))
-			},
+			(AIProvider::Vertex(_), InputFormat::Completions) if is_vertex_gemini => resp.map(|b| {
+				conversion::vertex_gemini::to_completions::translate_stream(b, buffer, model, logger)
+			}),
 			(AIProvider::Vertex(_), InputFormat::Completions) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
 			},
