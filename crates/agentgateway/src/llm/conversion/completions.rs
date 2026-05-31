@@ -828,6 +828,8 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
+								reasoning_content: None,
+								reasoning_signature: None,
 							},
 						));
 					}

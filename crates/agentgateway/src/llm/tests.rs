@@ -276,6 +276,10 @@ mod requests {
 		("parallel-tool-call", &[BEDROCK]),
 		("reasoning", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC]),
+		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
+		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
+		("reasoning_replay", &[BEDROCK]),
+		("reasoning_replay_unsigned", &[BEDROCK]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
@@ -513,9 +517,19 @@ mod response {
 		BEDROCK_TO_COMPLETIONS,
 		BEDROCK_TO_RESPONSES,
 	];
-	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
-	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] =
-		&[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
+	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", ALL_BEDROCK),
+		("tool", ALL_BEDROCK),
+		// Reasoning block forwarding: `reasoning` carries a signature (surfaced as
+		// reasoning_signature on the completions path), `reasoning_unsigned` does not.
+		("reasoning", ALL_BEDROCK),
+		("reasoning_unsigned", ALL_BEDROCK),
+	];
+	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", ALL_BEDROCK),
+		("tool", ALL_BEDROCK),
+		("reasoning", ALL_BEDROCK),
+	];
 
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,

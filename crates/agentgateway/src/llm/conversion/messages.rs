@@ -482,6 +482,7 @@ pub mod from_completions {
 			refusal: None,
 			audio: None,
 			reasoning_content,
+			reasoning_signature: None,
 			extra: None,
 		};
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);

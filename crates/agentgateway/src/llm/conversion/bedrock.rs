@@ -237,6 +237,20 @@ pub mod from_completions {
 		msg: &completions::RequestAssistantMessage,
 	) -> Vec<bedrock::ContentBlock> {
 		let mut content = Vec::new();
+		// Replay a previously-emitted thinking block first. Anthropic (via Bedrock Converse) requires
+		// the reasoningContent block to precede the text/toolUse blocks of the same assistant turn,
+		// and to carry the original cryptographic signature so Bedrock can validate it. Only replay
+		// when a non-empty signature is present — Bedrock rejects an unsigned thinking block.
+		if let Some(signature) = msg.reasoning_signature.as_deref().filter(|s| !s.is_empty()) {
+			content.push(bedrock::ContentBlock::ReasoningContent(
+				bedrock::ReasoningContentBlock::Structured {
+					reasoning_text: bedrock::ReasoningText {
+						text: msg.reasoning_content.clone().unwrap_or_default(),
+						signature: Some(signature.to_string()),
+					},
+				},
+			));
+		}
 		if let Some(content_field) = &msg.content {
 			match content_field {
 				completions::RequestAssistantMessageContent::Text(text) => {
@@ -722,7 +736,22 @@ pub mod from_completions {
 							) => {
 								dr.reasoning_content = Some("[REDACTED]".to_string());
 							},
-							bedrock::ContentBlockDelta::ReasoningContent(_) => {},
+							bedrock::ContentBlockDelta::ReasoningContent(
+								bedrock::ReasoningContentBlockDelta::Signature(sig),
+							) => {
+								// Forward the cryptographic signature so a replayed thinking block can be
+								// validated by Bedrock on the next turn. Bedrock emits a single Signature
+								// delta per reasoning block as the terminal piece, so a later overwrite
+								// here would be a protocol change, not normal multi-chunk accumulation.
+								dr.reasoning_signature = Some(sig);
+							},
+							bedrock::ContentBlockDelta::ReasoningContent(other) => {
+								// `ReasoningContentBlockDelta` is `#[non_exhaustive]`; this arm catches
+								// the `Unknown` variant and any future protocol additions that we have
+								// not yet wired up explicitly. Log so a silently-introduced delta type
+								// shows up in dev rather than being invisibly dropped.
+								tracing::debug!(?other, "unhandled Bedrock reasoning content delta variant",);
+							},
 							bedrock::ContentBlockDelta::Text(t) => {
 								dr.content = Some(t);
 							},
@@ -2756,6 +2785,7 @@ impl ConverseResponseAdapter {
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
 		let mut reasoning_content = None;
+		let mut reasoning_signature = None;
 		for block in &self.message.content {
 			match block {
 				bedrock::ContentBlock::Text(text) => {
@@ -2764,14 +2794,23 @@ impl ConverseResponseAdapter {
 					content.get_or_insert_with(String::new).push_str(text);
 				},
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
-					// Extract text from either format
-					let text = match reasoning {
-						bedrock::ReasoningContentBlock::Structured { reasoning_text } => {
-							reasoning_text.text.clone()
-						},
-						bedrock::ReasoningContentBlock::Simple { text } => text.clone(),
+					// Extract text and signature from either format. The signature is forwarded so
+					// downstream consumers can preserve thinking blocks across conversation turns;
+					// empty signatures are excluded so callers can use Option::is_some() as the
+					// "safe to replay" guard.
+					let (text, signature) = match reasoning {
+						bedrock::ReasoningContentBlock::Structured { reasoning_text } => (
+							reasoning_text.text.clone(),
+							reasoning_text.signature.clone(),
+						),
+						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), None),
 					};
 					reasoning_content = Some(text);
+					if let Some(sig) = signature
+						&& !sig.is_empty()
+					{
+						reasoning_signature = Some(sig);
+					}
 				},
 				bedrock::ContentBlock::ToolUse(tu) => {
 					let Some(args) = serde_json::to_string(&tu.input).ok() else {
@@ -2809,6 +2848,7 @@ impl ConverseResponseAdapter {
 			audio: None,
 			extra: None,
 			reasoning_content,
+			reasoning_signature,
 		};
 
 		let choice = completions::ChatChoice {
