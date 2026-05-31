@@ -173,6 +173,11 @@ async fn apply_request_policies(
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
 		.await?;
 
+	pol
+		.buffering
+		.apply_without_response("buffering", c, l, req, rp.headers())
+		.await?;
+
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
 	// The selected config is built into per-request state, which must be retained for
 	// the response mutation phase instead of applying ExtProc directly.
@@ -231,7 +236,6 @@ async fn apply_request_policies(
 		.direct_response
 		.apply_without_response("direct response", c, l, req, rp.headers())
 		.await?;
-
 	// Mirror, timeout, and retry are handled separately.
 
 	Ok(())
@@ -337,6 +341,7 @@ async fn apply_gateway_policies(
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	let c = &client;
+
 	policies
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
@@ -359,6 +364,11 @@ async fn apply_gateway_policies(
 	policies
 		.ext_authz
 		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
+		.await?;
+
+	policies
+		.buffering
+		.apply_without_response("gateway buffering", c, l, req, response_policies.headers())
 		.await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
