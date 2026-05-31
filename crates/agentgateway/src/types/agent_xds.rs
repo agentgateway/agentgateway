@@ -382,6 +382,14 @@ fn mcp_authentication_from_proto(
 			"MCP Authentication requires jwks_inline to be set.".to_string(),
 		));
 	}
+	use proto::agent::backend_policy_spec::mcp_authentication::McpIdp;
+	if m.provider == McpIdp::Cognito as i32 && m.client_id.as_deref().unwrap_or("").is_empty() {
+		return Err(ProtoError::Generic(
+			"Cognito provider requires `clientId` to be configured \
+			 (Cognito does not support Dynamic Client Registration)"
+				.to_string(),
+		));
+	}
 
 	let audiences = (!m.audiences.is_empty()).then(|| m.audiences.clone());
 	let jwt_validation_options = m
@@ -465,6 +473,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Auth0 as i32 => Some(McpIDP::Auth0 {}),
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
+		x if x == McpIdp::Cognito as i32 => Some(McpIDP::Cognito {}),
 		_ => None,
 	}
 }
@@ -3815,6 +3824,25 @@ mod tests {
 		};
 
 		assert_eq!(metrics.add.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn cognito_xds_without_client_id_is_rejected() -> Result<(), ProtoError> {
+		use proto::agent::backend_policy_spec::mcp_authentication::McpIdp;
+		let m = proto::agent::backend_policy_spec::McpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123".to_string()],
+			jwks_inline: r#"{"keys":[]}"#.to_string(),
+			provider: McpIdp::Cognito as i32,
+			client_id: None,
+			..Default::default()
+		};
+		let err = mcp_authentication_from_proto(&m, &mut Diagnostics::default()).unwrap_err();
+		assert!(
+			err.to_string().contains("clientId"),
+			"error should mention clientId: {err}"
+		);
 		Ok(())
 	}
 }

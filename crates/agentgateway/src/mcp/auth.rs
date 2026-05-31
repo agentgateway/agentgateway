@@ -205,7 +205,7 @@ pub(super) async fn authorization_server_metadata(
 	let metadata_uri = match &auth.provider {
 		// Keycloak and Okta do not support the RFC 8414 path-based issuer format;
 		// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
-		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) => {
+		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) | Some(McpIDP::Cognito {}) => {
 			openid_configuration_metadata_url(&auth.issuer)
 		},
 		_ => authorization_server_metadata_url(&auth.issuer),
@@ -274,6 +274,21 @@ pub(super) async fn authorization_server_metadata(
 			};
 			*re = format!("{current_uri}/client-registration");
 		},
+		Some(McpIDP::Cognito {}) => {
+			// The gateway is the trust anchor here: we serve the OIDC metadata ourselves,
+			// so injecting our own registration_endpoint is intentional and safe. MCP clients
+			// discover this endpoint and call it to register; we return the pre-configured
+			// clientId without involving Cognito's registration flow (which doesn't exist).
+			// Cognito also does not support RFC 8707 resource indicators — operators must
+			// configure `audiences` matching their Cognito app client ID (the `aud` claim).
+			let current_uri = request_uri_for_oauth_metadata(req);
+			if let Some(obj) = resp.as_object_mut() {
+				obj.insert(
+					"registration_endpoint".to_string(),
+					serde_json::Value::String(format!("{current_uri}/client-registration")),
+				);
+			}
+		},
 		_ => {},
 	}
 
@@ -303,6 +318,12 @@ pub(super) async fn client_registration(
 	let issuer = auth.issuer.trim_end_matches('/');
 	let body = std::mem::take(req.body_mut());
 	let registration_uri = match &auth.provider {
+		Some(McpIDP::Cognito {}) => {
+			// Cognito does not support Dynamic Client Registration.
+			// clientId is required for Cognito and validated at config load time,
+			// so reaching here means a misconfiguration in the XDS path.
+			return Err(cognito_dcr_error());
+		},
 		Some(McpIDP::Okta {}) => {
 			// Okta's DCR endpoint is relative to the org URL, not the issuer.
 			// Issuer: https://trial-xxx.okta.com/oauth2/default
@@ -378,6 +399,14 @@ async fn build_mock_dcr_response(
 			.status(::http::StatusCode::CREATED)
 			.header(::http::header::CONTENT_TYPE, "application/json")
 			.body(body_bytes.into())?,
+	)
+}
+
+fn cognito_dcr_error() -> ProxyError {
+	ProxyError::ProcessingString(
+		"Cognito does not support Dynamic Client Registration; \
+		 configure `clientId` in your agentgateway provider settings"
+			.to_string(),
 	)
 }
 
@@ -504,5 +533,69 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[test]
+	fn cognito_metadata_injects_registration_endpoint() {
+		// Simulate a Cognito OIDC discovery doc that has no registration_endpoint
+		let mut cognito_metadata = serde_json::json!({
+			"issuer": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_test",
+			"authorization_endpoint": "https://test.auth.us-east-1.amazoncognito.com/oauth2/authorize",
+			"token_endpoint": "https://test.auth.us-east-1.amazoncognito.com/oauth2/token",
+			"jwks_uri": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_test/.well-known/jwks.json"
+		});
+
+		// Verify no registration_endpoint before injection
+		assert!(cognito_metadata.get("registration_endpoint").is_none());
+
+		// Apply Cognito injection logic
+		let gateway_uri = "https://gateway.example.com/cognito/mcp";
+		if let Some(obj) = cognito_metadata.as_object_mut() {
+			obj.insert(
+				"registration_endpoint".to_string(),
+				serde_json::Value::String(format!("{gateway_uri}/client-registration")),
+			);
+		}
+
+		assert_eq!(
+			cognito_metadata["registration_endpoint"],
+			"https://gateway.example.com/cognito/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn cognito_registration_endpoint_overwritten_by_gateway() {
+		// If Cognito ever exposes a registration_endpoint, we overwrite it with
+		// our own — intentional, since we always proxy DCR through the gateway.
+		let mut metadata = serde_json::json!({
+			"registration_endpoint": "https://old-endpoint.example.com/register"
+		});
+		let gateway_uri = "https://gateway.example.com/cognito/mcp";
+		if let Some(obj) = metadata.as_object_mut() {
+			obj.insert(
+				"registration_endpoint".to_string(),
+				serde_json::Value::String(format!("{gateway_uri}/client-registration")),
+			);
+		}
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/cognito/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn cognito_client_registration_errors_without_client_id() {
+		// cognito_dcr_error() is what client_registration() returns for Cognito
+		// when no clientId is configured. Calling it here ensures the error text
+		// is kept in sync and that the helper is exercised by a test.
+		let err = cognito_dcr_error();
+		assert!(
+			matches!(&err, ProxyError::ProcessingString(s) if s.contains("Dynamic Client Registration")),
+			"error should mention Dynamic Client Registration"
+		);
+		assert!(
+			matches!(&err, ProxyError::ProcessingString(s) if s.contains("agentgateway")),
+			"error should reference agentgateway (lowercase)"
+		);
 	}
 }

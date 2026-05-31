@@ -1891,6 +1891,7 @@
           "$ref": "#/$defs/JWTValidationOptions"
         },
         "clientId": {
+          "description": "Required when `provider` is `Cognito` (Cognito does not support Dynamic Client Registration).\nOptional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.",
           "type": [
             "string",
             "null"
@@ -1943,6 +1944,19 @@
           },
           "required": [
             "okta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cognito": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "cognito"
           ],
           "additionalProperties": false
         }

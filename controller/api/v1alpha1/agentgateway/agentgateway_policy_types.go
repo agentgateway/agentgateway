@@ -960,12 +960,13 @@ type JWTMCPConfig struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
 
 	// `provider` specifies the identity provider to use for MCP authentication flows.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
+	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta;Cognito
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
 
-	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
-	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// `clientId` is the OAuth app client ID.
+	// Required when provider is Cognito, which does not support Dynamic Client Registration.
+	// Optional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
 }
@@ -1414,7 +1415,7 @@ type MCPAuthentication struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata"`
 
 	// `provider` specifies the identity provider to use for authentication.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
+	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta;Cognito
 	// +optional
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
@@ -1442,8 +1443,9 @@ type MCPAuthentication struct {
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
-	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
-	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// `clientId` is the OAuth app client ID.
+	// Required when provider is Cognito, which does not support Dynamic Client Registration.
+	// Optional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
 }
@@ -1455,6 +1457,7 @@ const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
 	Okta     McpIDP = "Okta"
+	Cognito  McpIDP = "Cognito"
 )
 
 type BackendTunnel struct {
