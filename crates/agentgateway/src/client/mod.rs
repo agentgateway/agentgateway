@@ -125,7 +125,7 @@ pub enum Transport {
 	Hbone(ApplicationTransport, u16, Vec<Identity>, HboneHeaders),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
-		gateway_identity: Identity,  // Identity of network gateway
+		gateway_identities: Vec<Identity>, // Identities of network gateway (workload + service SANs)
 		waypoint_identities: Vec<Identity>, // Identities of waypoint/workload (workload + service SANs)
 		inner: ApplicationTransport,
 		headers: HboneHeaders,
@@ -348,7 +348,7 @@ impl Connector {
 
 			Transport::DoubleHbone {
 				gateway_address,
-				gateway_identity,
+				gateway_identities,
 				waypoint_identities,
 				inner: _,
 				headers,
@@ -362,7 +362,7 @@ impl Connector {
 					&target,
 					ep,
 					gateway_address,
-					gateway_identity,
+					gateway_identities,
 					waypoint_identities,
 					headers,
 				)

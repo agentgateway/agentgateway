@@ -3136,6 +3136,181 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 }
 
 #[tokio::test]
+async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::gatewayaddress::Destination;
+	use crate::types::discovery::{
+		GatewayAddress, Identity, InboundProtocol, NamespacedHostname, NetworkAddress, Service,
+		Workload,
+	};
+
+	let mock = simple_mock().await;
+	let waypoint_vip: std::net::IpAddr = "240.240.0.5".parse().unwrap();
+	let waypoint_ip: std::net::IpAddr = "10.20.0.12".parse().unwrap();
+	let gateway_ip: std::net::IpAddr = "172.18.7.110".parse().unwrap();
+	let remote_network = strng::literal!("network-2");
+	let t = setup_proxy_test("{}").unwrap();
+
+	let svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		waypoint: Some(GatewayAddress {
+			destination: Destination::Hostname(NamespacedHostname {
+				namespace: strng::literal!("default"),
+				hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+			}),
+			hbone_mtls_port: 15008,
+		}),
+		ingress_use_waypoint: true,
+		..Default::default()
+	};
+	let wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-wl-uid"),
+			name: strng::literal!("test-wl"),
+			namespace: strng::literal!("default"),
+			workload_ips: vec![mock.address().ip()],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+	let wp_svc = Service {
+		name: strng::literal!("waypoint"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: waypoint_vip,
+		}],
+		ports: std::collections::HashMap::from([(15008, 15008)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td2"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint-san"),
+		}],
+		..Default::default()
+	};
+	let wp_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-waypoint-wl-uid"),
+			name: strng::literal!("test-waypoint-wl"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint"),
+			network: remote_network.clone(),
+			workload_ips: vec![waypoint_ip],
+			network_gateway: Some(GatewayAddress {
+				destination: Destination::Address(NetworkAddress {
+					network: remote_network.clone(),
+					address: gateway_ip,
+				}),
+				hbone_mtls_port: 15008,
+			}),
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/waypoint.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(15008, 15008)]),
+		)]),
+	};
+	let gw_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-gateway-wl-uid"),
+			name: strng::literal!("test-gateway-wl"),
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+			network: remote_network.clone(),
+			workload_ips: vec![gateway_ip],
+			..Default::default()
+		},
+		services: Default::default(),
+	};
+
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![svc, wp_svc],
+			vec![wl, wp_wl, gw_wl],
+			Default::default(),
+		)
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		Default::default(),
+		&svc,
+		&80,
+		None,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	assert!(
+		backend_call.waypoint.is_none(),
+		"remote waypoint should be reached through double HBONE, not direct waypoint transport"
+	);
+	let (resolved_gw, gw_identities) = backend_call
+		.network_gateway
+		.expect("remote waypoint should resolve a network gateway");
+	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+		assert_eq!(addr.address, gateway_ip);
+		assert_eq!(addr.network, remote_network);
+	});
+	assert_eq!(resolved_gw.hbone_mtls_port, 15008);
+	// Outer tunnel: gateway workload id (the gateway is referenced by address, so no SANs).
+	assert_eq!(
+		gw_identities,
+		vec![Identity::Spiffe {
+			trust_domain: strng::EMPTY,
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+		}]
+	);
+	// Inner tunnel: waypoint workload id + waypoint service SANs.
+	assert_matches!(backend_call.transport_override, Some((InboundProtocol::HBONE, identities)) => {
+		assert_eq!(identities, vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td2"),
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint-san"),
+			},
+		]);
+	});
+	assert_matches!(backend_call.target, Target::Hostname(host, port) => {
+		assert_eq!(host.as_str(), "my-svc.default.svc.cluster.local");
+		assert_eq!(port, 80);
+	});
+}
+
+#[tokio::test]
 async fn ingress_use_waypoint_ip_based_waypoint() {
 	use crate::proxy::httpproxy;
 	use crate::store::LocalWorkload;
@@ -3408,6 +3583,11 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		hostname: gateway_hostname.clone(),
 		vips: vec![],
 		ports: std::collections::HashMap::from([(svc_port, gw_target_port)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td-gw"),
+			namespace: gateway_namespace.clone(),
+			service_account: strng::literal!("gateway-san"),
+		}],
 		..Default::default()
 	};
 	let gw_wl = LocalWorkload {
@@ -3459,7 +3639,7 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	)
 	.expect("build_service_call should succeed");
 
-	let (resolved_gw, gw_identity) = backend_call
+	let (resolved_gw, gw_identities) = backend_call
 		.network_gateway
 		.expect("network_gateway must be resolved for hostname-form destination");
 
@@ -3471,12 +3651,20 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		resolved_gw.hbone_mtls_port, gw_target_port,
 		"port should be the endpoint target port, not the service port"
 	);
+	// Outer-tunnel identities match ztunnel: gateway workload id + gateway service SANs.
 	assert_eq!(
-		gw_identity,
-		Identity::Spiffe {
-			trust_domain: strng::EMPTY,
-			namespace: gateway_namespace.clone(),
-			service_account: strng::literal!("gateway-sa"),
-		},
+		gw_identities,
+		vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-sa"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td-gw"),
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-san"),
+			},
+		]
 	);
 }
