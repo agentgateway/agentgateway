@@ -6094,6 +6094,7 @@ spec:
                       and responses.'
                     properties:
                       bufferRequestBody:
+                        default: false
                         description: '`bufferRequestBody` controls whether the request
                           body should be buffered.'
                         type: boolean
@@ -9196,8 +9197,9 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.buffering),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication
+                    and buffering
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:

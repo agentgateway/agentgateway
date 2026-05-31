@@ -57,7 +57,7 @@ const (
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
-	bufferingSuffix          = ":buffering"
+	bufferingSuffix                = ":buffering"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -525,22 +525,31 @@ func translateTrafficPolicyToAgw(
 
 func processBufferingPolicy(buffering *agentgateway.Buffering, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
 	var errs []error
-	if buffering.RequestBodyBuffering == nil {
-		errs = append(errs, fmt.Errorf("buffering policy requires requestBodyBuffering field to be set"))
+	translatedBuffering := &api.Buffering{}
+
+	if buffering.RequestBodyBuffering != nil {
+		translatedBuffering.RequestBodyBuffering = *buffering.RequestBodyBuffering
+	} else {
+		// Default to false if not specified
+		translatedBuffering.RequestBodyBuffering = false
 	}
+
 	bufferingPolicy := &api.Policy{
 		Key:  basePolicyName + bufferingSuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Buffering{
-					Buffering: &api.Buffering{
-						RequestBodyBuffering: *buffering.RequestBodyBuffering,
-					},
+					Buffering: translatedBuffering,
 				},
 			},
 		},
 	}
+
+	logger.Debug("generated Buffering policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", bufferingPolicy.Name)
+
 	return bufferingPolicy, errors.Join(errs...)
 }
 
