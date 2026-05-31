@@ -386,6 +386,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			upstream_finish_reason: None,
 			first_token: Default::default(),
 		}
 	}
@@ -1029,6 +1030,7 @@ pub mod typed {
 				} else {
 					None
 				},
+				upstream_finish_reason: None,
 				first_token: Default::default(),
 			}
 		}

@@ -50,6 +50,7 @@
 |`llm.prompt[].role`|string||
 |`llm.prompt[].content`|string||
 |`llm.completion`|[]string|The completion from the LLM. Warning: accessing this has some performance impacts for large responses.|
+|`llm.upstreamFinishReason`|string|The raw upstream finish reason before any OpenAI-spec collapsing (e.g. Gemini's `MALFORMED_FUNCTION_CALL`).<br>Preserved so operators can distinguish upstream reasons that collapse to the same OpenAI `finish_reason`.<br>Populated only on the Gemini native path (see vertex_gemini::to_completions)|
 |`llm.params`|object|The parameters for the LLM request.|
 |`llm.params.temperature`|number||
 |`llm.params.top_p`|number||

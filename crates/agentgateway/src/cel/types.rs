@@ -1072,6 +1072,12 @@ pub struct LLMContext {
 	/// The completion from the LLM. Warning: accessing this has some performance impacts for large responses.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	/// The raw upstream finish reason before any OpenAI-spec collapsing (e.g. Gemini's `MALFORMED_FUNCTION_CALL`).
+	/// Preserved so operators can distinguish upstream reasons that collapse to the same OpenAI `finish_reason`.
+	/// Populated only on the Gemini native path (see vertex_gemini::to_completions)
+	#[dynamic(rename = "upstreamFinishReason")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub upstream_finish_reason: Option<Strng>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
 }
@@ -1095,6 +1101,7 @@ impl From<llm::LLMInfo> for LLMContext {
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
 			service_tier: resp.service_tier.clone(),
 			response_model: resp.provider_model.clone(),
+			upstream_finish_reason: resp.upstream_finish_reason.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
 			..LLMContext::from(value.request)
@@ -1142,6 +1149,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
 			service_tier: None,
+			upstream_finish_reason: None,
 		}
 	}
 }
@@ -1774,6 +1782,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 
 			prompt: None,
 			completion: Some(vec!["Hello".to_string()]),
+			upstream_finish_reason: None,
 			params: llm::LLMRequestParams {
 				temperature: Some(0.7),
 				top_p: Some(1.0),

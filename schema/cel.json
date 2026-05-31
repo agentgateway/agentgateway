@@ -372,6 +372,13 @@
             "type": "string"
           }
         },
+        "upstreamFinishReason": {
+          "description": "The raw upstream finish reason before any OpenAI-spec collapsing (e.g. Gemini's `MALFORMED_FUNCTION_CALL`).\nPreserved so operators can distinguish upstream reasons that collapse to the same OpenAI `finish_reason`.\nPopulated only on the Gemini native path (see vertex_gemini::to_completions)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "params": {
           "description": "The parameters for the LLM request.",
           "type": "object",

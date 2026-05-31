@@ -196,6 +196,9 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			// Populated only on the Gemini native path (see vertex_gemini::to_completions), so its
+			// presence signals native routing; the raw value would otherwise be lost to mapping.
+			upstream_finish_reason: None,
 			first_token: Default::default(),
 		}
 	}

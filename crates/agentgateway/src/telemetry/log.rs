@@ -1014,6 +1014,13 @@ impl Drop for DropOnLog {
 					.as_ref()
 					.and_then(|l| l.response_model.display()),
 			),
+			// Raw upstream finish reason before OpenAI-spec collapsing; Populated only on the Gemini native path (see vertex_gemini::to_completions)
+			(
+				"gen_ai.response.finish_reason",
+				llm_response
+					.as_ref()
+					.and_then(|l| l.upstream_finish_reason.display()),
+			),
 			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 			(
 				"gen_ai.usage.cache_creation.input_tokens",

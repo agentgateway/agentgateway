@@ -432,6 +432,7 @@ impl ResponseType for Response {
 			cache_creation_input_tokens: None,
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
+			upstream_finish_reason: None,
 			completion: if include_completion_in_log {
 				Some(
 					self
