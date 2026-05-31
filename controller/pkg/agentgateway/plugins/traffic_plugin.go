@@ -57,6 +57,7 @@ const (
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
+	bufferingSuffix                = ":buffering"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -527,6 +528,10 @@ func translateTrafficPolicyToAgw(
 		))
 	}
 
+	if traffic.Buffering != nil {
+		appendPolicy("buffering")(processBufferingPolicy(traffic.Buffering, basePolicyName, policyName))
+	}
+
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
@@ -539,6 +544,36 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
+}
+
+func processBufferingPolicy(buffering *agentgateway.Buffering, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
+	var errs []error
+	translatedBuffering := &api.Buffering{}
+
+	if buffering.RequestBodyBuffering != nil {
+		translatedBuffering.RequestBodyBuffering = *buffering.RequestBodyBuffering
+	} else {
+		// Default to false if not specified
+		translatedBuffering.RequestBodyBuffering = false
+	}
+
+	bufferingPolicy := &api.Policy{
+		Key:  basePolicyName + bufferingSuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Buffering{
+					Buffering: translatedBuffering,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated Buffering policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", bufferingPolicy.Name)
+
+	return bufferingPolicy, errors.Join(errs...)
 }
 
 func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {

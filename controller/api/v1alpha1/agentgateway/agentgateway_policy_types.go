@@ -758,7 +758,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication"
+// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication;buffering,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication and buffering"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is `PreRouting`,
 	// the `targetRef` must be a `Gateway` or a `Listener`. `PreRouting` is
@@ -861,6 +861,10 @@ type Traffic struct {
 	// client.
 	// +optional
 	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
+
+	// `buffering` defines the policy for buffering requests and responses.
+	// +optional
+	Buffering *Buffering `json:"buffering,omitempty"`
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
@@ -1254,6 +1258,13 @@ type APIKeyAuthentication struct {
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
+}
+
+type Buffering struct {
+	// `bufferRequestBody` controls whether the request body should be buffered.
+	// +optional
+	// +kubebuilder:default=false
+	RequestBodyBuffering *bool `json:"bufferRequestBody,omitempty"`
 }
 
 type SecretSelector struct {

@@ -466,6 +466,11 @@ message DirectResponse {
   repeated ExpressionHeader headers = 4;
 }
 
+message Buffering {
+  bool requestBodyBuffering = 1;
+}
+
+
 message ExpressionHeader {
   string name = 1;
   string expression = 2;
@@ -1039,6 +1044,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    Buffering buffering = 22;
   }
 }
 
