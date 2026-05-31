@@ -130,11 +130,6 @@ async fn apply_request_policies(
 	// 2. CORS response headers are queued even if the request is later rejected,
 	//    allowing browsers to read error responses instead of seeing a CORS error
 	pol
-		.buffering
-		.apply_without_response("buffering", c, l, req, rp.headers())
-		.await?;
-
-	pol
 		.cors
 		.apply_without_response("cors", c, l, req, rp.headers())
 		.await?;
@@ -176,6 +171,11 @@ async fn apply_request_policies(
 	rp.llm_request_policies.remote_rate_limit = pol
 		.remote_rate_limit
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
+		.await?;
+
+	pol
+		.buffering
+		.apply_without_response("buffering", c, l, req, rp.headers())
 		.await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
@@ -333,10 +333,6 @@ async fn apply_gateway_policies(
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
 	let c = &client;
-	policies
-		.buffering
-		.apply_without_response("gateway buffering", c, l, req, response_policies.headers())
-		.await?;
 
 	policies
 		.oidc
@@ -360,6 +356,11 @@ async fn apply_gateway_policies(
 	policies
 		.ext_authz
 		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
+		.await?;
+
+	policies
+		.buffering
+		.apply_without_response("gateway buffering", c, l, req, response_policies.headers())
 		.await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.

@@ -38,13 +38,14 @@ impl TryFrom<BufferingSerde> for Buffering {
 }
 
 /// Inserted into request extensions when the buffering policy has fully drained the request
-/// body into memory. Other policies (CEL inspection, ext_proc, retry replay) can read this
-/// to avoid redundant buffering of the same bytes.
+/// body into memory. Body-inspecting policies (ext_proc, CEL transformation, content-safety
+/// scanners) can read this to avoid re-buffering the same bytes. Retry replay is handled
+/// separately by `ReplayBody`.
 #[derive(Clone, Debug)]
-pub struct BufferedRequestBody(pub Bytes);
+pub struct BufferRequestBody(pub Bytes);
 
 impl Buffering {
-	/// Drains the request body into memory and stores the bytes in a `BufferedRequestBody`
+	/// Drains the request body into memory and stores the bytes in a `BufferRequestBody`
 	/// extension if the policy enables buffering. No-op when buffering is disabled, when the
 	/// body has already been buffered, or for upgrade requests (whose "body" only exists
 	/// post-handshake as the upgraded byte stream).
@@ -55,7 +56,7 @@ impl Buffering {
 		if !self.buffer_request_body {
 			return Ok(());
 		}
-		if req.extensions().get::<BufferedRequestBody>().is_some() {
+		if req.extensions().get::<BufferRequestBody>().is_some() {
 			return Ok(());
 		}
 		if req.headers().contains_key(::http::header::UPGRADE) {
@@ -64,11 +65,18 @@ impl Buffering {
 
 		let limit = crate::http::buffer_limit(req);
 		let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
-		let bytes = crate::http::read_body_with_limit(body, limit)
-			.await
-			.map_err(crate::proxy::ProxyError::Body)?;
+		let bytes = match crate::http::read_body_with_limit(body, limit).await {
+			Ok(b) => b,
+			Err(_) => {
+				let resp = ::http::Response::builder()
+					.status(::http::StatusCode::PAYLOAD_TOO_LARGE)
+					.body(crate::http::Body::empty())
+					.expect("static response builds");
+				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
+			},
+		};
 		*req.body_mut() = crate::http::Body::from(bytes.clone());
-		req.extensions_mut().insert(BufferedRequestBody(bytes));
+		req.extensions_mut().insert(BufferRequestBody(bytes));
 
 		Ok(())
 	}

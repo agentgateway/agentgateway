@@ -87,7 +87,7 @@ async fn apply_to_request_is_noop_when_disabled() {
 		.await
 		.expect("disabled buffering should succeed");
 
-	assert!(req.extensions().get::<BufferedRequestBody>().is_none());
+	assert!(req.extensions().get::<BufferRequestBody>().is_none());
 	assert_eq!(
 		read_body_bytes(&mut req).await,
 		Bytes::from_static(b"payload")
@@ -116,7 +116,7 @@ async fn apply_to_request_drains_streaming_body_into_extension() {
 
 	let buffered = req
 		.extensions()
-		.get::<BufferedRequestBody>()
+		.get::<BufferRequestBody>()
 		.expect("extension inserted")
 		.0
 		.clone();
@@ -138,7 +138,7 @@ async fn apply_to_request_is_noop_when_already_buffered() {
 	let mut req = request_with_body(crate::http::Body::from("ignored-payload"));
 	req
 		.extensions_mut()
-		.insert(BufferedRequestBody(prebuffered.clone()));
+		.insert(BufferRequestBody(prebuffered.clone()));
 
 	policy
 		.apply_to_request(&mut req)
@@ -147,7 +147,7 @@ async fn apply_to_request_is_noop_when_already_buffered() {
 
 	// Extension is preserved as-is; the body is not re-read into it.
 	assert_eq!(
-		req.extensions().get::<BufferedRequestBody>().unwrap().0,
+		req.extensions().get::<BufferRequestBody>().unwrap().0,
 		prebuffered
 	);
 	// The original body is left untouched on this no-op path.
@@ -173,7 +173,7 @@ async fn apply_to_request_skips_upgrade_requests() {
 		.await
 		.expect("upgrade requests skip buffering");
 
-	assert!(req.extensions().get::<BufferedRequestBody>().is_none());
+	assert!(req.extensions().get::<BufferRequestBody>().is_none());
 	assert_eq!(
 		read_body_bytes(&mut req).await,
 		Bytes::from_static(b"payload")
@@ -194,8 +194,58 @@ async fn apply_to_request_fails_when_body_exceeds_buffer_limit() {
 		.await
 		.expect_err("oversize body must surface as an error");
 
+	match err {
+		ProxyResponse::DirectResponse(resp) => {
+			assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
+		},
+		other => panic!("expected 413 DirectResponse, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn apply_via_request_policy_trait_drains_body() {
+	let policy = Buffering {
+		buffer_request_body: true,
+	};
+	let mut req = request_with_body(crate::http::Body::from("payload"));
+
+	let resp = crate::test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("trait apply should succeed");
+
 	assert!(
-		matches!(err, ProxyResponse::Error(_)),
-		"expected ProxyResponse::Error, got {err:?}"
+		!resp.should_short_circuit(),
+		"buffering must not short-circuit the policy chain"
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<BufferRequestBody>()
+			.expect("extension inserted")
+			.0,
+		Bytes::from_static(b"payload")
+	);
+	assert_eq!(
+		read_body_bytes(&mut req).await,
+		Bytes::from_static(b"payload")
+	);
+}
+
+#[tokio::test]
+async fn apply_via_request_policy_trait_is_noop_when_disabled() {
+	let policy = Buffering {
+		buffer_request_body: false,
+	};
+	let mut req = request_with_body(crate::http::Body::from("payload"));
+
+	let resp = crate::test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("trait apply should succeed");
+
+	assert!(!resp.should_short_circuit());
+	assert!(req.extensions().get::<BufferRequestBody>().is_none());
+	assert_eq!(
+		read_body_bytes(&mut req).await,
+		Bytes::from_static(b"payload")
 	);
 }
