@@ -285,6 +285,9 @@ impl BackendPolicies {
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
+		if let Some(health) = self.health.as_ref() {
+			health.register_expressions(ctx);
+		}
 	}
 }
 

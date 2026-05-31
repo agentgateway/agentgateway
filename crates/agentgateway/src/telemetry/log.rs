@@ -51,6 +51,17 @@ use crate::{cel, llm, mcp};
 #[derive(Clone)]
 pub struct AsyncLog<T>(Arc<AtomicCell<Option<T>>>);
 
+impl<T: Clone> AsyncLog<T> {
+	// load_clone is only a best-effort snapshot. It temporarily removes the value so it can clone it,
+	// then stores the clone back. A concurrent store/non_atomic_mutate between those operations can be
+	// lost when we restore `cur`, so callers must not rely on this as an atomic read.
+	pub fn load_clone(&self) -> Option<T> {
+		let cur = self.0.take();
+		self.0.store(cur.clone());
+		cur
+	}
+}
+
 impl<T> AsyncLog<T> {
 	// non_atomic_mutate is a racey method to modify the current value.
 	// If there is no current value, a default is used.
@@ -459,13 +470,25 @@ impl DropOnLog {
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
 	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
 	/// gRPC status as unhealthy.
+	#[cfg(test)]
 	fn default_unhealthy(log: &RequestLog) -> bool {
-		log.status.is_none_or(|s| s.is_server_error())
+		Self::default_unhealthy_for_status(log, log.status)
+	}
+
+	fn default_unhealthy_for_status(
+		log: &RequestLog,
+		status: Option<crate::http::StatusCode>,
+	) -> bool {
+		status.is_none_or(|s| s.is_server_error())
 			|| log.grpc_status.load().is_some_and(|status| status != 0)
 	}
 
-	fn eviction_unhealthy(log: &RequestLog, cel_exec: &CelLoggingExecutor<'_>) -> bool {
-		let default_unhealthy = Self::default_unhealthy(log);
+	fn eviction_unhealthy(
+		log: &RequestLog,
+		status: Option<crate::http::StatusCode>,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) -> bool {
+		let default_unhealthy = Self::default_unhealthy_for_status(log, status);
 		let Some(policy) = &log.health_policy else {
 			return default_unhealthy;
 		};
@@ -477,17 +500,19 @@ impl DropOnLog {
 
 	/// Returns (health, eviction_duration, restore_health).
 	fn eviction_decision(
-		log: &RequestLog,
+		health_policy: &Option<health::Policy>,
+		retry_backoff: Option<Duration>,
+		retry_after: Option<Duration>,
 		current_health: f64,
 		consecutive_failure_count: u64,
 		times_ejected: u64,
 		unhealthy: bool,
 	) -> (bool, Option<Duration>, Option<f64>) {
-		let Some(policy) = &log.health_policy else {
+		let Some(policy) = health_policy else {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let fallback_duration = log.retry_after.or(log.retry_backoff);
+		let fallback_duration = retry_after.or(retry_backoff);
 		policy.eviction_decision(
 			current_health,
 			consecutive_failure_count,
@@ -662,6 +687,65 @@ impl RequestLog {
 			inner: self.trace_spans.clone(),
 		})
 	}
+
+	fn finish_request_handle(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) {
+		self.finish_request_handle_with_attempt(rh, end_time, self.status, self.retry_after, cel_exec);
+	}
+
+	fn finish_request_handle_with_attempt(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) {
+		let unhealthy = DropOnLog::eviction_unhealthy(self, status, cel_exec);
+		let (health, eviction_duration, restore_health) = DropOnLog::eviction_decision(
+			&self.health_policy,
+			self.retry_backoff,
+			retry_after,
+			rh.health_score(),
+			rh.consecutive_failures(),
+			rh.times_ejected(),
+			unhealthy,
+		);
+		rh.finish_request(
+			health,
+			end_time.duration_since(&self.start),
+			eviction_duration,
+			restore_health,
+		);
+	}
+
+	pub(crate) fn finalize_request_handle_for_attempt(
+		&mut self,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		response_snapshot: Option<&cel::ResponseSnapshot>,
+		llm_response: Option<&LLMContext>,
+		mcp: Option<&MCPInfo>,
+	) {
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = self.cel.build(CelLoggingBuildInputs {
+			req: self.request_snapshot.as_deref(),
+			resp: response_snapshot,
+			llm_response,
+			mcp: mcp.filter(|m| !m.is_empty()),
+			end_time: &cel_end_time,
+			source_context: self.source_context.as_ref(),
+		});
+		let Some(rh) = self.request_handle.take() else {
+			return;
+		};
+		self.finish_request_handle_with_attempt(rh, end_time, status, retry_after, &cel_exec);
+	}
 }
 
 #[derive(Debug)]
@@ -784,31 +868,19 @@ impl Drop for DropOnLog {
 		let enable_trace = log.tracer.is_some();
 
 		let llm_response = log.llm_response.take().map(Into::into);
-
 		let mcp = log.mcp_status.take();
-		let mcp_cel = mcp.as_ref().filter(|m| !m.is_empty());
+		let request_handle = log.request_handle.take();
 		let cel_end_time = cel::RequestTime(end_time.as_datetime());
 		let cel_exec = log.cel.build(CelLoggingBuildInputs {
 			req: log.request_snapshot.as_deref(),
 			resp: log.response_snapshot.as_ref(),
 			llm_response: llm_response.as_ref(),
-			mcp: mcp_cel,
+			mcp: mcp.as_ref().filter(|m| !m.is_empty()),
 			end_time: &cel_end_time,
 			source_context: log.source_context.as_ref(),
 		});
-		if let Some(rh) = log.request_handle.take() {
-			let current_health = rh.health_score();
-			let consecutive_failures = rh.consecutive_failures();
-			let times_ejected = rh.times_ejected();
-			let unhealthy = Self::eviction_unhealthy(&log, &cel_exec);
-			let (health, eviction_duration, restore_health) = Self::eviction_decision(
-				&log,
-				current_health,
-				consecutive_failures,
-				times_ejected,
-				unhealthy,
-			);
-			rh.finish_request(health, duration, eviction_duration, restore_health);
+		if let Some(rh) = request_handle {
+			log.finish_request_handle(rh, end_time, &cel_exec);
 		}
 
 		let custom_metric_fields = CustomField::new(
