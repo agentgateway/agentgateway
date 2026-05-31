@@ -225,6 +225,50 @@ fn tool_result_becomes_function_response_with_user_role() {
 }
 
 #[test]
+fn multi_turn_tool_loop_role_correctness() {
+	// Across a multi-turn tool loop, every Gemini content entry must be role user or model, and
+	// each tool result becomes a functionResponse carried under role=user (litellm#22003).
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [
+			{ "role": "user", "content": "weather?" },
+			{ "role": "assistant", "tool_calls": [
+				{ "id": "call_1", "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" } }
+			]},
+			{ "role": "tool", "tool_call_id": "call_1", "content": "12C" },
+			{ "role": "assistant", "content": "It is 12C." },
+			{ "role": "user", "content": "and tomorrow?" },
+			{ "role": "assistant", "tool_calls": [
+				{ "id": "call_2", "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\",\"day\":\"tomorrow\"}" } }
+			]},
+			{ "role": "tool", "tool_call_id": "call_2", "content": "10C" }
+		]
+	}));
+	let contents = g["contents"].as_array().unwrap();
+	let roles: Vec<&str> = contents
+		.iter()
+		.map(|c| c["role"].as_str().unwrap())
+		.collect();
+	assert_eq!(
+		roles,
+		["user", "model", "user", "model", "user", "model", "user"]
+	);
+
+	// Both tool results land under role=user, and the function name is recovered from the
+	// preceding tool_call id (Gemini functionResponse needs the name; the OpenAI tool message
+	// carries only the id).
+	for idx in [2, 6] {
+		assert_eq!(contents[idx]["role"], "user");
+		assert_eq!(
+			contents[idx]["parts"][0]["functionResponse"]["name"],
+			"get_weather"
+		);
+	}
+}
+
+#[test]
 fn tools_become_function_declarations() {
 	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",
@@ -570,6 +614,25 @@ fn usage_maps_cached_and_reasoning_tokens() {
 		r["usage"]["completion_tokens_details"]["reasoning_tokens"],
 		20
 	);
+}
+
+#[test]
+fn cel_usage_fields_match_usage_metadata() {
+	// The CEL/log token fields (via to_llm_response) must equal Gemini's usageMetadata exactly,
+	// so rate limiting and telemetry see native counts rather than shim numbers.
+	let r = llm_resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100, "candidatesTokenCount": 50, "totalTokenCount": 150,
+			"cachedContentTokenCount": 30, "thoughtsTokenCount": 20
+		}
+	}));
+	assert_eq!(r.input_tokens, Some(100));
+	assert_eq!(r.output_tokens, Some(50));
+	assert_eq!(r.total_tokens, Some(150));
+	assert_eq!(r.cached_input_tokens, Some(30));
+	assert_eq!(r.reasoning_tokens, Some(20));
 }
 
 #[test]
