@@ -2,6 +2,7 @@
 
 - Issue: [#288](https://github.com/agentgateway/agentgateway/issues/288)
 - Related: [#1714](https://github.com/agentgateway/agentgateway/issues/1714)
+- Implementation: [#1932](https://github.com/agentgateway/agentgateway/pull/1932)
 - Status: proposed
 - Date: 5/18/2026
 
@@ -18,7 +19,7 @@ token counting, prompt policies, and response parsing.
 This proposal fixes that by adding a `custom` LLM provider that can target a `Service`, `InferencePool`, or direct
 `host + port`, and by refactoring the LLM path so provider selection happens before optional inference routing.
 
-M1 is intentionally narrow:
+The design is intentionally narrow:
 
 - Only `custom` providers get explicit backend targets.
 - Existing managed providers stay unchanged.
@@ -30,17 +31,17 @@ M1 is intentionally narrow:
 - Let an AI backend select a `custom` provider whose concrete target is a `Service` or `InferencePool`.
 - Let `custom` declare the provider-native request/response formats it supports.
 - Select the provider and concrete provider target before optional inference routing.
-- Preserve the existing LLM request pipeline for AI policy application, token counting, and upstream serialization in M1.
+- Preserve the existing LLM request pipeline for AI policy application, token counting, and upstream serialization.
 - Reuse the existing `build_service_call` path for `Service` and lowered `InferencePool` provider targets.
 - Keep managed providers such as `openai`, `anthropic`, `gemini`, `vertexai`, `azure`, and `bedrock` as they are.
 
 ## Non-Goals
 
-- Add `backendRef` support to managed providers in M1.
+- Add `backendRef` support to managed providers.
 - Redesign MCP execution.
 - Change the upstream GAIE `InferencePool` API or EPP protocol.
 - Add a dataplane-native `InferencePool` backend kind.
-- Support arbitrary gRPC custom providers in M1.
+- Support arbitrary gRPC custom providers.
 - Allow recursive provider targets such as custom provider -> `AgentgatewayBackend`.
 
 ## API
@@ -54,8 +55,14 @@ type LLMProvider struct {
 }
 
 type CustomProvider struct {
-    BackendRef       *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
-    SupportedFormats []ProviderFormat             `json:"supportedFormats"`
+    BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+    Model      *ShortString                  `json:"model,omitempty"`
+    Formats    []ProviderFormatConfig        `json:"formats"`
+}
+
+type ProviderFormatConfig struct {
+    Type ProviderFormat `json:"type"`
+    Path LongString     `json:"path,omitempty"`
 }
 ```
 
@@ -63,8 +70,9 @@ Validation:
 
 - `custom` is added to the `ExactlyOneOf` provider list.
 - `custom` must specify exactly one of `backendRef` or direct `host + port`.
-- `supportedFormats` is required and must contain at least one format.
-- In M1, `backendRef` may target only namespace-local `Service` or `InferencePool`.
+- `formats` is required and must contain at least one format.
+- `backendRef` may target only namespace-local `Service` or `InferencePool`.
+- `path`, `pathPrefix`, and custom format `path` overrides are mutually exclusive.
 
 Example:
 
@@ -86,14 +94,16 @@ spec:
             group: inference.networking.k8s.io
             kind: InferencePool
             name: llama-pool
-          supportedFormats:
-          - Completions
+          formats:
+          - type: Completions
+            path: /v1/chat/completions
 ```
 
-### Supported Formats
+### Provider Formats
 
-`supportedFormats` declares provider-native wire formats, not route matching behavior. It should be a new enum rather
-than a reuse of `RouteType`.
+`formats` declares provider-native wire formats, not route matching behavior. Each entry may optionally set `path` to
+override the default upstream path for that provider-native format. The format type should be a new enum rather than a
+reuse of `RouteType`.
 
 Initial values:
 
@@ -112,7 +122,7 @@ Excluded values:
 
 ## Runtime Design
 
-Add an explicit custom provider runtime variant. Do not try to unify all provider internals in M1; existing providers
+Add an explicit custom provider runtime variant. Do not try to unify all provider internals; existing providers
 have provider-specific request, response, auth, path, and model handling that should stay on their current paths.
 
 Conceptually:
@@ -129,7 +139,8 @@ enum AIProvider {
 }
 
 struct CustomProviderRuntime {
-    supported_formats: BTreeSet<ProviderFormat>,
+    model: Option<Strng>,
+    formats: Vec<ProviderFormatConfig>,
     target: CustomProviderTarget,
 }
 
@@ -143,7 +154,7 @@ The selected provider target can resolve to:
 
 - Built-in provider default target for existing managed providers.
 - Direct `host + port`, including custom direct targets.
-- `custom.backendRef`, targeting `Service` or `InferencePool` in M1.
+- `custom.backendRef`, targeting `Service` or `InferencePool`.
 
 `custom.backendRef` targets are service-backed at runtime:
 
@@ -194,12 +205,12 @@ match backend:
 For `InferencePool` targets, EPP endpoint selection happens after provider and provider-target selection, but before the
 existing LLM request pipeline applies AI policies and mutates the request into the final provider-native upstream form.
 
-M1 intentionally does not split AI policy application from provider-native serialization. In the current implementation,
+This design intentionally does not split AI policy application from provider-native serialization. In the current implementation,
 those steps are part of the same LLM request pipeline. That means EPP may be called for a request that is later rejected
 by AI policy or rate limiting, and EPP will not see prompt mutation or model aliasing performed by AI policy. This is an
-acceptable M1 tradeoff because it avoids a larger LLM pipeline refactor.
+acceptable tradeoff because it avoids a larger LLM pipeline refactor.
 
-EPP sees the client/input API shape in M1. If the EPP parser only supports OpenAI chat completions, then `custom` +
+EPP sees the client/input API shape. If the EPP parser only supports OpenAI chat completions, then `custom` +
 `InferencePool` is guaranteed only for input shapes that EPP can parse. Other client formats can work once EPP supports
 those protocols. Direct custom targets that do not use EPP can still translate to any supported native format.
 
@@ -211,7 +222,7 @@ upstream request serialization and upstream response parsing.
 Inputs:
 
 - `input_format`: resolved from backend/route AI policy and request path after the top-level backend is selected.
-- `supported_formats`: declared by `custom` or inferred from the existing managed provider behavior.
+- `formats`: declared by `custom` or inferred from the existing managed provider behavior.
 
 Initial conversion table:
 
@@ -245,7 +256,13 @@ message AIBackend {
   }
 
   message Custom {
-    repeated ProviderFormat supported_formats = 1;
+    repeated ProviderFormatConfig formats = 1;
+    optional string model = 2;
+  }
+
+  message ProviderFormatConfig {
+    ProviderFormat format = 1;
+    optional string path = 2;
   }
 
   message Provider {
@@ -269,8 +286,10 @@ message AIBackend {
 }
 ```
 
-`provider_backend` is populated only for `custom` in M1. A `custom.backendRef` to `InferencePool` should translate the
+`provider_backend` is populated only for `custom`. A `custom.backendRef` to `InferencePool` should translate the
 same way route backend refs do today: synthetic service hostname plus canonical pool port.
+
+`dynamicForwardProxy` and `inferenceRouting` are orthogonal and should be rejected when configured together.
 
 ## Policy Attachment
 
@@ -287,7 +306,7 @@ This proposal builds on that behavior. When a `custom` AI provider targets an `I
 - Apply LLM-affecting policies before token counting and before the upstream call.
 - Apply target-bound backend policies and auth after the concrete backend call target is known.
 
-For M1, the clearest token-rate-limit configuration is to attach the policy to the `HTTPRoute`, `GRPCRoute`, `Gateway`,
+The clearest token-rate-limit configuration is to attach the policy to the `HTTPRoute`, `GRPCRoute`, `Gateway`,
 or `ListenerSet` that selects the AI backend. Pool-targeted policies are also valid, but they must be collected through
 the selected custom provider target before the LLM request pipeline runs.
 
@@ -298,18 +317,21 @@ Direct route -> `InferencePool` remains valid and unchanged, but it continues to
 To apply AI policies to pool-backed traffic:
 
 1. Create an `AgentgatewayBackend` with `spec.ai`.
-2. Configure one or more `custom` providers with `supportedFormats`.
+2. Configure one or more `custom` providers with `formats`.
 3. Point the selected `custom` provider at a `Service` or `InferencePool`.
 4. Update the route to reference the AI backend.
 
 ## Test Plan
 
-- API validation rejects empty `custom.supportedFormats`.
+- API validation rejects empty `custom.formats`.
 - API validation rejects `custom.backendRef` plus direct `host + port`.
+- API validation rejects conflicting path overrides.
 - `custom.backendRef` to `Service` translates to the expected provider backend reference.
 - `custom.backendRef` to `InferencePool` translates to the synthetic service hostname and pool port.
+- Custom format path overrides are honored.
 - Service-backed custom targets use `build_service_call`.
 - `custom` + `InferencePool` performs token counting and inference routing.
 - `custom` + `InferencePool` sends the input request shape to EPP before upstream serialization.
 - Native format selection rejects unsupported input/native format combinations.
+- Dynamic forward proxy with inference routing is rejected.
 - Existing managed providers and MCP behavior remain unchanged.
