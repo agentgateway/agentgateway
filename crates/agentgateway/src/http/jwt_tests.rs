@@ -1022,3 +1022,27 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		"required_claims with nbf should reject tokens missing nbf claim"
 	);
 }
+
+#[test]
+fn test_canonical_identity_combines_iss_and_sub() {
+	let claims = super::Claims {
+		inner: json!({ "iss": "https://idp-a/", "sub": "alice" })
+			.as_object()
+			.unwrap()
+			.clone(),
+		jwt: Default::default(),
+	};
+	assert_eq!(
+		claims.canonical_identity().as_deref(),
+		Some("https://idp-a/#alice")
+	);
+}
+
+#[test]
+fn test_canonical_identity_none_when_claim_missing() {
+	let claims = super::Claims {
+		inner: json!({ "sub": "alice" }).as_object().unwrap().clone(),
+		jwt: Default::default(),
+	};
+	assert_eq!(claims.canonical_identity(), None);
+}

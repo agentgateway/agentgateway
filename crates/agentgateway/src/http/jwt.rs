@@ -413,12 +413,27 @@ pub struct Claims {
 	pub jwt: SecretString,
 }
 
+impl Claims {
+	/// Canonical cross-issuer identity: the `(iss, sub)` pair (OIDC Core 1.0 §5.7).
+	/// `None` if either claim is absent or non-string.
+	pub fn canonical_identity(&self) -> Option<String> {
+		let iss = self.inner.get("iss")?.as_str()?;
+		let sub = self.inner.get("sub")?.as_str()?;
+		Some(format!("{iss}#{sub}"))
+	}
+}
+
 impl DynamicType for Claims {
 	fn materialize(&self) -> cel::Value<'_> {
 		self.inner.materialize()
 	}
 
 	fn field(&self, field: &str) -> Option<cel::Value<'_>> {
+		if field == "identity" {
+			return self
+				.canonical_identity()
+				.map(|id| cel::Value::String(id.into()));
+		}
 		self.inner.field(field)
 	}
 }
@@ -493,10 +508,11 @@ impl Jwt {
 			},
 		};
 
-		if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub")
-			&& let Some(log) = log
-		{
-			log.jwt_sub = Some(sub.to_string());
+		if let Some(log) = log {
+			if let Some(serde_json::Value::String(sub)) = claims.inner.get("sub") {
+				log.jwt_sub = Some(sub.to_string());
+			}
+			log.jwt_identity = claims.canonical_identity();
 		};
 		// Remove the token.
 		self

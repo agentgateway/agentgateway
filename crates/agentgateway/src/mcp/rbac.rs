@@ -199,4 +199,19 @@ mod tests {
 
 		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
 	}
+
+	// `jwt.identity` keys on the (iss, sub) pair, so the same `sub` from a different issuer is a
+	// distinct identity (OIDC Core 1.0 §5.7).
+	#[test]
+	fn test_mcp_authorization_jwt_identity_disambiguates_issuers() {
+		let authz =
+			authorization_set(r#"mcp.tool.name == "increment" && jwt.identity == "https://idp-a/#alice""#);
+		let res = tool_resource("server", "increment");
+
+		let matching = req_with_claims(json!({ "iss": "https://idp-a/", "sub": "alice" }));
+		assert!(authz.validate(&res, &CelExecWrapper::new(matching)));
+
+		let other_issuer = req_with_claims(json!({ "iss": "https://idp-b/", "sub": "alice" }));
+		assert!(!authz.validate(&res, &CelExecWrapper::new(other_issuer)));
+	}
 }
