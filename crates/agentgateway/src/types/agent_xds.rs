@@ -611,8 +611,7 @@ fn convert_ext_mcp(
 		};
 		let methods = convert_methods(&processor.methods);
 		if methods.is_empty() {
-			diagnostics
-				.add_warning("extMcp processor configured with no methods; it will never run");
+			diagnostics.add_warning("extMcp processor configured with no methods; it will never run");
 		}
 		drivers.push(crate::mcp::extmcp::Driver { methods, kind });
 	}
