@@ -51,7 +51,9 @@ pub struct ExtMcp {
 #[serde(rename_all = "camelCase")]
 pub struct Driver {
 	/// Allowlist: only methods listed here run through this driver, at the
-	/// configured phase. Methods absent from the map bypass this driver.
+	/// configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
+	/// or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching
+	/// no key bypass this driver; see [`phase::resolve`] for match precedence.
 	#[serde(skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
 	#[serde(flatten)]

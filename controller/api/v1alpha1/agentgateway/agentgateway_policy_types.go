@@ -1444,11 +1444,13 @@ type ExtMcpProcessor struct {
 
 	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
 	// `tools/list`) routed through this processor, keyed by method name with the
-	// phase it runs in. Methods not listed here, including unknown ones, bypass
-	// this processor.
+	// phase it runs in. Keys may be exact, a prefix wildcard (`tools/*`), a suffix
+	// wildcard (`*/list`), or `*` for all methods; the most specific match wins.
+	// Methods matching no key, including unknown ones, bypass this processor.
 	// +required
 	// +kubebuilder:validation:MinProperties=1
 	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="self.all(k, !k.contains('*') || (k.indexOf('*') == k.lastIndexOf('*') && (k.indexOf('*') == 0 || k.indexOf('*') == size(k) - 1)))",message="method wildcards must be '*', a prefix like 'tools/*', or a suffix like '*/list'"
 	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 

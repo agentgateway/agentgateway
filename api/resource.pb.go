@@ -12529,7 +12529,9 @@ type BackendPolicySpec_ExtMcp_Processor struct {
 	Kind isBackendPolicySpec_ExtMcp_Processor_Kind `protobuf_oneof:"kind"`
 	// Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
 	// through this processor, keyed by method name with the phase it runs in.
-	// Methods not listed here — including unknown ones — bypass this processor.
+	// Keys may be exact, prefix ("tools/*") or suffix ("*/list") wildcards, or
+	// "*" for all methods; the most specific match wins when a method would match
+	// multiple entries.
 	Methods       map[string]BackendPolicySpec_ExtMcp_Phase `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_Phase"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -1368,7 +1368,9 @@ message BackendPolicySpec {
 
       // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
       // through this processor, keyed by method name with the phase it runs in.
-      // Methods not listed here — including unknown ones — bypass this processor.
+      // Keys may be exact, prefix ("tools/*") or suffix ("*/list") wildcards, or
+      // "*" for all methods; the most specific match wins when a method would match
+      // multiple entries.
       map<string, Phase> methods = 2;
     }
 

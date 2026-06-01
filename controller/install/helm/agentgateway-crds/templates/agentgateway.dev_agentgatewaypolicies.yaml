@@ -4405,11 +4405,18 @@ spec:
                                   description: |-
                                     `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
                                     `tools/list`) routed through this processor, keyed by method name with the
-                                    phase it runs in. Methods not listed here, including unknown ones, bypass
-                                    this processor.
+                                    phase it runs in. Keys may be exact, a prefix wildcard (`tools/*`), a suffix
+                                    wildcard (`*/list`), or `*` for all methods; the most specific match wins.
+                                    Methods matching no key, including unknown ones, bypass this processor.
                                   maxProperties: 64
                                   minProperties: 1
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: method wildcards must be '*', a prefix
+                                      like 'tools/*', or a suffix like '*/list'
+                                    rule: self.all(k, !k.contains('*') || (k.indexOf('*')
+                                      == k.lastIndexOf('*') && (k.indexOf('*') ==
+                                      0 || k.indexOf('*') == size(k) - 1)))
                                 remote:
                                   description: '`remote` configures a gRPC policy
                                     server.'
