@@ -1192,7 +1192,10 @@ pub(crate) fn backend_with_policies_from_proto(
 								.iter()
 								.map(|format| convert_provider_format_config(format, provider_idx))
 								.collect::<Result<Vec<_>, _>>()?;
-							AIProvider::Custom(llm::custom::Provider { formats })
+							AIProvider::Custom(llm::custom::Provider {
+								model: custom.model.as_deref().map(strng::new),
+								formats,
+							})
 						},
 						None => {
 							return Err(ProtoError::Generic(format!(
@@ -1206,19 +1209,29 @@ pub(crate) fn backend_with_policies_from_proto(
 					} else {
 						strng::new(&provider_config.name)
 					};
+					let provider_backend = provider_config
+						.provider_backend
+						.as_ref()
+						.map(|backend| resolve_simple_reference(Some(backend)));
+					let host_override = provider_config
+						.r#host_override
+						.as_ref()
+						.map(|o| Target::from((o.host.as_str(), o.port as u16)));
+					if matches!(provider, AIProvider::Custom(_))
+						&& provider_backend.is_none()
+						&& host_override.is_none()
+					{
+						return Err(ProtoError::Generic(format!(
+							"AI backend custom provider at index {provider_idx} requires providerBackend or hostOverride"
+						)));
+					}
 
 					let np = NamedAIProvider {
 						name: provider_name.clone(),
 						provider,
 						tokenize: false,
-						provider_backend: provider_config
-							.provider_backend
-							.as_ref()
-							.map(|backend| resolve_simple_reference(Some(backend))),
-						host_override: provider_config
-							.r#host_override
-							.as_ref()
-							.map(|o| Target::from((o.host.as_str(), o.port as u16))),
+						provider_backend,
+						host_override,
 						path_override: provider_config.path_override.as_ref().map(strng::new),
 						path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 						inline_policies: pols,
@@ -3857,6 +3870,7 @@ mod tests {
 									path: Some("/api/messages".to_string()),
 								},
 							],
+							model: None,
 						})),
 						inline_policies: vec![],
 					}],

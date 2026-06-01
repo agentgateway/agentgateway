@@ -1267,6 +1267,13 @@ async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 	)
 	.await;
 	assert_eq!(res.status(), 503);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert!(
+		String::from_utf8_lossy(&body)
+			.contains("unsupported conversion: from Completions to provider custom"),
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
 
 	let requests = mock
 		.received_requests()

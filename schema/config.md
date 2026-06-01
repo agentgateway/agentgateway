@@ -2088,6 +2088,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string||
@@ -3196,6 +3197,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
@@ -8270,6 +8272,7 @@
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string||
 |`backends[].ai.provider.custom`|object||
+|`backends[].ai.provider.custom.model`|string||
 |`backends[].ai.provider.custom.formats`|[]object||
 |`backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`backends[].ai.provider.custom.formats[].path`|string||
@@ -9378,6 +9381,7 @@
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`backends[].ai.groups[].providers[].provider.custom`|object||
+|`backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
 |`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
@@ -13545,6 +13549,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.custom`|object||
+|`routeGroups[].routes[].backends[].ai.provider.custom.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats`|[]object||
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string||
@@ -14653,6 +14658,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
@@ -16832,7 +16838,12 @@
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
 |`llm.models[].params.tokenize`|boolean|Whether to tokenize the request before forwarding it upstream.|
-|`llm.models[].provider`|enum|provider of the LLM we are connecting too<br>Possible values: `openAI`, `gemini`, `vertex`, `anthropic`, `bedrock`, `azure`, `copilot`.|
+|`llm.models[].provider`|object|provider of the LLM we are connecting too|
+|`llm.models[].provider.custom`|object||
+|`llm.models[].provider.custom.model`|string||
+|`llm.models[].provider.custom.formats`|[]object||
+|`llm.models[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
+|`llm.models[].provider.custom.formats[].path`|string||
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|

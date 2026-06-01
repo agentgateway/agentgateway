@@ -200,7 +200,10 @@ pub fn custom_llm_backend_with_formats(
 ) -> BackendWithPolicies {
 	let provider = NamedAIProvider {
 		name: "default".into(),
-		provider: AIProvider::Custom(crate::llm::custom::Provider { formats }),
+		provider: AIProvider::Custom(crate::llm::custom::Provider {
+			model: None,
+			formats,
+		}),
 		provider_backend: Some(provider_backend),
 		host_override: None,
 		path_override: None,

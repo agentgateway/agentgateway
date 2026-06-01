@@ -1654,7 +1654,12 @@ async fn make_backend_call(
 				let (target, provider_defaults) = match &provider.host_override {
 					Some(target) => (target.clone(), provider_defaults),
 					None => {
-						let (tgt, mut pol) = provider.provider.default_connector();
+						let (tgt, mut pol) = provider.provider.default_connector().ok_or_else(|| {
+							ProxyError::ProcessingString(
+								"custom providers require an explicit host override or provider backend"
+									.to_string(),
+							)
+						})?;
 						pol.llm_provider = Some(provider.clone());
 						(tgt, pol)
 					},
@@ -1959,7 +1964,7 @@ async fn make_backend_call(
 						log.add(|l| {
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
-								native_format: InputFormat::Realtime,
+								native_format: Some(llm::custom::ProviderFormat::Realtime),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),

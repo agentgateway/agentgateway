@@ -1537,6 +1537,11 @@ func (in *CustomProvider) DeepCopyInto(out *CustomProvider) {
 		*out = new(apisv1.BackendObjectReference)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Model != nil {
+		in, out := &in.Model, &out.Model
+		*out = new(ShortString)
+		**out = **in
+	}
 	if in.Formats != nil {
 		in, out := &in.Formats, &out.Formats
 		*out = make([]ProviderFormatConfig, len(*in))

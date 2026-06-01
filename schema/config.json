@@ -5970,6 +5970,12 @@
     "Provider8": {
       "type": "object",
       "properties": {
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "formats": {
           "type": "array",
           "items": {
@@ -7784,15 +7790,31 @@
       "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
-      "type": "string",
-      "enum": [
-        "openAI",
-        "gemini",
-        "vertex",
-        "anthropic",
-        "bedrock",
-        "azure",
-        "copilot"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "openAI",
+            "gemini",
+            "vertex",
+            "anthropic",
+            "bedrock",
+            "azure",
+            "copilot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "LLMRouteMatch": {

@@ -13,7 +13,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,
 		input_format: InputFormat::Completions,
-		native_format: InputFormat::Completions,
+		native_format: Some(custom::ProviderFormat::Completions),
 		request_model: "test-model".into(),
 		provider: "test-provider".into(),
 		streaming: true,
@@ -683,7 +683,7 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
-			native_format: input_format,
+			native_format: input_format.provider_format(),
 			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
@@ -1162,7 +1162,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
-		native_format: InputFormat::Completions,
+		native_format: Some(custom::ProviderFormat::Completions),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: true,
@@ -1244,7 +1244,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,
-				native_format: InputFormat::Completions,
+				native_format: Some(custom::ProviderFormat::Completions),
 				request_model: "input-model".into(),
 				provider: Default::default(),
 				streaming: true,
@@ -1333,6 +1333,7 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 #[test]
 fn setup_request_custom_path_override_wins_over_format_path() {
 	let provider = AIProvider::Custom(custom::Provider {
+		model: None,
 		formats: vec![custom::ProviderFormatConfig {
 			format: custom::ProviderFormat::Messages,
 			path: Some(strng::literal!("/api/messages")),
@@ -1341,7 +1342,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 	let llm_request = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
-		native_format: InputFormat::Messages,
+		native_format: Some(custom::ProviderFormat::Messages),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: false,
@@ -1373,7 +1374,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Messages,
-		native_format: InputFormat::Messages,
+		native_format: Some(custom::ProviderFormat::Messages),
 		request_model: request_model.into(),
 		provider: Default::default(),
 		streaming: false,

@@ -1,31 +1,33 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
-use crate::llm::InputFormat;
+use crate::llm::{InputFormat, RouteType};
 use crate::*;
 
 #[apply(schema!)]
 pub struct Provider {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
 	pub formats: Vec<ProviderFormatConfig>,
 }
 
 impl Provider {
-	pub fn supports(&self, format: InputFormat) -> bool {
+	pub fn supports(&self, format: ProviderFormat) -> bool {
 		self
 			.formats
 			.iter()
-			.any(|supported| supported.format.supports(format))
+			.any(|supported| supported.format == format)
 	}
 
-	pub fn native_format_for(&self, input_format: InputFormat) -> Option<InputFormat> {
-		let preferences: &[InputFormat] = match input_format {
-			InputFormat::Completions => &[InputFormat::Completions, InputFormat::Messages],
-			InputFormat::Messages => &[InputFormat::Messages, InputFormat::Completions],
-			InputFormat::Responses => &[InputFormat::Responses, InputFormat::Completions],
-			InputFormat::Embeddings => &[InputFormat::Embeddings],
-			InputFormat::CountTokens => &[InputFormat::CountTokens],
-			InputFormat::Realtime => &[InputFormat::Realtime],
-			InputFormat::Detect => return Some(InputFormat::Detect),
+	pub fn native_format_for(&self, input_format: InputFormat) -> Option<ProviderFormat> {
+		let preferences: &[ProviderFormat] = match input_format {
+			InputFormat::Completions => &[ProviderFormat::Completions, ProviderFormat::Messages],
+			InputFormat::Messages => &[ProviderFormat::Messages, ProviderFormat::Completions],
+			InputFormat::Responses => &[ProviderFormat::Responses, ProviderFormat::Completions],
+			InputFormat::Embeddings => &[ProviderFormat::Embeddings],
+			InputFormat::CountTokens => &[ProviderFormat::AnthropicTokenCount],
+			InputFormat::Realtime => &[ProviderFormat::Realtime],
+			InputFormat::Detect => return None,
 		};
 		preferences
 			.iter()
@@ -33,11 +35,11 @@ impl Provider {
 			.find(|format| self.supports(*format))
 	}
 
-	pub fn path_for(&self, format: InputFormat) -> Option<&str> {
+	pub fn path_for(&self, format: ProviderFormat) -> Option<&str> {
 		self
 			.formats
 			.iter()
-			.find(|supported| supported.format.supports(format))
+			.find(|supported| supported.format == format)
 			.and_then(|supported| supported.path.as_deref())
 	}
 }
@@ -65,16 +67,26 @@ pub enum ProviderFormat {
 }
 
 impl ProviderFormat {
-	fn supports(self, format: InputFormat) -> bool {
-		matches!(
-			(self, format),
-			(Self::Completions, InputFormat::Completions)
-				| (Self::Messages, InputFormat::Messages)
-				| (Self::Responses, InputFormat::Responses)
-				| (Self::Embeddings, InputFormat::Embeddings)
-				| (Self::AnthropicTokenCount, InputFormat::CountTokens)
-				| (Self::Realtime, InputFormat::Realtime)
-		)
+	pub fn input_format(self) -> InputFormat {
+		match self {
+			Self::Completions => InputFormat::Completions,
+			Self::Messages => InputFormat::Messages,
+			Self::Responses => InputFormat::Responses,
+			Self::Embeddings => InputFormat::Embeddings,
+			Self::AnthropicTokenCount => InputFormat::CountTokens,
+			Self::Realtime => InputFormat::Realtime,
+		}
+	}
+
+	pub fn route_type(self) -> RouteType {
+		match self {
+			Self::Completions => RouteType::Completions,
+			Self::Messages => RouteType::Messages,
+			Self::Responses => RouteType::Responses,
+			Self::Embeddings => RouteType::Embeddings,
+			Self::AnthropicTokenCount => RouteType::AnthropicTokenCount,
+			Self::Realtime => RouteType::Realtime,
+		}
 	}
 }
 
@@ -84,6 +96,7 @@ mod tests {
 
 	fn provider(supported_formats: Vec<ProviderFormat>) -> Provider {
 		Provider {
+			model: None,
 			formats: supported_formats
 				.into_iter()
 				.map(|format| ProviderFormatConfig { format, path: None })
@@ -96,17 +109,17 @@ mod tests {
 		let messages_only = provider(vec![ProviderFormat::Messages]);
 		assert_eq!(
 			messages_only.native_format_for(InputFormat::Completions),
-			Some(InputFormat::Messages)
+			Some(ProviderFormat::Messages)
 		);
 
 		let completions_only = provider(vec![ProviderFormat::Completions]);
 		assert_eq!(
 			completions_only.native_format_for(InputFormat::Messages),
-			Some(InputFormat::Completions)
+			Some(ProviderFormat::Completions)
 		);
 		assert_eq!(
 			completions_only.native_format_for(InputFormat::Responses),
-			Some(InputFormat::Completions)
+			Some(ProviderFormat::Completions)
 		);
 
 		let embeddings_only = provider(vec![ProviderFormat::Embeddings]);
@@ -119,6 +132,7 @@ mod tests {
 	#[test]
 	fn path_for_returns_format_path() {
 		let provider = Provider {
+			model: None,
 			formats: vec![
 				ProviderFormatConfig {
 					format: ProviderFormat::Completions,
@@ -132,9 +146,9 @@ mod tests {
 		};
 
 		assert_eq!(
-			provider.path_for(InputFormat::Messages),
+			provider.path_for(ProviderFormat::Messages),
 			Some("/api/messages")
 		);
-		assert_eq!(provider.path_for(InputFormat::Responses), None);
+		assert_eq!(provider.path_for(ProviderFormat::Responses), None);
 	}
 }

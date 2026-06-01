@@ -287,6 +287,11 @@ type CustomProvider struct {
 	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
+	// Optional: Override the model name, such as `gpt-oss`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+
 	// Formats declares the provider-native API formats this provider supports.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=6

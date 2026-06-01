@@ -346,6 +346,13 @@ spec:
                                     x-kubernetes-list-map-keys:
                                     - type
                                     x-kubernetes-list-type: map
+                                  model:
+                                    description: |-
+                                      Optional: Override the model name, such as `gpt-oss`.
+                                      If unset, the model name is taken from the request.
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
                                 required:
                                 - formats
                                 type: object
@@ -5373,6 +5380,13 @@ spec:
                             x-kubernetes-list-map-keys:
                             - type
                             x-kubernetes-list-type: map
+                          model:
+                            description: |-
+                              Optional: Override the model name, such as `gpt-oss`.
+                              If unset, the model name is taken from the request.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                         required:
                         - formats
                         type: object

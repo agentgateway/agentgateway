@@ -2165,6 +2165,24 @@ json(request.body).model
 			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
 			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
 			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
+			LocalModelAIProvider::Custom(custom_provider) => {
+				if custom_provider.formats.is_empty() {
+					bail!(
+						"custom provider for model {} must specify at least one format",
+						model_config.name
+					);
+				}
+				if p.host_override.is_none() {
+					bail!(
+						"custom provider for model {} requires params.baseUrl",
+						model_config.name
+					);
+				}
+				AIProvider::Custom(crate::llm::custom::Provider {
+					model: model.or_else(|| custom_provider.model.clone()),
+					..custom_provider.clone()
+				})
+			},
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
 
