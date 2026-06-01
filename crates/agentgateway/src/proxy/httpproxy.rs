@@ -1732,15 +1732,15 @@ async fn make_backend_call(
 			)
 			.await?
 		},
+		Backend::Dynamic(_, _) if policies.inference_routing.is_some() => {
+			return Err(
+				ProxyError::ProcessingString(
+					"inferenceRouting is not supported with dynamic backends".to_string(),
+				)
+				.into(),
+			);
+		},
 		Backend::Dynamic(_, _) => {
-			let (maybe_inference, _) = apply_inference_routing(
-				&policies,
-				policy_client.clone(),
-				&mut req,
-				&mut log,
-				response_policies,
-			)
-			.await?;
 			let backend_call = BackendCall {
 				target: target_from_request(&req)?,
 				http_version_override: None,
@@ -1750,7 +1750,7 @@ async fn make_backend_call(
 				waypoint: None,
 				backend_policies: policies,
 			};
-			(backend_call, maybe_inference)
+			(backend_call, http::ext_proc::InferencePoolRouter::default())
 		},
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();

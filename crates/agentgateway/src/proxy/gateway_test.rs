@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ::http::{Method, Version, header};
+use ::http::{Method, StatusCode, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
 use http_body_util::BodyExt;
@@ -28,7 +28,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
-use crate::http::{Body, Response};
+use crate::http::{Body, Response, ext_proc};
 use crate::llm::{AIProvider, custom, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
@@ -2675,6 +2675,44 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 	let t = t.with_bind(bind).with_route(route);
 	let io = t.serve_https(BIND_KEY, None);
 	(t, io)
+}
+
+/// DFP and inference routing are orthogonal: DFP chooses the upstream from the request authority,
+/// while inference routing expects an endpoint picker to choose the upstream endpoint.
+#[tokio::test]
+async fn dfp_rejects_inference_routing() {
+	let backend_name = ResourceName::new("dynamic".into(), "".into());
+	let dynamic_backend = BackendWithPolicies {
+		backend: Backend::Dynamic(backend_name, ()),
+		inline_policies: vec![BackendTrafficPolicy::InferenceRouting(
+			ext_proc::InferenceRouting {
+				target: Arc::new(SimpleBackendReference::InlineBackend(Target::from((
+					"127.0.0.1",
+					9002,
+				)))),
+				destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+				failure_mode: ext_proc::FailureMode::FailClosed,
+			},
+		)],
+	};
+
+	let route = basic_named_route("/dynamic".into());
+	let t = setup_proxy_test("{}").unwrap();
+	let pi = t.inputs();
+	pi.stores
+		.binds
+		.write()
+		.insert_backend(dynamic_backend.backend.name(), dynamic_backend);
+	let t = t.with_bind(simple_bind()).with_route(route);
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://example.com/dynamic").await;
+	assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(
+		String::from_utf8_lossy(&body),
+		"processing failed: inferenceRouting is not supported with dynamic backends"
+	);
 }
 
 /// DFP resolves the destination from the request's Host/URI authority, including the port.
