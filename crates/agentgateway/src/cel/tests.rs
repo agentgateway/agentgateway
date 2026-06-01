@@ -354,6 +354,15 @@ fn api_key_secret_is_redacted_by_default() {
 	);
 }
 
+#[test]
+fn jwt_token_is_redacted_by_default() {
+	assert_eq!(json!("<redacted>"), eval("jwt.rawToken").unwrap());
+	assert_eq!(
+		json!("fake.jwt.token"),
+		eval("jwt.rawToken.unredacted()").unwrap()
+	);
+}
+
 mod query_accessors {
 	use cel::Value;
 	use http::Method;

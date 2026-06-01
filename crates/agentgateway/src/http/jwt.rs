@@ -419,7 +419,10 @@ impl DynamicType for Claims {
 	}
 
 	fn field(&self, field: &str) -> Option<cel::Value<'_>> {
-		self.inner.field(field)
+		match field {
+			"rawToken" => Some(crate::cel::secret_string_to_value(&self.jwt)),
+			_ => self.inner.field(field),
+		}
 	}
 }
 

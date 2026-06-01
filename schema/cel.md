@@ -23,8 +23,9 @@
 |`env.namespace`|string|The namespace of the pod (when running on Kubernetes)|
 |`env.gateway`|string|The Gateway we are running as (when running on Kubernetes)|
 |`jwt`|object|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
+|`jwt.rawToken`|string|The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.|
 |`apiKey`|object|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
-|`apiKey.key`|string||
+|`apiKey.key`|string|The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.|
 |`basicAuth`|object|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
