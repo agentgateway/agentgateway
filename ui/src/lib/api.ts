@@ -101,7 +101,15 @@ function cleanupConfig(config: LocalConfig): LocalConfig {
           const cleanedRoute: any = {
             hostnames: route.hostnames,
             matches: route.matches,
-            backends: route.backends,
+            backends: route.backends.map((b) => {
+              // mcp.name is injected by config_dump (ResourceName flattening)
+              // but is not part of the write schema — strip it before POST.
+              if (b.mcp?.name) {
+                const { name: _, ...mcpRest } = b.mcp;
+                return { ...b, mcp: mcpRest };
+              }
+              return b;
+            }),
           };
 
           if (route.name) cleanedRoute.name = route.name;
