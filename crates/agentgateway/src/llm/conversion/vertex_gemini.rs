@@ -390,7 +390,7 @@ pub mod from_completions {
 					.get("description")
 					.and_then(Value::as_str)
 					.map(str::to_string),
-				parameters: f.get("parameters").cloned(),
+				parameters: f.get("parameters").map(normalize_gemini_schema),
 				rest: Value::Null,
 			})
 			.collect();
@@ -491,15 +491,302 @@ pub mod from_completions {
 		match rf.get("type").and_then(Value::as_str) {
 			Some("json_object") => (Some("application/json".into()), None),
 			Some("json_schema") => {
-				// Unwrap OpenAI's {schema, strict, name, description}; Gemini wants the bare schema.
+				// Unwrap OpenAI's {schema, strict, name, description} and normalize the bare schema.
 				let schema = rf
 					.get("json_schema")
 					.and_then(|js| js.get("schema"))
-					.cloned();
+					.map(normalize_gemini_schema);
 				(Some("application/json".into()), schema)
 			},
 			_ => (None, None),
 		}
+	}
+
+	// Gemini's responseSchema / functionDeclarations[].parameters accept only a subset of JSON Schema.
+	// The normalization below is ported from litellm's `_build_vertex_schema` (BerriAI/litellm, MIT).
+
+	/// Schema fields Gemini accepts. `format` is further pruned to enum/date-time and `enum` is
+	/// dropped on non-string types.
+	const ALLOWED_SCHEMA_FIELDS: &[&str] = &[
+		"type",
+		"format",
+		"description",
+		"title",
+		"nullable",
+		"enum",
+		"items",
+		"properties",
+		"required",
+		"anyOf",
+		"default",
+		"minLength",
+		"maxLength",
+		"pattern",
+		"minimum",
+		"maximum",
+		"exclusiveMinimum",
+		"exclusiveMaximum",
+		"propertyOrdering",
+	];
+
+	/// Normalize an OpenAI/Pydantic JSON Schema into Gemini's responseSchema subset.
+	pub(super) fn normalize_gemini_schema(schema: &Value) -> Value {
+		let mut out = schema.clone();
+		let defs = take_defs(&mut out);
+		inline_refs(&mut out, &defs, &mut Vec::new());
+		clean_schema_node(&mut out);
+		out
+	}
+
+	/// Move the top-level `$defs`/`definitions` out of `root` into a lookup map.
+	fn take_defs(root: &mut Value) -> serde_json::Map<String, Value> {
+		let mut defs = serde_json::Map::new();
+		if let Value::Object(map) = root {
+			for key in ["$defs", "definitions"] {
+				if let Some(Value::Object(obj)) = map.remove(key) {
+					defs.extend(obj);
+				}
+			}
+		}
+		defs
+	}
+
+	/// Visit each direct child schema (`items`, `properties`, `anyOf`, `allOf`), shared by both passes
+	/// so they recurse the same keywords. (`clean_schema_node` flattens `allOf` first, so it is a no-op here.)
+	fn for_each_child_schema(
+		map: &mut serde_json::Map<String, Value>,
+		mut f: impl FnMut(&mut Value),
+	) {
+		if let Some(items) = map.get_mut("items") {
+			f(items);
+		}
+		if let Some(Value::Object(props)) = map.get_mut("properties") {
+			for v in props.values_mut() {
+				f(v);
+			}
+		}
+		for key in ["anyOf", "allOf"] {
+			if let Some(Value::Array(arr)) = map.get_mut(key) {
+				for v in arr.iter_mut() {
+					f(v);
+				}
+			}
+		}
+	}
+
+	/// Inline `$ref` against `defs` (sibling keys win over the target) and drop `$defs`/`definitions`.
+	/// A `$ref` already on the resolution chain is left in place: Gemini cannot represent recursion,
+	/// but we must not loop.
+	fn inline_refs(node: &mut Value, defs: &serde_json::Map<String, Value>, chain: &mut Vec<String>) {
+		let ref_name = node
+			.get("$ref")
+			.and_then(Value::as_str)
+			.map(|r| r.rsplit('/').next().unwrap_or(r).to_string());
+		if let Some(name) = ref_name {
+			if chain.contains(&name) {
+				return;
+			}
+			if let Some(target) = defs.get(&name) {
+				let mut resolved = target.clone();
+				if let (Value::Object(rmap), Value::Object(orig)) = (&mut resolved, &*node) {
+					for (k, v) in orig.iter() {
+						if k != "$ref" {
+							rmap.insert(k.clone(), v.clone());
+						}
+					}
+				}
+				chain.push(name);
+				inline_refs(&mut resolved, defs, chain);
+				chain.pop();
+				*node = resolved;
+			}
+			// Unknown ref: leave the node untouched.
+			return;
+		}
+
+		match node {
+			Value::Object(map) => {
+				// Nested $defs (top-level ones already taken).
+				map.remove("$defs");
+				map.remove("definitions");
+				for_each_child_schema(map, |v| inline_refs(v, defs, chain));
+			},
+			Value::Array(arr) => {
+				for v in arr.iter_mut() {
+					inline_refs(v, defs, chain);
+				}
+			},
+			_ => {},
+		}
+	}
+
+	/// One pass of the structural rewrites that can each surface further structural keywords on the
+	/// node: flatten `allOf`, collapse a nullable/single-member `anyOf`, lift `const` to an `enum`
+	/// typed by its value kind, and split a `type` array. Returns whether it changed the node, so the
+	/// caller can re-run it until stable (an anyOf member may carry an allOf, an allOf member a const).
+	fn rewrite_structural(map: &mut serde_json::Map<String, Value>) -> bool {
+		let mut changed = false;
+
+		// Flatten allOf into the parent (existing sibling keys win).
+		if let Some(Value::Array(members)) = map.remove("allOf") {
+			changed = true;
+			for m in members {
+				if let Value::Object(mm) = m {
+					for (k, v) in mm {
+						map.entry(k).or_insert(v);
+					}
+				}
+			}
+		}
+
+		// const -> single-value enum typed by the const's JSON kind (Gemini has no const). A
+		// non-string enum is dropped later by the enum-on-non-string rule, but the inferred type stays.
+		if let Some(c) = map.remove("const") {
+			changed = true;
+			let ty = const_value_type(&c);
+			map.insert("enum".to_string(), Value::Array(vec![c]));
+			map.entry("type".to_string()).or_insert_with(|| ty.into());
+		}
+
+		if let Some(Value::Array(types)) = map.get("type").cloned() {
+			changed = true;
+			let names: Vec<String> = types
+				.iter()
+				.filter_map(|t| t.as_str().map(String::from))
+				.collect();
+			let has_null = names.iter().any(|t| t == "null");
+			let non_null: Vec<String> = names.into_iter().filter(|t| t != "null").collect();
+			map.remove("type");
+			if has_null {
+				map.insert("nullable".to_string(), true.into());
+			}
+			match non_null.as_slice() {
+				[] => {},
+				[one] => {
+					map.insert("type".to_string(), one.clone().into());
+				},
+				many => {
+					let any_of = many.iter().map(|t| json!({ "type": t })).collect();
+					map.insert("anyOf".to_string(), Value::Array(any_of));
+				},
+			}
+		}
+
+		// anyOf with a {type:null} branch -> nullable; collapse a single remaining member up. Only act
+		// when collapsible (a null branch or a single member) so genuine multi-member unions are left
+		// alone and the fixpoint terminates.
+		let collapsible = map
+			.get("anyOf")
+			.and_then(Value::as_array)
+			.map(|members| {
+				members.len() == 1
+					|| members
+						.iter()
+						.any(|m| m.get("type").and_then(Value::as_str) == Some("null"))
+			})
+			.unwrap_or(false);
+		if collapsible && let Some(Value::Array(members)) = map.remove("anyOf") {
+			changed = true;
+			let had_null = members
+				.iter()
+				.any(|m| m.get("type").and_then(Value::as_str) == Some("null"));
+			let non_null: Vec<Value> = members
+				.into_iter()
+				.filter(|m| m.get("type").and_then(Value::as_str) != Some("null"))
+				.collect();
+			if had_null {
+				map.insert("nullable".to_string(), true.into());
+			}
+			match non_null.len() {
+				0 => {},
+				1 => {
+					// Merge the lone member up; existing parent keys win (consistent with allOf).
+					if let Some(Value::Object(member)) = non_null.into_iter().next() {
+						for (k, v) in member {
+							map.entry(k).or_insert(v);
+						}
+					}
+				},
+				_ => {
+					map.insert("anyOf".to_string(), Value::Array(non_null));
+				},
+			}
+		}
+
+		changed
+	}
+
+	/// Gemini Schema `type` matching the JSON kind of a `const` value.
+	fn const_value_type(v: &Value) -> &'static str {
+		match v {
+			Value::String(_) => "string",
+			Value::Bool(_) => "boolean",
+			Value::Number(n) if n.is_f64() => "number",
+			Value::Number(_) => "integer",
+			Value::Array(_) => "array",
+			_ => "object",
+		}
+	}
+
+	/// Rewrite a single schema node and its children into Gemini's accepted shape.
+	fn clean_schema_node(node: &mut Value) {
+		let map = match node {
+			Value::Object(map) => map,
+			Value::Array(arr) => {
+				for v in arr.iter_mut() {
+					clean_schema_node(v);
+				}
+				return;
+			},
+			_ => return,
+		};
+
+		// A structural rewrite can surface further structural keywords on a merged node, so run them to
+		// a fixpoint before the scalar cleanups. Depth is bounded by serde_json's parse limit; the guard
+		// is only a safety net.
+		let mut guard = 0;
+		while rewrite_structural(map) && guard < 64 {
+			guard += 1;
+		}
+
+		// Gemini requires items on arrays.
+		if map.get("type").and_then(Value::as_str) == Some("array") && !map.contains_key("items") {
+			map.insert("items".to_string(), json!({ "type": "object" }));
+		}
+
+		// enum applies to string types only: drop it on an explicitly non-string type, but default a
+		// typeless enum to string rather than dropping the constraint and mistyping the node.
+		if map.contains_key("enum") {
+			match map.get("type").and_then(Value::as_str) {
+				Some("string") => {},
+				Some(_) => {
+					map.remove("enum");
+				},
+				None => {
+					map.insert("type".to_string(), "string".into());
+				},
+			}
+		}
+
+		// additionalProperties is unsupported (boolean form and open-dict form alike).
+		map.remove("additionalProperties");
+
+		// Default any remaining typeless, non-union, non-enum node to an object.
+		if !map.contains_key("type") && !map.contains_key("anyOf") && !map.contains_key("enum") {
+			map.insert("type".to_string(), "object".into());
+		}
+
+		let drop_format = map
+			.get("format")
+			.and_then(Value::as_str)
+			.map(|f| f != "enum" && f != "date-time")
+			.unwrap_or(false);
+		if drop_format {
+			map.remove("format");
+		}
+
+		for_each_child_schema(map, clean_schema_node);
+		map.retain(|k, _| ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()));
 	}
 
 	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer

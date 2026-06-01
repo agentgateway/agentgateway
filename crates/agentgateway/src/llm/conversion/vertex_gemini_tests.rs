@@ -385,6 +385,573 @@ fn response_format_json_object_sets_mime_only() {
 	assert!(g["generationConfig"].get("responseSchema").is_none());
 }
 
+/// Gemini's responseSchema subset rejects $defs/$ref/additionalProperties,
+/// so the translator must inline the $ref, drop $defs, and strip additionalProperties before egress.
+#[test]
+fn response_format_inlines_pydantic_defs_and_refs() {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "list the events" }],
+		"response_format": {
+			"type": "json_schema",
+			"json_schema": {
+				"name": "EventsList",
+				"strict": true,
+				"schema": {
+					"$defs": {
+						"CalendarEvent": {
+							"additionalProperties": false,
+							"properties": {
+								"name": { "title": "Name", "type": "string" },
+								"date": { "title": "Date", "type": "string" },
+								"participants": { "items": { "type": "string" }, "title": "Participants", "type": "array" }
+							},
+							"required": ["name", "date", "participants"],
+							"title": "CalendarEvent",
+							"type": "object"
+						}
+					},
+					"additionalProperties": false,
+					"properties": {
+						"events": { "items": { "$ref": "#/$defs/CalendarEvent" }, "title": "Events", "type": "array" }
+					},
+					"required": ["events"],
+					"title": "EventsList",
+					"type": "object"
+				}
+			}
+		}
+	}));
+	let schema = &g["generationConfig"]["responseSchema"];
+	let s = serde_json::to_string(schema).unwrap();
+	assert!(
+		!s.contains("$ref"),
+		"Vertex rejects $ref in responseSchema: {s}"
+	);
+	assert!(
+		!s.contains("$defs"),
+		"Vertex rejects $defs in responseSchema: {s}"
+	);
+	assert!(
+		!s.contains("additionalProperties"),
+		"Gemini rejects additionalProperties: {s}"
+	);
+	// The referenced CalendarEvent must be inlined where the $ref was.
+	assert_eq!(schema["properties"]["events"]["items"]["type"], "object");
+	assert!(
+		schema["properties"]["events"]["items"]["properties"]
+			.get("name")
+			.is_some(),
+		"inlined object lost its properties: {s}"
+	);
+}
+
+/// Reproduces the exact Vertex 400 verbatim:
+///   Unknown name "$defs" at 'generation_config.response_schema'
+///   Unknown name "$ref" at 'generation_config.response_schema.properties[3].value.any_of[0].items'
+/// `properties[3]` is `options`, whose `anyOf[0].items.$ref` points at `#/$defs/SelectOption`. This
+/// one payload exercises every construct the normalizer must handle: top-level `$defs`, a `$ref`
+/// nested under `anyOf[0].items`, two `{type: null}` anyOf branches (`options`, `copy_value_from`),
+/// and `additionalProperties: false`.
+#[test]
+fn response_format_inlines_real_dialog_question_schema() {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "h" }],
+		"response_format": {
+			"type": "json_schema",
+			"json_schema": {
+				"name": "DialogQuestionDynamic",
+				"strict": true,
+				"schema": {
+					"$defs": {
+						"SelectOption": {
+							"description": "A single option for select/multi_select/boolean questions.",
+							"properties": {
+								"id": { "title": "Id", "type": "string" },
+								"label": { "title": "Label", "type": "string" }
+							},
+							"required": ["id", "label"],
+							"title": "SelectOption",
+							"type": "object",
+							"additionalProperties": false
+						}
+					},
+					"properties": {
+						"information_id": { "enum": ["2l8I2VKmjQ"], "title": "Information Id", "type": "string" },
+						"question_text": { "title": "Question Text", "type": "string" },
+						"question_type": {
+							"enum": ["select", "multi_select", "boolean", "number", "string", "address", "timespan"],
+							"title": "Question Type",
+							"type": "string"
+						},
+						"options": {
+							"anyOf": [
+								{ "items": { "$ref": "#/$defs/SelectOption" }, "type": "array" },
+								{ "type": "null" }
+							],
+							"default": null,
+							"title": "Options"
+						},
+						"copy_value_from": {
+							"anyOf": [{ "type": "string" }, { "type": "null" }],
+							"default": null,
+							"title": "Copy Value From"
+						}
+					},
+					"required": ["copy_value_from", "information_id", "options", "question_text", "question_type"],
+					"title": "DialogQuestionDynamic",
+					"type": "object",
+					"additionalProperties": false
+				}
+			}
+		}
+	}));
+	let s = serde_json::to_string(&g["generationConfig"]["responseSchema"]).unwrap();
+	assert!(
+		!s.contains("$ref"),
+		"Vertex rejects $ref (here under options.anyOf[0].items): {s}"
+	);
+	assert!(!s.contains("$defs"), "Vertex rejects $defs: {s}");
+	assert!(
+		!s.contains("additionalProperties"),
+		"Gemini rejects additionalProperties: {s}"
+	);
+	assert!(
+		!s.contains("\"type\":\"null\""),
+		"anyOf null branches must collapse to nullable; Gemini has no null type: {s}"
+	);
+	// SelectOption must be inlined (its fields survive even though $defs is gone).
+	assert!(
+		s.contains("\"label\""),
+		"inlined SelectOption fields must survive: {s}"
+	);
+}
+
+/// Translate a request whose `response_format` wraps `schema`; return the egress `responseSchema`.
+fn response_schema(schema: Value) -> Value {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"response_format": {
+			"type": "json_schema",
+			"json_schema": { "name": "T", "strict": true, "schema": schema }
+		}
+	}));
+	g["generationConfig"]["responseSchema"].clone()
+}
+
+// Case 1: additionalProperties must be dropped at every level, not just the top.
+#[test]
+fn gemini_schema_drops_nested_additional_properties() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"inner": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": { "a": { "type": "string" } }
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("additionalProperties"),
+		"additionalProperties must be stripped everywhere: {txt}"
+	);
+}
+
+// Case 2: the same normalization must run on tool parameters (the ADK path), not just responseSchema.
+#[test]
+fn tool_parameters_inline_defs_and_refs() {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "save",
+				"description": "save events",
+				"parameters": {
+					"$defs": {
+						"Event": {
+							"type": "object",
+							"additionalProperties": false,
+							"properties": { "name": { "type": "string" } },
+							"required": ["name"]
+						}
+					},
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"events": { "type": "array", "items": { "$ref": "#/$defs/Event" } }
+					},
+					"required": ["events"]
+				}
+			}
+		}]
+	}));
+	let params = &g["tools"][0]["functionDeclarations"][0]["parameters"];
+	let txt = serde_json::to_string(params).unwrap();
+	assert!(
+		!txt.contains("$ref"),
+		"tool parameters must inline $ref: {txt}"
+	);
+	assert!(
+		!txt.contains("$defs"),
+		"tool parameters must drop $defs: {txt}"
+	);
+	assert!(
+		!txt.contains("additionalProperties"),
+		"tool parameters must drop additionalProperties: {txt}"
+	);
+	assert_eq!(params["properties"]["events"]["items"]["type"], "object");
+}
+
+// Case 3: Pydantic wraps a described nested-model field as {allOf:[{$ref}], description} (or a
+// $ref with siblings). Gemini supports neither; the single allOf member must be flattened into the
+// parent, not dropped (dropping would lose the type).
+#[test]
+fn gemini_schema_flattens_allof_single_ref() {
+	let s = response_schema(json!({
+		"$defs": {
+			"Inner": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": { "a": { "type": "string" } }
+			}
+		},
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"inner": { "allOf": [{ "$ref": "#/$defs/Inner" }], "description": "the inner object" }
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("allOf"),
+		"single-member allOf must be flattened: {txt}"
+	);
+	assert!(
+		!txt.contains("$ref"),
+		"the ref inside allOf must be inlined: {txt}"
+	);
+	assert!(!txt.contains("$defs"), "must drop $defs: {txt}");
+	assert_eq!(
+		s["properties"]["inner"]["type"], "object",
+		"flattened type lost: {txt}"
+	);
+	assert_eq!(
+		s["properties"]["inner"]["description"], "the inner object",
+		"sibling description must be preserved: {txt}"
+	);
+}
+
+// Case 4: Pydantic `Literal["a"]` emits {const: "a"}. Gemini has no const; preserve the constraint
+// as a single-value string enum (litellm drops const, which silently loses it).
+#[test]
+fn gemini_schema_converts_const_to_enum() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": { "kind": { "const": "a", "title": "Kind" } }
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(!txt.contains("\"const\""), "Gemini rejects const: {txt}");
+	assert_eq!(
+		s["properties"]["kind"]["enum"][0], "a",
+		"const value must be preserved as a single-element enum: {txt}"
+	);
+	assert_eq!(
+		s["properties"]["kind"]["type"], "string",
+		"enum needs a string type: {txt}"
+	);
+}
+
+// Case 5: only `enum` and `date-time` string formats are safe; others (uri, email, int64, uuid, ...)
+// must be stripped.
+#[test]
+fn gemini_schema_strips_unsupported_formats_keeps_datetime() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"link": { "type": "string", "format": "uri" },
+			"when": { "type": "string", "format": "date-time" },
+			"big": { "type": "integer", "format": "int64" }
+		}
+	}));
+	assert!(
+		s["properties"]["link"].get("format").is_none(),
+		"unsupported string format must be dropped: {s}"
+	);
+	assert_eq!(
+		s["properties"]["when"]["format"], "date-time",
+		"date-time format must be kept: {s}"
+	);
+	assert!(
+		s["properties"]["big"].get("format").is_none(),
+		"unsupported numeric format must be dropped: {s}"
+	);
+}
+
+// Case 6: JSON Schema `type` arrays are not allowed. A `null` member becomes `nullable`; a genuine
+// union becomes `anyOf`.
+#[test]
+fn gemini_schema_normalizes_multitype_arrays() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"u": { "type": ["string", "integer"] },
+			"o": { "type": ["string", "null"] }
+		}
+	}));
+	assert!(
+		!s["properties"]["u"]["type"].is_array(),
+		"a multi-type union must not stay a type array: {s}"
+	);
+	assert!(
+		s["properties"]["u"].get("anyOf").is_some(),
+		"a multi-type union should become anyOf: {s}"
+	);
+	assert_eq!(
+		s["properties"]["o"]["type"], "string",
+		"null member should drop to a single type: {s}"
+	);
+	assert_eq!(
+		s["properties"]["o"]["nullable"], true,
+		"null member should set nullable: {s}"
+	);
+}
+
+// Case 7: Gemini requires `items` on arrays; a bare array (List[Any]) must get a default item schema.
+#[test]
+fn gemini_schema_array_without_items_gets_items() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": { "tags": { "type": "array" } }
+	}));
+	assert!(
+		s["properties"]["tags"].get("items").is_some(),
+		"array must have items: {s}"
+	);
+}
+
+// Case 8: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
+// it must be dropped (the open value typing is lost; that is the documented trade-off).
+#[test]
+fn gemini_schema_drops_open_dict_additional_properties() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"meta": { "type": "object", "additionalProperties": { "type": "string" } }
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("additionalProperties"),
+		"typed additionalProperties (open dict) must be dropped: {txt}"
+	);
+}
+
+// Case 9: a self-referential model must not make the inliner hang. Recursion cannot be represented
+// in Gemini's subset, so $defs is still dropped; the guarantee is termination and a bounded result.
+#[test]
+fn gemini_schema_recursive_model_terminates() {
+	let s = response_schema(json!({
+		"$defs": {
+			"Node": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"value": { "type": "string" },
+					"children": { "type": "array", "items": { "$ref": "#/$defs/Node" } }
+				}
+			}
+		},
+		"type": "object",
+		"additionalProperties": false,
+		"properties": { "root": { "$ref": "#/$defs/Node" } }
+	}));
+	// Reaching this line at all proves the normalizer terminated (no infinite inline loop).
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("$defs"),
+		"must drop $defs even for recursive models: {txt}"
+	);
+}
+
+// Case 10: an object schema that omits `type` must get `type: object`.
+#[test]
+fn gemini_schema_adds_missing_object_type() {
+	let s = response_schema(json!({
+		"additionalProperties": false,
+		"properties": { "a": { "type": "string" } }
+	}));
+	assert_eq!(
+		s["type"], "object",
+		"missing object type must be added: {s}"
+	);
+}
+
+// Case 11: Gemini's enum applies to string types; an enum on a non-string field must be dropped.
+#[test]
+fn gemini_schema_drops_enum_on_non_string() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": { "n": { "type": "integer", "enum": [1, 2, 3] } }
+	}));
+	assert!(
+		s["properties"]["n"].get("enum").is_none(),
+		"enum on a non-string field must be dropped: {s}"
+	);
+}
+
+// Optional[Literal["a"]] = {anyOf:[{const:"a"},{type:null}]}. The single-member collapse
+// merges `const` into the parent AFTER the const->enum pass already ran, so the literal is dropped by
+// the whitelist and the field becomes an object. It must survive as a nullable string enum.
+#[test]
+fn gemini_schema_anyof_const_member_preserved_as_nullable_enum() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"x": { "anyOf": [{ "const": "a" }, { "type": "null" }], "default": null, "title": "X" }
+		}
+	}));
+	let x = &s["properties"]["x"];
+	assert_eq!(
+		x["type"], "string",
+		"Optional[Literal] must stay a string, not become object: {s}"
+	);
+	assert_eq!(
+		x["enum"][0], "a",
+		"the literal value must be preserved: {s}"
+	);
+	assert_eq!(
+		x["nullable"], true,
+		"the null branch must become nullable: {s}"
+	);
+}
+
+// A `type` array inside a collapsed anyOf member escapes the type-array pass (which ran
+// before the collapse), shipping an illegal JSON-Schema type array to Gemini.
+#[test]
+fn gemini_schema_anyof_type_array_member_normalized() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"u": { "anyOf": [{ "type": ["string", "integer"] }, { "type": "null" }] }
+		}
+	}));
+	let u = &s["properties"]["u"];
+	assert!(
+		!u["type"].is_array(),
+		"a type array merged from an anyOf member must be normalized, not shipped: {s}"
+	);
+	assert_eq!(
+		u["nullable"], true,
+		"the null branch must become nullable: {s}"
+	);
+}
+
+// An `allOf` inside a collapsed anyOf member escapes the allOf-flatten (which ran before
+// the collapse), so the inlined inner schema is dropped by the whitelist and its fields are lost.
+#[test]
+fn gemini_schema_anyof_allof_member_flattened() {
+	let s = response_schema(json!({
+		"$defs": {
+			"Inner": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": { "a": { "type": "string" } }
+			}
+		},
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"w": { "anyOf": [{ "allOf": [{ "$ref": "#/$defs/Inner" }] }, { "type": "null" }] }
+		}
+	}));
+	let w = &s["properties"]["w"];
+	let txt = serde_json::to_string(w).unwrap();
+	assert!(
+		!txt.contains("allOf"),
+		"allOf merged from an anyOf member must be flattened: {s}"
+	);
+	assert_eq!(
+		w["type"], "object",
+		"the inlined inner type must survive: {s}"
+	);
+	assert!(
+		w["properties"].get("a").is_some(),
+		"the inlined inner properties must survive: {s}"
+	);
+	assert_eq!(
+		w["nullable"], true,
+		"the null branch must become nullable: {s}"
+	);
+}
+
+// A typeless enum ({enum:[...]} with no `type`) is dropped by the enum-on-non-string step
+// (which treats an absent type as non-string) and then retyped as an object, losing the constraint.
+#[test]
+fn gemini_schema_typeless_enum_kept_as_string_enum() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"color": { "enum": ["red", "green"] }
+		}
+	}));
+	let color = &s["properties"]["color"];
+	assert_eq!(
+		color["type"], "string",
+		"a typeless enum must default to a string type, not object: {s}"
+	);
+	assert_eq!(
+		color["enum"][0], "red",
+		"the enum values must be preserved: {s}"
+	);
+}
+
+// A non-string const must be typed by its JSON kind, not forced to `string` (which yields
+// an invalid string-typed numeric/boolean enum). A string const stays a string enum.
+#[test]
+fn gemini_schema_non_string_const_typed_by_value_kind() {
+	let s = response_schema(json!({
+		"type": "object",
+		"additionalProperties": false,
+		"properties": {
+			"i": { "const": 5 },
+			"b": { "const": true },
+			"str": { "const": "x" }
+		}
+	}));
+	assert_eq!(
+		s["properties"]["i"]["type"], "integer",
+		"integer const must be typed integer, not string: {s}"
+	);
+	assert_eq!(
+		s["properties"]["b"]["type"], "boolean",
+		"boolean const must be typed boolean, not string: {s}"
+	);
+	assert_eq!(
+		s["properties"]["str"]["type"], "string",
+		"string const stays string: {s}"
+	);
+	assert_eq!(
+		s["properties"]["str"]["enum"][0], "x",
+		"string const preserved as enum: {s}"
+	);
+}
+
 #[test]
 fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
 	let g = to_gemini(json!({
