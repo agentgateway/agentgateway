@@ -113,7 +113,7 @@ pub(crate) fn create_auth_required_response(
 		.and_then(|u| http::uri::Uri::try_from(u).ok())
 		.and_then(|uri| {
 			let mut parts = uri.into_parts();
-			parts.path_and_query = Some(PathAndQuery::from_static(""));
+			parts.path_and_query = Some(PathAndQuery::from_static("/"));
 			Uri::from_parts(parts).ok()
 		})
 		.and_then(|uri| uri.to_string().strip_suffix("/").map(ToString::to_string))
@@ -422,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn www_authenticate_resource_metadata_preserves_authority_for_root_path() {
-		let req = auth_request("https://example.com/");
+		let req = auth_request("https://example.com/", default_auth());
 
 		assert_eq!(
 			www_authenticate_resource_metadata(&req),
@@ -432,7 +432,7 @@ mod tests {
 
 	#[test]
 	fn www_authenticate_resource_metadata_preserves_authority_when_path_matches_host_prefix() {
-		let req = auth_request("https://example.com/example.com");
+		let req = auth_request("https://example.com/example.com", default_auth());
 
 		assert_eq!(
 			www_authenticate_resource_metadata(&req),
@@ -442,7 +442,7 @@ mod tests {
 
 	#[test]
 	fn www_authenticate_resource_metadata_preserves_authority_for_non_matching_path() {
-		let req = auth_request("https://example.com/sse");
+		let req = auth_request("https://example.com/sse", default_auth());
 
 		assert_eq!(
 			www_authenticate_resource_metadata(&req),
@@ -450,32 +450,73 @@ mod tests {
 		);
 	}
 
-	fn auth_request(uri: &'static str) -> Request {
-		::http::Request::builder()
+	#[test]
+	fn auth_required_response_accepts_configured_resource_with_path() {
+		let req = auth_request(
+			"http://backend.internal/mcp",
+			McpAuthentication {
+				issuer: "https://idp.example.com".to_string(),
+				audiences: Vec::new(),
+				provider: None,
+				resource_metadata: crate::types::agent::ResourceMetadata {
+					extra: std::collections::BTreeMap::from([(
+						"resource".to_string(),
+						serde_json::Value::String(
+							"https://gateway.example.com/base/path?debug=true".to_string(),
+						),
+					)]),
+				},
+				jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+					Vec::new(),
+					crate::http::jwt::Mode::Strict,
+					crate::http::auth::AuthorizationLocation::default(),
+				)),
+				mode: crate::types::agent::McpAuthenticationMode::Strict,
+				client_id: None,
+			},
+		);
+
+		assert_eq!(
+			www_authenticate_resource_metadata(&req),
+			"Bearer resource_metadata=\"https://gateway.example.com/.well-known/oauth-protected-resource/mcp\""
+		);
+	}
+
+	fn auth_request(uri: &'static str, auth: McpAuthentication) -> Request {
+		let mut req = ::http::Request::builder()
 			.uri(uri)
 			.body(Body::empty())
-			.expect("request should build")
+			.expect("request should build");
+		req.extensions_mut().insert(auth);
+		req
+	}
+
+	fn default_auth() -> McpAuthentication {
+		McpAuthentication {
+			issuer: "https://issuer.example.com".to_string(),
+			audiences: vec!["mcp".to_string()],
+			provider: None,
+			resource_metadata: crate::types::agent::ResourceMetadata {
+				extra: Default::default(),
+			},
+			jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+				vec![],
+				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
+			)),
+			mode: crate::types::agent::McpAuthenticationMode::Strict,
+			client_id: None,
+		}
 	}
 
 	fn www_authenticate_resource_metadata(req: &Request) -> String {
 		let err = create_auth_required_response(
 			ProxyError::ProcessingString("test auth failure".to_string()),
 			req,
-			&McpAuthentication {
-				issuer: "https://issuer.example.com".to_string(),
-				audiences: vec!["mcp".to_string()],
-				provider: None,
-				resource_metadata: crate::types::agent::ResourceMetadata {
-					extra: Default::default(),
-				},
-				jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
-					vec![],
-					crate::http::jwt::Mode::Strict,
-					crate::http::auth::AuthorizationLocation::bearer_header(),
-				)),
-				mode: crate::types::agent::McpAuthenticationMode::Strict,
-				client_id: None,
-			},
+			req
+				.extensions()
+				.get::<McpAuthentication>()
+				.expect("auth should be set"),
 		);
 
 		match err {
