@@ -13,7 +13,6 @@ spec:
       aws:
         assumeRole:
           roleArn: arn:aws:iam::123456789012:role/backend
-          stsRegion: us-west-2
 ---
 # Output
 output:
@@ -27,7 +26,6 @@ output:
           aws:
             assumeRole:
               roleArn: arn:aws:iam::123456789012:role/backend
-              stsRegion: us-west-2
             implicit: {}
       key: backend/default/agw:backend-auth:default/test
       name:

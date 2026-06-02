@@ -871,18 +871,6 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		assumeRole = &api.AwsAssumeRole{
 			RoleArn: auth.AssumeRole.RoleArn,
 		}
-		if auth.AssumeRole.SessionName != nil {
-			assumeRole.SessionName = string(*auth.AssumeRole.SessionName)
-		}
-		if auth.AssumeRole.ExternalID != nil {
-			assumeRole.ExternalId = string(*auth.AssumeRole.ExternalID)
-		}
-		if auth.AssumeRole.Duration != nil {
-			assumeRole.Duration = durationpb.New(auth.AssumeRole.Duration.Duration)
-		}
-		if auth.AssumeRole.STSRegion != nil {
-			assumeRole.StsRegion = string(*auth.AssumeRole.STSRegion)
-		}
 	}
 
 	awsAuth := &api.Aws{
@@ -893,6 +881,9 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		AssumeRole:  assumeRole,
 	}
 	if auth.SecretRef != nil && auth.SecretRef.Name != "" {
+		if auth.AssumeRole != nil {
+			errs = append(errs, errors.New("secretRef and assumeRole are mutually exclusive"))
+		}
 		// Get secret using the SecretIndex
 		data, err := ctx.ResolveCredentialRef(auth.SecretRef, namespace)
 		if err != nil {

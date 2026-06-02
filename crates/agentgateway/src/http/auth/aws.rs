@@ -34,9 +34,6 @@ pub enum AwsAuth {
 		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
 		#[serde(skip_serializing_if = "Option::is_none")]
 		service_name: Option<String>,
-		/// Optional AWS STS role to assume before signing requests.
-		#[serde(skip_serializing_if = "Option::is_none")]
-		assume_role: Option<AwsAssumeRole>,
 	},
 	/// Use implicit AWS authentication (environment variables, IAM roles, etc.)
 	#[serde(rename_all = "camelCase")]
@@ -55,23 +52,6 @@ pub enum AwsAuth {
 pub struct AwsAssumeRole {
 	/// AWS IAM role ARN to assume.
 	pub role_arn: String,
-	/// Optional STS role session name.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub session_name: Option<String>,
-	/// Optional STS external ID for cross-account access.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub external_id: Option<String>,
-	/// Optional STS role session duration.
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		with = "serde_dur_option"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	pub duration: Option<Duration>,
-	/// Optional AWS region to use for the STS AssumeRole call.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub sts_region: Option<String>,
 }
 
 impl AwsAuth {
@@ -85,9 +65,8 @@ impl AwsAuth {
 
 	fn assume_role(&self) -> Option<&AwsAssumeRole> {
 		match self {
-			AwsAuth::ExplicitConfig { assume_role, .. } | AwsAuth::Implicit { assume_role, .. } => {
-				assume_role.as_ref()
-			},
+			AwsAuth::ExplicitConfig { .. } => None,
+			AwsAuth::Implicit { assume_role, .. } => assume_role.as_ref(),
 		}
 	}
 }
@@ -194,7 +173,6 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 			session_token,
 			region: _,
 			service_name: _,
-			assume_role: _,
 		} => {
 			// Use explicit credentials
 			let mut builder = Credentials::builder()
@@ -258,19 +236,9 @@ async fn load_assumed_credentials(
 	}
 
 	let config = Box::pin(sdk_config()).await;
-	let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
+	let builder = AssumeRoleProvider::builder(&assume_role.role_arn)
 		.configure(config)
 		.region(Region::new(sts_region));
-
-	if let Some(session_name) = &assume_role.session_name {
-		builder = builder.session_name(session_name);
-	}
-	if let Some(external_id) = &assume_role.external_id {
-		builder = builder.external_id(external_id);
-	}
-	if let Some(duration) = assume_role.duration {
-		builder = builder.session_length(duration);
-	}
 
 	let provider = builder.build_from_provider(source_credentials).await;
 	let creds = provider.provide_credentials().await?;
@@ -279,12 +247,9 @@ async fn load_assumed_credentials(
 }
 
 async fn resolve_sts_region(
-	assume_role: &AwsAssumeRole,
+	_assume_role: &AwsAssumeRole,
 	signing_region: &str,
 ) -> anyhow::Result<String> {
-	if let Some(sts_region) = &assume_role.sts_region {
-		return Ok(sts_region.clone());
-	}
 	if !signing_region.is_empty() {
 		return Ok(signing_region.to_string());
 	}

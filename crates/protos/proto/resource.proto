@@ -361,14 +361,6 @@ message AwsImplicit {}
 message AwsAssumeRole {
   // Role ARN to assume before signing backend requests.
   string role_arn = 1;
-  // Optional role session name. AWS will generate one when unset.
-  string session_name = 2;
-  // Optional external ID for cross-account assume role.
-  string external_id = 3;
-  // Optional role session duration.
-  google.protobuf.Duration duration = 4;
-  // Optional AWS region for the STS AssumeRole call.
-  string sts_region = 5;
 }
 
 // Explicit Azure credentials configuration

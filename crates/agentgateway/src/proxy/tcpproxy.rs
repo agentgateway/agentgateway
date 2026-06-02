@@ -941,7 +941,6 @@ mod tests {
 				region: Some("us-west-2".to_string()),
 				session_token: None,
 				service_name: None,
-				assume_role: None,
 			})),
 			..Default::default()
 		};

@@ -2878,17 +2878,6 @@
                 "string",
                 "null"
               ]
-            },
-            "assumeRole": {
-              "description": "Optional AWS STS role to assume before signing requests.",
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/AwsAssumeRole"
-                },
-                {
-                  "type": "null"
-                }
-              ]
             }
           },
           "additionalProperties": false,
@@ -2930,34 +2919,6 @@
         "roleArn": {
           "description": "AWS IAM role ARN to assume.",
           "type": "string"
-        },
-        "sessionName": {
-          "description": "Optional STS role session name.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "externalId": {
-          "description": "Optional STS external ID for cross-account access.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "duration": {
-          "description": "Optional STS role session duration.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "stsRegion": {
-          "description": "Optional AWS region to use for the STS AssumeRole call.",
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "additionalProperties": false,

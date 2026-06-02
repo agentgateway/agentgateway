@@ -1234,7 +1234,6 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 				region: Some("us-east-1".to_string()),
 				session_token: None,
 				service_name: None,
-				assume_role: None,
 			},
 		))],
 	};

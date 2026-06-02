@@ -1,6 +1,5 @@
 use secrecy::SecretString;
 use serde_json::Map;
-use std::time::Duration;
 
 use super::*;
 use crate::http::jwt::Claims;
@@ -9,36 +8,6 @@ use crate::test_helpers::proxymock::setup_proxy_test;
 
 #[test]
 fn test_aws_auth_deserializes_assume_role() {
-	let explicit: AwsAuth = serde_json::from_value(serde_json::json!({
-		"accessKeyId": "AKIAIOSFODNN7EXAMPLE",
-		"secretAccessKey": "secret",
-		"region": "us-west-2",
-		"assumeRole": {
-			"roleArn": "arn:aws:iam::123456789012:role/backend",
-			"sessionName": "agentgateway",
-			"externalId": "external",
-			"duration": "1h",
-			"stsRegion": "us-east-1"
-		}
-	}))
-	.expect("explicit AWS assume role auth should deserialize");
-
-	let AwsAuth::ExplicitConfig {
-		assume_role: Some(assume_role),
-		..
-	} = explicit
-	else {
-		panic!("expected explicit AWS auth with assume role");
-	};
-	assert_eq!(
-		assume_role.role_arn,
-		"arn:aws:iam::123456789012:role/backend"
-	);
-	assert_eq!(assume_role.session_name.as_deref(), Some("agentgateway"));
-	assert_eq!(assume_role.external_id.as_deref(), Some("external"));
-	assert_eq!(assume_role.duration, Some(Duration::from_secs(3600)));
-	assert_eq!(assume_role.sts_region.as_deref(), Some("us-east-1"));
-
 	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
 		"assumeRole": {
 			"roleArn": "arn:aws:iam::123456789012:role/backend"
@@ -278,7 +247,6 @@ async fn test_aws_sign_request_explicit_region() {
 		region: Some("us-west-2".to_string()),
 		session_token: None,
 		service_name: None,
-		assume_role: None,
 	};
 
 	// No default region in request extensions.
@@ -336,7 +304,6 @@ async fn test_aws_sign_requestallback() {
 		region: None, // No region in config
 		session_token: None,
 		service_name: None,
-		assume_role: None,
 	};
 
 	// Insert default AwsRegion into request extensions
@@ -370,7 +337,6 @@ async fn test_aws_sign_request_no_region_error() {
 		region: None, // No region in config
 		session_token: None,
 		service_name: None,
-		assume_role: None,
 	};
 
 	// No default region in request extensions.

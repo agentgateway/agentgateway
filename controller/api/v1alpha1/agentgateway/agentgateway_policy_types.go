@@ -1308,6 +1308,8 @@ type GcpAuth struct {
 }
 
 // AwsAuth specifies the authentication method to use for the backend.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
 	// `secretRef` references a credential source, defaulting to a Kubernetes
 	// `Secret`, containing the AWS credentials. When using the default Secret
@@ -1317,8 +1319,7 @@ type AwsAuth struct {
 	SecretRef shared.LocalSecretObjectRef `json:"secretRef"`
 
 	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
-	// When `secretRef` is set, those static credentials are used as the source
-	// credentials for STS; otherwise ambient AWS credentials are used.
+	// Ambient AWS credentials are used as the source credentials for STS.
 	//
 	// +optional
 	AssumeRole *AwsAssumeRole `json:"assumeRole,omitempty"`
@@ -1336,28 +1337,9 @@ type AwsAssumeRole struct {
 	// `roleArn` is the AWS IAM role ARN to assume.
 	//
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
 	// +required
 	RoleArn string `json:"roleArn"`
-
-	// `sessionName` is the optional STS role session name.
-	//
-	// +optional
-	SessionName *ShortString `json:"sessionName,omitempty"`
-
-	// `externalId` is the optional STS external ID for cross-account access.
-	//
-	// +optional
-	ExternalID *ShortString `json:"externalId,omitempty"`
-
-	// `duration` is the optional STS role session duration.
-	//
-	// +optional
-	Duration *metav1.Duration `json:"duration,omitempty"`
-
-	// `stsRegion` is the optional AWS region to use for the STS AssumeRole call.
-	//
-	// +optional
-	STSRegion *ShortString `json:"stsRegion,omitempty"`
 }
 
 type AzureAuth struct {

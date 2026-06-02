@@ -839,35 +839,25 @@ fn backend_auth_from_proto(
 			};
 			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
 				role_arn: assume_role.role_arn,
-				session_name: if assume_role.session_name.is_empty() {
-					None
-				} else {
-					Some(assume_role.session_name)
-				},
-				external_id: if assume_role.external_id.is_empty() {
-					None
-				} else {
-					Some(assume_role.external_id)
-				},
-				duration: assume_role.duration.map(convert_duration),
-				sts_region: if assume_role.sts_region.is_empty() {
-					None
-				} else {
-					Some(assume_role.sts_region)
-				},
 			});
 			let aws_auth = match a.kind {
-				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
-					access_key_id: config.access_key_id.into(),
-					secret_access_key: config.secret_access_key.into(),
-					region: if config.region.is_empty() {
-						None
-					} else {
-						Some(config.region.clone())
-					},
-					session_token: config.session_token.map(|token| token.into()),
-					service_name,
-					assume_role,
+				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
+					if assume_role.is_some() {
+						return Err(ProtoError::Generic(
+							"explicit AWS credentials cannot be combined with assumeRole".to_string(),
+						));
+					}
+					AwsAuth::ExplicitConfig {
+						access_key_id: config.access_key_id.into(),
+						secret_access_key: config.secret_access_key.into(),
+						region: if config.region.is_empty() {
+							None
+						} else {
+							Some(config.region.clone())
+						},
+						session_token: config.session_token.map(|token| token.into()),
+						service_name,
+					}
 				},
 				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
 					service_name,
