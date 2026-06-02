@@ -562,9 +562,9 @@ func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
 
 func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
 	var errs []error
-	translatedBuffering := &api.Buffer{}
-	translatedBuffering.Request = translateBufferBody(buffer.Request)
-	translatedBuffering.Response = translateBufferBody(buffer.Response)
+	translatedBuffer := &api.Buffer{}
+	translatedBuffer.Request = translateBufferBody(buffer.Request)
+	translatedBuffer.Response = translateBufferBody(buffer.Response)
 
 	bufferPolicy := &api.Policy{
 		Key:  basePolicyName + bufferSuffix,
@@ -572,7 +572,7 @@ func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, pol
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Buffer{
-					Buffer: translatedBuffering,
+					Buffer: translatedBuffer,
 				},
 			},
 		},
