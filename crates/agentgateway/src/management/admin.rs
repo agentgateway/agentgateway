@@ -115,7 +115,7 @@ impl Service {
 		.map(|s| Service { s })
 	}
 
-	pub fn address(&self) -> SocketAddr {
+	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 

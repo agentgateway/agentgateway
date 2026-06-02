@@ -3,7 +3,11 @@
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt;
+#[cfg(unix)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -63,11 +67,11 @@ enum Listener {
 }
 
 impl Listener {
-	fn tcp_addr(&self) -> SocketAddr {
+	fn tcp_addr(&self) -> Option<SocketAddr> {
 		match self {
-			Listener::Tcp(listener) => listener.local_addr().expect("local address must be ready"),
+			Listener::Tcp(listener) => listener.local_addr().ok(),
 			#[cfg(unix)]
-			Listener::Unix { .. } => panic!("Unix listener does not have a TCP address"),
+			Listener::Unix { .. } => None,
 		}
 	}
 
@@ -100,8 +104,12 @@ async fn bind_unix(path: PathBuf) -> anyhow::Result<Listener> {
 
 #[cfg(unix)]
 fn remove_stale_unix_socket(path: &Path) -> anyhow::Result<()> {
-	match std::fs::remove_file(path) {
-		Ok(()) => Ok(()),
+	match std::fs::symlink_metadata(path) {
+		Ok(metadata) if metadata.file_type().is_socket() => {
+			std::fs::remove_file(path)?;
+			Ok(())
+		},
+		Ok(_) => anyhow::bail!("refusing to remove non-socket file at {}", path.display()),
 		Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
 		Err(err) => Err(err.into()),
 	}
@@ -158,12 +166,8 @@ impl<S> Server<S> {
 		self
 	}
 
-	pub fn address(&self) -> SocketAddr {
-		self
-			.binds
-			.first()
-			.expect("must have at least one address")
-			.tcp_addr()
+	pub fn address(&self) -> Option<SocketAddr> {
+		self.binds.first().and_then(Listener::tcp_addr)
 	}
 
 	pub fn state_mut(&mut self) -> &mut S {
@@ -200,17 +204,17 @@ impl<S> Server<S> {
 				let stream = listener_stream(bind, allow_proxy_protocol);
 				let mut stream = stream.take_until(Box::pin(drain_stream.wait_for_drain()));
 				while let Some(socket) = stream.next().await {
+					let socket = match socket {
+						Ok(socket) => socket,
+						Err(err) => {
+							tracing::warn!(%err, "management connection setup failed");
+							continue;
+						},
+					};
 					let drain = drain_connections.clone();
 					let f = f.clone();
 					let state = state.clone();
 					tokio::spawn(async move {
-						let socket = match socket {
-							Ok(socket) => socket,
-							Err(err) => {
-								tracing::warn!(%err, "management connection setup failed");
-								return Ok(());
-							},
-						};
 						let serve = http1_server()
 							.half_close(true)
 							.header_read_timeout(Duration::from_secs(2))

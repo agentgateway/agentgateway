@@ -644,7 +644,8 @@ impl ProxyInputs {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-// Address is a wrapper around either a normal SocketAddr or "bind to localhost on IPv4 and IPv6"
+// Address is a management listener address. It may bind TCP, bind localhost on
+// both IPv4 and IPv6, bind a Unix domain socket, or disable the listener.
 pub enum Address {
 	// Do not bind this listener.
 	Off,
@@ -696,6 +697,9 @@ impl Address {
 		if s == "off" {
 			Ok(Address::Off)
 		} else if let Some(path) = s.strip_prefix("unix:") {
+			if path.trim().is_empty() {
+				anyhow::bail!("unix socket path must not be empty")
+			}
 			Ok(Address::UnixSocket(PathBuf::from(path)))
 		} else if s.starts_with("localhost:") {
 			let (_host, ports) = s.split_once(':').expect("already checked it has a :");
