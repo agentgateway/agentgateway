@@ -1,3 +1,49 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: my-service
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: test-grpc-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: my-service
+          port: 81
+---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -5,8 +51,8 @@ metadata:
   namespace: default
 spec:
   targetRefs:
-    - kind: Gateway
-      name: test
+    - kind: HTTPRoute
+      name: test-route
       group: gateway.networking.k8s.io
   traffic:
     buffer:
@@ -14,21 +60,56 @@ spec:
       response:
         maxBytes: 5Mi
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-grpc
+  namespace: default
+spec:
+  targetRefs:
+    - kind: GRPCRoute
+      name: test-grpc-route
+      group: gateway.networking.k8s.io
+  traffic:
+    buffer:
+      request: 
+        maxBytes: 5Mi
+---
 # Output
 output:
 - gateway:
-    Name: test
+    Name: test-gateway
     Namespace: default
   resource:
     policy:
-      key: traffic/default/agw:buffer:default/test
+      key: traffic/default/agw-grpc:buffer:default/test-grpc-route
+      name:
+        kind: AgentgatewayPolicy
+        name: agw-grpc
+        namespace: default
+      target:
+        route:
+          kind: GRPCRoute
+          name: test-grpc-route
+          namespace: default
+      traffic:
+        buffer:
+          request:
+            maxBytes: 5242880
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:buffer:default/test-route
       name:
         kind: AgentgatewayPolicy
         name: agw
         namespace: default
       target:
-        gateway:
-          name: test
+        route:
+          kind: HTTPRoute
+          name: test-route
           namespace: default
       traffic:
         buffer:
@@ -47,7 +128,7 @@ status:
     - ancestorRef:
         group: gateway.networking.k8s.io
         kind: Gateway
-        name: test
+        name: test-gateway
         namespace: default
       conditions:
       - lastTransitionTime: fake
@@ -61,3 +142,29 @@ status:
         status: "True"
         type: Attached
       controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw-grpc
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+

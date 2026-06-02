@@ -556,7 +556,6 @@ func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
 		return &api.BufferBody{}
 	}
 
-
 	return nil
 }
 

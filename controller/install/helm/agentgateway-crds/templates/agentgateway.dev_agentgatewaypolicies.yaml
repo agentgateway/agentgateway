@@ -9986,6 +9986,14 @@ spec:
               rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase)
                 && self.traffic.phase == ''PreRouting'' ? self.targetSelectors.all(t,
                 t.kind in [''Gateway'', ''ListenerSet'']) : true'
+            - message: buffer policy can only be attached to httproutes and grpcroutes
+              rule: 'has(self.targetRefs) && has(self.traffic) && has(self.traffic.buffer)
+                ? self.targetRefs.all(t, t.kind in [''HTTPRoute'', ''GRPCRoute''])
+                : true'
+            - message: buffer policy can only be attached to httproutes and grpcroutes
+              rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.buffer)
+                ? self.targetSelectors.all(t, t.kind in [''HTTPRoute'', ''GRPCRoute''])
+                : true'
             - message: exactly one of the fields in [targetRefs targetSelectors] must
                 be set
               rule: '[has(self.targetRefs),has(self.targetSelectors)].filter(x,x==true).size()
