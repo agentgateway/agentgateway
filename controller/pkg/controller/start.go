@@ -77,9 +77,9 @@ type StartConfig struct {
 	AgwCollections *agwplugins.AgwCollections
 	Resolver       remotehttp.Resolver
 	JWKSLookup     jwks.Lookup
-	// CredentialResolver adds custom credential backends while retaining the
-	// built-in Secret resolver fallback.
-	CredentialResolver kubeutils.CredentialResolver
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	KrtOptions                     krtutil.KrtOptions
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
@@ -178,8 +178,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	return cb, nil
 }
 
-// Plugins registers built-in policy plugins with shared credential resolver
-// extensions.
+// Plugins registers built-in policy plugins with a shared credential resolver.
 func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) []agwplugins.AgwPlugin {
 	return []agwplugins.AgwPlugin{
 		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup, credentialResolver),
@@ -192,7 +191,11 @@ func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksL
 
 func agwPluginFactory(cfg StartConfig) func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
 	return func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
-		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup, cfg.CredentialResolver)
+		credentialResolverFactory := cfg.CredentialResolverFactory
+		if credentialResolverFactory == nil {
+			credentialResolverFactory = agwplugins.DefaultCredentialResolverFactory
+		}
+		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup, credentialResolverFactory(agw))
 		if cfg.ExtraAgwPlugins != nil {
 			plugins = append(plugins, cfg.ExtraAgwPlugins(ctx, agw)...)
 		}

@@ -32,7 +32,7 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	ctx := simpleAuthPolicyCtx(
 		&AgwCollections{
 			Secrets: secrets,
-		}, nil)
+		}, kubeutils.NewSecretCredentialResolver(secrets))
 
 	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{}, "default")
 	if err != nil {
@@ -58,7 +58,7 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"))
 	ctx := simpleAuthPolicyCtx(&AgwCollections{
 		Secrets: secrets,
-	}, nil)
+	}, kubeutils.NewSecretCredentialResolver(secrets))
 
 	_, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
 		SecretRef: &shared.LocalSecretObjectRef{
@@ -111,9 +111,15 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 		},
 	}
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver"))
-	ctx := simpleAuthPolicyCtx(&AgwCollections{
-		Secrets: secrets,
-	}, configMapCredentialResolver{})
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		},
+		kubeutils.NewChainedCredentialResolver(
+			configMapCredentialResolver{},
+			kubeutils.NewSecretCredentialResolver(secrets),
+		),
+	)
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
 		SecretRef: &shared.LocalSecretObjectRef{
@@ -126,6 +132,32 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 	}
 	if got := policy.GetTraffic().GetBasicAuth().HtpasswdContent; got != "bob:hash" {
 		t.Fatalf("basic auth htpasswd content = %q, want %q", got, "bob:hash")
+	}
+}
+
+func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "basic-auth",
+		},
+		Data: map[string][]byte{
+			".htaccess": []byte("bob:hash"),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret"))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, configMapCredentialResolver{})
+
+	_, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
+		SecretRef: &shared.LocalSecretObjectRef{
+			Name: "basic-auth",
+			Kind: "Secret",
+		},
+	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
+	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
+		t.Fatalf("processBasicAuthenticationPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
 	}
 }
 

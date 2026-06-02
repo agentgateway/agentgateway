@@ -113,17 +113,6 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 	}
 }
 
-// defaultCredentialResolver composes an optional custom override ahead of the
-// built-in Secret resolver, so name-only Secret refs keep resolving when a
-// custom resolver is installed.
-func defaultCredentialResolver(agw *AgwCollections, override kubeutils.CredentialResolver) kubeutils.CredentialResolver {
-	resolvers := []kubeutils.CredentialResolver{override}
-	if agw != nil {
-		resolvers = append(resolvers, kubeutils.NewSecretCredentialResolver(agw.Secrets))
-	}
-	return kubeutils.NewChainedCredentialResolver(resolvers...)
-}
-
 type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
@@ -131,9 +120,8 @@ type PolicyCtx struct {
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
 
-	// resolvedCredentialResolver is the composed chain (custom override +
-	// built-in Secret resolver); always build a PolicyCtx via NewPolicyCtx.
-	resolvedCredentialResolver kubeutils.CredentialResolver
+	// credentialResolver is the complete credential resolver chain.
+	credentialResolver kubeutils.CredentialResolver
 }
 
 // NewPolicyCtx creates a policy translation context
@@ -146,23 +134,21 @@ func NewPolicyCtx(
 	credentialResolver kubeutils.CredentialResolver,
 ) PolicyCtx {
 	return PolicyCtx{
-		Krt:         krtctx,
-		Collections: collections,
-		References:  references,
-		Resolver:    resolver,
-		JWKSLookup:  jwksLookup,
-
-		resolvedCredentialResolver: defaultCredentialResolver(collections, credentialResolver),
+		Krt:                krtctx,
+		Collections:        collections,
+		References:         references,
+		Resolver:           resolver,
+		JWKSLookup:         jwksLookup,
+		credentialResolver: credentialResolver,
 	}
 }
 
-// ResolveCredentialRef applies the context's credential resolvers with the
-// built-in Secret fallback.
+// ResolveCredentialRef applies the context's credential resolver chain.
 func (ctx PolicyCtx) ResolveCredentialRef(ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
-	if ctx.resolvedCredentialResolver == nil {
-		return nil, errors.New("credential resolver is not configured")
+	if ctx.credentialResolver == nil {
+		return nil, errors.New("secret credential resolver is not configured")
 	}
-	return ctx.resolvedCredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
+	return ctx.credentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
 type ResolvedTarget struct {

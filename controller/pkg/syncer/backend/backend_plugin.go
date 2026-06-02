@@ -30,8 +30,7 @@ import (
 
 var logger = logging.New("agentgateway/backend")
 
-// NewBackendPlugin creates an AgentgatewayBackend plugin. Credential resolvers
-// are consulted before the built-in Secret fallback.
+// NewBackendPlugin creates a new plugin for AgentgatewayBackends
 func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{

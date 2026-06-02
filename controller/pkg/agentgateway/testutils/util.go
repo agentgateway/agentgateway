@@ -195,7 +195,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
-	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup, nil)
+	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup, plugins.DefaultCredentialResolverFactory(agwCollections))
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }
@@ -204,7 +204,7 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	collections := BuildMockCollection(t, inputs)
 	resolver := BuildRemoteHTTPResolver(collections)
 	jwksLookup := jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver))
-	return plugins.NewPolicyCtx(krt.TestingDummyContext{}, collections, plugins.ReferenceIndex{}, resolver, jwksLookup, nil)
+	return plugins.NewPolicyCtx(krt.TestingDummyContext{}, collections, plugins.ReferenceIndex{}, resolver, jwksLookup, plugins.DefaultCredentialResolverFactory(collections))
 }
 
 func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {

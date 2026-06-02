@@ -71,9 +71,9 @@ type Options struct {
 	GlobalSettings              *apisettings.Settings
 	LeaderElectionID            string
 	ExtraStatusHandlers         map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
-	// CredentialResolver adds custom credential backends while retaining the
-	// built-in Secret resolver fallback.
-	CredentialResolver kubeutils.CredentialResolver
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	AgentGatewaySyncerOptions []syncer.AgentgatewaySyncerOption
 
@@ -363,7 +363,7 @@ func (s *setup) buildSyncer(
 		AgwCollections:                 agwCollections,
 		Resolver:                       resolver,
 		JWKSLookup:                     jwksLookup,
-		CredentialResolver:             s.CredentialResolver,
+		CredentialResolverFactory:      s.CredentialResolverFactory,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,
