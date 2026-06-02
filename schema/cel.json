@@ -154,6 +154,12 @@
         "object",
         "null"
       ],
+      "properties": {
+        "rawToken": {
+          "description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
+          "type": "string"
+        }
+      },
       "additionalProperties": true
     },
     "apiKey": {
@@ -164,6 +170,7 @@
       ],
       "properties": {
         "key": {
+          "description": "The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.",
           "type": "string"
         }
       },
