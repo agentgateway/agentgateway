@@ -670,7 +670,7 @@ pub mod from_messages {
 					json_schema: completions::ResponseFormatJsonSchema {
 						description: None,
 						name: "structured_output".to_string(),
-						schema: Some(schema.clone()),
+						schema: schema.clone(),
 						strict: None,
 					},
 				},

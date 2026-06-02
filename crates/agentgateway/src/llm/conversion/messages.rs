@@ -359,9 +359,11 @@ pub mod from_completions {
 		};
 
 		let response_format = match req.response_format {
-			Some(completions::ResponseFormat::JsonSchema { json_schema }) => json_schema
-				.schema
-				.map(|schema| messages::OutputFormat::JsonSchema { schema }),
+			Some(completions::ResponseFormat::JsonSchema { json_schema }) => {
+				Some(messages::OutputFormat::JsonSchema {
+					schema: json_schema.schema,
+				})
+			},
 			Some(completions::ResponseFormat::JsonObject) => Some(messages::OutputFormat::JsonSchema {
 				schema: serde_json::json!({
 					"type": "object",
