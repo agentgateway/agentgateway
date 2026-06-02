@@ -121,6 +121,19 @@ spec:
       keepalive:
         interval: 100ms
 ---
+_err: 'at least one of the fields in [request response] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    buffer: {}
+---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

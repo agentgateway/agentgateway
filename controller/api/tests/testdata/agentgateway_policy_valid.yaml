@@ -861,15 +861,60 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: buffering-request-body
+  name: buffer-request-and-response
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: dummy
   traffic:
-    buffering:
-      bufferRequestBody: true
+    buffer:
+      request:
+        maxBytes: 10Mi
+      response:
+        maxBytes: 5Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-request-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    buffer:
+      request:
+        maxBytes: 10Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    buffer:
+      response:
+        maxBytes: 5Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    buffer:
+      request: {}
+      response: {}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

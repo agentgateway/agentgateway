@@ -758,7 +758,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication;buffering,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication and buffering"
+// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication;buffer,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication and buffer"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is `PreRouting`,
 	// the `targetRef` must be a `Gateway` or a `Listener`. `PreRouting` is
@@ -862,9 +862,9 @@ type Traffic struct {
 	// +optional
 	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
 
-	// `buffering` defines the policy for buffering requests and responses.
+	// `buffer` defines the policy for buffer requests and responses.
 	// +optional
-	Buffering *Buffering `json:"buffering,omitempty"`
+	Buffer *Buffer `json:"buffer,omitempty"`
 }
 
 // DirectResponse defines the policy to send a direct response to the client.
@@ -1260,11 +1260,21 @@ type APIKeyAuthentication struct {
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
-type Buffering struct {
-	// `bufferRequestBody` controls whether the request body should be buffered.
+type BufferBody struct {
+	// `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
 	// +optional
-	// +kubebuilder:default=false
-	RequestBodyBuffering *bool `json:"bufferRequestBody,omitempty"`
+	// if unset, defaults to 2Mi
+	MaxBytes *ByteSize `json:"maxBytes,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneOf=request;response
+type Buffer struct {
+	// `request` configures buffering of the request body.
+	// +optional
+	Request *BufferBody `json:"request,omitempty"`
+	// `response` configures buffering of the response body.
+	// +optional
+	Response *BufferBody `json:"response,omitempty"`
 }
 
 type SecretSelector struct {

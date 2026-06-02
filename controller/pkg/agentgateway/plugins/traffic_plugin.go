@@ -57,7 +57,7 @@ const (
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
-	bufferingSuffix                = ":buffering"
+	bufferSuffix                   = ":buffer"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -528,8 +528,8 @@ func translateTrafficPolicyToAgw(
 		))
 	}
 
-	if traffic.Buffering != nil {
-		appendPolicy("buffering")(processBufferingPolicy(traffic.Buffering, basePolicyName, policyName))
+	if traffic.Buffer != nil {
+		appendPolicy("buffer")(processBufferPolicy(traffic.Buffer, basePolicyName, policyName))
 	}
 
 	if traffic.JWTAuthentication != nil {
@@ -546,34 +546,43 @@ func translateTrafficPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
-func processBufferingPolicy(buffering *agentgateway.Buffering, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
-	var errs []error
-	translatedBuffering := &api.Buffering{}
-
-	if buffering.RequestBodyBuffering != nil {
-		translatedBuffering.RequestBodyBuffering = *buffering.RequestBodyBuffering
-	} else {
-		// Default to false if not specified
-		translatedBuffering.RequestBodyBuffering = false
+func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
+	if b != nil {
+		if v := b.MaxBytes; v != nil {
+			return &api.BufferBody{
+				MaxBytes: quantityUint32(v),
+			}
+		}
+		return &api.BufferBody{}
 	}
 
-	bufferingPolicy := &api.Policy{
-		Key:  basePolicyName + bufferingSuffix,
+
+	return nil
+}
+
+func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
+	var errs []error
+	translatedBuffering := &api.Buffer{}
+	translatedBuffering.Request = translateBufferBody(buffer.Request)
+	translatedBuffering.Response = translateBufferBody(buffer.Response)
+
+	bufferPolicy := &api.Policy{
+		Key:  basePolicyName + bufferSuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Buffering{
-					Buffering: translatedBuffering,
+				Kind: &api.TrafficPolicySpec_Buffer{
+					Buffer: translatedBuffering,
 				},
 			},
 		},
 	}
 
-	logger.Debug("generated Buffering policy",
+	logger.Debug("generated Buffer policy",
 		"policy", basePolicyName,
-		"agentgateway_policy", bufferingPolicy.Name)
+		"agentgateway_policy", bufferPolicy.Name)
 
-	return bufferingPolicy, errors.Join(errs...)
+	return bufferPolicy, errors.Join(errs...)
 }
 
 func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {

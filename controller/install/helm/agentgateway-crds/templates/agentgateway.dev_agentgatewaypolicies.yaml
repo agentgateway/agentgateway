@@ -6786,16 +6786,58 @@ spec:
                         be set
                       rule: '[has(self.users),has(self.secretRef)].filter(x,x==true).size()
                         == 1'
-                  buffering:
-                    description: '`buffering` defines the policy for buffering requests
+                  buffer:
+                    description: '`buffer` defines the policy for buffer requests
                       and responses.'
                     properties:
-                      bufferRequestBody:
-                        default: false
-                        description: '`bufferRequestBody` controls whether the request
-                          body should be buffered.'
-                        type: boolean
+                      request:
+                        description: '`request` configures buffering of the request
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to 2Mi
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
+                      response:
+                        description: '`response` configures buffering of the response
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to 2Mi
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request response] must
+                        be set
+                      rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                        >= 1'
                   cors:
                     description: cors specifies the CORS configuration for the policy.
                     properties:
@@ -9891,7 +9933,7 @@ spec:
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
                     extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication
-                    and buffering
+                    and buffer
                   rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
