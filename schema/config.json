@@ -166,21 +166,21 @@
           ]
         },
         "adminAddr": {
-          "description": "Admin UI address in the format \"ip:port\"",
+          "description": "Admin UI address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "statsAddr": {
-          "description": "Stats/metrics server address in the format \"ip:port\"",
+          "description": "Stats/metrics server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "readinessAddr": {
-          "description": "Readiness probe server address in the format \"ip:port\"",
+          "description": "Readiness probe server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"

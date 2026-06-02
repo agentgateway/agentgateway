@@ -31,7 +31,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let proxy_task = ready.register_task("agentgateway");
 
 	let readiness_server = crate::management::readiness_server::Server::new(
-		config.readiness_addr,
+		config.readiness_addr.clone(),
 		drain_rx.clone(),
 		ready.clone(),
 	)
@@ -142,10 +142,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	admin_server.spawn();
 
 	// Create and start the metrics server.
-	let metrics_server =
-		crate::management::metrics_server::Server::new(config.stats_addr, drain_rx.clone(), registry)
-			.await
-			.context("stats server starts")?;
+	let metrics_server = crate::management::metrics_server::Server::new(
+		config.stats_addr.clone(),
+		drain_rx.clone(),
+		registry,
+	)
+	.await
+	.context("stats server starts")?;
 	// Run the metrics sever in the current tokio worker pool.
 	metrics_server.spawn();
 	Ok(Bound {

@@ -3,15 +3,18 @@
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use agent_core::drain::DrainWatcher;
-use futures_util::TryFutureExt;
+use futures_util::{StreamExt, TryFutureExt};
 use hyper::Request;
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioTimer;
 use tokio::net::TcpListener;
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tracing::info;
 
 use crate::http::{Body, Response};
@@ -44,10 +47,82 @@ pub fn plaintext_response(code: hyper::StatusCode, body: String) -> Response {
 /// * Draining
 pub struct Server<S> {
 	name: String,
-	binds: Vec<TcpListener>,
+	binds: Vec<Listener>,
 	drain_rx: DrainWatcher,
 	state: S,
 	allow_proxy_protocol: bool,
+}
+
+enum Listener {
+	Tcp(TcpListener),
+	#[cfg(unix)]
+	Unix {
+		listener: UnixListener,
+		path: PathBuf,
+	},
+}
+
+impl Listener {
+	fn tcp_addr(&self) -> SocketAddr {
+		match self {
+			Listener::Tcp(listener) => listener.local_addr().expect("local address must be ready"),
+			#[cfg(unix)]
+			Listener::Unix { .. } => panic!("Unix listener does not have a TCP address"),
+		}
+	}
+
+	fn address(&self) -> String {
+		match self {
+			Listener::Tcp(listener) => listener
+				.local_addr()
+				.map(|addr| addr.to_string())
+				.unwrap_or_else(|_| "<unknown>".to_string()),
+			#[cfg(unix)]
+			Listener::Unix { path, .. } => format!("unix:{}", path.display()),
+		}
+	}
+}
+
+#[cfg(unix)]
+async fn bind_unix(path: PathBuf) -> anyhow::Result<Listener> {
+	remove_stale_unix_socket(&path)?;
+	let listener = UnixListener::bind(&path)?;
+	Ok(Listener::Unix { listener, path })
+}
+
+#[cfg(not(unix))]
+async fn bind_unix(path: PathBuf) -> anyhow::Result<Listener> {
+	anyhow::bail!(
+		"Unix domain sockets are not supported on this platform: {}",
+		path.display()
+	)
+}
+
+#[cfg(unix)]
+fn remove_stale_unix_socket(path: &Path) -> anyhow::Result<()> {
+	match std::fs::remove_file(path) {
+		Ok(()) => Ok(()),
+		Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+		Err(err) => Err(err.into()),
+	}
+}
+
+fn listener_stream(
+	listener: Listener,
+	allow_proxy_protocol: bool,
+) -> futures_util::stream::BoxStream<'static, anyhow::Result<Socket>> {
+	match listener {
+		Listener::Tcp(listener) => tokio_stream::wrappers::TcpListenerStream::new(listener)
+			.then(move |socket| async move {
+				let socket = socket?;
+				prepare_socket(socket, allow_proxy_protocol).await
+			})
+			.boxed(),
+		#[cfg(unix)]
+		Listener::Unix { listener, .. } => tokio_stream::wrappers::UnixListenerStream::new(listener)
+			.map(|socket| Ok(Socket::from_unix(socket?)?))
+			.boxed(),
+	}
 }
 
 impl<S> Server<S> {
@@ -58,8 +133,16 @@ impl<S> Server<S> {
 		s: S,
 	) -> anyhow::Result<Self> {
 		let mut binds = vec![];
-		for addr in addrs.into_iter() {
-			binds.push(TcpListener::bind(&addr).await?)
+		match addrs {
+			crate::Address::Off => {},
+			crate::Address::UnixSocket(path) => {
+				binds.push(bind_unix(path).await?);
+			},
+			addrs => {
+				for addr in addrs.into_iter() {
+					binds.push(Listener::Tcp(TcpListener::bind(&addr).await?))
+				}
+			},
 		}
 		Ok(Server {
 			name: name.to_string(),
@@ -80,8 +163,7 @@ impl<S> Server<S> {
 			.binds
 			.first()
 			.expect("must have at least one address")
-			.local_addr()
-			.expect("local address must be ready")
+			.tcp_addr()
 	}
 
 	pub fn state_mut(&mut self) -> &mut S {
@@ -94,32 +176,35 @@ impl<S> Server<S> {
 		F: Fn(Arc<S>, Request<hyper::body::Incoming>) -> R + Send + Sync + 'static,
 		R: Future<Output = Result<crate::http::Response, anyhow::Error>> + Send + 'static,
 	{
-		use futures_util::StreamExt as OtherStreamExt;
-		let address = self.address();
+		if self.binds.is_empty() {
+			info!(component = self.name, "listener disabled");
+			return;
+		}
 		let drain = self.drain_rx;
 		let state = Arc::new(self.state);
 		let f = Arc::new(f);
 		let allow_proxy_protocol = self.allow_proxy_protocol;
-		info!(
-				%address,
-				component=self.name,
-				"listener established",
-		);
 		for bind in self.binds {
+			let address = bind.address();
+			info!(
+					%address,
+					component=self.name,
+					"listener established",
+			);
 			let drain_stream = drain.clone();
 			let drain_connections = drain.clone();
 			let state = state.clone();
 			let name = self.name.clone();
 			let f = f.clone();
 			tokio::spawn(async move {
-				let stream = tokio_stream::wrappers::TcpListenerStream::new(bind);
+				let stream = listener_stream(bind, allow_proxy_protocol);
 				let mut stream = stream.take_until(Box::pin(drain_stream.wait_for_drain()));
-				while let Some(Ok(socket)) = stream.next().await {
+				while let Some(socket) = stream.next().await {
 					let drain = drain_connections.clone();
 					let f = f.clone();
 					let state = state.clone();
 					tokio::spawn(async move {
-						let socket = match prepare_socket(socket, allow_proxy_protocol).await {
+						let socket = match socket {
 							Ok(socket) => socket,
 							Err(err) => {
 								tracing::warn!(%err, "management connection setup failed");

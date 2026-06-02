@@ -100,7 +100,7 @@ impl Service {
 	) -> anyhow::Result<Self> {
 		Server::<State>::bind(
 			"admin",
-			config.admin_addr,
+			config.admin_addr.clone(),
 			drain_rx,
 			State {
 				config,
