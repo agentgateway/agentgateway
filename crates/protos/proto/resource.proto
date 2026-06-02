@@ -466,8 +466,13 @@ message DirectResponse {
   repeated ExpressionHeader headers = 4;
 }
 
-message Buffering {
-  bool requestBodyBuffering = 1;
+message BufferBody {
+  optional uint32 max_bytes = 1;
+}
+
+message Buffer {
+  optional BufferBody request = 1;
+  optional BufferBody response = 2;
 }
 
 
@@ -1044,7 +1049,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
-    Buffering buffering = 22;
+    Buffer buffer = 22;
   }
 }
 

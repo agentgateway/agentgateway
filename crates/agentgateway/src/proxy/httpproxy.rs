@@ -20,6 +20,7 @@ use types::discovery::*;
 use crate::cel::{BackendContext, RequestTime};
 use crate::client::{ApplicationTransport, HboneHeaders, HboneSourceRole, Transport};
 use crate::http::backendtls::BackendTLS;
+use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
@@ -173,9 +174,9 @@ async fn apply_request_policies(
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
 		.await?;
 
-	pol
-		.buffering
-		.apply_without_response("buffering", c, l, req, rp.headers())
+	rp.buffer = pol
+		.buffer
+		.apply("buffer", c, l, req, rp.headers())
 		.await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
@@ -3276,6 +3277,7 @@ struct ResponsePolicies {
 	timeout: Option<http::timeout::Policy>,
 	route_response_header: ResponsePolicy<filters::HeaderModifier>,
 	backend_response_header: ResponsePolicy<filters::HeaderModifier>,
+	buffer: ResponsePolicy<Buffer>,
 	transformation: ResponsePolicy<Transformation>,
 	backend_transformation: ResponsePolicy<Transformation>,
 	gateway_transformation: ResponsePolicy<Transformation>,
@@ -3320,6 +3322,10 @@ impl ResponsePolicies {
 		self
 			.backend_response_header
 			.apply("backend response header modifier", l, resp, rh)
+			.await?;
+		self
+			.buffer
+			.apply("buffer", l, resp, rh)
 			.await?;
 		self
 			.transformation

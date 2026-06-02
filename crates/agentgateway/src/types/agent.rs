@@ -2330,7 +2330,7 @@ pub enum TrafficPolicy {
 	HostRewrite(agent::HostRedirectOverride),
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(RequestPolicy<filters::DirectResponse>),
-	Buffering(RequestPolicy<http::buffering::Buffering>),
+	Buffer(RequestPolicy<http::buffer::Buffer>),
 	#[serde(rename = "cors")]
 	CORS(RequestPolicy<http::cors::Cors>),
 }

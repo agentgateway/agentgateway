@@ -323,7 +323,7 @@ pub struct RoutePolicies {
 	pub hostname_rewrite: RequestPolicy<agent::HostRedirectOverride>,
 	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
-	pub buffering: RequestPolicy<http::buffering::Buffering>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
 #[derive(Debug, Default)]
@@ -335,7 +335,7 @@ pub struct GatewayPolicies {
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
-	pub buffering: RequestPolicy<http::buffering::Buffering>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
 impl GatewayPolicies {
@@ -871,8 +871,8 @@ impl Store {
 				TrafficPolicy::CORS(p) => {
 					pol.cors.merge_with_inheritance(p, lock_inheritance);
 				},
-				TrafficPolicy::Buffering(p) => {
-					pol.buffering.set_if_unset(p);
+				TrafficPolicy::Buffer(p) => {
+					pol.buffer.set_if_unset(p);
 				},
 			}
 		}
@@ -931,9 +931,6 @@ impl Store {
 				},
 				TrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
-				},
-				TrafficPolicy::Buffering(b) => {
-					pol.buffering.set_if_unset(b);
 				},
 				other => {
 					warn!("unexpected gateway policy: {:?}", other);

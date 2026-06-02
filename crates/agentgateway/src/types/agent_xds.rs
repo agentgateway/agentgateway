@@ -26,6 +26,7 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
@@ -2175,12 +2176,24 @@ fn traffic_policy_from_proto(
 				Mode::Auto => agent::HostRedirectOverride::Auto,
 			})
 		},
-		Some(tps::Kind::Buffering(buffering)) => TrafficPolicy::Buffering(RequestPolicy::single(
-			http::buffering::Buffering::try_from(http::buffering::BufferingSerde {
-				buffer_request_body: buffering.request_body_buffering,
-			})
-			.map_err(|e| ProtoError::Generic(e.to_string()))?,
-		)),
+		Some(tps::Kind::Buffer(buffer)) => {
+			let to_body = |b: Option<proto::agent::BufferBody>| BufferBody {
+				max_bytes: match b {
+					Some(bb) => bb
+						.max_bytes
+						.map(|v| v as usize)
+						.unwrap_or_else(crate::defaults::max_buffer_size),
+					None => 0,
+				},
+			};
+			TrafficPolicy::Buffer(RequestPolicy::single(
+				http::buffer::Buffer::try_from(http::buffer::BufferSerde {
+					request: to_body(buffer.request),
+					response: to_body(buffer.response),
+				})
+				.map_err(|e| ProtoError::Generic(e.to_string()))?,
+			))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -2903,7 +2916,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::UrlRewrite(_) => build!(UrlRewrite),
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
-		TrafficPolicy::Buffering(_) => build!(Buffering),
+		TrafficPolicy::Buffer(_) => build!(Buffer),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -2934,7 +2947,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::HostRewrite(_) => "hostRewrite",
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
-		TrafficPolicy::Buffering(_) => "buffering",
+		TrafficPolicy::Buffer(_) => "buffer",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }
