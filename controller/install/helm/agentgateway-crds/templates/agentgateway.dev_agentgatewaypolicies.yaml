@@ -5613,6 +5613,12 @@ spec:
                         maximum: 4096
                         minimum: 1
                         type: integer
+                      http1PreserveHeaderCase:
+                        description: |-
+                          `http1PreserveHeaderCase` preserves the original casing of `HTTP/1.1`
+                          request header names when encoding responses on the same connection.
+                          This only applies to `HTTP/1.1`.
+                        type: boolean
                       http2ConnectionWindowSize:
                         anyOf:
                         - type: integer
@@ -5723,10 +5729,11 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
-                        http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
-                        http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConnectionDuration] must be set
-                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        http1PreserveHeaderCase http2ConnectionWindowSize http2FrameSize
+                        http2KeepaliveInterval http2KeepaliveTimeout http2MaxHeaderSize
+                        http2WindowSize maxBufferSize maxConnectionDuration] must
+                        be set
+                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http1PreserveHeaderCase),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-

@@ -44,6 +44,8 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::http1_idle_timeout")]
 	pub http1_idle_timeout: Duration,
+	#[serde(default)]
+	pub http1_preserve_header_case: bool,
 
 	#[serde(default)]
 	pub http2_window_size: Option<u32>,
@@ -78,6 +80,7 @@ impl Default for HTTP {
 
 			http1_max_headers: None,
 			http1_idle_timeout: defaults::http1_idle_timeout(),
+			http1_preserve_header_case: false,
 
 			http2_window_size: None,
 			http2_connection_window_size: None,

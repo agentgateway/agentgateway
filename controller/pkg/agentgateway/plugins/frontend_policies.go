@@ -491,6 +491,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP1IdleTimeout; v != nil {
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
 	}
+	if v := http.HTTP1PreserveHeaderCase; v != nil {
+		spec.Http1PreserveHeaderCase = *v
+	}
 	if v := http.HTTP2WindowSize; v != nil {
 		spec.Http2WindowSize = quantityUint32(v)
 	}

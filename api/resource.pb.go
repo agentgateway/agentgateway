@@ -7908,8 +7908,10 @@ type FrontendPolicySpec_HTTP struct {
 	Http2KeepaliveTimeout     *durationpb.Duration   `protobuf:"bytes,8,opt,name=http2_keepalive_timeout,json=http2KeepaliveTimeout,proto3" json:"http2_keepalive_timeout,omitempty"`
 	MaxConnectionDuration     *durationpb.Duration   `protobuf:"bytes,9,opt,name=max_connection_duration,json=maxConnectionDuration,proto3" json:"max_connection_duration,omitempty"`
 	Http2MaxHeaderSize        *uint32                `protobuf:"varint,10,opt,name=http2_max_header_size,json=http2MaxHeaderSize,proto3,oneof" json:"http2_max_header_size,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// Preserve the original HTTP/1 request header casing when encoding responses.
+	Http1PreserveHeaderCase bool `protobuf:"varint,11,opt,name=http1_preserve_header_case,json=http1PreserveHeaderCase,proto3" json:"http1_preserve_header_case,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *FrontendPolicySpec_HTTP) Reset() {
@@ -8010,6 +8012,13 @@ func (x *FrontendPolicySpec_HTTP) GetHttp2MaxHeaderSize() uint32 {
 		return *x.Http2MaxHeaderSize
 	}
 	return 0
+}
+
+func (x *FrontendPolicySpec_HTTP) GetHttp1PreserveHeaderCase() bool {
+	if x != nil {
+		return x.Http1PreserveHeaderCase
+	}
+	return false
 }
 
 type FrontendPolicySpec_TLS struct {
@@ -13581,7 +13590,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xd8 \n" +
+	"\b_retries\"\x95!\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -13590,7 +13599,7 @@ const file_resource_proto_rawDesc = "" +
 	"\atracing\x18\x05 \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.TracingH\x00R\atracing\x12y\n" +
 	"\x15network_authorization\x18\x06 \x01(\v2B.agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorizationH\x00R\x14networkAuthorization\x12d\n" +
 	"\x0eproxy_protocol\x18\a \x01(\v2;.agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocolH\x00R\rproxyProtocol\x12Q\n" +
-	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\x96\x06\n" +
+	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\xd3\x06\n" +
 	"\x04HTTP\x12+\n" +
 	"\x0fmax_buffer_size\x18\x01 \x01(\rH\x00R\rmaxBufferSize\x88\x01\x01\x12/\n" +
 	"\x11http1_max_headers\x18\x02 \x01(\rH\x01R\x0fhttp1MaxHeaders\x88\x01\x01\x12G\n" +
@@ -13602,7 +13611,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x17http2_keepalive_timeout\x18\b \x01(\v2\x19.google.protobuf.DurationR\x15http2KeepaliveTimeout\x12Q\n" +
 	"\x17max_connection_duration\x18\t \x01(\v2\x19.google.protobuf.DurationR\x15maxConnectionDuration\x126\n" +
 	"\x15http2_max_header_size\x18\n" +
-	" \x01(\rH\x05R\x12http2MaxHeaderSize\x88\x01\x01B\x12\n" +
+	" \x01(\rH\x05R\x12http2MaxHeaderSize\x88\x01\x01\x12;\n" +
+	"\x1ahttp1_preserve_header_case\x18\v \x01(\bR\x17http1PreserveHeaderCaseB\x12\n" +
 	"\x10_max_buffer_sizeB\x14\n" +
 	"\x12_http1_max_headersB\x14\n" +
 	"\x12_http2_window_sizeB\x1f\n" +

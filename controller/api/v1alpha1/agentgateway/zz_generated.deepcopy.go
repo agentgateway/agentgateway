@@ -1988,6 +1988,11 @@ func (in *FrontendHTTP) DeepCopyInto(out *FrontendHTTP) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.HTTP1PreserveHeaderCase != nil {
+		in, out := &in.HTTP1PreserveHeaderCase, &out.HTTP1PreserveHeaderCase
+		*out = new(bool)
+		**out = **in
+	}
 	if in.HTTP2WindowSize != nil {
 		in, out := &in.HTTP2WindowSize, &out.HTTP2WindowSize
 		x := (*in).DeepCopy()

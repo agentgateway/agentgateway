@@ -2402,6 +2402,7 @@ fn frontend_policy_from_proto(
 				.http1_idle_timeout
 				.map(convert_duration)
 				.unwrap_or_else(crate::defaults::http1_idle_timeout),
+			http1_preserve_header_case: h.http1_preserve_header_case,
 			http2_window_size: h.http2_window_size,
 			http2_connection_window_size: h.http2_connection_window_size,
 			http2_frame_size: h.http2_frame_size,
