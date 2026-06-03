@@ -30,11 +30,16 @@ impl ExtMcpDynamicMetadata {
 
 mod client;
 pub mod methods;
-pub mod outcome;
 pub mod phase;
 
-pub use outcome::Outcome;
 pub use phase::Phase;
+
+#[derive(Debug)]
+pub enum Outcome {
+	Pass,
+	Mutated,
+	Reject(rmcp::model::ErrorData),
+}
 
 pub mod wire {
 	pub use protos::ext_mcp::*;
