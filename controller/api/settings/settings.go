@@ -150,20 +150,11 @@ type Settings struct {
 	// Defaults to false, meaning gateways opt in to Istio integration via spec.istio.
 	IstioAutoEnabled bool `split_words:"true"`
 
-	// The cluster ID applied to Istio-integrated gateway deployments. Only takes effect for gateways
-	// that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters spec.istio);
-	// it does not by itself enable integration. GatewayParameters can override this per gateway.
+	// IstioClusterId, IstioNetwork, and IstioCaAddress are mesh values applied to gateways that have
+	// Istio integration enabled; they do not enable it themselves. GatewayParameters override per gateway.
 	IstioClusterId string `split_words:"true"`
-
-	// The network applied to Istio-integrated gateway deployments. Only takes effect for gateways
-	// that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters spec.istio);
-	// it does not by itself enable integration. GatewayParameters can override this per gateway.
-	IstioNetwork string `split_words:"true"`
-
-	// The Istio CA address applied to Istio-integrated gateway deployments. Only takes effect for
-	// gateways that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters
-	// spec.istio); it does not by itself enable integration. GatewayParameters can override this per gateway.
-	// Defaults to "https://istiod.istio-system.svc:15012", the typical address of the Istio CA in a default Istio installation.
+	IstioNetwork   string `split_words:"true"`
+	// Defaults to "https://istiod.istio-system.svc:15012".
 	IstioCaAddress string `split_words:"true"`
 
 	// XdsServiceHost is the host that serves xDS config.

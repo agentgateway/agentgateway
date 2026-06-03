@@ -32,10 +32,7 @@ type HelmTestCase struct {
 	Inputs *deployer.Inputs
 	// InputFile is just the name of the manifest omitting the file extension suffix
 	InputFile string
-	// Settings, when set, are the install-time control-plane settings the collections are built
-	// with (e.g. IstioClusterId/IstioRevision). Needed for config captured at construction such as
-	// the MeshConfig singleton's revision; the testdata objects are also fed to those collections so
-	// e.g. a mesh ConfigMap in the manifest is visible to MeshConfig.
+	// Settings has install-time control plane settings, passed to AgwCollections.
 	Settings *apisettings.Settings
 	// Validate is an optional function to run additional validation on the output YAML
 	Validate func(t *testing.T, outputYaml string)

@@ -166,10 +166,7 @@ type AgentgatewayParametersConfigs struct {
 }
 
 type IstioSpec struct {
-	// Enabled explicitly turns Istio integration on or off for this gateway, overriding the
-	// control-plane default. When unset, integration is on whenever spec.istio is present (including
-	// an empty `istio: {}`); set this to false to opt a gateway out when integration is enabled by
-	// default control-plane-wide.
+	// Enabled explicitly turns Istio integration on or off for this gateway.
 	//
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
@@ -191,7 +188,7 @@ type IstioSpec struct {
 	//
 	// +optional
 	ClusterId string `json:"clusterId,omitempty"`
-	// The Istio network this gateway runs in If unset, defaults to the empty network.
+	// The Istio network this gateway runs in. If unset, defaults to the empty network.
 	//
 	// +optional
 	Network string `json:"network,omitempty"`

@@ -83,12 +83,10 @@ type AgwCollections struct {
 	IstioNamespace string
 	// IstioRevision is the Istio revision of the Istio control plane (default is "default").
 	IstioRevision string
-	// IstioAutoEnabled turns on Istio integration by default for built-in-class gateways; individual
-	// gateways can opt out via params spec.istio.enabled=false.
+	// IstioAutoEnabled turns on Istio integration by default for built-in-class gateways
 	IstioAutoEnabled bool
-	// IstioClusterId / IstioNetwork / IstioCaAddress are control-plane-wide mesh values applied to
-	// gateways that have Istio integration enabled; params spec.istio fields can override them. They
-	// do not by themselves enable integration.
+	// IstioClusterId / IstioNetwork / IstioCaAddress are control-plane-wide mesh values.
+	// Gateway that have istio enabled will have them propagated on envs when deployed.
 	IstioClusterId string
 	IstioNetwork   string
 	IstioCaAddress string
