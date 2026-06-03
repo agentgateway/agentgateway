@@ -857,7 +857,7 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 
 func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
-	if !credentialRefConfigured(auth.SecretRef) {
+	if auth.SecretRef.Name == "" {
 		logger.Warn("not using any auth for AWS - it's most likely not what you want")
 		return nil, nil
 	}
@@ -954,10 +954,6 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 
 	errs = append(errs, errors.New("no valid Azure auth method provided"))
 	return nil, errors.Join(errs...)
-}
-
-func credentialRefConfigured(ref shared.LocalSecretObjectRef) bool {
-	return ref.Name != ""
 }
 
 func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {

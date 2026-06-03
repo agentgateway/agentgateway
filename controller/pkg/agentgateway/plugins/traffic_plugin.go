@@ -120,35 +120,18 @@ type PolicyCtx struct {
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
 
-	// credentialResolver is the complete credential resolver chain.
-	credentialResolver kubeutils.CredentialResolver
+	// CredentialResolver resolves credential refs: the built-in Secret resolver
+	// in OSS, or an injected resolver (which may itself be a chain). Access it
+	// through ResolveCredentialRef, which is nil-safe.
+	CredentialResolver kubeutils.CredentialResolver
 }
 
-// NewPolicyCtx creates a policy translation context
-func NewPolicyCtx(
-	krtctx krt.HandlerContext,
-	collections *AgwCollections,
-	references ReferenceIndex,
-	resolver remotehttp.Resolver,
-	jwksLookup jwks.Lookup,
-	credentialResolver kubeutils.CredentialResolver,
-) PolicyCtx {
-	return PolicyCtx{
-		Krt:                krtctx,
-		Collections:        collections,
-		References:         references,
-		Resolver:           resolver,
-		JWKSLookup:         jwksLookup,
-		credentialResolver: credentialResolver,
-	}
-}
-
-// ResolveCredentialRef applies the context's credential resolver chain.
+// ResolveCredentialRef applies the context's credential resolver.
 func (ctx PolicyCtx) ResolveCredentialRef(ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
-	if ctx.credentialResolver == nil {
+	if ctx.CredentialResolver == nil {
 		return nil, errors.New("secret credential resolver is not configured")
 	}
-	return ctx.credentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
+	return ctx.CredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
 type ResolvedTarget struct {
@@ -171,7 +154,7 @@ func TranslateAgentgatewayPolicy(
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := NewPolicyCtx(ctx, agw, references, resolver, jwksLookup, credentialResolver)
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup, CredentialResolver: credentialResolver}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors

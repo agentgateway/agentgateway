@@ -1075,7 +1075,8 @@ spec:
                                                               items:
                                                                 description: |-
                                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                                  The default case is to simply set the `name` field, which will refer to
+                                                                  a Kubernetes `Secret` resource.
                                                                 properties:
                                                                   group:
                                                                     description: Group
@@ -1828,7 +1829,8 @@ spec:
                                                               items:
                                                                 description: |-
                                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                                  The default case is to simply set the `name` field, which will refer to
+                                                                  a Kubernetes `Secret` resource.
                                                                 properties:
                                                                   group:
                                                                     description: Group
@@ -2577,7 +2579,8 @@ spec:
                                                               items:
                                                                 description: |-
                                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                                  The default case is to simply set the `name` field, which will refer to
+                                                                  a Kubernetes `Secret` resource.
                                                                 properties:
                                                                   group:
                                                                     description: Group
@@ -3552,7 +3555,8 @@ spec:
                                                               items:
                                                                 description: |-
                                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                                  The default case is to simply set the `name` field, which will refer to
+                                                                  a Kubernetes `Secret` resource.
                                                                 properties:
                                                                   group:
                                                                     description: Group
@@ -4305,7 +4309,8 @@ spec:
                                                               items:
                                                                 description: |-
                                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                                  The default case is to simply set the `name` field, which will refer to
+                                                                  a Kubernetes `Secret` resource.
                                                                 properties:
                                                                   group:
                                                                     description: Group
@@ -5320,7 +5325,8 @@ spec:
                                         items:
                                           description: |-
                                             LocalSecretObjectRef references a same-namespace credential.
-                                            A name-only ref preserves the previous Secret reference wire shape.
+                                            The default case is to simply set the `name` field, which will refer to
+                                            a Kubernetes `Secret` resource.
                                           properties:
                                             group:
                                               description: Group of the referenced
@@ -6709,7 +6715,8 @@ spec:
                                       items:
                                         description: |-
                                           LocalSecretObjectRef references a same-namespace credential.
-                                          A name-only ref preserves the previous Secret reference wire shape.
+                                          The default case is to simply set the `name` field, which will refer to
+                                          a Kubernetes `Secret` resource.
                                         properties:
                                           group:
                                             description: Group of the referenced credential.
@@ -7583,7 +7590,8 @@ spec:
                                               items:
                                                 description: |-
                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
                                                   group:
                                                     description: Group of the referenced
@@ -8234,7 +8242,8 @@ spec:
                                               items:
                                                 description: |-
                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
                                                   group:
                                                     description: Group of the referenced
@@ -8882,7 +8891,8 @@ spec:
                                               items:
                                                 description: |-
                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
                                                   group:
                                                     description: Group of the referenced
@@ -9747,7 +9757,8 @@ spec:
                                               items:
                                                 description: |-
                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
                                                   group:
                                                     description: Group of the referenced
@@ -10398,7 +10409,8 @@ spec:
                                               items:
                                                 description: |-
                                                   LocalSecretObjectRef references a same-namespace credential.
-                                                  A name-only ref preserves the previous Secret reference wire shape.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
                                                   group:
                                                     description: Group of the referenced
@@ -11850,7 +11862,8 @@ spec:
                         items:
                           description: |-
                             LocalSecretObjectRef references a same-namespace credential.
-                            A name-only ref preserves the previous Secret reference wire shape.
+                            The default case is to simply set the `name` field, which will refer to
+                            a Kubernetes `Secret` resource.
                           properties:
                             group:
                               description: Group of the referenced credential. Empty

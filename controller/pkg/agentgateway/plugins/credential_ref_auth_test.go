@@ -17,14 +17,11 @@ import (
 )
 
 func simpleAuthPolicyCtx(col *AgwCollections, res kubeutils.CredentialResolver) PolicyCtx {
-	return NewPolicyCtx(
-		krt.TestingDummyContext{},
-		col,
-		ReferenceIndex{},
-		nil,
-		nil,
-		res,
-	)
+	return PolicyCtx{
+		Krt:                krt.TestingDummyContext{},
+		Collections:        col,
+		CredentialResolver: res,
+	}
 }
 
 func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {

@@ -45,7 +45,14 @@ func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver,
 						*agentgateway.AgentgatewayBackendStatus,
 						[]agwir.AgwResource,
 					) {
-						pc := plugins.NewPolicyCtx(ctx, agw, input.References, resolver, jwksLookup, credentialResolver)
+						pc := plugins.PolicyCtx{
+							Krt:                ctx,
+							Collections:        agw,
+							References:         input.References,
+							Resolver:           resolver,
+							JWKSLookup:         jwksLookup,
+							CredentialResolver: credentialResolver,
+						}
 						return TranslateAgwBackend(pc, backend, input.References)
 					}, agw.KrtOpts.ToOptions("backends/Agentgateway")...)
 					return plugins.ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "backends/Agentgateway"), col

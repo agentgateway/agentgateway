@@ -26,34 +26,15 @@ type CredentialResolver interface {
 	ResolveCredentialRef(krtctx krt.HandlerContext, ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error)
 }
 
-// NewChainedCredentialResolver returns a resolver that tries resolvers in order
-// until one supports the CredentialRef group/kind. Nil resolvers are ignored,
-// nested chains created by this function are flattened, and duplicate Secret
-// resolvers are skipped.
+// NewChainedCredentialResolver returns a resolver that tries resolvers in order,
+// falling through to the next whenever one returns ErrUnsupportedCredentialKind.
+// Nil resolvers are ignored; an empty or all-nil list yields nil.
 func NewChainedCredentialResolver(resolvers ...CredentialResolver) CredentialResolver {
 	chain := make(chainedCredentialResolver, 0, len(resolvers))
-	hasSecretResolver := false
-	var appendResolver func(CredentialResolver)
-	appendResolver = func(r CredentialResolver) {
-		if r == nil {
-			return
+	for _, r := range resolvers {
+		if r != nil {
+			chain = append(chain, r)
 		}
-		if nested, ok := r.(chainedCredentialResolver); ok {
-			for _, resolver := range nested {
-				appendResolver(resolver)
-			}
-			return
-		}
-		if _, ok := r.(secretCredentialResolver); ok {
-			if hasSecretResolver {
-				return
-			}
-			hasSecretResolver = true
-		}
-		chain = append(chain, r)
-	}
-	for _, resolver := range resolvers {
-		appendResolver(resolver)
 	}
 	if len(chain) == 0 {
 		return nil
