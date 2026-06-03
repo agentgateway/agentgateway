@@ -43,6 +43,13 @@ func TestNewSingletonTrustDomain(t *testing.T) {
 			want:     "cluster1",
 		},
 		{
+			name:     "reads trustDomain from non-default namespace",
+			ns:       "istio-1-30-system",
+			revision: "1-30",
+			cms:      []*corev1.ConfigMap{cm("istio-1-30-system", "istio-1-30", "trustDomain: cluster1")},
+			want:     "cluster1",
+		},
+		{
 			name:     "reads from the revisioned configmap",
 			ns:       "istio-system",
 			revision: "1-30",
