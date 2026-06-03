@@ -6,7 +6,7 @@ import "github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 // policy translation.
 type CredentialResolverFactory func(*AgwCollections) kubeutils.CredentialResolver
 
-// DefaultCredentialResolverFactory returns the OSS default resolver chain.
+// DefaultCredentialResolverFactory returns the default resolver chain.
 func DefaultCredentialResolverFactory(agw *AgwCollections) kubeutils.CredentialResolver {
 	if agw == nil {
 		return nil
