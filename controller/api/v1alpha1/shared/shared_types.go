@@ -182,7 +182,8 @@ type HeaderModifiers struct {
 }
 
 // LocalSecretObjectRef references a same-namespace credential.
-// A name-only ref preserves the previous Secret reference wire shape.
+// The default case is to simply set the `name` field, which will refer to
+// a Kubernetes `Secret` resource.
 //
 // +structType=atomic
 // +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
