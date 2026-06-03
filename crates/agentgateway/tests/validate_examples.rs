@@ -142,7 +142,9 @@ fn example_name(path: &str) -> String {
 
 fn example_requires_keycloak(path: &str) -> bool {
 	let yaml = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
-	yaml.contains("http://localhost:7080/realms/") || yaml.contains("http://localhost:9000")
+	yaml.contains("http://localhost:7080/realms/")
+		|| yaml.contains("http://localhost:9000")
+		|| yaml.contains("https://localhost:3000/realms/")
 }
 
 #[tokio::test]

@@ -9,7 +9,7 @@ use agent_core::strng::Strng;
 use bytes::Bytes;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue, StringValue};
+use cel::objects::{BytesValue, ListValue, MapValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
@@ -295,6 +295,19 @@ impl ExecutorResolver<'_> {
 impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
 		self.executor.field(variable)
+	}
+	fn variables(&self) -> Option<Value<'a>> {
+		match self.executor.materialize() {
+			Value::Map(map) => {
+				let variables = map
+					.iter()
+					.filter(|(_, value)| !matches!(value, Value::Null))
+					.map(|(key, value)| (key, value.clone()))
+					.collect();
+				Some(Value::Map(MapValue::Borrow(variables)))
+			},
+			_ => None,
+		}
 	}
 	// A bit annoying, but a nice speed up for us
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
@@ -1119,6 +1132,7 @@ impl From<llm::LLMRequest> for LLMContext {
 		let LLMRequest {
 			input_tokens,
 			input_format: _, // Expose this?
+			native_format: _,
 			request_model,
 			provider,
 			streaming,
@@ -1590,27 +1604,12 @@ pub struct ExecutorSerde {
 	pub extproc: Option<ExtProcDynamicMetadata>,
 
 	/// `extMcp` contains dynamic metadata returned by extMcp policy drivers.
-	#[serde(
-		default,
-		skip_serializing_if = "is_ext_mcp_metadata_none_or_empty",
-		rename = "extMcp"
-	)]
+	#[serde(default, skip_serializing_if = "Option::is_none", rename = "extMcp")]
 	pub extmcp: Option<ExtMcpDynamicMetadata>,
 
 	/// `metadata` contains values set by transformation metadata expressions.
-	#[serde(
-		default,
-		skip_serializing_if = "is_transformation_metadata_none_or_empty"
-	)]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
-}
-
-fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
-	metadata.as_ref().is_none_or(|m| m.0.is_empty())
-}
-
-fn is_ext_mcp_metadata_none_or_empty(metadata: &Option<ExtMcpDynamicMetadata>) -> bool {
-	metadata.as_ref().is_none_or(|m| m.is_empty())
 }
 
 impl ExecutorSerde {
@@ -1746,6 +1745,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+				certificate: Default::default(),
 			}),
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),

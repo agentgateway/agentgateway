@@ -166,21 +166,21 @@
           ]
         },
         "adminAddr": {
-          "description": "Admin UI address in the format \"ip:port\"",
+          "description": "Admin UI address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "statsAddr": {
-          "description": "Stats/metrics server address in the format \"ip:port\"",
+          "description": "Stats/metrics server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "readinessAddr": {
-          "description": "Readiness probe server address in the format \"ip:port\"",
+          "description": "Readiness probe server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
@@ -5800,6 +5800,18 @@
             "copilot"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -5954,6 +5966,56 @@
         }
       },
       "additionalProperties": false
+    },
+    "Provider8": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProviderFormatConfig"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "formats"
+      ]
+    },
+    "ProviderFormatConfig": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ProviderFormat"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ]
+    },
+    "ProviderFormat": {
+      "type": "string",
+      "enum": [
+        "completions",
+        "messages",
+        "responses",
+        "embeddings",
+        "anthropicTokenCount",
+        "realtime"
+      ]
     },
     "LocalBackendPolicies": {
       "type": "object",
@@ -7728,15 +7790,31 @@
       "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
-      "type": "string",
-      "enum": [
-        "openAI",
-        "gemini",
-        "vertex",
-        "anthropic",
-        "bedrock",
-        "azure",
-        "copilot"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "openAI",
+            "gemini",
+            "vertex",
+            "anthropic",
+            "bedrock",
+            "azure",
+            "copilot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "LLMRouteMatch": {

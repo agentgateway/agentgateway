@@ -20,7 +20,6 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/protomarshal"
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,6 +35,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -90,7 +90,7 @@ func ConvertStatusCollection[T controllers.Object, S any](
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
-func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) AgwPlugin {
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -99,7 +99,7 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup, credentialResolver)
 					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
 					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
@@ -119,6 +119,19 @@ type PolicyCtx struct {
 	References  ReferenceIndex
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+
+	// CredentialResolver resolves credential refs: the built-in Secret resolver
+	// in OSS, or an injected resolver (which may itself be a chain). Access it
+	// through ResolveCredentialRef, which is nil-safe.
+	CredentialResolver kubeutils.CredentialResolver
+}
+
+// ResolveCredentialRef applies the context's credential resolver.
+func (ctx PolicyCtx) ResolveCredentialRef(ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
+	if ctx.CredentialResolver == nil {
+		return nil, errors.New("secret credential resolver is not configured")
+	}
+	return ctx.CredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
 type ResolvedTarget struct {
@@ -136,11 +149,12 @@ func TranslateAgentgatewayPolicy(
 	references ReferenceIndex,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
+	credentialResolver kubeutils.CredentialResolver,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup, CredentialResolver: credentialResolver}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -702,11 +716,11 @@ func processBasicAuthenticationPolicy(
 	}
 
 	if s := ba.SecretRef; s != nil {
-		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
-		if scrt == nil {
-			errs = append(errs, fmt.Errorf("basic authentication secret %v not found", s.Name))
+		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		if err != nil {
+			errs = append(errs, err)
 		} else {
-			d, ok := scrt.Data[".htaccess"]
+			d, ok := data[".htaccess"]
 			if !ok {
 				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name))
 			}
@@ -758,27 +772,36 @@ func processAPIKeyAuthenticationPolicy(
 		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
 	}
 
-	var secrets []*corev1.Secret
+	type apiKeyData struct {
+		name string
+		data map[string][]byte
+	}
+	var dataSets []apiKeyData
 	var errs []error
 	if err := validateExtractionAuthorizationLocation(ak.Location, "apiKeyAuthentication location"); err != nil {
 		errs = append(errs, err)
 	}
 	if s := ak.SecretRef; s != nil {
-		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
-		if scrt == nil {
-			errs = append(errs, fmt.Errorf("API Key secret %v not found", s.Name))
+		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		if err != nil {
+			errs = append(errs, err)
 		} else {
-			secrets = []*corev1.Secret{scrt}
+			dataSets = []apiKeyData{{name: string(s.Name), data: data}}
 		}
 	}
 	if s := ak.SecretSelector; s != nil {
-		secrets = krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace))
+		dataSets = nil
+		// Preserve existing precedence: secretSelector replaces secretRef, and
+		// remains Secret-only. CredentialRef resolution is handled by secretRef.
+		for _, secret := range krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace)) {
+			dataSets = append(dataSets, apiKeyData{name: secret.Name, data: secret.Data})
+		}
 	}
-	for _, s := range secrets {
-		for k, v := range s.Data {
+	for _, s := range dataSets {
+		for k, v := range s.data {
 			trimmed := bytes.TrimSpace(v)
 			if len(trimmed) == 0 {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.Name, k))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.name, k))
 				continue
 			}
 			var ke APIKeyEntry
@@ -789,13 +812,13 @@ func processAPIKeyAuthenticationPolicy(
 					Metadata: nil,
 				}
 			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.Name, k, err))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
 			}
 
 			pbs, err := toStruct(ke.Metadata)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.Name, k, err))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{

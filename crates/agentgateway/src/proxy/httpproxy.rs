@@ -9,7 +9,6 @@ use ::http::{HeaderMap, header};
 use anyhow::anyhow;
 use frozen_collections::Len;
 use headers::HeaderMapExt;
-use hyper::body::Incoming;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
 use rand::RngExt;
@@ -496,11 +495,7 @@ where
 }
 
 impl HTTPProxy {
-	pub async fn proxy(
-		&self,
-		connection: Arc<Extension>,
-		mut req: ::http::Request<Incoming>,
-	) -> Response {
+	pub async fn proxy(&self, connection: Arc<Extension>, mut req: Request) -> Response {
 		let start = agent_core::Timestamp::now();
 
 		dtrace::trace(|f| f.request_started());
@@ -577,12 +572,7 @@ impl HTTPProxy {
 
 		// Pass the log into the body so it finishes once the stream is entirely complete.
 		// We will also record trailer info there.
-		log.with(|l| {
-			l.status = Some(resp.status());
-			l.reason = Some(reason);
-			l.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
-			l.response_snapshot = l.cel.cel_context.maybe_snapshot_response(&mut resp);
-		});
+		log.with(|l| set_final_response_fields(l, &reason, &mut resp));
 
 		if resp.status() == StatusCode::SWITCHING_PROTOCOLS {
 			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
@@ -598,7 +588,7 @@ impl HTTPProxy {
 
 	async fn proxy_internal(
 		&self,
-		req: ::http::Request<Incoming>,
+		mut req: Request,
 		log: &mut RequestLog,
 		response_policies: &mut ResponsePolicies,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -609,7 +599,6 @@ impl HTTPProxy {
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();
 		debug!(bind=%bind_name, "route for bind");
-		let mut req = req.map(http::Body::new);
 
 		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 			return Err(ProxyResponse::Error(ProxyError::BindNotFound)).snapshot_on_err(log, &mut req);
@@ -778,11 +767,6 @@ impl HTTPProxy {
 		backend_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.health_policy = backend_policies.health.clone();
-		if let Some(ev) = &backend_policies.health
-			&& let Some(expr) = &ev.unhealthy_expression
-		{
-			log.cel.ctx().register_expression(expr.as_ref());
-		}
 		log.backend_info = Some(selected_backend.backend.backend.backend_info());
 		if let Some(bp) = selected_backend.backend.backend.backend_protocol() {
 			log.backend_protocol = Some(bp)
@@ -882,7 +866,7 @@ impl HTTPProxy {
 				);
 			}
 			let req = Request::from_parts(head, http::Body::new(this));
-			let res = self
+			let mut res = self
 				.attempt_upstream(
 					log,
 					&mut req_upgrade,
@@ -905,6 +889,7 @@ impl HTTPProxy {
 				res.is_err(),
 				res.as_ref().map(|r| r.status())
 			);
+			finalize_attempt_for_retry(log, &mut res);
 			last_res = Some(res);
 			if let Some(bo) = retry_backoff {
 				let fut = if let Some(request_timeout) = request_timeout {
@@ -1307,7 +1292,7 @@ pub async fn build_transport(
 
 	// Check if we need double hbone
 	if let (
-		Some((gw_addr, gw_identity)),
+		Some((gw_addr, gw_identities)),
 		Some((InboundProtocol::HBONE, waypoint_identities)),
 		Some(ca),
 	) = (
@@ -1334,7 +1319,7 @@ pub async fn build_transport(
 			);
 			return Ok(Transport::DoubleHbone {
 				gateway_address: gateway_socket_addr,
-				gateway_identity: gw_identity.clone(),
+				gateway_identities: gw_identities.clone(),
 				waypoint_identities: waypoint_identities.clone(),
 				inner: app_transport,
 				headers: build_hbone_headers(inputs, hbone_source),
@@ -1464,6 +1449,118 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 }
 
 #[allow(clippy::too_many_arguments)]
+async fn apply_inference_routing(
+	policies: &BackendPolicies,
+	policy_client: PolicyClient,
+	req: &mut Request,
+	log: &mut Option<&mut RequestLog>,
+	response_policies: &mut ResponsePolicies,
+) -> Result<(http::ext_proc::InferencePoolRouter, ServiceCallOverride), ProxyResponse> {
+	let mut maybe_inference = policies.build_inference(policy_client);
+	let inference_result = maybe_inference.mutate_request(req).await?;
+	inference_result
+		.policy_response
+		.apply(response_policies.headers())?;
+	log.add(|l| l.inference_pool = inference_result.destination);
+
+	// Use inference override if present, otherwise check for stateful MCP pinning.
+	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
+	let service_override = ServiceCallOverride {
+		destination: inference_result.destination.or(policies.override_dest),
+		destination_passthrough: inference_result.destination.is_some()
+			&& matches!(
+				inference_result.destination_mode,
+				InferenceRoutingDestinationMode::Passthrough
+			),
+		inference_failed_open: inference_result.failed_open,
+	};
+
+	Ok((maybe_inference, service_override))
+}
+
+/// Builds a call for an already-resolved simple backend without re-entering
+/// full AI or MCP backend dispatch.
+#[allow(clippy::too_many_arguments)]
+async fn build_simple_backend_call(
+	inputs: &ProxyInputs,
+	policy_client: PolicyClient,
+	backend: &SimpleBackend,
+	policies: BackendPolicies,
+	req: &mut Request,
+	log: &mut Option<&mut RequestLog>,
+	response_policies: &mut ResponsePolicies,
+	hbone_source: Option<HboneSourceRole>,
+) -> Result<(BackendCall, http::ext_proc::InferencePoolRouter), ProxyResponse> {
+	let (maybe_inference, service_override) =
+		apply_inference_routing(&policies, policy_client, req, log, response_policies).await?;
+	let backend_call = match backend {
+		SimpleBackend::Service(svc, port) => {
+			// If user explicitly set auto hostname, we support it for Service.
+			// Otherwise, the implicit default only applies to AgentgatewayBackend.
+			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
+				&& auto.explicit
+			{
+				auto.target = Some(svc.hostname.clone());
+			}
+			build_service_call(
+				inputs,
+				policies,
+				log,
+				service_override,
+				svc,
+				port,
+				req.uri().host(),
+				hbone_source,
+			)?
+		},
+		SimpleBackend::Opaque(_, target) => BackendCall {
+			target: target.clone(),
+			backend_policies: policies,
+			http_version_override: None,
+			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			network_gateway: None,
+			waypoint: None,
+		},
+		SimpleBackend::Aws(_, config) => {
+			http::modify_req_uri(req, |uri| {
+				let host_with_port = format!("{}:443", config.get_host());
+				uri.authority =
+					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
+				uri.path_and_query = Some(PathAndQuery::from_str(&config.get_path())?);
+				Ok(())
+			})
+			.map_err(ProxyError::Processing)?;
+
+			req.extensions_mut().insert(llm::bedrock::AwsRegion {
+				region: config.region().to_string(),
+			});
+
+			let default_policies = BackendPolicies {
+				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
+				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
+					service_name: Some(config.service_name().to_string()),
+				})),
+				..Default::default()
+			};
+			BackendCall {
+				target: Target::Hostname(config.get_host().into(), 443),
+				backend_policies: default_policies.merge(policies),
+				http_version_override: None,
+				transport_override: None,
+				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+				network_gateway: None,
+				waypoint: None,
+			}
+		},
+		SimpleBackend::Invalid => {
+			return Err(ProxyError::BackendDoesNotExist.into());
+		},
+	};
+	Ok((backend_call, maybe_inference))
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
@@ -1517,26 +1614,7 @@ async fn make_backend_call(
 		}
 	});
 
-	let mut maybe_inference = policies.build_inference(policy_client.clone());
-	let inference_result = maybe_inference.mutate_request(&mut req).await?;
-	inference_result
-		.policy_response
-		.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_result.destination);
-
-	// Use inference override if present, otherwise check for stateful MCP pinning.
-	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
-	let service_override = ServiceCallOverride {
-		destination: inference_result.destination.or(policies.override_dest),
-		destination_passthrough: inference_result.destination.is_some()
-			&& matches!(
-				inference_result.destination_mode,
-				InferenceRoutingDestinationMode::Passthrough
-			),
-		inference_failed_open: inference_result.failed_open,
-	};
-
-	let mut backend_call = match backend {
+	let (mut backend_call, mut maybe_inference) = match backend {
 		Backend::AI(n, ai) => {
 			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
@@ -1550,99 +1628,125 @@ async fn make_backend_call(
 				.read_binds()
 				.sub_backend_policies(sub_backend_name, Some(&provider.inline_policies));
 
-			let (target, provider_defaults) = match &provider.host_override {
-				Some(target) => (
-					target.clone(),
-					BackendPolicies {
-						// Attach LLM provider, but don't use default setup
-						llm_provider: Some(provider.clone()),
-						..Default::default()
-					},
-				),
-				None => {
-					let (tgt, mut pol) = provider.provider.default_connector();
-					pol.llm_provider = Some(provider.clone());
-					(tgt, pol)
-				},
+			let provider_defaults = BackendPolicies {
+				llm_provider: Some(provider.clone()),
+				..Default::default()
 			};
-			// Defaults for the provider < Backend level policies < Sub Backend
-			let effective_policies = provider_defaults
-				.merge(policies)
-				.merge(sub_backend_policies);
-			BackendCall {
-				target,
-				backend_policies: effective_policies,
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
+			if let Some(provider_backend) = &provider.provider_backend {
+				let provider_backend =
+					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
+				let provider_backend_policies = inputs.stores.read_binds().sub_backend_policies(
+					provider_backend.backend.target(),
+					Some(&provider_backend.inline_policies),
+				);
+				let effective_policies = provider_defaults
+					.merge(policies)
+					.merge(sub_backend_policies)
+					.merge(provider_backend_policies);
+
+				build_simple_backend_call(
+					&inputs,
+					policy_client.clone(),
+					&provider_backend.backend,
+					effective_policies,
+					&mut req,
+					&mut log,
+					response_policies,
+					hbone_source,
+				)
+				.await?
+			} else {
+				let (target, provider_defaults) = match &provider.host_override {
+					Some(target) => (target.clone(), provider_defaults),
+					None => {
+						let (tgt, mut pol) = provider.provider.default_connector().ok_or_else(|| {
+							ProxyError::ProcessingString(
+								"custom providers require an explicit host override or provider backend"
+									.to_string(),
+							)
+						})?;
+						pol.llm_provider = Some(provider.clone());
+						(tgt, pol)
+					},
+				};
+				// Defaults for the provider < Backend level policies < Sub Backend
+				let effective_policies = provider_defaults
+					.merge(policies)
+					.merge(sub_backend_policies);
+				let (maybe_inference, _) = apply_inference_routing(
+					&effective_policies,
+					policy_client.clone(),
+					&mut req,
+					&mut log,
+					response_policies,
+				)
+				.await?;
+				(
+					BackendCall {
+						target,
+						backend_policies: effective_policies,
+						http_version_override: None,
+						transport_override: None,
+						hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+						network_gateway: None,
+						waypoint: None,
+					},
+					maybe_inference,
+				)
 			}
 		},
 		Backend::Service(svc, port) => {
-			// If user explicitly set auto hostname, we support it for Service.
-			// Otherwise, the implicit default only applies to AgentgatewayBackend.
-			if let Some(auto) = req.extensions_mut().get_mut::<AutoHostname>()
-				&& auto.explicit
-			{
-				auto.target = Some(svc.hostname.clone());
-			}
-			build_service_call(
+			let simple = SimpleBackend::Service(svc.clone(), *port);
+			build_simple_backend_call(
 				&inputs,
+				policy_client.clone(),
+				&simple,
 				policies,
+				&mut req,
 				&mut log,
-				service_override,
-				svc,
-				port,
-				req.uri().host(),
+				response_policies,
 				hbone_source,
-			)?
+			)
+			.await?
 		},
-		Backend::Opaque(_, target) => BackendCall {
-			target: target.clone(),
-			http_version_override: None,
-			transport_override: None,
-			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			network_gateway: None,
-			waypoint: None,
-			backend_policies: policies,
+		Backend::Opaque(name, target) => {
+			let simple = SimpleBackend::Opaque(name.clone(), target.clone());
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
 		},
-		Backend::Aws(_, config) => {
-			http::modify_req_uri(&mut req, |uri| {
-				let host_with_port = format!("{}:443", config.get_host());
-				uri.authority =
-					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
-				uri.path_and_query = Some(PathAndQuery::from_str(&config.get_path())?);
-				Ok(())
-			})
-			.map_err(ProxyError::Processing)?;
-
-			req.extensions_mut().insert(llm::bedrock::AwsRegion {
-				region: config.region().to_string(),
-			});
-
-			let default_policies = BackendPolicies {
-				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
-					service_name: Some(config.service_name().to_string()),
-				})),
-				..Default::default()
-			};
-			BackendCall {
-				target: Target::Hostname(config.get_host().into(), 443),
-				backend_policies: default_policies.merge(policies),
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
-			}
+		Backend::Aws(name, config) => {
+			let simple = SimpleBackend::Aws(name.clone(), config.clone());
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
+		},
+		Backend::Dynamic(_, _) if policies.inference_routing.is_some() => {
+			return Err(
+				ProxyError::ProcessingString(
+					"inferenceRouting is not supported with dynamic backends".to_string(),
+				)
+				.into(),
+			);
 		},
 		Backend::Dynamic(_, _) => {
-			// Use a preliminary target from the current request URI.
-			// This will be re-resolved after transformations are applied,
-			// so that policies like `:authority` overrides take effect.
-			BackendCall {
+			let backend_call = BackendCall {
 				target: target_from_request(&req)?,
 				http_version_override: None,
 				transport_override: None,
@@ -1650,7 +1754,8 @@ async fn make_backend_call(
 				network_gateway: None,
 				waypoint: None,
 				backend_policies: policies,
-			}
+			};
+			(backend_call, http::ext_proc::InferencePoolRouter::default())
 		},
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
@@ -1671,6 +1776,12 @@ async fn make_backend_call(
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
+	log.add(|l| l.health_policy = backend_call.backend_policies.health.clone());
+	if let Some(log) = log.as_mut() {
+		backend_call
+			.backend_policies
+			.register_cel_expressions(log.cel.ctx());
+	}
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -1856,6 +1967,7 @@ async fn make_backend_call(
 						log.add(|l| {
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
+								native_format: Some(llm::custom::ProviderFormat::Realtime),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
@@ -2035,92 +2147,17 @@ pub fn build_service_call(
 	log.add(move |l| l.request_handle = Some(handle));
 
 	// Check if we need double hbone (workload on remote network with gateway)
-	let network_gateway = if wl.network != inputs.cfg.network {
-		if let Some(gw_addr) = &wl.network_gateway {
-			match &gw_addr.destination {
-				types::discovery::gatewayaddress::Destination::Address(net_addr) => {
-					if let Some(gw_wl) = workloads.find_address(net_addr) {
-						let resolved_gw_addr = gw_addr.clone();
-						tracing::debug!(
-							source_network = %inputs.cfg.network,
-							dest_network = %wl.network,
-							gateway = ?resolved_gw_addr,
-							"picked workload on remote network, using double hbone"
-						);
-						Some((resolved_gw_addr, gw_wl.identity()))
-					} else {
-						tracing::warn!(
-							gateway_address = ?net_addr,
-							"network gateway address not found in workload store for remote workload"
-						);
-						None
-					}
-				},
-				types::discovery::gatewayaddress::Destination::Hostname(hostname) => {
-					// TODO we could support looking up workloads by hostname too
-					let resolved = discovery
-						.services
-						.get_by_namespaced_host(&NamespacedHostname {
-							namespace: hostname.namespace.clone(),
-							hostname: hostname.hostname.clone(),
-						})
-						.and_then(|gw_svc| {
-							let (gw_ep, _gw_handle, gw_wl) = gw_svc.endpoints.select_endpoint(
-								&discovery.workloads,
-								gw_svc.as_ref(),
-								gw_addr.hbone_mtls_port,
-								None,
-							)?;
-							let resolved_port = select_service_target_port(
-								gw_ep.as_ref(),
-								gw_svc.as_ref(),
-								gw_addr.hbone_mtls_port,
-								None,
-								false,
-							)?;
-							let ip = *gw_wl.workload_ips.first()?;
-							Some((
-								GatewayAddress {
-									destination: types::discovery::gatewayaddress::Destination::Address(
-										NetworkAddress {
-											network: gw_wl.network.clone(),
-											address: ip,
-										},
-									),
-									hbone_mtls_port: resolved_port,
-								},
-								gw_wl.identity(),
-							))
-						});
-					if let Some((resolved_gw_addr, gw_identity)) = resolved {
-						tracing::debug!(
-							source_network = %inputs.cfg.network,
-							dest_network = %wl.network,
-							gateway = ?resolved_gw_addr,
-							"picked workload on remote network, using double hbone"
-						);
-						// TODO:wire the gw_handle through to handshake_double to track per-conn health/latency
-						Some((resolved_gw_addr, gw_identity))
-					} else {
-						tracing::warn!(
-							gateway_hostname = ?hostname,
-							"no service / endpoint / IP for hostname-based network gateway"
-						);
-						None
-					}
-				},
-			}
-		} else {
-			tracing::warn ! (
-			source_network = % inputs.cfg.network,
-			dest_network = % wl.network,
-			"workload on remote network but no gateway configured"
-			);
-			None
-		}
+	let mut network_gateway = if wl.network != inputs.cfg.network {
+		resolve_network_gateway(
+			inputs,
+			&discovery,
+			wl.as_ref(),
+			"selected service workload is remote",
+		)
 	} else {
 		None
 	};
+	let mut transport_override = Some((wl.protocol, workload_and_service_sans(&wl, svc)));
 
 	// Check if the service has ingress_use_waypoint set and a waypoint configured.
 	// When set, route traffic through the waypoint instead of directly to the workload.
@@ -2128,68 +2165,75 @@ pub fn build_service_call(
 	// ingress gateways, never waypoint-to-waypoint traffic.
 	let waypoint = if svc.ingress_use_waypoint && hbone_source != Some(HboneSourceRole::Waypoint) {
 		if let Some(wp) = &svc.waypoint {
-			let wp_ip = match &wp.destination {
-				types::discovery::gatewayaddress::Destination::Address(net_addr) => Some(net_addr.address),
-				types::discovery::gatewayaddress::Destination::Hostname(nh) => {
-					// Resolve hostname-based waypoint via service discovery
-					discovery
-						.services
-						.get_by_namespaced_host(&NamespacedHostname {
-							namespace: nh.namespace.clone(),
-							hostname: nh.hostname.clone(),
-						})
-						.and_then(|wp_svc| {
-							wp_svc
-								.vips
-								.iter()
-								.find(|v| v.network == inputs.cfg.network)
-								.or_else(|| wp_svc.vips.first())
-								.map(|v| v.address)
-						})
-				},
+			let default_wp_port = if wp.hbone_mtls_port > 0 {
+				wp.hbone_mtls_port
+			} else {
+				agent_hbone::DEFAULT_HBONE_PORT
 			};
-			// Resolve the waypoint's own SPIFFE identity for mTLS verification.
-			let waypoint_info = wp_ip.and_then(|ip| {
-				let net_addr = types::discovery::NetworkAddress {
-					network: inputs.cfg.network.clone(),
-					address: ip,
-				};
-				let identity = if let Some(wp_wl) = discovery.workloads.find_address(&net_addr) {
-					// waypoint_ip is a pod IP — use the workload identity directly
-					Some(wp_wl.identity())
-				} else if let Some(wp_svc) = discovery.services.get_by_vip(&net_addr) {
-					// waypoint_ip is a service VIP — get identity from a backing workload
-					wp_svc.endpoints.iter().iter().find_map(|(ep, _)| {
-						discovery
-							.workloads
-							.find_uid(&ep.workload_uid)
-							.map(|wl| wl.identity())
-					})
-				} else {
-					None
-				};
-				identity.map(|id| (ip, id))
-			});
-			match waypoint_info {
-				Some((ip, identity)) => {
-					let wp_port = if wp.hbone_mtls_port > 0 {
-						wp.hbone_mtls_port
+			// Resolve the waypoint to a concrete backing workload so we know its IP (not the
+			// service VIP) and its network — the latter lets us detect a remote waypoint and
+			// route to it through the network gateway via double HBONE.
+			let waypoint_info = match &wp.destination {
+				types::discovery::gatewayaddress::Destination::Address(net_addr) => {
+					if let Some(wp_wl) = discovery.workloads.find_address(net_addr) {
+						// A pod IP: use the workload identity directly (no service SANs available).
+						Some((
+							SocketAddr::new(net_addr.address, default_wp_port),
+							vec![wp_wl.identity()],
+							wp_wl,
+						))
+					} else if let Some(wp_svc) = discovery.services.get_by_vip(net_addr) {
+						// A service VIP: resolve a backing endpoint to get a real workload IP.
+						resolve_service_endpoint(&discovery, &wp_svc, default_wp_port)
 					} else {
-						agent_hbone::DEFAULT_HBONE_PORT
-					};
-					tracing::debug!(
-						service = %svc.hostname,
-						waypoint = %ip,
-						waypoint_port = %wp_port,
-						"ingress_use_waypoint: routing through waypoint"
-					);
-					Some(WaypointTarget {
-						address: SocketAddr::new(ip, wp_port),
-						service_hostname: svc.hostname.clone(),
-						identities: vec![identity],
-					})
+						None
+					}
 				},
-				_ => {
+				types::discovery::gatewayaddress::Destination::Hostname(nh) => discovery
+					.services
+					.get_by_namespaced_host(&NamespacedHostname {
+						namespace: nh.namespace.clone(),
+						hostname: nh.hostname.clone(),
+					})
+					.and_then(|wp_svc| resolve_service_endpoint(&discovery, &wp_svc, default_wp_port)),
+			};
+			match waypoint_info {
+				Some((address, identities, wp_wl)) => {
+					if wp_wl.network != inputs.cfg.network {
+						// Remote waypoint: reach it through the network gateway via double HBONE.
+						// The inner HBONE identities are the waypoint's; the outer ones are the
+						// gateway's, resolved below.
+						if let Some(gw) = resolve_network_gateway(
+							inputs,
+							&discovery,
+							wp_wl.as_ref(),
+							"ingress_use_waypoint selected a remote waypoint workload",
+						) {
+							network_gateway = Some(gw);
+							transport_override = Some((InboundProtocol::HBONE, identities));
+							tracing::debug!(
+								service = %svc.hostname,
+								waypoint = %address.ip(),
+								waypoint_port = %address.port(),
+								"ingress_use_waypoint: routing to remote waypoint through network gateway"
+							);
+						}
+						None
+					} else {
+						tracing::debug!(
+							service = %svc.hostname,
+							waypoint = %address.ip(),
+							waypoint_port = %address.port(),
+							"ingress_use_waypoint: routing through waypoint"
+						);
+						Some(WaypointTarget {
+							address,
+							service_hostname: svc.hostname.clone(),
+							identities,
+						})
+					}
+				},
+				None => {
 					tracing::warn!(
 						service = %svc.hostname,
 						"ingress_use_waypoint set but waypoint could not be resolved"
@@ -2241,7 +2285,7 @@ pub fn build_service_call(
 	Ok(BackendCall {
 		target,
 		http_version_override,
-		transport_override: Some((wl.protocol, workload_and_service_sans(&wl, svc))),
+		transport_override,
 		hbone_port,
 		network_gateway,
 		waypoint,
@@ -2290,6 +2334,95 @@ fn workload_and_service_sans(wl: &Workload, svc: &Service) -> Vec<Identity> {
 	ids
 }
 
+/// Selects a healthy endpoint for `svc` on `port` and returns its reachable socket address
+/// (a real workload IP, not the service VIP), the accepted SPIFFE identities for mTLS
+/// verification (workload identity + service SANs, matching ztunnel), and the backing workload.
+fn resolve_service_endpoint(
+	discovery: &store::DiscoveryStore,
+	svc: &Service,
+	port: u16,
+) -> Option<(SocketAddr, Vec<Identity>, Arc<Workload>)> {
+	let (ep, _handle, wl) = svc
+		.endpoints
+		.select_endpoint(&discovery.workloads, svc, port, None)?;
+	// TODO: plumb `_handle` through the waypoint/gateway transports so endpoint selection
+	// keeps EWMA, eviction, and latency feedback.
+	let resolved_port = select_service_target_port(ep.as_ref(), svc, port, None, false)?;
+	let ip = *wl.workload_ips.first()?;
+	let identities = workload_and_service_sans(&wl, svc);
+	Some((SocketAddr::new(ip, resolved_port), identities, wl))
+}
+
+/// Resolves the network gateway used to reach `remote_wl` from the local network via double
+/// HBONE. Returns the gateway address and the accepted SPIFFE identities for the outer tunnel.
+fn resolve_network_gateway(
+	inputs: &ProxyInputs,
+	discovery: &store::DiscoveryStore,
+	remote_wl: &Workload,
+	reason: &'static str,
+) -> Option<(GatewayAddress, Vec<Identity>)> {
+	let Some(gw_addr) = &remote_wl.network_gateway else {
+		tracing::warn!(
+			source_network = %inputs.cfg.network,
+			dest_network = %remote_wl.network,
+			"workload on remote network but no gateway configured"
+		);
+		return None;
+	};
+	let resolved = match &gw_addr.destination {
+		types::discovery::gatewayaddress::Destination::Address(net_addr) => {
+			let Some(gw_wl) = discovery.workloads.find_address(net_addr) else {
+				tracing::warn!(
+					gateway_address = ?net_addr,
+					"network gateway address not found in workload store for remote workload"
+				);
+				return None;
+			};
+			// A direct gateway address gives us only the workload; no service SANs available.
+			Some((gw_addr.clone(), vec![gw_wl.identity()]))
+		},
+		types::discovery::gatewayaddress::Destination::Hostname(hostname) => {
+			let resolved = discovery
+				.services
+				.get_by_namespaced_host(&NamespacedHostname {
+					namespace: hostname.namespace.clone(),
+					hostname: hostname.hostname.clone(),
+				})
+				.and_then(|gw_svc| {
+					let (addr, identities, gw_wl) =
+						resolve_service_endpoint(discovery, &gw_svc, gw_addr.hbone_mtls_port)?;
+					Some((
+						GatewayAddress {
+							destination: types::discovery::gatewayaddress::Destination::Address(NetworkAddress {
+								network: gw_wl.network.clone(),
+								address: addr.ip(),
+							}),
+							hbone_mtls_port: addr.port(),
+						},
+						identities,
+					))
+				});
+			if resolved.is_none() {
+				tracing::warn!(
+					gateway_hostname = ?hostname,
+					"no service / endpoint / IP for hostname-based network gateway"
+				);
+			}
+			resolved
+		},
+	};
+	if let Some((resolved_gw_addr, _)) = &resolved {
+		tracing::debug!(
+			source_network = %inputs.cfg.network,
+			dest_network = %remote_wl.network,
+			gateway = ?resolved_gw_addr,
+			reason,
+			"picked workload on remote network, using double hbone"
+		);
+	}
+	resolved
+}
+
 fn resolved_workload_target_hostname<'a>(
 	workload_hostname: &'a str,
 	request_host: Option<&'a str>,
@@ -2306,6 +2439,43 @@ fn resolved_workload_target_hostname<'a>(
 	}
 }
 
+fn set_final_response_fields(
+	log: &mut RequestLog,
+	reason: &ProxyResponseReason,
+	resp: &mut Response,
+) {
+	log.status = Some(resp.status());
+	log.reason = Some(*reason);
+	log.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
+	log.response_snapshot = log.cel.cel_context.maybe_snapshot_response(resp);
+}
+
+fn finalize_attempt_for_retry(
+	log: &mut RequestLog,
+	res: &mut Result<Response, SnapshottedProxyResponse>,
+) {
+	let (status, retry_after, response_snapshot) = match res {
+		Ok(resp) => (
+			Some(resp.status()),
+			http::outlierdetection::retry_after(resp.status(), resp.headers()),
+			log.cel.cel_context.maybe_snapshot_response(resp),
+		),
+		Err(SnapshottedProxyResponse(_)) => (None, None, None),
+	};
+	let end_time = agent_core::Timestamp::now();
+	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
+	let llm_response = log.llm_response.load_clone().map(Into::into);
+	let mcp = log.mcp_status.load_clone();
+	log.finalize_request_handle_for_attempt(
+		end_time,
+		status,
+		retry_after,
+		response_snapshot.as_ref(),
+		llm_response.as_ref(),
+		mcp.as_ref(),
+	);
+}
+
 fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
 	match res {
 		Ok(resp) => pol.codes.contains(&resp.status()),
@@ -2319,14 +2489,20 @@ mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
 
+	use ::http::Method;
+	use serde_json::json;
+	use wiremock::{Mock, ResponseTemplate};
+
 	use super::{
 		apply_auto_hostname, hop_by_hop_headers, resolved_workload_target_hostname,
 		select_service_target_port,
 	};
 	use crate::http;
 	use crate::http::filters::AutoHostname;
-	use crate::types::agent::Target;
+	use crate::test_helpers::proxymock;
+	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
+	use crate::types::local::LocalAIBackend;
 
 	#[test]
 	fn apply_auto_hostname_rewrites_authority_when_enabled() {
@@ -2525,6 +2701,118 @@ mod tests {
 		);
 		assert!(!req.headers().contains_key("x-original-url"));
 	}
+
+	#[tokio::test]
+	async fn llm_retry_evicts_failed_priority_group_before_next_attempt() {
+		let primary = wiremock::MockServer::start().await;
+		Mock::given(wiremock::matchers::any())
+			.respond_with(ResponseTemplate::new(429))
+			.mount(&primary)
+			.await;
+
+		let fallback = wiremock::MockServer::start().await;
+		Mock::given(wiremock::matchers::any())
+			.respond_with(ResponseTemplate::new(200).set_body_raw(
+				include_bytes!("../llm/tests/response/completions/basic.json").to_vec(),
+				"application/json",
+			))
+			.mount(&fallback)
+			.await;
+
+		let mut bind = proxymock::setup_proxy_test("{}").expect("proxy test harness");
+		let local_backend: LocalAIBackend = serde_json::from_value(json!({
+			"groups": [
+				{
+					"providers": [{
+						"name": "primary",
+						"hostOverride": primary.address().to_string(),
+						"provider": {
+							"openAI": {
+								"model": null
+							}
+						},
+						"policies": {
+							"health": {
+								"unhealthyExpression": "response.code == 429",
+								"eviction": {
+									"duration": "1s"
+								}
+							}
+						}
+					}]
+				},
+				{
+					"providers": [{
+						"name": "fallback",
+						"hostOverride": fallback.address().to_string(),
+						"provider": {
+							"openAI": {
+								"model": null
+							}
+						}
+					}]
+				}
+			]
+		}))
+		.expect("local AI backend");
+		let backend = Backend::AI(
+			ResourceName::new("llm".into(), "".into()),
+			local_backend.translate().expect("translated backend"),
+		);
+		bind
+			.pi
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend.name(), backend.into());
+		bind = bind
+			.with_bind(proxymock::simple_bind())
+			.with_route(proxymock::basic_named_route("/llm".into()));
+		bind
+			.attach_route_policy(json!({
+				"retry": {
+					"attempts": 1,
+					"backoff": "10ms",
+					"codes": [429]
+				},
+				"ai": {
+					"routes": {
+						"/v1/chat/completions": "completions"
+					}
+				}
+			}))
+			.await;
+		let io = bind.serve_http(proxymock::BIND_KEY);
+
+		let res = proxymock::send_request_body(
+			io,
+			Method::POST,
+			"http://lo/v1/chat/completions",
+			include_bytes!("../llm/tests/requests/completions/basic.json"),
+		)
+		.await;
+
+		assert_eq!(res.status(), 200);
+
+		let primary_requests = primary
+			.received_requests()
+			.await
+			.expect("primary request recording");
+		assert_eq!(primary_requests.len(), 1);
+
+		let fallback_requests = fallback
+			.received_requests()
+			.await
+			.expect("fallback request recording");
+		assert_eq!(fallback_requests.len(), 1);
+		assert_eq!(
+			fallback_requests[0]
+				.headers
+				.get("x-retry-attempt")
+				.and_then(|v| v.to_str().ok()),
+			Some("1")
+		);
+	}
 }
 
 pub fn maybe_set_grpc_status(status: &AsyncLog<u8>, headers: &HeaderMap) {
@@ -2699,8 +2987,8 @@ pub struct BackendCall {
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub hbone_port: u16,
-	pub network_gateway: Option<(GatewayAddress, Identity)>, /* For double hbone: (gateway_address, gateway_identity) */
-	pub waypoint: Option<WaypointTarget>,                    // For ingress waypoint routing
+	pub network_gateway: Option<(GatewayAddress, Vec<Identity>)>, /* For double hbone: (gateway_address, gateway_identities) */
+	pub waypoint: Option<WaypointTarget>,                         // For ingress waypoint routing
 	pub backend_policies: BackendPolicies,
 }
 

@@ -665,6 +665,28 @@ fn test_pseudo_header_value_extraction() {
 }
 
 #[test]
+fn grpc_ext_authz_scheme_uses_forwarded_proto_when_uri_has_no_scheme() {
+	let req = ::http::Request::builder()
+		.uri("/api/test")
+		.header("x-forwarded-proto", "https")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(ExtAuthz::request_scheme(&req), "https");
+}
+
+#[test]
+fn grpc_ext_authz_scheme_prefers_uri_scheme_over_forwarded_proto() {
+	let req = ::http::Request::builder()
+		.uri("http://example.com/api/test")
+		.header("x-forwarded-proto", "https")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(ExtAuthz::request_scheme(&req), "http");
+}
+
+#[test]
 fn test_pseudo_header_authority_fallback() {
 	use ::http::{Method, Request};
 

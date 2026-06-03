@@ -205,6 +205,7 @@ impl RequestType for Request {
 		let llm = LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Messages,
+			native_format: Some(crate::llm::custom::ProviderFormat::Messages),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

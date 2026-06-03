@@ -77,6 +77,7 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Detect,
+			native_format: None,
 			request_model: self
 				.lookup(lookups::MODEL, |v| v.as_str())
 				.map(Into::into)

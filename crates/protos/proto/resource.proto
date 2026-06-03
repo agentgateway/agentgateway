@@ -1472,12 +1472,30 @@ message AIBackend {
     OPEN_AI = 0;
     FOUNDRY = 1;
   }
+  enum ProviderFormat {
+    PROVIDER_FORMAT_UNSPECIFIED = 0;
+    COMPLETIONS = 1;
+    MESSAGES = 2;
+    RESPONSES = 3;
+    EMBEDDINGS = 4;
+    ANTHROPIC_TOKEN_COUNT = 5;
+    REALTIME = 6;
+  }
+  message ProviderFormatConfig {
+    ProviderFormat format = 1;
+    optional string path = 2;
+  }
+  message Custom {
+    repeated ProviderFormatConfig formats = 1;
+    optional string model = 2;
+  }
 
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
     optional string path_prefix = 12;
+    BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;
@@ -1486,6 +1504,7 @@ message AIBackend {
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
+      Custom custom = 15;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

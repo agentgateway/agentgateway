@@ -647,7 +647,7 @@ pub mod trustdomain {
 			}
 			let (_, c) = X509Certificate::from_der(client_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let (ids, _) = super::sans(c).map_err(|_e| {
+			let (ids, _) = super::sans(&c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -874,7 +874,7 @@ pub mod identity {
 			use x509_parser::prelude::*;
 			let (_, c) = X509Certificate::from_der(server_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let (id, _) = super::sans(c).map_err(|_e| {
+			let (id, _) = super::sans(&c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -989,6 +989,9 @@ pub struct TlsInfo {
 	/// The CN of the subject from the downstream certificate, if available.
 	#[serde(default)]
 	pub subject_cn: Option<Strng>,
+	/// PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
+	#[serde(default)]
+	pub certificate: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -1037,7 +1040,8 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 		})?;
 
 	let (issuer, subject, subject_cn) = names(&cert);
-	let (istio, sans) = sans(cert).ok()?;
+	let (istio, sans) = sans(&cert).ok()?;
+	let certificate = Some(certificate(cert));
 	Some(TlsInfo {
 		identity: istio.into_iter().next().map(|i| {
 			let Identity::Spiffe {
@@ -1055,6 +1059,7 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 		issuer,
 		subject,
 		subject_cn,
+		certificate,
 	})
 }
 fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
@@ -1067,7 +1072,7 @@ fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
 		.map(strng::new);
 	(issuer, subject, subject_cn)
 }
-fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
+fn sans(cert: &X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 	use x509_parser::prelude::*;
 	let names = cert
 		.subject_alternative_name()?
@@ -1113,6 +1118,11 @@ fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 		return Ok((istio, generic));
 	}
 	Ok((Vec::default(), Vec::default()))
+}
+fn certificate(cert: X509Certificate) -> Strng {
+	let pem_block = pem::Pem::new("CERTIFICATE", cert.as_raw().to_vec());
+	let pem_string = pem::encode(&pem_block);
+	Strng::from(pem_string)
 }
 
 #[derive(thiserror::Error, Debug)]

@@ -739,7 +739,8 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(async move {
+				let req = req.map(crate::http::Body::new);
+				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
 					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 				}))
 			}),
@@ -999,6 +1000,7 @@ impl Gateway {
 					issuer: crate::strng::EMPTY,
 					subject: crate::strng::EMPTY,
 					subject_cn: None,
+					certificate: None,
 				}),
 				server_name: None,
 				negotiated_alpn: None,

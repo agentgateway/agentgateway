@@ -26,7 +26,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::AIProvider;
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -40,6 +40,7 @@ use crate::types::agent::{
 	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, Target, TargetedPolicy,
 };
+use crate::types::loadbalancer::EndpointSet;
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
@@ -175,6 +176,47 @@ pub fn llm_named_provider(
 		tokenize,
 		policies: None,
 	}
+}
+
+pub fn custom_llm_backend(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	supported_formats: Vec<crate::llm::custom::ProviderFormat>,
+) -> BackendWithPolicies {
+	custom_llm_backend_with_formats(
+		name,
+		provider_backend,
+		supported_formats
+			.into_iter()
+			.map(|format| crate::llm::custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+pub fn custom_llm_backend_with_formats(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	formats: Vec<crate::llm::custom::ProviderFormatConfig>,
+) -> BackendWithPolicies {
+	let provider = NamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(crate::llm::custom::Provider {
+			model: None,
+			formats,
+		}),
+		provider_backend: Some(provider_backend),
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	let providers = EndpointSet::new(vec![vec![(provider.name.clone(), provider)]]);
+	Backend::AI(
+		ResourceName::new(name.into(), "".into()),
+		AIBackend { providers },
+	)
+	.into()
 }
 
 pub fn basic_route(target: SocketAddr) -> Route {

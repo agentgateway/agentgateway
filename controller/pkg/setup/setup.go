@@ -71,6 +71,9 @@ type Options struct {
 	GlobalSettings              *apisettings.Settings
 	LeaderElectionID            string
 	ExtraStatusHandlers         map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	AgentGatewaySyncerOptions []syncer.AgentgatewaySyncerOption
 
@@ -360,6 +363,7 @@ func (s *setup) buildSyncer(
 		AgwCollections:                 agwCollections,
 		Resolver:                       resolver,
 		JWKSLookup:                     jwksLookup,
+		CredentialResolverFactory:      s.CredentialResolverFactory,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,

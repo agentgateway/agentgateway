@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ::http::{Method, Request};
@@ -24,12 +24,17 @@ use crate::http::ext_proc::proto::{
 };
 use crate::http::ext_proc::{ExtProcDynamicMetadata, proto};
 use crate::http::{Body, ext_proc};
-use crate::test_helpers::MockInstance;
+use crate::llm::custom;
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
 	response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
+use crate::test_helpers::{MockInstance, ratelimitmock};
+use crate::types::agent::{
+	BackendTarget, BackendTrafficPolicy, PolicyTarget, SimpleBackendReference, Target, TargetedPolicy,
+};
+use crate::types::discovery::NamespacedHostname;
 use crate::*;
 
 // Processing-option decoding and default behavior.
@@ -1972,6 +1977,33 @@ const STANDALONE_SERVICE_PORT: u16 = 8000;
 struct StandaloneInferenceRouter {
 	target: Option<SocketAddr>,
 	request_headers_seen: Arc<AtomicUsize>,
+	request_path_seen: Option<Arc<Mutex<Option<String>>>>,
+	request_body_seen: Option<Arc<Mutex<Vec<u8>>>>,
+}
+
+impl StandaloneInferenceRouter {
+	fn new(target: Option<SocketAddr>, request_headers_seen: Arc<AtomicUsize>) -> Self {
+		Self {
+			target,
+			request_headers_seen,
+			request_path_seen: None,
+			request_body_seen: None,
+		}
+	}
+
+	fn recording(
+		target: Option<SocketAddr>,
+		request_headers_seen: Arc<AtomicUsize>,
+		request_path_seen: Arc<Mutex<Option<String>>>,
+		request_body_seen: Arc<Mutex<Vec<u8>>>,
+	) -> Self {
+		Self {
+			target,
+			request_headers_seen,
+			request_path_seen: Some(request_path_seen),
+			request_body_seen: Some(request_body_seen),
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -1985,10 +2017,20 @@ struct BodyDrivenStandaloneInferenceRouter {
 impl Handler for StandaloneInferenceRouter {
 	async fn handle_request_headers(
 		&mut self,
-		_headers: &HttpHeaders,
+		headers: &HttpHeaders,
 		sender: &Sender<Result<ProcessingResponse, Status>>,
 	) -> Result<(), Status> {
 		self.request_headers_seen.fetch_add(1, Ordering::SeqCst);
+		if let Some(request_path_seen) = &self.request_path_seen
+			&& let Some(path) = headers.headers.as_ref().and_then(|headers| {
+				headers
+					.headers
+					.iter()
+					.find(|header| header.key == ":path")
+					.map(|header| header.value.clone())
+			}) {
+			*request_path_seen.lock().unwrap() = Some(path);
+		}
 		let _ = sender
 			.send(request_header_response(self.target.map(|target| {
 				CommonResponse {
@@ -2010,6 +2052,61 @@ impl Handler for StandaloneInferenceRouter {
 			.await;
 		Ok(())
 	}
+
+	async fn handle_request_body(
+		&mut self,
+		body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		if let Some(request_body_seen) = &self.request_body_seen {
+			request_body_seen
+				.lock()
+				.unwrap()
+				.extend_from_slice(&body.body);
+		}
+		let _ = sender
+			.send(request_body_response(Some(CommonResponse {
+				body_mutation: Some(BodyMutation {
+					mutation: Some(body_mutation::Mutation::StreamedResponse(
+						proto::StreamedBodyResponse {
+							body: body.body.clone(),
+							end_of_stream: body.end_of_stream,
+						},
+					)),
+				}),
+				..Default::default()
+			})))
+			.await;
+		Ok(())
+	}
+}
+
+#[derive(Clone)]
+struct RecordingRateLimit {
+	requests: mpsc::UnboundedSender<crate::http::remoteratelimit::proto::RateLimitRequest>,
+}
+
+#[async_trait::async_trait]
+impl ratelimitmock::Handler for RecordingRateLimit {
+	async fn should_rate_limit(
+		&mut self,
+		request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+	) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+		self
+			.requests
+			.send(request.clone())
+			.expect("rate limit request receiver should be open");
+		ratelimitmock::ok_response()
+	}
+}
+
+async fn recv_rate_limit_request(
+	requests: &mut mpsc::UnboundedReceiver<crate::http::remoteratelimit::proto::RateLimitRequest>,
+) -> crate::http::remoteratelimit::proto::RateLimitRequest {
+	tokio::time::timeout(Duration::from_secs(1), requests.recv())
+		.await
+		.expect("timed out waiting for rate limit request")
+		.expect("rate limit request sender should be open")
 }
 
 #[async_trait::async_trait]
@@ -2101,12 +2198,10 @@ async fn setup_inference_routing_mock(
 	request_headers_seen: Arc<AtomicUsize>,
 	destination_mode: Option<&'static str>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
-	let ext_proc = ExtProcMock::new(move || StandaloneInferenceRouter {
-		target,
-		request_headers_seen: request_headers_seen.clone(),
-	})
-	.spawn()
-	.await;
+	let ext_proc =
+		ExtProcMock::new(move || StandaloneInferenceRouter::new(target, request_headers_seen.clone()))
+			.spawn()
+			.await;
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
 	configure_standalone_service(&t);
@@ -2281,6 +2376,220 @@ mod standalone_inference_routing {
 			"gateway should consult EPP before rejecting the request",
 		);
 	}
+}
+
+#[tokio::test]
+async fn custom_llm_provider_service_backend_runs_inference_routing() {
+	let backend = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let backend_addr = *backend.address();
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let ext_proc = ExtProcMock::new({
+		let request_headers_seen = request_headers_seen.clone();
+		move || StandaloneInferenceRouter::new(Some(backend_addr), request_headers_seen.clone())
+	})
+	.spawn()
+	.await;
+
+	let backend_name = "custom-ai";
+	let service = NamespacedHostname {
+		namespace: "default".into(),
+		hostname: STANDALONE_SERVICE_NAME.into(),
+	};
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend(
+			backend_name,
+			SimpleBackendReference::Service {
+				name: service.clone(),
+				port: STANDALONE_SERVICE_PORT,
+			},
+			vec![custom::ProviderFormat::Completions],
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	configure_standalone_service(&t);
+	t.with_policy(TargetedPolicy {
+		key: "custom-provider-epp".into(),
+		name: None,
+		target: PolicyTarget::Backend(BackendTarget::Service {
+			hostname: service.hostname.clone(),
+			namespace: service.namespace.clone(),
+			port: Some(STANDALONE_SERVICE_PORT),
+		}),
+		policy: BackendTrafficPolicy::InferenceRouting(ext_proc::InferenceRouting {
+			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+				ext_proc.address,
+			))),
+			destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+			failure_mode: ext_proc::FailureMode::FailClosed,
+		})
+		.into(),
+	});
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = read_body_raw(res.into_body()).await;
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"provider service backend should consult EPP",
+	);
+	assert_eq!(
+		backend
+			.received_requests()
+			.await
+			.expect("backend recording should be enabled")
+			.len(),
+		1,
+		"EPP-selected backend should receive the LLM request",
+	);
+}
+
+#[tokio::test]
+async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token_rate_limit() {
+	let backend = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let backend_addr = *backend.address();
+	let request_headers_seen = Arc::new(AtomicUsize::new(0));
+	let request_path_seen = Arc::new(Mutex::new(None));
+	let request_body_seen = Arc::new(Mutex::new(Vec::new()));
+	let ext_proc = ExtProcMock::new({
+		let request_headers_seen = request_headers_seen.clone();
+		let request_path_seen = request_path_seen.clone();
+		let request_body_seen = request_body_seen.clone();
+		move || {
+			StandaloneInferenceRouter::recording(
+				Some(backend_addr),
+				request_headers_seen.clone(),
+				request_path_seen.clone(),
+				request_body_seen.clone(),
+			)
+		}
+	})
+	.spawn()
+	.await;
+
+	let (rate_limit_tx, mut rate_limit_rx) = mpsc::unbounded_channel();
+	let rate_limit = ratelimitmock::RateLimitMock::new({
+		let rate_limit_tx = rate_limit_tx.clone();
+		move || RecordingRateLimit {
+			requests: rate_limit_tx.clone(),
+		}
+	})
+	.spawn()
+	.await;
+
+	let backend_name = "custom-ai";
+	let service = NamespacedHostname {
+		namespace: "default".into(),
+		hostname: STANDALONE_SERVICE_NAME.into(),
+	};
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend(
+			backend_name,
+			SimpleBackendReference::Service {
+				name: service.clone(),
+				port: STANDALONE_SERVICE_PORT,
+			},
+			vec![custom::ProviderFormat::Messages],
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	configure_standalone_service(&t);
+	t.with_policy(TargetedPolicy {
+		key: "custom-provider-epp".into(),
+		name: None,
+		target: PolicyTarget::Backend(BackendTarget::Service {
+			hostname: service.hostname.clone(),
+			namespace: service.namespace.clone(),
+			port: Some(STANDALONE_SERVICE_PORT),
+		}),
+		policy: BackendTrafficPolicy::InferenceRouting(ext_proc::InferenceRouting {
+			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+				ext_proc.address,
+			))),
+			destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+			failure_mode: ext_proc::FailureMode::FailClosed,
+		})
+		.into(),
+	});
+	t.attach_route_policy(json!({
+		"remoteRateLimit": {
+			"domain": "llm",
+			"host": rate_limit.address.to_string(),
+			"descriptors": [{
+				"entries": [{
+					"key": "model",
+					"value": "\"model\"",
+				}],
+				"type": "tokens",
+				"cost": "llm.outputTokens * uint(1000) + llm.inputTokens",
+			}],
+		},
+	}))
+	.await;
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let response_body: serde_json::Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
+	assert_eq!(response_body["object"], "chat.completion");
+
+	assert_eq!(
+		request_headers_seen.load(Ordering::SeqCst),
+		1,
+		"provider service backend should consult EPP",
+	);
+	assert_eq!(
+		request_path_seen.lock().unwrap().as_deref(),
+		Some("/v1/chat/completions"),
+		"EPP should see the client request path before upstream serialization",
+	);
+	let epp_body: serde_json::Value =
+		serde_json::from_slice(&request_body_seen.lock().unwrap()).expect("EPP body is JSON");
+	assert_eq!(epp_body["messages"][0]["role"], "system");
+	assert!(epp_body.get("system").is_none());
+
+	let requests = backend
+		.received_requests()
+		.await
+		.expect("backend recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].url.path(), "/v1/messages");
+	let upstream_body: serde_json::Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
+	assert_eq!(upstream_body["messages"][0]["role"], "user");
+
+	let initial_request = recv_rate_limit_request(&mut rate_limit_rx).await;
+	let amend_request = recv_rate_limit_request(&mut rate_limit_rx).await;
+	assert_eq!(initial_request.domain, "llm");
+	assert_eq!(amend_request.domain, "llm");
+	assert_eq!(
+		initial_request.descriptors.first().unwrap().hits_addend,
+		Some(0)
+	);
+	assert_eq!(
+		amend_request.descriptors.first().unwrap().hits_addend,
+		Some(21015)
+	);
 }
 
 // Shared ext_proc mock handlers used by the end-to-end tests above and below.

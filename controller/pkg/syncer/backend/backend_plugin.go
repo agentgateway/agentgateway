@@ -24,13 +24,14 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 var logger = logging.New("agentgateway/backend")
 
 // NewBackendPlugin creates a new plugin for AgentgatewayBackends
-func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
+func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
 	return plugins.AgwPlugin{
 		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
 			wellknown.AgentgatewayBackendGVK.GroupKind(): {
@@ -45,11 +46,12 @@ func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver,
 						[]agwir.AgwResource,
 					) {
 						pc := plugins.PolicyCtx{
-							Krt:         ctx,
-							Collections: agw,
-							References:  input.References,
-							Resolver:    resolver,
-							JWKSLookup:  jwksLookup,
+							Krt:                ctx,
+							Collections:        agw,
+							References:         input.References,
+							Resolver:           resolver,
+							JWKSLookup:         jwksLookup,
+							CredentialResolver: credentialResolver,
 						}
 						return TranslateAgwBackend(pc, backend, input.References)
 					}, agw.KrtOpts.ToOptions("backends/Agentgateway")...)
@@ -82,8 +84,10 @@ func BuildAgwBackendReferences(
 		plugins.BackendReferencesFromBackendPolicy(backend.Spec.Policies, app)
 	}
 	if ai := backend.Spec.AI; ai != nil {
+		appendLLMProviderBackendReferences(ai.LLM, app)
 		for _, r := range ai.PriorityGroups {
 			for _, p := range r.Providers {
+				appendLLMProviderBackendReferences(&p.LLMProvider, app)
 				if p.Policies != nil {
 					plugins.BackendReferencesFromBackendPolicy(&agentgateway.BackendFull{
 						BackendSimple:  p.Policies.BackendSimple,
@@ -106,6 +110,13 @@ func BuildAgwBackendReferences(
 		}
 	}
 	return attachments
+}
+
+func appendLLMProviderBackendReferences(llm *agentgateway.LLMProvider, app func(ref gwv1.BackendObjectReference)) {
+	if llm == nil || llm.Custom == nil || llm.Custom.BackendRef == nil {
+		return
+	}
+	app(*llm.Custom.BackendRef)
 }
 
 // BuildAgwBackend translates a Backend to an AgwBackend
@@ -355,7 +366,7 @@ func translateAIBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBac
 
 	aiBackend := &api.AIBackend{}
 	if llm := ai.LLM; llm != nil {
-		provider, err := translateLLMProvider(llm, utils.SingularLLMProviderSubBackendName)
+		provider, err := translateLLMProvider(ctx, be.Namespace, llm, utils.SingularLLMProviderSubBackendName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to translate LLM provider: %w", err)
 		}
@@ -368,7 +379,7 @@ func translateAIBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBac
 			providerGroup := &api.AIBackend_ProviderGroup{}
 
 			for _, provider := range group.Providers {
-				tp, err := translateLLMProvider(&provider.LLMProvider, string(provider.Name))
+				tp, err := translateLLMProvider(ctx, be.Namespace, &provider.LLMProvider, string(provider.Name))
 				if err != nil {
 					return nil, fmt.Errorf("failed to translate LLM provider: %w", err)
 				}
@@ -426,7 +437,7 @@ func translateAIBackendPolicies(
 	})
 }
 
-func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*api.AIBackend_Provider, error) {
+func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgateway.LLMProvider, providerName string) (*api.AIBackend_Provider, error) {
 	provider := &api.AIBackend_Provider{
 		Name: providerName,
 	}
@@ -514,11 +525,85 @@ func translateLLMProvider(llm *agentgateway.LLMProvider, providerName string) (*
 				GuardrailVersion:    guardrailVersion,
 			},
 		}
+	} else if llm.Custom != nil {
+		formats, err := translateProviderFormats(llm.Custom.Formats)
+		if err != nil {
+			return nil, err
+		}
+		provider.Provider = &api.AIBackend_Provider_Custom{
+			Custom: &api.AIBackend_Custom{
+				Formats: formats,
+				Model:   llm.Custom.Model,
+			},
+		}
+		if llm.Custom.BackendRef != nil {
+			providerBackend, err := translateCustomProviderBackendRef(ctx, namespace, *llm.Custom.BackendRef)
+			if err != nil {
+				return nil, err
+			}
+			provider.ProviderBackend = providerBackend
+		}
 	} else {
 		return nil, fmt.Errorf("no supported LLM provider configured")
 	}
 
 	return provider, nil
+}
+
+func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
+	out := make([]*api.AIBackend_ProviderFormatConfig, 0, len(formats))
+	for _, format := range formats {
+		protoFormat, err := translateProviderFormat(format.Type)
+		if err != nil {
+			return nil, err
+		}
+		protoConfig := &api.AIBackend_ProviderFormatConfig{Format: protoFormat}
+		if format.Path != "" {
+			path := string(format.Path)
+			protoConfig.Path = &path
+		}
+		out = append(out, protoConfig)
+	}
+	return out, nil
+}
+
+func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_ProviderFormat, error) {
+	switch format {
+	case agentgateway.ProviderFormatCompletions:
+		return api.AIBackend_COMPLETIONS, nil
+	case agentgateway.ProviderFormatMessages:
+		return api.AIBackend_MESSAGES, nil
+	case agentgateway.ProviderFormatResponses:
+		return api.AIBackend_RESPONSES, nil
+	case agentgateway.ProviderFormatEmbeddings:
+		return api.AIBackend_EMBEDDINGS, nil
+	case agentgateway.ProviderFormatAnthropicTokenCount:
+		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
+	case agentgateway.ProviderFormatRealtime:
+		return api.AIBackend_REALTIME, nil
+	default:
+		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
+	}
+}
+
+func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref gwv1.BackendObjectReference) (*api.BackendReference, error) {
+	if ref.Namespace != nil && string(*ref.Namespace) != namespace {
+		return nil, fmt.Errorf("custom provider backendRef must be namespace-local")
+	}
+
+	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
+	group := ptr.OrDefault(ref.Group, "")
+	gk := schema.GroupKind{
+		Group: string(group),
+		Kind:  string(kind),
+	}
+	switch gk {
+	case wellknown.ServiceGVK.GroupKind(), wellknown.InferencePoolGVK.GroupKind():
+	default:
+		return nil, fmt.Errorf("custom provider backendRef may target only Service or InferencePool")
+	}
+
+	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
 func translateAwsBackends(

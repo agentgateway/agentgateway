@@ -580,19 +580,11 @@ pub mod from_completions {
 					serde_json::json!({ "type": "object", "additionalProperties": true }),
 				),
 			),
-			completions::ResponseFormat::JsonSchema { json_schema } => {
-				let Some(schema) = json_schema.schema.as_ref() else {
-					tracing::warn!(
-						"Dropping response_format.json_schema for Bedrock conversion because schema is missing"
-					);
-					return None;
-				};
-				(
-					Some(json_schema.name.clone()),
-					json_schema.description.clone(),
-					std::borrow::Cow::Borrowed(schema),
-				)
-			},
+			completions::ResponseFormat::JsonSchema { json_schema } => (
+				Some(json_schema.name.clone()),
+				json_schema.description.clone(),
+				std::borrow::Cow::Borrowed(&json_schema.schema),
+			),
 		};
 
 		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {
@@ -2095,19 +2087,11 @@ pub mod from_responses {
 					serde_json::json!({ "type": "object", "additionalProperties": true }),
 				),
 			),
-			responses::TextResponseFormatConfiguration::JsonSchema(json_schema) => {
-				let Some(schema) = json_schema.schema.as_ref() else {
-					tracing::warn!(
-						"Dropping text.format.json_schema for Bedrock conversion because schema is missing"
-					);
-					return None;
-				};
-				(
-					Some(json_schema.name.clone()),
-					json_schema.description.clone(),
-					std::borrow::Cow::Borrowed(schema),
-				)
-			},
+			responses::TextResponseFormatConfiguration::JsonSchema(json_schema) => (
+				Some(json_schema.name.clone()),
+				json_schema.description.clone(),
+				std::borrow::Cow::Borrowed(&json_schema.schema),
+			),
 		};
 
 		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {

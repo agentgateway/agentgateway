@@ -166,22 +166,41 @@ fn get_redirect_url(req: &Request, strip_base: &str) -> String {
 	uri
 		.path()
 		.strip_suffix(strip_base)
-		.map(|p| uri.to_string().replace(uri.path(), p))
+		.map(|p| uri_with_path(uri.clone(), p))
 		.unwrap_or(uri.to_string())
 }
 
 fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
 	let uri = request_uri_for_oauth_metadata(req);
 
-	let path = uri.path();
+	let path = uri.path().to_string();
 	const OAUTH_PREFIX: &str = "/.well-known/oauth-protected-resource";
 
 	// Remove the oauth-protected-resource prefix and keep the remaining path
 	if let Some(remaining_path) = path.strip_prefix(OAUTH_PREFIX) {
-		uri.to_string().replace(path, remaining_path)
+		uri_with_path(uri, remaining_path)
 	} else {
 		// If the prefix is not found, return the original URI
 		uri.to_string()
+	}
+}
+
+fn uri_with_path(uri: Uri, path: &str) -> String {
+	let mut parts = uri.into_parts();
+	let path_and_query = if path.is_empty() {
+		PathAndQuery::from_static("/")
+	} else {
+		PathAndQuery::try_from(path.to_string()).unwrap_or_else(|_| PathAndQuery::from_static("/"))
+	};
+	parts.path_and_query = Some(path_and_query);
+
+	let uri = Uri::from_parts(parts)
+		.map(|uri| uri.to_string())
+		.unwrap_or_default();
+	if path.is_empty() {
+		uri.strip_suffix('/').unwrap_or(&uri).to_string()
+	} else {
+		uri
 	}
 }
 
@@ -383,6 +402,8 @@ async fn build_mock_dcr_response(
 
 #[cfg(test)]
 mod tests {
+	use std::sync::Arc;
+
 	use super::*;
 
 	#[test]
@@ -397,6 +418,70 @@ mod tests {
 			request_uri_for_oauth_metadata(&req).to_string(),
 			"https://example.com/.well-known/oauth-protected-resource/mcp"
 		);
+	}
+
+	#[test]
+	fn www_authenticate_resource_metadata_preserves_authority_for_root_path() {
+		let req = auth_request("https://example.com/");
+
+		assert_eq!(
+			www_authenticate_resource_metadata(&req),
+			"Bearer resource_metadata=\"https://example.com/.well-known/oauth-protected-resource/\""
+		);
+	}
+
+	#[test]
+	fn www_authenticate_resource_metadata_preserves_authority_when_path_matches_host_prefix() {
+		let req = auth_request("https://example.com/example.com");
+
+		assert_eq!(
+			www_authenticate_resource_metadata(&req),
+			"Bearer resource_metadata=\"https://example.com/.well-known/oauth-protected-resource/example.com\""
+		);
+	}
+
+	#[test]
+	fn www_authenticate_resource_metadata_preserves_authority_for_non_matching_path() {
+		let req = auth_request("https://example.com/sse");
+
+		assert_eq!(
+			www_authenticate_resource_metadata(&req),
+			"Bearer resource_metadata=\"https://example.com/.well-known/oauth-protected-resource/sse\""
+		);
+	}
+
+	fn auth_request(uri: &'static str) -> Request {
+		::http::Request::builder()
+			.uri(uri)
+			.body(Body::empty())
+			.expect("request should build")
+	}
+
+	fn www_authenticate_resource_metadata(req: &Request) -> String {
+		let err = create_auth_required_response(
+			ProxyError::ProcessingString("test auth failure".to_string()),
+			req,
+			&McpAuthentication {
+				issuer: "https://issuer.example.com".to_string(),
+				audiences: vec!["mcp".to_string()],
+				provider: None,
+				resource_metadata: crate::types::agent::ResourceMetadata {
+					extra: Default::default(),
+				},
+				jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+					vec![],
+					crate::http::jwt::Mode::Strict,
+					crate::http::auth::AuthorizationLocation::bearer_header(),
+				)),
+				mode: crate::types::agent::McpAuthenticationMode::Strict,
+				client_id: None,
+			},
+		);
+
+		match err {
+			ProxyError::McpJwtAuthenticationFailure(_, www_authenticate) => www_authenticate,
+			other => panic!("expected MCP JWT authentication failure, got {other:?}"),
+		}
 	}
 
 	async fn response_body_to_json(resp: Response) -> serde_json::Value {

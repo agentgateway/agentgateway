@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ::http::{Method, Version, header};
+use ::http::{Method, StatusCode, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
 use http_body_util::BodyExt;
@@ -28,14 +28,15 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
-use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
+use crate::http::{Body, Response, ext_proc};
+use crate::llm::{AIProvider, custom, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
 	Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
+	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch,
+	SimpleBackendReference, Target,
 };
 use crate::types::backend;
 use crate::{read_body, *};
@@ -444,7 +445,7 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 	let (_mock, _bind, io) = basic_setup().await;
-	let mut trace_rx = crate::proxy::dtrace::track();
+	let mut trace_rx = crate::proxy::dtrace::track_expression(None);
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -464,6 +465,49 @@ async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 		.filter(|event| event["message"]["type"] == "requestStarted")
 		.count();
 	assert_eq!(request_started, 1, "{events:#?}");
+}
+
+#[tokio::test]
+async fn debug_trace_expression_watchers_match_first_request() {
+	let (_mock, _bind, io) = basic_setup().await;
+	let mut first_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/first'").unwrap(),
+	));
+	let mut second_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/second'").unwrap(),
+	));
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/second").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), first_trace_rx.recv())
+			.await
+			.is_err(),
+		"first watcher should remain queued when its expression does not match",
+	);
+	let second_event = tokio::time::timeout(Duration::from_secs(1), second_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(second_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/first").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let first_event = tokio::time::timeout(Duration::from_secs(1), first_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(first_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
 }
 
 #[tokio::test]
@@ -1073,6 +1117,169 @@ async fn llm_openai_tokenize() {
 		want,
 	)
 	.await;
+}
+
+fn setup_custom_llm_provider_backend_mock(
+	mock: MockServer,
+	supported_formats: Vec<custom::ProviderFormat>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		supported_formats
+			.into_iter()
+			.map(|format| custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+fn setup_custom_llm_provider_backend_mock_with_formats(
+	mock: MockServer,
+	formats: Vec<custom::ProviderFormatConfig>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let backend_name = "custom-ai";
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend_with_formats(
+			backend_name,
+			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			formats,
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	let io = t.serve_http(BIND_KEY);
+	(mock, t, io)
+}
+
+#[tokio::test]
+async fn llm_custom_provider_routes_to_provider_backend() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/chat/completions"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_native_format_fallback() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let response_body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
+	assert_eq!(response_body["object"], "chat.completion");
+	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["completion_tokens"], 21);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/messages"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
+	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_format_path_override() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) = setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/api/messages"
+	);
+}
+
+#[tokio::test]
+async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 503);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert!(
+		String::from_utf8_lossy(&body)
+			.contains("unsupported conversion: from Completions to provider custom"),
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 0);
 }
 
 #[derive(Clone)]
@@ -2470,6 +2677,44 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 	(t, io)
 }
 
+/// DFP and inference routing are orthogonal: DFP chooses the upstream from the request authority,
+/// while inference routing expects an endpoint picker to choose the upstream endpoint.
+#[tokio::test]
+async fn dfp_rejects_inference_routing() {
+	let backend_name = ResourceName::new("dynamic".into(), "".into());
+	let dynamic_backend = BackendWithPolicies {
+		backend: Backend::Dynamic(backend_name, ()),
+		inline_policies: vec![BackendTrafficPolicy::InferenceRouting(
+			ext_proc::InferenceRouting {
+				target: Arc::new(SimpleBackendReference::InlineBackend(Target::from((
+					"127.0.0.1",
+					9002,
+				)))),
+				destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+				failure_mode: ext_proc::FailureMode::FailClosed,
+			},
+		)],
+	};
+
+	let route = basic_named_route("/dynamic".into());
+	let t = setup_proxy_test("{}").unwrap();
+	let pi = t.inputs();
+	pi.stores
+		.binds
+		.write()
+		.insert_backend(dynamic_backend.backend.name(), dynamic_backend);
+	let t = t.with_bind(simple_bind()).with_route(route);
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://example.com/dynamic").await;
+	assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(
+		String::from_utf8_lossy(&body),
+		"processing failed: inferenceRouting is not supported with dynamic backends"
+	);
+}
+
 /// DFP resolves the destination from the request's Host/URI authority, including the port.
 #[tokio::test]
 async fn dfp_uses_host_port() {
@@ -3093,6 +3338,181 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 }
 
 #[tokio::test]
+async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::gatewayaddress::Destination;
+	use crate::types::discovery::{
+		GatewayAddress, Identity, InboundProtocol, NamespacedHostname, NetworkAddress, Service,
+		Workload,
+	};
+
+	let mock = simple_mock().await;
+	let waypoint_vip: std::net::IpAddr = "240.240.0.5".parse().unwrap();
+	let waypoint_ip: std::net::IpAddr = "10.20.0.12".parse().unwrap();
+	let gateway_ip: std::net::IpAddr = "172.18.7.110".parse().unwrap();
+	let remote_network = strng::literal!("network-2");
+	let t = setup_proxy_test("{}").unwrap();
+
+	let svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		waypoint: Some(GatewayAddress {
+			destination: Destination::Hostname(NamespacedHostname {
+				namespace: strng::literal!("default"),
+				hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+			}),
+			hbone_mtls_port: 15008,
+		}),
+		ingress_use_waypoint: true,
+		..Default::default()
+	};
+	let wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-wl-uid"),
+			name: strng::literal!("test-wl"),
+			namespace: strng::literal!("default"),
+			workload_ips: vec![mock.address().ip()],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+	let wp_svc = Service {
+		name: strng::literal!("waypoint"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: waypoint_vip,
+		}],
+		ports: std::collections::HashMap::from([(15008, 15008)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td2"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint-san"),
+		}],
+		..Default::default()
+	};
+	let wp_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-waypoint-wl-uid"),
+			name: strng::literal!("test-waypoint-wl"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint"),
+			network: remote_network.clone(),
+			workload_ips: vec![waypoint_ip],
+			network_gateway: Some(GatewayAddress {
+				destination: Destination::Address(NetworkAddress {
+					network: remote_network.clone(),
+					address: gateway_ip,
+				}),
+				hbone_mtls_port: 15008,
+			}),
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/waypoint.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(15008, 15008)]),
+		)]),
+	};
+	let gw_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-gateway-wl-uid"),
+			name: strng::literal!("test-gateway-wl"),
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+			network: remote_network.clone(),
+			workload_ips: vec![gateway_ip],
+			..Default::default()
+		},
+		services: Default::default(),
+	};
+
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![svc, wp_svc],
+			vec![wl, wp_wl, gw_wl],
+			Default::default(),
+		)
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		Default::default(),
+		&svc,
+		&80,
+		None,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	assert!(
+		backend_call.waypoint.is_none(),
+		"remote waypoint should be reached through double HBONE, not direct waypoint transport"
+	);
+	let (resolved_gw, gw_identities) = backend_call
+		.network_gateway
+		.expect("remote waypoint should resolve a network gateway");
+	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+		assert_eq!(addr.address, gateway_ip);
+		assert_eq!(addr.network, remote_network);
+	});
+	assert_eq!(resolved_gw.hbone_mtls_port, 15008);
+	// Outer tunnel: gateway workload id (the gateway is referenced by address, so no SANs).
+	assert_eq!(
+		gw_identities,
+		vec![Identity::Spiffe {
+			trust_domain: strng::EMPTY,
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+		}]
+	);
+	// Inner tunnel: waypoint workload id + waypoint service SANs.
+	assert_matches!(backend_call.transport_override, Some((InboundProtocol::HBONE, identities)) => {
+		assert_eq!(identities, vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td2"),
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint-san"),
+			},
+		]);
+	});
+	assert_matches!(backend_call.target, Target::Hostname(host, port) => {
+		assert_eq!(host.as_str(), "my-svc.default.svc.cluster.local");
+		assert_eq!(port, 80);
+	});
+}
+
+#[tokio::test]
 async fn ingress_use_waypoint_ip_based_waypoint() {
 	use crate::proxy::httpproxy;
 	use crate::store::LocalWorkload;
@@ -3365,6 +3785,11 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		hostname: gateway_hostname.clone(),
 		vips: vec![],
 		ports: std::collections::HashMap::from([(svc_port, gw_target_port)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td-gw"),
+			namespace: gateway_namespace.clone(),
+			service_account: strng::literal!("gateway-san"),
+		}],
 		..Default::default()
 	};
 	let gw_wl = LocalWorkload {
@@ -3416,7 +3841,7 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	)
 	.expect("build_service_call should succeed");
 
-	let (resolved_gw, gw_identity) = backend_call
+	let (resolved_gw, gw_identities) = backend_call
 		.network_gateway
 		.expect("network_gateway must be resolved for hostname-form destination");
 
@@ -3428,12 +3853,20 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		resolved_gw.hbone_mtls_port, gw_target_port,
 		"port should be the endpoint target port, not the service port"
 	);
+	// Outer-tunnel identities match ztunnel: gateway workload id + gateway service SANs.
 	assert_eq!(
-		gw_identity,
-		Identity::Spiffe {
-			trust_domain: strng::EMPTY,
-			namespace: gateway_namespace.clone(),
-			service_account: strng::literal!("gateway-sa"),
-		},
+		gw_identities,
+		vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-sa"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td-gw"),
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-san"),
+			},
+		]
 	);
 }

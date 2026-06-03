@@ -9,8 +9,7 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = []
-glibc = []
+default = ["jemalloc", "mimalloc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
@@ -86,6 +85,7 @@ opentelemetry-http.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
+pem.workspace = true
 percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true

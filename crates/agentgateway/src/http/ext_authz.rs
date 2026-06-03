@@ -286,6 +286,15 @@ impl ExtAuthz {
 		}
 	}
 
+	fn request_scheme(req: &Request) -> String {
+		if let Some(scheme) = req.uri().scheme() {
+			return scheme.to_string();
+		}
+		http::x_headers::forwarded_scheme(req.headers())
+			.unwrap_or(http::uri::Scheme::HTTP)
+			.to_string()
+	}
+
 	fn get_header_values(
 		&self,
 		req: &Request,
@@ -448,11 +457,7 @@ impl ExtAuthz {
 					.map(|s| s.as_str())
 					.unwrap_or("")
 					.to_string(),
-				scheme: req
-					.uri()
-					.scheme()
-					.map(|s| s.to_string())
-					.unwrap_or_else(|| "http".to_string()),
+				scheme: Self::request_scheme(req),
 				protocol: http::version_str(&req.version()).to_string(),
 				// Always empty per spec
 				query: "".to_string(),

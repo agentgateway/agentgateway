@@ -284,6 +284,7 @@ impl super::RequestType for Request {
 		let llm = LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Completions,
+			native_format: Some(crate::llm::custom::ProviderFormat::Completions),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

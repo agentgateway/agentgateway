@@ -14,6 +14,7 @@ type traceFlags struct {
 	namespace      string
 	proxyAdminPort int
 	traceFile      string
+	expression     string
 	raw            bool
 	port           int
 	local          bool
@@ -41,6 +42,8 @@ func Command() flag.Command {
   # Render trace JSONL from a file or stdin instead of opening a live trace.
   agctl trace --file trace.jsonl
   agctl trace --file - --raw
+  # Watch for the next request matching a CEL expression.
+  agctl trace --expression 'request.path == "/healthz"'
   # Enable tracing and send a request to the gateway, with some curl arguments.
   agctl trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -64,6 +67,7 @@ func (f *traceFlags) attach(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&f.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.Flags().IntVar(&f.proxyAdminPort, "proxy-admin-port", f.proxyAdminPort, "Agentgateway admin port")
 	cmd.Flags().StringVarP(&f.traceFile, "file", "f", "", "Trace JSONL file to render, or - for stdin")
+	cmd.Flags().StringVar(&f.expression, "expression", "", "CEL expression for selecting which request to trace")
 	cmd.Flags().BoolVar(&f.raw, "raw", false, "Print trace events as JSONL instead of opening the TUI")
 	cmd.Flags().IntVar(&f.port, "port", 0, "Gateway listener port to use when triggering a request")
 	cmd.Flags().BoolVar(&f.local, "local", false, "Trace against a local agentgateway instance on 127.0.0.1")
@@ -86,6 +90,9 @@ func parseArgs(cmd *cobra.Command, args []string, flags *traceFlags) (string, []
 		}
 		if flags.local {
 			return "", nil, fmt.Errorf("at most one of --file or --local may be passed")
+		}
+		if flags.expression != "" {
+			return "", nil, fmt.Errorf("--file does not accept --expression")
 		}
 		if len(requestArgs) > 0 {
 			return "", nil, fmt.Errorf("--file does not accept a request URL after --")

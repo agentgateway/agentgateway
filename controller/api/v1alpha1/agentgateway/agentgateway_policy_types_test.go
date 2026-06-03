@@ -49,6 +49,25 @@ func TestFrontendHTTPInvalidByteSizeDecodesAsUnsetValue(t *testing.T) {
 	}
 }
 
+func TestAzureManagedIdentityJSONOmitsSecretRef(t *testing.T) {
+	auth := AzureAuth{
+		ManagedIdentity: &AzureManagedIdentity{
+			ClientID:   "client-id",
+			ObjectID:   "object-id",
+			ResourceID: "resource-id",
+		},
+	}
+
+	got, err := json.Marshal(auth)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	want := `{"managedIdentity":{"clientId":"client-id","objectId":"object-id","resourceId":"resource-id"}}`
+	if string(got) != want {
+		t.Fatalf("Marshal() = %s, want %s", got, want)
+	}
+}
+
 func TestByteSizeYAMLDecodeClampedValue(t *testing.T) {
 	type holder struct {
 		Size *ByteSize `json:"size,omitempty"`

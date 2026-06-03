@@ -77,6 +77,9 @@ type StartConfig struct {
 	AgwCollections *agwplugins.AgwCollections
 	Resolver       remotehttp.Resolver
 	JWKSLookup     jwks.Lookup
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	KrtOptions                     krtutil.KrtOptions
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
@@ -175,20 +178,24 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	return cb, nil
 }
 
-// Plugins registers all built-in policy plugins
-func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) []agwplugins.AgwPlugin {
+// Plugins registers built-in policy plugins with a shared credential resolver.
+func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) []agwplugins.AgwPlugin {
 	return []agwplugins.AgwPlugin{
-		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup),
+		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup, credentialResolver),
 		agwplugins.NewInferencePlugin(agw),
 		agwplugins.NewA2APlugin(agw),
 		agwplugins.NewBackendTLSPlugin(agw),
-		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup),
+		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup, credentialResolver),
 	}
 }
 
 func agwPluginFactory(cfg StartConfig) func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
 	return func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
-		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup)
+		credentialResolverFactory := cfg.CredentialResolverFactory
+		if credentialResolverFactory == nil {
+			credentialResolverFactory = agwplugins.DefaultCredentialResolverFactory
+		}
+		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup, credentialResolverFactory(agw))
 		if cfg.ExtraAgwPlugins != nil {
 			plugins = append(plugins, cfg.ExtraAgwPlugins(ctx, agw)...)
 		}

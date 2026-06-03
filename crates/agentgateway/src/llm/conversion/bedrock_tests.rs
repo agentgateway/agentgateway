@@ -761,7 +761,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 			json_schema: types::completions::typed::ResponseFormatJsonSchema {
 				description: Some("Structured summary".to_string()),
 				name: "summary_schema".to_string(),
-				schema: Some(schema.clone()),
+				schema: schema.clone(),
 				strict: Some(true),
 			},
 		}),

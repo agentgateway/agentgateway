@@ -51,6 +51,17 @@ use crate::{cel, llm, mcp};
 #[derive(Clone)]
 pub struct AsyncLog<T>(Arc<AtomicCell<Option<T>>>);
 
+impl<T: Clone> AsyncLog<T> {
+	// load_clone is only a best-effort snapshot. It temporarily removes the value so it can clone it,
+	// then stores the clone back. A concurrent store/non_atomic_mutate between those operations can be
+	// lost when we restore `cur`, so callers must not rely on this as an atomic read.
+	pub fn load_clone(&self) -> Option<T> {
+		let cur = self.0.take();
+		self.0.store(cur.clone());
+		cur
+	}
+}
+
 impl<T> AsyncLog<T> {
 	// non_atomic_mutate is a racey method to modify the current value.
 	// If there is no current value, a default is used.
@@ -457,9 +468,27 @@ impl DropOnLog {
 
 	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
-	/// When no CEL expression is set, the default treats 4xx, 5xx, or connection failures as unhealthy.
-	fn eviction_unhealthy(log: &RequestLog, cel_exec: &CelLoggingExecutor<'_>) -> bool {
-		let default_unhealthy = log.status.is_none_or(|s| s.is_server_error());
+	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
+	/// gRPC status as unhealthy.
+	#[cfg(test)]
+	fn default_unhealthy(log: &RequestLog) -> bool {
+		Self::default_unhealthy_for_status(log, log.status)
+	}
+
+	fn default_unhealthy_for_status(
+		log: &RequestLog,
+		status: Option<crate::http::StatusCode>,
+	) -> bool {
+		status.is_none_or(|s| s.is_server_error())
+			|| log.grpc_status.load().is_some_and(|status| status != 0)
+	}
+
+	fn eviction_unhealthy(
+		log: &RequestLog,
+		status: Option<crate::http::StatusCode>,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) -> bool {
+		let default_unhealthy = Self::default_unhealthy_for_status(log, status);
 		let Some(policy) = &log.health_policy else {
 			return default_unhealthy;
 		};
@@ -471,17 +500,19 @@ impl DropOnLog {
 
 	/// Returns (health, eviction_duration, restore_health).
 	fn eviction_decision(
-		log: &RequestLog,
+		health_policy: &Option<health::Policy>,
+		retry_backoff: Option<Duration>,
+		retry_after: Option<Duration>,
 		current_health: f64,
 		consecutive_failure_count: u64,
 		times_ejected: u64,
 		unhealthy: bool,
 	) -> (bool, Option<Duration>, Option<f64>) {
-		let Some(policy) = &log.health_policy else {
+		let Some(policy) = health_policy else {
 			let health = !unhealthy;
 			return (health, None, None);
 		};
-		let fallback_duration = log.retry_after.or(log.retry_backoff);
+		let fallback_duration = retry_after.or(retry_backoff);
 		policy.eviction_decision(
 			current_health,
 			consecutive_failure_count,
@@ -656,6 +687,65 @@ impl RequestLog {
 			inner: self.trace_spans.clone(),
 		})
 	}
+
+	fn finish_request_handle(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) {
+		self.finish_request_handle_with_attempt(rh, end_time, self.status, self.retry_after, cel_exec);
+	}
+
+	fn finish_request_handle_with_attempt(
+		&self,
+		rh: ActiveHandle,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		cel_exec: &CelLoggingExecutor<'_>,
+	) {
+		let unhealthy = DropOnLog::eviction_unhealthy(self, status, cel_exec);
+		let (health, eviction_duration, restore_health) = DropOnLog::eviction_decision(
+			&self.health_policy,
+			self.retry_backoff,
+			retry_after,
+			rh.health_score(),
+			rh.consecutive_failures(),
+			rh.times_ejected(),
+			unhealthy,
+		);
+		rh.finish_request(
+			health,
+			end_time.duration_since(&self.start),
+			eviction_duration,
+			restore_health,
+		);
+	}
+
+	pub(crate) fn finalize_request_handle_for_attempt(
+		&mut self,
+		end_time: Timestamp,
+		status: Option<crate::http::StatusCode>,
+		retry_after: Option<Duration>,
+		response_snapshot: Option<&cel::ResponseSnapshot>,
+		llm_response: Option<&LLMContext>,
+		mcp: Option<&MCPInfo>,
+	) {
+		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let cel_exec = self.cel.build(CelLoggingBuildInputs {
+			req: self.request_snapshot.as_deref(),
+			resp: response_snapshot,
+			llm_response,
+			mcp: mcp.filter(|m| !m.is_empty()),
+			end_time: &cel_end_time,
+			source_context: self.source_context.as_ref(),
+		});
+		let Some(rh) = self.request_handle.take() else {
+			return;
+		};
+		self.finish_request_handle_with_attempt(rh, end_time, status, retry_after, &cel_exec);
+	}
 }
 
 #[derive(Debug)]
@@ -735,427 +825,419 @@ impl Drop for DropOnLog {
 		} else {
 			dtrace::trace(|t| t.request_completed());
 		}
-		let Some(mut log) = self.log.take() else {
-			return;
-		};
+		let debug_tracer = self.debug_tracer.clone();
+		dtrace::with_trace(debug_tracer, || {
+			let Some(mut log) = self.log.take() else {
+				return;
+			};
 
-		let route_identifier = RouteIdentifier {
-			bind: (&log.bind_name).into(),
-			gateway: log
-				.listener_name
-				.as_ref()
-				.map(|l| l.as_gateway_name())
-				.into(),
-			listener: log.listener_name.as_ref().map(|l| &l.listener_name).into(),
-			route: log.route_name.as_ref().map(|l| l.as_route_name()).into(),
-			route_rule: log
-				.route_name
-				.as_ref()
-				.and_then(|l| l.rule_name.as_ref())
-				.into(),
-		};
+			let route_identifier = RouteIdentifier {
+				bind: (&log.bind_name).into(),
+				gateway: log
+					.listener_name
+					.as_ref()
+					.map(|l| l.as_gateway_name())
+					.into(),
+				listener: log.listener_name.as_ref().map(|l| &l.listener_name).into(),
+				route: log.route_name.as_ref().map(|l| l.as_route_name()).into(),
+				route_rule: log
+					.route_name
+					.as_ref()
+					.and_then(|l| l.rule_name.as_ref())
+					.into(),
+			};
 
-		let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
+			let is_tcp = matches!(&log.backend_protocol, &Some(cel::BackendProtocol::tcp));
 
-		let mut http_labels = HTTPLabels {
-			backend: log
-				.backend_info
-				.as_ref()
-				.map(|info| info.backend_name.clone())
-				.into(),
-			protocol: log.backend_protocol.into(),
-			route: route_identifier.clone(),
-			method: log.method.clone().into(),
-			status: log.status.as_ref().map(|s| s.as_u16()).into(),
-			reason: log.reason.into(),
-			custom: CustomField::default(),
-		};
+			let mut http_labels = HTTPLabels {
+				backend: log
+					.backend_info
+					.as_ref()
+					.map(|info| info.backend_name.clone())
+					.into(),
+				protocol: log.backend_protocol.into(),
+				route: route_identifier.clone(),
+				method: log.method.clone().into(),
+				status: log.status.as_ref().map(|s| s.as_u16()).into(),
+				reason: log.reason.into(),
+				custom: CustomField::default(),
+			};
 
-		// Always run request_handle/finish_request first so LLM provider eviction (failover) runs
-		// even when logging/tracing/metrics are disabled.
-		let end_time = Timestamp::now();
-		let duration = end_time.duration_since(&log.start);
-		let enable_trace = log.tracer.is_some();
+			// Always run request_handle/finish_request first so LLM provider eviction (failover) runs
+			// even when logging/tracing/metrics are disabled.
+			let end_time = Timestamp::now();
+			let duration = end_time.duration_since(&log.start);
+			let enable_trace = log.tracer.is_some();
 
-		let llm_response = log.llm_response.take().map(Into::into);
+			let llm_response = log.llm_response.take().map(Into::into);
 
-		let mcp = log.mcp_status.take();
-		let mcp_cel = mcp.as_ref().filter(|m| !m.is_empty());
-		let cel_end_time = cel::RequestTime(end_time.as_datetime());
-		let cel_exec = log.cel.build(CelLoggingBuildInputs {
-			req: log.request_snapshot.as_deref(),
-			resp: log.response_snapshot.as_ref(),
-			llm_response: llm_response.as_ref(),
-			mcp: mcp_cel,
-			end_time: &cel_end_time,
-			source_context: log.source_context.as_ref(),
-		});
-		if let Some(rh) = log.request_handle.take() {
-			let current_health = rh.health_score();
-			let consecutive_failures = rh.consecutive_failures();
-			let times_ejected = rh.times_ejected();
-			let unhealthy = Self::eviction_unhealthy(&log, &cel_exec);
-			let (health, eviction_duration, restore_health) = Self::eviction_decision(
-				&log,
-				current_health,
-				consecutive_failures,
-				times_ejected,
-				unhealthy,
+			let mcp = log.mcp_status.take();
+			let request_handle = log.request_handle.take();
+			let cel_end_time = cel::RequestTime(end_time.as_datetime());
+			let cel_exec = log.cel.build(CelLoggingBuildInputs {
+				req: log.request_snapshot.as_deref(),
+				resp: log.response_snapshot.as_ref(),
+				llm_response: llm_response.as_ref(),
+				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
+				end_time: &cel_end_time,
+				source_context: log.source_context.as_ref(),
+			});
+			if let Some(rh) = request_handle {
+				log.finish_request_handle(rh, end_time, &cel_exec);
+			}
+
+			let custom_metric_fields = CustomField::new(
+				// For metrics, keep empty values which will become 'unknown'
+				cel_exec
+					.eval_keep_empty(&cel_exec.metric_fields.add, true)
+					.into_iter()
+					.map(|(k, v)| {
+						(
+							strng::new(k),
+							v.and_then(|v| match v {
+								Value::String(s) => Some(strng::new(s)),
+								_ => None,
+							}),
+						)
+					}),
 			);
-			rh.finish_request(health, duration, eviction_duration, restore_health);
-		}
-
-		let custom_metric_fields = CustomField::new(
-			// For metrics, keep empty values which will become 'unknown'
-			cel_exec
-				.eval_keep_empty(&cel_exec.metric_fields.add, true)
-				.into_iter()
-				.map(|(k, v)| {
-					(
-						strng::new(k),
-						v.and_then(|v| match v {
-							Value::String(s) => Some(strng::new(s)),
-							_ => None,
-						}),
-					)
-				}),
-		);
-		http_labels.custom = custom_metric_fields.clone();
-		if !is_tcp {
-			log.metrics.requests.get_or_create(&http_labels).inc();
-		}
-		if log.response_bytes > 0 {
+			http_labels.custom = custom_metric_fields.clone();
+			if !is_tcp {
+				log.metrics.requests.get_or_create(&http_labels).inc();
+			}
+			if log.response_bytes > 0 {
+				log
+					.metrics
+					.response_bytes
+					.get_or_create(&http_labels)
+					.inc_by(log.response_bytes);
+			}
+			// Record HTTP request duration for all requests
 			log
 				.metrics
-				.response_bytes
+				.request_duration
 				.get_or_create(&http_labels)
-				.inc_by(log.response_bytes);
-		}
-		// Record HTTP request duration for all requests
-		log
-			.metrics
-			.request_duration
-			.get_or_create(&http_labels)
-			.observe(duration.as_secs_f64());
+				.observe(duration.as_secs_f64());
 
-		if let Some(retry_count) = log.retry_attempt {
-			log
-				.metrics
-				.retries
-				.get_or_create(&http_labels)
-				.inc_by(retry_count as u64);
-		}
-
-		Self::add_llm_metrics(
-			&log,
-			&route_identifier,
-			end_time,
-			duration,
-			llm_response.as_ref(),
-			&custom_metric_fields,
-		);
-		if let Some(mcp) = &mcp
-			&& mcp.method_name.is_some()
-		{
-			// Check mcp.method_name is set, so we don't count things like GET and DELETE
-			log
-				.metrics
-				.mcp_requests
-				.get_or_create(&MCPCall {
-					method: mcp.method_name.as_ref().map(RichStrng::from).into(),
-					resource_type: mcp.resource_type().into(),
-					server: mcp.target_name().map(RichStrng::from).into(),
-					resource: mcp.resource_name().map(RichStrng::from).into(),
-
-					route: route_identifier.clone(),
-					custom: custom_metric_fields.clone(),
-				})
-				.inc();
-		}
-
-		let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
-		let enable_logs = maybe_enable_log && cel_exec.eval_filter();
-		if !enable_logs && !enable_trace {
-			return;
-		}
-
-		let dur = format!("{}ms", duration.as_millis());
-		let grpc = log.grpc_status.load();
-
-		let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
-
-		let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
-		let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
-		let fields = cel_exec.fields;
-		let reason = log.reason.and_then(|r| match r {
-			ProxyResponseReason::Upstream => None,
-			_ => Some(r),
-		});
-		let mcp_target = mcp
-			.as_ref()
-			.and_then(|m| m.target_name())
-			.map(str::to_owned);
-		let mcp_resource_type = mcp.as_ref().and_then(|m| m.resource_type());
-		let mcp_resource_uri = mcp.as_ref().and_then(|m| {
-			if matches!(m.resource_type(), Some(MCPOperation::Resource)) {
-				m.resource_name().map(str::to_owned)
-			} else {
-				None
+			if let Some(retry_count) = log.retry_attempt {
+				log
+					.metrics
+					.retries
+					.get_or_create(&http_labels)
+					.inc_by(retry_count as u64);
 			}
-		});
-		let mcp_tool_name = mcp.as_ref().and_then(|m| {
-			if matches!(m.resource_type(), Some(MCPOperation::Tool)) {
-				m.resource_name().map(str::to_owned)
-			} else {
-				None
-			}
-		});
-		let mcp_prompt_name = mcp.as_ref().and_then(|m| {
-			if matches!(m.resource_type(), Some(MCPOperation::Prompt)) {
-				m.resource_name().map(str::to_owned)
-			} else {
-				None
-			}
-		});
 
-		let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
-		let mut kv = vec![
-			(
-				"connection.id",
-				emit_ids
-					.then_some(log.connection_id)
-					.flatten()
-					.map(Into::into),
-			),
-			(
-				"request.id",
-				emit_ids.then_some(log.request_id).flatten().map(Into::into),
-			),
-			("gateway", route_identifier.gateway.as_deref().map(display)),
-			(
-				"listener",
-				route_identifier.listener.as_deref().map(display),
-			),
-			(
-				"route_rule",
-				route_identifier.route_rule.as_deref().map(display),
-			),
-			("route", route_identifier.route.as_deref().map(display)),
-			("endpoint", log.endpoint.display()),
-			("src.addr", Some(display(&log.tcp_info.peer_addr))),
-			("http.method", log.method.display()),
-			("http.host", log.host.display()),
-			("http.path", log.path.display()),
-			// TODO: incoming vs outgoing
-			("http.version", log.version.as_ref().map(debug)),
-			(
-				"http.status",
-				log.status.as_ref().map(|s| s.as_u16().into()),
-			),
-			("grpc.status", grpc.map(Into::into)),
-			(
-				"tls.sni",
-				if log.host.is_none() {
-					log.tls_info.as_ref().and_then(|s| s.server_name.display())
+			Self::add_llm_metrics(
+				&log,
+				&route_identifier,
+				end_time,
+				duration,
+				llm_response.as_ref(),
+				&custom_metric_fields,
+			);
+			if let Some(mcp) = &mcp
+				&& mcp.method_name.is_some()
+			{
+				// Check mcp.method_name is set, so we don't count things like GET and DELETE
+				log
+					.metrics
+					.mcp_requests
+					.get_or_create(&MCPCall {
+						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
+						resource_type: mcp.resource_type().into(),
+						server: mcp.target_name().map(RichStrng::from).into(),
+						resource: mcp.resource_name().map(RichStrng::from).into(),
+
+						route: route_identifier.clone(),
+						custom: custom_metric_fields.clone(),
+					})
+					.inc();
+			}
+
+			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let enable_logs = maybe_enable_log && cel_exec.eval_filter();
+			if !enable_logs && !enable_trace {
+				return;
+			}
+
+			let dur = format!("{}ms", duration.as_millis());
+			let grpc = log.grpc_status.load();
+
+			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
+
+			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
+			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
+			let fields = cel_exec.fields;
+			let reason = log.reason.and_then(|r| match r {
+				ProxyResponseReason::Upstream => None,
+				_ => Some(r),
+			});
+			let mcp_target = mcp
+				.as_ref()
+				.and_then(|m| m.target_name())
+				.map(str::to_owned);
+			let mcp_resource_type = mcp.as_ref().and_then(|m| m.resource_type());
+			let mcp_resource_uri = mcp.as_ref().and_then(|m| {
+				if matches!(m.resource_type(), Some(MCPOperation::Resource)) {
+					m.resource_name().map(str::to_owned)
 				} else {
 					None
-				},
-			),
-			("trace.id", trace_id.display()),
-			("span.id", span_id.display()),
-			("jwt.sub", log.jwt_sub.display()),
-			("protocol", log.backend_protocol.as_ref().map(debug)),
-			("a2a.method", log.a2a_method.display()),
-			(
-				"mcp.method.name",
-				mcp
-					.as_ref()
-					.and_then(|m| m.method_name.as_ref())
-					.map(display),
-			),
-			("mcp.target", mcp_target.as_ref().map(display)),
-			("mcp.resource.type", mcp_resource_type.as_ref().map(display)),
-			("mcp.resource.uri", mcp_resource_uri.as_ref().map(display)),
-			("gen_ai.tool.name", mcp_tool_name.as_ref().map(display)),
-			("gen_ai.prompt.name", mcp_prompt_name.as_ref().map(display)),
-			(
-				"mcp.session.id",
-				mcp
-					.as_ref()
-					.and_then(|m| m.session_id.as_ref())
-					.map(display),
-			),
-			(
-				"inferencepool.selected_endpoint",
-				log.inference_pool.display(),
-			),
-			// OpenTelemetry Gen AI Semantic Conventions v1.40.0
-			(
-				"gen_ai.operation.name",
-				log.llm_request.as_ref().map(|r| {
-					if r.input_format == InputFormat::Embeddings {
-						"embeddings".into()
+				}
+			});
+			let mcp_tool_name = mcp.as_ref().and_then(|m| {
+				if matches!(m.resource_type(), Some(MCPOperation::Tool)) {
+					m.resource_name().map(str::to_owned)
+				} else {
+					None
+				}
+			});
+			let mcp_prompt_name = mcp.as_ref().and_then(|m| {
+				if matches!(m.resource_type(), Some(MCPOperation::Prompt)) {
+					m.resource_name().map(str::to_owned)
+				} else {
+					None
+				}
+			});
+
+			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
+			let mut kv = vec![
+				(
+					"connection.id",
+					emit_ids
+						.then_some(log.connection_id)
+						.flatten()
+						.map(Into::into),
+				),
+				(
+					"request.id",
+					emit_ids.then_some(log.request_id).flatten().map(Into::into),
+				),
+				("gateway", route_identifier.gateway.as_deref().map(display)),
+				(
+					"listener",
+					route_identifier.listener.as_deref().map(display),
+				),
+				(
+					"route_rule",
+					route_identifier.route_rule.as_deref().map(display),
+				),
+				("route", route_identifier.route.as_deref().map(display)),
+				("endpoint", log.endpoint.display()),
+				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				("http.method", log.method.display()),
+				("http.host", log.host.display()),
+				("http.path", log.path.display()),
+				// TODO: incoming vs outgoing
+				("http.version", log.version.as_ref().map(debug)),
+				(
+					"http.status",
+					log.status.as_ref().map(|s| s.as_u16().into()),
+				),
+				("grpc.status", grpc.map(Into::into)),
+				(
+					"tls.sni",
+					if log.host.is_none() {
+						log.tls_info.as_ref().and_then(|s| s.server_name.display())
 					} else {
-						"chat".into()
+						None
+					},
+				),
+				("trace.id", trace_id.display()),
+				("span.id", span_id.display()),
+				("jwt.sub", log.jwt_sub.display()),
+				("protocol", log.backend_protocol.as_ref().map(debug)),
+				("a2a.method", log.a2a_method.display()),
+				(
+					"mcp.method.name",
+					mcp
+						.as_ref()
+						.and_then(|m| m.method_name.as_ref())
+						.map(display),
+				),
+				("mcp.target", mcp_target.as_ref().map(display)),
+				("mcp.resource.type", mcp_resource_type.as_ref().map(display)),
+				("mcp.resource.uri", mcp_resource_uri.as_ref().map(display)),
+				("gen_ai.tool.name", mcp_tool_name.as_ref().map(display)),
+				("gen_ai.prompt.name", mcp_prompt_name.as_ref().map(display)),
+				(
+					"mcp.session.id",
+					mcp
+						.as_ref()
+						.and_then(|m| m.session_id.as_ref())
+						.map(display),
+				),
+				(
+					"inferencepool.selected_endpoint",
+					log.inference_pool.display(),
+				),
+				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
+				(
+					"gen_ai.operation.name",
+					log.llm_request.as_ref().map(|r| {
+						if r.input_format == InputFormat::Embeddings {
+							"embeddings".into()
+						} else {
+							"chat".into()
+						}
+					}),
+				),
+				(
+					"gen_ai.provider.name",
+					log.llm_request.as_ref().map(|l| display(&l.provider)),
+				),
+				(
+					"gen_ai.request.model",
+					log.llm_request.as_ref().map(|l| display(&l.request_model)),
+				),
+				(
+					"gen_ai.response.model",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.response_model.display()),
+				),
+				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
+				(
+					"gen_ai.usage.cache_creation.input_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.cache_creation_input_tokens)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.usage.cache_read.input_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.cached_input_tokens)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.usage.output_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.output_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.output_image_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.output_image_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.output_audio_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.output_audio_tokens)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.request.temperature",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.temperature)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.embeddings.dimension.count",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.dimensions)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.request.encoding_formats",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.encoding_format.display()),
+				),
+				(
+					"gen_ai.request.top_p",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.top_p)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.request.max_tokens",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.max_tokens)
+						.map(|v| (v as i64).into()),
+				),
+				(
+					"gen_ai.request.frequency_penalty",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.frequency_penalty)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.request.presence_penalty",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.presence_penalty)
+						.map(Into::into),
+				),
+				(
+					"gen_ai.request.seed",
+					log
+						.llm_request
+						.as_ref()
+						.and_then(|l| l.params.seed)
+						.map(Into::into),
+				),
+				("retry.attempt", log.retry_attempt.display()),
+				("error", log.error.quoted()),
+				("reason", reason.display()),
+				("duration", Some(dur.as_str().into())),
+			];
+
+			if enable_trace && let Some(t) = &log.tracer {
+				t.send(&log, &end_time, &cel_exec, kv.as_slice());
+				// Flush any buffered spans created during request processing.
+				// Does best effort, if the lock is poisoned, skip flushing.
+				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
+					&& let Ok(mut spans) = log.trace_spans.lock()
+				{
+					for buffered_span in spans.drain(..) {
+						t.processor.emit(buffered_span.into_span_data());
 					}
-				}),
-			),
-			(
-				"gen_ai.provider.name",
-				log.llm_request.as_ref().map(|l| display(&l.provider)),
-			),
-			(
-				"gen_ai.request.model",
-				log.llm_request.as_ref().map(|l| display(&l.request_model)),
-			),
-			(
-				"gen_ai.response.model",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.response_model.display()),
-			),
-			("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
-			(
-				"gen_ai.usage.cache_creation.input_tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.cache_creation_input_tokens)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.usage.cache_read.input_tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.cached_input_tokens)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.usage.output_tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.output_tokens)
-					.map(Into::into),
-			),
-			// Not part of official semconv
-			(
-				"gen_ai.usage.output_image_tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.output_image_tokens)
-					.map(Into::into),
-			),
-			// Not part of official semconv
-			(
-				"gen_ai.usage.output_audio_tokens",
-				llm_response
-					.as_ref()
-					.and_then(|l| l.output_audio_tokens)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.request.temperature",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.temperature)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.embeddings.dimension.count",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.dimensions)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.request.encoding_formats",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.encoding_format.display()),
-			),
-			(
-				"gen_ai.request.top_p",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.top_p)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.request.max_tokens",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.max_tokens)
-					.map(|v| (v as i64).into()),
-			),
-			(
-				"gen_ai.request.frequency_penalty",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.frequency_penalty)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.request.presence_penalty",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.presence_penalty)
-					.map(Into::into),
-			),
-			(
-				"gen_ai.request.seed",
-				log
-					.llm_request
-					.as_ref()
-					.and_then(|l| l.params.seed)
-					.map(Into::into),
-			),
-			("retry.attempt", log.retry_attempt.display()),
-			("error", log.error.quoted()),
-			("reason", reason.display()),
-			("duration", Some(dur.as_str().into())),
-		];
+				}
+			};
+			if enable_logs {
+				kv.reserve(fields.add.len());
+				for (k, v) in &mut kv {
+					// Remove filtered lines, or things we are about to add
+					if fields.has(k) {
+						*v = None;
+					}
+				}
+				// To avoid lifetime issues need to store the expression before we give it to ValueBag reference.
+				// TODO: we could allow log() to take a list of borrows and then a list of OwnedValueBag
+				let raws = cel_exec.eval_additions();
+				for (k, v) in &raws {
+					// TODO: convert directly instead of via json()
+					let eval = v.as_ref().map(ValueBag::capture_serde1);
+					kv.push((k, eval));
+				}
 
-		if enable_trace && let Some(t) = &log.tracer {
-			t.send(&log, &end_time, &cel_exec, kv.as_slice());
-			// Flush any buffered spans created during request processing.
-			// Does best effort, if the lock is poisoned, skip flushing.
-			if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
-				&& let Ok(mut spans) = log.trace_spans.lock()
-			{
-				for buffered_span in spans.drain(..) {
-					t.processor.emit(buffered_span.into_span_data());
+				agent_core::telemetry::log("info", "request", &kv);
+
+				if let Some(otel) = &log.otel_logger {
+					otel.emit("info", "request", &kv);
 				}
 			}
-		};
-		if enable_logs {
-			kv.reserve(fields.add.len());
-			for (k, v) in &mut kv {
-				// Remove filtered lines, or things we are about to add
-				if fields.has(k) {
-					*v = None;
-				}
-			}
-			// To avoid lifetime issues need to store the expression before we give it to ValueBag reference.
-			// TODO: we could allow log() to take a list of borrows and then a list of OwnedValueBag
-			let raws = cel_exec.eval_additions();
-			for (k, v) in &raws {
-				// TODO: convert directly instead of via json()
-				let eval = v.as_ref().map(ValueBag::capture_serde1);
-				kv.push((k, eval));
-			}
-
-			agent_core::telemetry::log("info", "request", &kv);
-
-			if let Some(otel) = &log.otel_logger {
-				otel.emit("info", "request", &kv);
-			}
-		}
+		});
 	}
 }
 
@@ -1654,6 +1736,17 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	#[test]
+	fn default_health_treats_non_zero_grpc_status_as_unhealthy() {
+		let mut log = test_request_log();
+		log.status = Some(http::StatusCode::OK);
+		log.grpc_status.store(Some(13));
+		assert!(DropOnLog::default_unhealthy(&log));
+
+		log.grpc_status.store(Some(0));
+		assert!(!DropOnLog::default_unhealthy(&log));
 	}
 
 	#[test]
