@@ -1094,6 +1094,14 @@ impl HTTPProxy {
 			Ok(call.await)
 		};
 
+		// If ext_proc returned an ImmediateResponse during the request body phase, it stored
+		// the response and dropped the body channel.  Return it regardless of whether the
+		// upstream call succeeded (with empty body) or failed (body parse error).
+		if let Some(resp) = response_policies.take_ext_proc_body_immediate_response() {
+			return Err(ProxyResponse::DirectResponse(Box::new(resp)))
+				.maybe_snapshot_on_err(log, &mut req_opt);
+		}
+
 		// Run the actual call
 		let mut resp = match call_result {
 			Ok(Ok(resp)) => resp,
@@ -2903,6 +2911,17 @@ struct ResponsePolicies {
 impl ResponsePolicies {
 	pub fn headers(&mut self) -> &mut HeaderMap {
 		&mut self.response_headers
+	}
+
+	fn take_ext_proc_body_immediate_response(&self) -> Option<http::Response> {
+		for ep in [&self.ext_proc, &self.gateway_ext_proc] {
+			if let Some(ep) = ep {
+				if let Some(resp) = ep.take_body_immediate_response() {
+					return Some(resp);
+				}
+			}
+		}
+		None
 	}
 
 	pub async fn apply(
