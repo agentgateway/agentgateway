@@ -166,6 +166,13 @@ type AgentgatewayParametersConfigs struct {
 }
 
 type IstioSpec struct {
+	// Enabled explicitly turns Istio integration on or off for this gateway, overriding the
+	// control-plane default. When unset, integration is on whenever spec.istio is present (including
+	// an empty `istio: {}`); set this to false to opt a gateway out when integration is enabled by
+	// default control-plane-wide.
+	//
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// The address of the Istio CA. If unset, defaults to `https://istiod.istio-system.svc:15012`.
 	//
 	// +optional

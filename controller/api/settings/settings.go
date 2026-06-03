@@ -145,19 +145,25 @@ type Settings struct {
 	// Defaults to "default".
 	IstioRevision string `split_words:"true" default:"default"`
 
-	// The cluster ID used for mesh integration with Istio. This will populate the cluster ID of gateway deployments.
-	// GatewayParameters can override this for per-gateway customization.
-	// Defaults to unset, meaning no Istio configuration will be set up for gateway deployments.
+	// IstioAutoEnabled, when true, enables Istio integration by default on all built-in-class
+	// gateways. Individual gateways can opt out via AgentgatewayParameters spec.istio.enabled=false.
+	// Defaults to false, meaning gateways opt in to Istio integration via spec.istio.
+	IstioAutoEnabled bool `split_words:"true"`
+
+	// The cluster ID applied to Istio-integrated gateway deployments. Only takes effect for gateways
+	// that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters spec.istio);
+	// it does not by itself enable integration. GatewayParameters can override this per gateway.
 	IstioClusterId string `split_words:"true"`
 
-	// The network ID used for mesh integration with Istio. This will populate the network ID of gateway deployments.
-	// GatewayParameters can override this for per-gateway customization.
-	// Defaults to unset, meaning no Istio configuration will be set up for gateway deployments.
+	// The network applied to Istio-integrated gateway deployments. Only takes effect for gateways
+	// that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters spec.istio);
+	// it does not by itself enable integration. GatewayParameters can override this per gateway.
 	IstioNetwork string `split_words:"true"`
 
-	// The address of the Istio CA used for mesh integration with Istio. This will populate the CA address of gateway deployments.
-	// GatewayParameters can override this on a per-gateway basis.
-	// Defaults to "istiod.istio-system.svc:15012", the typical address of the Istio CA in a default Istio installation.
+	// The Istio CA address applied to Istio-integrated gateway deployments. Only takes effect for
+	// gateways that have Istio integration enabled (via IstioAutoEnabled or AgentgatewayParameters
+	// spec.istio); it does not by itself enable integration. GatewayParameters can override this per gateway.
+	// Defaults to "https://istiod.istio-system.svc:15012", the typical address of the Istio CA in a default Istio installation.
 	IstioCaAddress string `split_words:"true"`
 
 	// XdsServiceHost is the host that serves xDS config.

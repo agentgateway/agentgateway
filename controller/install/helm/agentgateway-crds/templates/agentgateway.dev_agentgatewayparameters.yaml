@@ -439,16 +439,24 @@ spec:
                       `https://istiod.istio-system.svc:15012`.
                     type: string
                   clusterId:
-                    description: The ID of the cluster this Agentgateway runs in.
-                      If unset, defaults to `Kubernetes`.
+                    description: The ID of the cluster this gateway runs in. If unset,
+                      defaults to `Kubernetes`.
                     type: string
-                  network:
+                  enabled:
                     description: |-
-                      The Istio network this Agentgateway runs in (e.g. the meshID). Used for HBONE
-                      routing in multi-network ambient meshes. If unset, defaults to the empty network.
+                      Enabled explicitly turns Istio integration on or off for this gateway, overriding the
+                      control-plane default. When unset, integration is on whenever spec.istio is present (including
+                      an empty `istio: {}`); set this to false to opt a gateway out when integration is enabled by
+                      default control-plane-wide.
+                    type: boolean
+                  network:
+                    description: The Istio network this gateway runs in If unset,
+                      defaults to the empty network.
                     type: string
                   trustDomain:
-                    description: The Istio trust domain. If not set, defaults to `cluster.local`.
+                    description: |-
+                      The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+                      trust domain for the control plane's istio revision.
                     type: string
                 type: object
               logging:

@@ -83,8 +83,12 @@ type AgwCollections struct {
 	IstioNamespace string
 	// IstioRevision is the Istio revision of the Istio control plane (default is "default").
 	IstioRevision string
-	// IstioClusterId / IstioNetwork / IstioCaAddress are control-plane-wide mesh defaults applied
-	// to built-in-class gateways when set; params spec.istio fields can override them.
+	// IstioAutoEnabled turns on Istio integration by default for built-in-class gateways; individual
+	// gateways can opt out via params spec.istio.enabled=false.
+	IstioAutoEnabled bool
+	// IstioClusterId / IstioNetwork / IstioCaAddress are control-plane-wide mesh values applied to
+	// gateways that have Istio integration enabled; params spec.istio fields can override them. They
+	// do not by themselves enable integration.
 	IstioClusterId string
 	IstioNetwork   string
 	IstioCaAddress string
@@ -145,13 +149,14 @@ func NewAgwCollections(
 			meshConfig,
 			agwControllerName,
 		), krtOptions.ToOptions("deployer/Gateways")...),
-		ControllerName:  agwControllerName,
-		SystemNamespace: systemNamespace,
-		IstioNamespace:  settings.IstioNamespace,
-		IstioRevision:   settings.IstioRevision,
-		IstioClusterId:  settings.IstioClusterId,
-		IstioNetwork:    settings.IstioNetwork,
-		IstioCaAddress:  settings.IstioCaAddress,
+		ControllerName:   agwControllerName,
+		SystemNamespace:  systemNamespace,
+		IstioNamespace:   settings.IstioNamespace,
+		IstioRevision:    settings.IstioRevision,
+		IstioAutoEnabled: settings.IstioAutoEnabled,
+		IstioClusterId:   settings.IstioClusterId,
+		IstioNetwork:     settings.IstioNetwork,
+		IstioCaAddress:   settings.IstioCaAddress,
 
 		// Core Kubernetes resources
 		Namespaces: krt.NewInformer[*corev1.Namespace](client, krtOptions.ToOptions("informer/Namespaces")...),
