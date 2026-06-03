@@ -122,6 +122,8 @@ impl BedrockGuardrails {
 			AwsAuth::Implicit {
 				service_name: None,
 				assume_role: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
 			},
 		)));
 		pols

@@ -2197,6 +2197,8 @@ json(request.body).model
 				region: p.aws_region.context("bedrock requires aws_region")?,
 				guardrail_identifier: None,
 				guardrail_version: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
 			}),
 			LocalModelAIProvider::Azure => AIProvider::Azure(crate::llm::azure::Provider {
 				model,

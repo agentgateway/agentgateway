@@ -241,6 +241,8 @@ impl TCPProxy {
 						http::auth::AwsAuth::Implicit {
 							service_name: None,
 							assume_role: None,
+							source_credentials_cache: Default::default(),
+							assume_role_cache: Default::default(),
 						},
 					)),
 					..Default::default()
@@ -914,7 +916,8 @@ mod tests {
 				Some(crate::http::auth::BackendAuth::Aws(
 					crate::http::auth::AwsAuth::Implicit {
 						service_name: None,
-						assume_role: None
+						assume_role: None,
+						..
 					}
 				))
 			),

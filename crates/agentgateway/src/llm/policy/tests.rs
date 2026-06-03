@@ -1277,7 +1277,8 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 			resolved.backend_auth,
 			Some(BackendAuth::Aws(AwsAuth::Implicit {
 				service_name: None,
-				assume_role: None
+				assume_role: None,
+				..
 			}))
 		),
 		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",

@@ -379,6 +379,8 @@ async fn test_aws_sign_request_implicit_with_extension() {
 	let aws_auth = AwsAuth::Implicit {
 		service_name: None,
 		assume_role: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
 	};
 
 	// Should use region from request extensions

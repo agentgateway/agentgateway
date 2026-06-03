@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use aws_config::sts::AssumeRoleProvider;
@@ -44,7 +44,33 @@ pub enum AwsAuth {
 		/// Optional AWS STS role to assume before signing requests.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		assume_role: Option<AwsAssumeRole>,
+		/// Cached source credentials, populated on first use.
+		#[serde(skip)]
+		#[cfg_attr(feature = "schema", schemars(skip))]
+		source_credentials_cache: AwsCredentialsCache,
+		/// Cached AssumeRole credentials, populated on first use.
+		#[serde(skip)]
+		#[cfg_attr(feature = "schema", schemars(skip))]
+		assume_role_cache: AwsAssumeRoleCache,
 	},
+}
+
+#[derive(Default, Clone)]
+pub struct AwsCredentialsCache(Arc<Mutex<Option<Credentials>>>);
+
+impl std::fmt::Debug for AwsCredentialsCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("AwsCredentialsCache")
+	}
+}
+
+#[derive(Default, Clone)]
+pub struct AwsAssumeRoleCache(Arc<Mutex<HashMap<AssumeRoleCacheKey, Credentials>>>);
+
+impl std::fmt::Debug for AwsAssumeRoleCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("AwsAssumeRoleCache")
+	}
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -67,6 +93,25 @@ impl AwsAuth {
 		match self {
 			AwsAuth::ExplicitConfig { .. } => None,
 			AwsAuth::Implicit { assume_role, .. } => assume_role.as_ref(),
+		}
+	}
+
+	fn assume_role_cache(&self) -> Option<&AwsAssumeRoleCache> {
+		match self {
+			AwsAuth::ExplicitConfig { .. } => None,
+			AwsAuth::Implicit {
+				assume_role_cache, ..
+			} => Some(assume_role_cache),
+		}
+	}
+
+	fn source_credentials_cache(&self) -> Option<&AwsCredentialsCache> {
+		match self {
+			AwsAuth::ExplicitConfig { .. } => None,
+			AwsAuth::Implicit {
+				source_credentials_cache,
+				..
+			} => Some(source_credentials_cache),
 		}
 	}
 }
@@ -157,11 +202,10 @@ async fn sdk_config<'a>() -> &'a SdkConfig {
 }
 
 async fn load_credentials(aws_auth: &AwsAuth, signing_region: &str) -> anyhow::Result<Credentials> {
-	let source_credentials = load_source_credentials(aws_auth).await?;
-	if let Some(assume_role) = aws_auth.assume_role() {
-		load_assumed_credentials(source_credentials, assume_role, signing_region).await
+	if let (Some(assume_role), Some(cache)) = (aws_auth.assume_role(), aws_auth.assume_role_cache()) {
+		load_assumed_credentials(assume_role, cache, signing_region).await
 	} else {
-		Ok(source_credentials)
+		load_source_credentials(aws_auth).await
 	}
 }
 
@@ -187,52 +231,61 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 			Ok(builder.build())
 		},
 		AwsAuth::Implicit { .. } => {
+			let cache = aws_auth
+				.source_credentials_cache()
+				.expect("implicit AWS auth always has a source credential cache");
+			{
+				let mut cached = cache.0.lock().await;
+				if let Some(creds) = cached.as_ref() {
+					if credentials_valid(creds) {
+						return Ok(creds.clone());
+					}
+					*cached = None;
+				}
+			}
+
 			// Load AWS configuration and credentials from environment/IAM
 			let config = Box::pin(sdk_config()).await;
 
 			// Get credentials from the config
-			// TODO this is not caching!!
-			Ok(
-				config
-					.credentials_provider()
-					.ok_or(anyhow::anyhow!(
-						"No credentials provider found in AWS config"
-					))?
-					.provide_credentials()
-					.await?,
-			)
+			let creds = config
+				.credentials_provider()
+				.ok_or(anyhow::anyhow!(
+					"No credentials provider found in AWS config"
+				))?
+				.provide_credentials()
+				.await?;
+			*cache.0.lock().await = Some(creds.clone());
+			Ok(creds)
 		},
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct AssumeRoleCacheKey {
-	source_access_key_id: String,
-	assume_role: AwsAssumeRole,
+	role_arn: String,
 	resolved_sts_region: String,
 }
-
-static ASSUME_ROLE_CACHE: LazyLock<Mutex<HashMap<AssumeRoleCacheKey, Credentials>>> =
-	LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
 
 async fn load_assumed_credentials(
-	source_credentials: Credentials,
 	assume_role: &AwsAssumeRole,
+	cache: &AwsAssumeRoleCache,
 	signing_region: &str,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
 	let key = AssumeRoleCacheKey {
-		source_access_key_id: source_credentials.access_key_id().to_string(),
-		assume_role: assume_role.clone(),
+		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
 	};
 
-	if let Some(creds) = ASSUME_ROLE_CACHE.lock().await.get(&key)
-		&& credentials_valid(creds)
 	{
-		return Ok(creds.clone());
+		let mut cached = cache.0.lock().await;
+		cached.retain(|_, creds| credentials_valid(creds));
+		if let Some(creds) = cached.get(&key) {
+			return Ok(creds.clone());
+		}
 	}
 
 	let config = Box::pin(sdk_config()).await;
@@ -240,9 +293,14 @@ async fn load_assumed_credentials(
 		.configure(config)
 		.region(Region::new(sts_region));
 
-	let provider = builder.build_from_provider(source_credentials).await;
+	let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
+		"No credentials provider found in AWS config"
+	))?;
+	let provider = builder
+		.build_from_provider(source_credentials_provider.clone())
+		.await;
 	let creds = provider.provide_credentials().await?;
-	ASSUME_ROLE_CACHE.lock().await.insert(key, creds.clone());
+	cache.0.lock().await.insert(key, creds.clone());
 	Ok(creds)
 }
 

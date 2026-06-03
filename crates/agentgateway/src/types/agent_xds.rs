@@ -862,6 +862,8 @@ fn backend_auth_from_proto(
 				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
 					service_name,
 					assume_role,
+					source_credentials_cache: Default::default(),
+					assume_role_cache: Default::default(),
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
@@ -1173,6 +1175,8 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								source_credentials_cache: Default::default(),
+								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
