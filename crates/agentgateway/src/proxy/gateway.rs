@@ -741,9 +741,7 @@ impl Gateway {
 				req.extensions_mut().insert(BufferLimit::new(buffer));
 				let req = req.map(crate::http::Body::new);
 				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
-					Box::pin(proxy.proxy(connection, req))
-						.map(Ok::<_, Infallible>)
-						.await
+					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 				}))
 			}),
 		);

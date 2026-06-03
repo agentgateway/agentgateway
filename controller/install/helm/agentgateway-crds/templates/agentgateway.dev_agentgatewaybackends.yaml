@@ -237,7 +237,11 @@ spec:
                                     type: string
                                 type: object
                               custom:
-                                description: Custom provider
+                                description: |-
+                                  Custom provider configures a non-managed or self-hosted LLM provider.
+                                  Use this when the provider target and API formats should be declared
+                                  explicitly instead of inferred from a managed provider such as OpenAI or
+                                  Anthropic.
                                 properties:
                                   backendRef:
                                     description: |-
@@ -330,16 +334,19 @@ spec:
                                           description: Type is the provider-native
                                             API format.
                                           enum:
-                                          - Completions
-                                          - Messages
-                                          - Responses
-                                          - Embeddings
                                           - AnthropicTokenCount
+                                          - Completions
+                                          - Embeddings
+                                          - Messages
                                           - Realtime
+                                          - Responses
                                           type: string
                                       required:
                                       - type
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: path must start with /
+                                        rule: '!has(self.path) || self.path.startsWith(''/'')'
                                     maxItems: 6
                                     minItems: 1
                                     type: array
@@ -5272,7 +5279,11 @@ spec:
                             type: string
                         type: object
                       custom:
-                        description: Custom provider
+                        description: |-
+                          Custom provider configures a non-managed or self-hosted LLM provider.
+                          Use this when the provider target and API formats should be declared
+                          explicitly instead of inferred from a managed provider such as OpenAI or
+                          Anthropic.
                         properties:
                           backendRef:
                             description: |-
@@ -5364,16 +5375,19 @@ spec:
                                 type:
                                   description: Type is the provider-native API format.
                                   enum:
-                                  - Completions
-                                  - Messages
-                                  - Responses
-                                  - Embeddings
                                   - AnthropicTokenCount
+                                  - Completions
+                                  - Embeddings
+                                  - Messages
                                   - Realtime
+                                  - Responses
                                   type: string
                               required:
                               - type
                               type: object
+                              x-kubernetes-validations:
+                              - message: path must start with /
+                                rule: '!has(self.path) || self.path.startsWith(''/'')'
                             maxItems: 6
                             minItems: 1
                             type: array

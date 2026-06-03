@@ -215,6 +215,22 @@ spec:
       port: 443
       pathPrefix: /custom
 ---
+_err: path must start with /
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-format-path-missing-slash
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Messages
+          path: api/messages
+---
 _err: custom providers must specify exactly one of backendRef or host and port
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

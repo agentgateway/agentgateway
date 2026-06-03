@@ -523,7 +523,8 @@ impl HTTPProxy {
 		// or direct responses
 		let mut response_policies = ResponsePolicies::default();
 		let is_grpc_request = http::is_grpc_request(&req);
-		let ret = Box::pin(self.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies))
+		let ret = self
+			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
 
@@ -827,16 +828,17 @@ impl HTTPProxy {
 				trace!("no retries");
 				// no retries at all, just send the request as normal
 				let req = Request::from_parts(head, http::Body::new(body));
-				return Box::pin(self.attempt_upstream(
-					log,
-					&mut req_upgrade,
-					llm_request_policies,
-					&selected_backend,
-					backend_policies,
-					response_policies,
-					req,
-				))
-				.await;
+				return self
+					.attempt_upstream(
+						log,
+						&mut req_upgrade,
+						llm_request_policies,
+						&selected_backend,
+						backend_policies,
+						response_policies,
+						req,
+					)
+					.await;
 			},
 		};
 		let mut last_res: Option<Result<Response, SnapshottedProxyResponse>> = None;
@@ -862,16 +864,17 @@ impl HTTPProxy {
 				);
 			}
 			let req = Request::from_parts(head, http::Body::new(this));
-			let mut res = Box::pin(self.attempt_upstream(
-				log,
-				&mut req_upgrade,
-				llm_request_policies.clone(),
-				&selected_backend,
-				backend_policies.clone(),
-				response_policies,
-				req,
-			))
-			.await;
+			let mut res = self
+				.attempt_upstream(
+					log,
+					&mut req_upgrade,
+					llm_request_policies.clone(),
+					&selected_backend,
+					backend_policies.clone(),
+					response_policies,
+					req,
+				)
+				.await;
 			if last || !should_retry(&res, retries.as_ref().unwrap()) {
 				if !last {
 					debug!("response not retry-able");
@@ -1072,7 +1075,7 @@ impl HTTPProxy {
 			.as_ref()
 			.and_then(|t| t.request_timeout);
 		let start = log.start;
-		let call = Box::pin(make_backend_call(
+		let call = make_backend_call(
 			self.inputs.clone(),
 			route_policies.clone(),
 			&selected_backend.backend.backend,
@@ -1080,7 +1083,7 @@ impl HTTPProxy {
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
-		));
+		);
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
@@ -1762,13 +1765,11 @@ async fn make_backend_call(
 					ProxyError::ProcessingString("invalid: log required for MCP".to_string()).into(),
 				);
 			};
-			let res = Box::pin(
-				inputs
-					.clone()
-					.mcp_state
-					.serve(inputs, name, backend, policies, req, log),
-			)
-			.await;
+			let res = inputs
+				.clone()
+				.mcp_state
+				.serve(inputs, name, backend, policies, req, log)
+				.await;
 			return res.map_err(ProxyResponse::from);
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),

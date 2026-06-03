@@ -247,7 +247,10 @@ type LLMProvider struct {
 	// +optional
 	Bedrock *BedrockConfig `json:"bedrock,omitempty"`
 
-	// Custom provider
+	// Custom provider configures a non-managed or self-hosted LLM provider.
+	// Use this when the provider target and API formats should be declared
+	// explicitly instead of inferred from a managed provider such as OpenAI or
+	// Anthropic.
 	// +optional
 	Custom *CustomProvider `json:"custom,omitempty"`
 
@@ -278,6 +281,9 @@ type LLMProvider struct {
 }
 
 // CustomProvider configures a provider with explicit API format support and an explicit target.
+// It is intended for local, self-hosted, or OpenAI-compatible providers whose
+// supported request/response formats are not fully described by the managed
+// provider types.
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.backendRef.namespace)",message="custom provider backendRef must be namespace-local"
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || (((!has(self.backendRef.group) || self.backendRef.group == \"\") && (!has(self.backendRef.kind) || self.backendRef.kind == 'Service')) || (has(self.backendRef.group) && self.backendRef.group == 'inference.networking.k8s.io' && has(self.backendRef.kind) && self.backendRef.kind == 'InferencePool'))",message="custom provider backendRef may target only Service or InferencePool"
 type CustomProvider struct {
@@ -302,6 +308,7 @@ type CustomProvider struct {
 }
 
 // ProviderFormatConfig configures a provider-native LLM API format.
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 type ProviderFormatConfig struct {
 	// Type is the provider-native API format.
 	// +required
@@ -314,7 +321,7 @@ type ProviderFormatConfig struct {
 }
 
 // ProviderFormat specifies a provider-native LLM API format.
-// +kubebuilder:validation:Enum=Completions;Messages;Responses;Embeddings;AnthropicTokenCount;Realtime
+// +k8s:enum
 type ProviderFormat string
 
 const (
