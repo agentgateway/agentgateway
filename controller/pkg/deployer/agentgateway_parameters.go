@@ -57,6 +57,42 @@ func setIfNonZero[T comparable](dst *T, src T) {
 	}
 }
 
+// ApplyControlPlaneIstioDefaults seeds the Istio block on the helm values with control-plane-level
+// defaults. It runs before AGWP params are applied (the lowest-precedence layer), so per-gateway
+// spec.istio values, merged later in ApplyToHelmValues, override these.
+func ApplyControlPlaneIstioDefaults(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) {
+	if gtw == nil || cols == nil {
+		return
+	}
+	if cols.IstioClusterId == "" && cols.IstioNetwork == "" && cols.IstioCaAddress == "" {
+		return
+	}
+	if gtw.Istio == nil {
+		gtw.Istio = &agentgateway.IstioSpec{}
+	}
+	setIfNonZero(&gtw.Istio.ClusterId, cols.IstioClusterId)
+	setIfNonZero(&gtw.Istio.Network, cols.IstioNetwork)
+	setIfNonZero(&gtw.Istio.CaAddress, cols.IstioCaAddress)
+}
+
+// ApplyMeshTrustDomainDefault infers the trust domain from mesh config when
+// istio integration is already enabled for this gateway and there is no explicit
+// trust domain configured by the params.
+func ApplyMeshTrustDomainDefault(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) {
+	// no istio config, no need for TD lookup
+	if gtw == nil || gtw.Istio == nil || gtw.Istio.TrustDomain != "" {
+		return
+	}
+	if cols == nil || cols.MeshConfig == nil {
+		return
+	}
+	mc := cols.MeshConfig.Get()
+	if mc == nil || mc.MeshConfig == nil {
+		return
+	}
+	gtw.Istio.TrustDomain = mc.MeshConfig.GetTrustDomain()
+}
+
 // ApplyToHelmValues applies the AgentgatewayParameters configs to the helm
 // values.  This is called before rendering the helm chart. (We render a helm
 // chart, but we do not use helm beyond that point.)
@@ -95,6 +131,8 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 		}
 		setIfNonZero(&res.Istio.CaAddress, configs.Istio.CaAddress)
 		setIfNonZero(&res.Istio.TrustDomain, configs.Istio.TrustDomain)
+		setIfNonZero(&res.Istio.ClusterId, configs.Istio.ClusterId)
+		setIfNonZero(&res.Istio.Network, configs.Istio.Network)
 		if len(configs.Istio.AdditionalTrustDomains) > 0 {
 			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
 		}
@@ -221,6 +259,10 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 		applier := NewAgentgatewayParametersApplier(resolved.gatewayAGWP)
 		applier.ApplyToHelmValues(vals)
 	}
+
+	// only apply TD after applying gw params, we don't neeed TD if there is no Istio
+	ApplyMeshTrustDomainDefault(vals.Agentgateway, g.inputs.AgwCollections)
+
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 
 	if g.inputs.ControlPlane.XdsTLS {
@@ -406,6 +448,8 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 	if err := SetLoadBalancerIPFromGatewayForAgentgateway(gw, gtw.Service); err != nil {
 		return nil, err
 	}
+
+	ApplyControlPlaneIstioDefaults(gtw, g.inputs.AgwCollections)
 
 	return &HelmConfig{Agentgateway: gtw}, nil
 }

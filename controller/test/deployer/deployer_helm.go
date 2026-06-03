@@ -15,6 +15,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -31,6 +32,11 @@ type HelmTestCase struct {
 	Inputs *deployer.Inputs
 	// InputFile is just the name of the manifest omitting the file extension suffix
 	InputFile string
+	// Settings, when set, are the install-time control-plane settings the collections are built
+	// with (e.g. IstioClusterId/IstioRevision). Needed for config captured at construction such as
+	// the MeshConfig singleton's revision; the testdata objects are also fed to those collections so
+	// e.g. a mesh ConfigMap in the manifest is visible to MeshConfig.
+	Settings *apisettings.Settings
 	// Validate is an optional function to run additional validation on the output YAML
 	Validate func(t *testing.T, outputYaml string)
 	// HelmValuesGeneratorOverride is an optional function to modify deployer inputs before rendering.
@@ -160,6 +166,10 @@ func (dt DeployerTester) RunHelmChartTest(t *testing.T, tt HelmTestCase, scheme 
 		t.FailNow()
 	}
 	agwCols := NewAgwCols(t)
+	if tt.Settings != nil {
+		// override control-plane level settings
+		agwCols = NewAgwColsWithSettings(t, *tt.Settings, objs...)
+	}
 	inputs := DefaultDeployerInputs(dt, agwCols)
 	if tt.Inputs != nil {
 		inputs = tt.Inputs

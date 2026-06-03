@@ -145,6 +145,21 @@ type Settings struct {
 	// Defaults to "default".
 	IstioRevision string `split_words:"true" default:"default"`
 
+	// The cluster ID used for mesh integration with Istio. This will populate the cluster ID of gateway deployments.
+	// GatewayParameters can override this for per-gateway customization.
+	// Defaults to unset, meaning no Istio configuration will be set up for gateway deployments.
+	IstioClusterId string `split_words:"true"`
+
+	// The network ID used for mesh integration with Istio. This will populate the network ID of gateway deployments.
+	// GatewayParameters can override this for per-gateway customization.
+	// Defaults to unset, meaning no Istio configuration will be set up for gateway deployments.
+	IstioNetwork string `split_words:"true"`
+
+	// The address of the Istio CA used for mesh integration with Istio. This will populate the CA address of gateway deployments.
+	// GatewayParameters can override this on a per-gateway basis.
+	// Defaults to "istiod.istio-system.svc:15012", the typical address of the Istio CA in a default Istio installation.
+	IstioCaAddress string `split_words:"true"`
+
 	// XdsServiceHost is the host that serves xDS config.
 	// It overrides xdsServiceName if set.
 	XdsServiceHost string `split_words:"true"`

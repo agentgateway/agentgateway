@@ -438,6 +438,15 @@ spec:
                     description: The address of the Istio CA. If unset, defaults to
                       `https://istiod.istio-system.svc:15012`.
                     type: string
+                  clusterId:
+                    description: The ID of the cluster this Agentgateway runs in.
+                      If unset, defaults to `Kubernetes`.
+                    type: string
+                  network:
+                    description: |-
+                      The Istio network this Agentgateway runs in (e.g. the meshID). Used for HBONE
+                      routing in multi-network ambient meshes. If unset, defaults to the empty network.
+                    type: string
                   trustDomain:
                     description: The Istio trust domain. If not set, defaults to `cluster.local`.
                     type: string

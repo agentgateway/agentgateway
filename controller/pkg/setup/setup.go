@@ -121,7 +121,7 @@ func New(opts Options) (*setup, error) {
 		s.RestConfig = ctrl.GetConfigOrDie()
 	}
 	if s.APIClient == nil {
-		apiClient, err := apiclient.New(s.RestConfig)
+		apiClient, err := apiclient.New(s.RestConfig, s.GlobalSettings.IstioClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("error creating API client: %w", err)
 		}
@@ -221,7 +221,6 @@ func (s *setup) Start(ctx context.Context) error {
 		*s.GlobalSettings,
 		// control plane system namespace (default is agentgateway-system)
 		namespaces.GetPodNamespace(),
-		s.APIClient.ClusterID().String(),
 	)
 	if err != nil {
 		slog.Error("error creating agw collections", "error", err)

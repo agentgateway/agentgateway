@@ -1,7 +1,7 @@
-package syncer
+package meshconfig
 
 import (
-	meshconfig "istio.io/api/mesh/v1alpha1"
+	meshapi "istio.io/api/mesh/v1alpha1"
 	"istio.io/istio/pkg/config/mesh"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -24,7 +24,7 @@ func GetMeshConfigMapName(revision string) string {
 
 // ParseMeshConfigFromConfigMap parses the Istio mesh YAML from the given ConfigMap (key "mesh")
 // and returns the MeshConfig with defaults applied. Returns nil if the key is missing or parse fails.
-func ParseMeshConfigFromConfigMap(cm *corev1.ConfigMap) *meshconfig.MeshConfig {
+func ParseMeshConfigFromConfigMap(cm *corev1.ConfigMap) *meshapi.MeshConfig {
 	if cm == nil {
 		return nil
 	}

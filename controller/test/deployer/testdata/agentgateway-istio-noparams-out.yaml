@@ -137,11 +137,13 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: CA_ADDRESS
-          value: https://foo:443
+          value: https://istiod.istio-system.svc:15012
         - name: TRUST_DOMAIN
-          value: not.cluster.local
-        - name: ADDITIONAL_TRUST_DOMAINS
-          value: extra.domain.com,another.domain.com
+          value: custom.example.com
+        - name: CLUSTER_ID
+          value: cluster-1
+        - name: NETWORK
+          value: network-1
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:

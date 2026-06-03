@@ -170,7 +170,8 @@ type IstioSpec struct {
 	//
 	// +optional
 	CaAddress string `json:"caAddress,omitempty"`
-	// The Istio trust domain. If not set, defaults to `cluster.local`.
+	// The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+	// trust domain for the control plane's istio revision.
 	//
 	// +optional
 	TrustDomain string `json:"trustDomain,omitempty"`
@@ -179,6 +180,14 @@ type IstioSpec struct {
 	//
 	// +optional
 	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
+	// The ID of the cluster this gateway runs in. If unset, defaults to `Kubernetes`.
+	//
+	// +optional
+	ClusterId string `json:"clusterId,omitempty"`
+	// The Istio network this gateway runs in If unset, defaults to the empty network.
+	//
+	// +optional
+	Network string `json:"network,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="The 'min' value must be less than or equal to the 'max' value."

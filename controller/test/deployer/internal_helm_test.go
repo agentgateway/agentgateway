@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -130,8 +131,46 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-shutdown",
 		},
 		{
-			Name:      "agentgateway with Istio configuration",
+			Name:      "agentgateway with params level Istio configuration",
 			InputFile: "agentgateway-istio",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from istio.clusterId")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from istio.network")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "not.cluster.local",
+					"explicit params trustDomain should be used as-is")
+			},
+		},
+		{
+			Name:      "agentgateway with controller level Istio configuration and mesh trust domain",
+			InputFile: "agentgateway-istio-noparams",
+			Settings: &apisettings.Settings{
+				IstioClusterId: "cluster-1",
+				IstioNetwork:   "network-1",
+				IstioNamespace: "istio-system",
+				IstioRevision:  "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "TRUST_DOMAIN",
+					"deployment should set TRUST_DOMAIN env var")
+				assert.Contains(t, outputYaml, "custom.example.com",
+					"trust domain should be auto-detected from the revisioned mesh ConfigMap")
+			},
 		},
 		{
 			Name:      "agentgateway with Istio additional trust domains",
