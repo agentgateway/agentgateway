@@ -545,8 +545,11 @@
         },
         "certificate": {
           "description": "PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "unverifiedWorkload": {
           "description": "The workload context of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.\n\nFields are nested under `unverified` to signal that they are derived\nfrom the source IP (not cryptographically authenticated). Policy\nauthors should prefer `source.identity.*` for trust-sensitive checks.",

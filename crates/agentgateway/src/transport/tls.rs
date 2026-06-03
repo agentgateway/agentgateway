@@ -991,7 +991,7 @@ pub struct TlsInfo {
 	pub subject_cn: Option<Strng>,
 	/// PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
 	#[serde(default)]
-	pub certificate: Strng,
+	pub certificate: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -1041,7 +1041,7 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 
 	let (issuer, subject, subject_cn) = names(&cert);
 	let (istio, sans) = sans(&cert).ok()?;
-	let certificate = certificate(cert);
+	let certificate = Some(certificate(cert));
 	Some(TlsInfo {
 		identity: istio.into_iter().next().map(|i| {
 			let Identity::Spiffe {
