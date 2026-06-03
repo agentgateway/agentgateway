@@ -71,6 +71,7 @@ impl HeaderModifier {
 				Some(crate::http::HeaderOrPseudoValue::Header(value)),
 				crate::http::HeaderMutationAction::OverwriteIfExistsOrAdd,
 			);
+
 		}
 		for k in &self.remove {
 			req

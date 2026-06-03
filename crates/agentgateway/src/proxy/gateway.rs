@@ -1388,7 +1388,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		max_buffer_size: _, // Not handled here
 		http1_max_headers,
 		http1_idle_timeout,
-		http1_preserve_header_case,
+		http1_header_case,
 		http2_window_size,
 		http2_connection_window_size,
 		http2_frame_size,
@@ -1403,7 +1403,10 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 	// See https://github.com/agentgateway/agentgateway/issues/504 for why "idle timeout" is used as "read header timeout"
 	b.http1().header_read_timeout(Some(*http1_idle_timeout));
-	b.http1().preserve_header_case(*http1_preserve_header_case);
+	b.http1().preserve_header_case(matches!(
+		http1_header_case,
+		frontend::HTTPHeaderCase::Preserve
+	));
 
 	if http2_window_size.is_some() || http2_connection_window_size.is_some() {
 		if let Some(w) = http2_connection_window_size {

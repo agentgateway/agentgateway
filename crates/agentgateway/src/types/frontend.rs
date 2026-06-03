@@ -31,6 +31,14 @@ impl From<TLSVersion> for super::agent::TLSVersion {
 	}
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum HTTPHeaderCase {
+	#[default]
+	Lowercase,
+	Preserve,
+}
+
 #[apply(schema!)]
 pub struct HTTP {
 	#[serde(default = "defaults::max_buffer_size")]
@@ -45,7 +53,7 @@ pub struct HTTP {
 	#[serde(default = "defaults::http1_idle_timeout")]
 	pub http1_idle_timeout: Duration,
 	#[serde(default)]
-	pub http1_preserve_header_case: bool,
+	pub http1_header_case: HTTPHeaderCase,
 
 	#[serde(default)]
 	pub http2_window_size: Option<u32>,
@@ -80,7 +88,7 @@ impl Default for HTTP {
 
 			http1_max_headers: None,
 			http1_idle_timeout: defaults::http1_idle_timeout(),
-			http1_preserve_header_case: false,
+			http1_header_case: HTTPHeaderCase::Lowercase,
 
 			http2_window_size: None,
 			http2_connection_window_size: None,

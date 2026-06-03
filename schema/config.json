@@ -6721,9 +6721,9 @@
           "type": "string",
           "default": "10m0s"
         },
-        "http1PreserveHeaderCase": {
-          "type": "boolean",
-          "default": false
+        "http1HeaderCase": {
+          "$ref": "#/$defs/HTTPHeaderCase",
+          "default": "lowercase"
         },
         "http2WindowSize": {
           "type": [
@@ -6785,6 +6785,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "HTTPHeaderCase": {
+      "type": "string",
+      "enum": [
+        "lowercase",
+        "preserve"
+      ]
     },
     "TLS": {
       "type": "object",

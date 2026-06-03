@@ -552,6 +552,11 @@ message KeepaliveConfig {
 
 message FrontendPolicySpec {
   message HTTP {
+    enum HTTPHeaderCase {
+      LOWERCASE = 0;
+      PRESERVE = 1;
+    }
+
     optional uint32 max_buffer_size = 1;
     optional uint32 http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
@@ -562,8 +567,8 @@ message FrontendPolicySpec {
     google.protobuf.Duration http2_keepalive_timeout = 8;
     google.protobuf.Duration max_connection_duration = 9;
     optional uint32 http2_max_header_size = 10;
-    // Preserve the original HTTP/1 request header casing when encoding responses.
-    bool http1_preserve_header_case = 11;
+    // Controls HTTP/1 request header casing when encoding responses.
+    HTTPHeaderCase http1_header_case = 11;
   }
   message TLS {
     // TLS handshake timeout

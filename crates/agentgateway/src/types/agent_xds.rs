@@ -36,6 +36,7 @@ use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
+use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::ext_proc::{
 	BodySendMode as XdsBodySendMode, HeaderTrailerSendMode as XdsHeaderTrailerSendMode,
@@ -2402,7 +2403,12 @@ fn frontend_policy_from_proto(
 				.http1_idle_timeout
 				.map(convert_duration)
 				.unwrap_or_else(crate::defaults::http1_idle_timeout),
-			http1_preserve_header_case: h.http1_preserve_header_case,
+			http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
+				match header_case {
+					HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
+					HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
+				}
+			})?,
 			http2_window_size: h.http2_window_size,
 			http2_connection_window_size: h.http2_connection_window_size,
 			http2_frame_size: h.http2_frame_size,

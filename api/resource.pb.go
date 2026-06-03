@@ -464,6 +464,52 @@ func (TLSConfig_KeyExchangeGroup) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{14, 4}
 }
 
+type FrontendPolicySpec_HTTP_HTTPHeaderCase int32
+
+const (
+	FrontendPolicySpec_HTTP_LOWERCASE FrontendPolicySpec_HTTP_HTTPHeaderCase = 0
+	FrontendPolicySpec_HTTP_PRESERVE  FrontendPolicySpec_HTTP_HTTPHeaderCase = 1
+)
+
+// Enum value maps for FrontendPolicySpec_HTTP_HTTPHeaderCase.
+var (
+	FrontendPolicySpec_HTTP_HTTPHeaderCase_name = map[int32]string{
+		0: "LOWERCASE",
+		1: "PRESERVE",
+	}
+	FrontendPolicySpec_HTTP_HTTPHeaderCase_value = map[string]int32{
+		"LOWERCASE": 0,
+		"PRESERVE":  1,
+	}
+)
+
+func (x FrontendPolicySpec_HTTP_HTTPHeaderCase) Enum() *FrontendPolicySpec_HTTP_HTTPHeaderCase {
+	p := new(FrontendPolicySpec_HTTP_HTTPHeaderCase)
+	*p = x
+	return p
+}
+
+func (x FrontendPolicySpec_HTTP_HTTPHeaderCase) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FrontendPolicySpec_HTTP_HTTPHeaderCase) Descriptor() protoreflect.EnumDescriptor {
+	return file_resource_proto_enumTypes[8].Descriptor()
+}
+
+func (FrontendPolicySpec_HTTP_HTTPHeaderCase) Type() protoreflect.EnumType {
+	return &file_resource_proto_enumTypes[8]
+}
+
+func (x FrontendPolicySpec_HTTP_HTTPHeaderCase) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FrontendPolicySpec_HTTP_HTTPHeaderCase.Descriptor instead.
+func (FrontendPolicySpec_HTTP_HTTPHeaderCase) EnumDescriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{48, 0, 0}
+}
+
 type FrontendPolicySpec_Logging_OtlpAccessLog_Protocol int32
 
 const (
@@ -494,11 +540,11 @@ func (x FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) String() string {
 }
 
 func (FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[8].Descriptor()
+	return file_resource_proto_enumTypes[9].Descriptor()
 }
 
 func (FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[8]
+	return &file_resource_proto_enumTypes[9]
 }
 
 func (x FrontendPolicySpec_Logging_OtlpAccessLog_Protocol) Number() protoreflect.EnumNumber {
@@ -540,11 +586,11 @@ func (x FrontendPolicySpec_Tracing_Protocol) String() string {
 }
 
 func (FrontendPolicySpec_Tracing_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[9].Descriptor()
+	return file_resource_proto_enumTypes[10].Descriptor()
 }
 
 func (FrontendPolicySpec_Tracing_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[9]
+	return &file_resource_proto_enumTypes[10]
 }
 
 func (x FrontendPolicySpec_Tracing_Protocol) Number() protoreflect.EnumNumber {
@@ -589,11 +635,11 @@ func (x FrontendPolicySpec_ProxyProtocol_Version) String() string {
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Version) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[10].Descriptor()
+	return file_resource_proto_enumTypes[11].Descriptor()
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Version) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[10]
+	return &file_resource_proto_enumTypes[11]
 }
 
 func (x FrontendPolicySpec_ProxyProtocol_Version) Number() protoreflect.EnumNumber {
@@ -635,11 +681,11 @@ func (x FrontendPolicySpec_ProxyProtocol_Mode) String() string {
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[11].Descriptor()
+	return file_resource_proto_enumTypes[12].Descriptor()
 }
 
 func (FrontendPolicySpec_ProxyProtocol_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[11]
+	return &file_resource_proto_enumTypes[12]
 }
 
 func (x FrontendPolicySpec_ProxyProtocol_Mode) Number() protoreflect.EnumNumber {
@@ -681,11 +727,11 @@ func (x TrafficPolicySpec_PolicyPhase) String() string {
 }
 
 func (TrafficPolicySpec_PolicyPhase) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[12].Descriptor()
+	return file_resource_proto_enumTypes[13].Descriptor()
 }
 
 func (TrafficPolicySpec_PolicyPhase) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[12]
+	return &file_resource_proto_enumTypes[13]
 }
 
 func (x TrafficPolicySpec_PolicyPhase) Number() protoreflect.EnumNumber {
@@ -727,11 +773,11 @@ func (x TrafficPolicySpec_RemoteRateLimit_Type) String() string {
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[13].Descriptor()
+	return file_resource_proto_enumTypes[14].Descriptor()
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_Type) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[13]
+	return &file_resource_proto_enumTypes[14]
 }
 
 func (x TrafficPolicySpec_RemoteRateLimit_Type) Number() protoreflect.EnumNumber {
@@ -775,11 +821,11 @@ func (x TrafficPolicySpec_RemoteRateLimit_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[14].Descriptor()
+	return file_resource_proto_enumTypes[15].Descriptor()
 }
 
 func (TrafficPolicySpec_RemoteRateLimit_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[14]
+	return &file_resource_proto_enumTypes[15]
 }
 
 func (x TrafficPolicySpec_RemoteRateLimit_FailureMode) Number() protoreflect.EnumNumber {
@@ -821,11 +867,11 @@ func (x TrafficPolicySpec_LocalRateLimit_Type) String() string {
 }
 
 func (TrafficPolicySpec_LocalRateLimit_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[15].Descriptor()
+	return file_resource_proto_enumTypes[16].Descriptor()
 }
 
 func (TrafficPolicySpec_LocalRateLimit_Type) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[15]
+	return &file_resource_proto_enumTypes[16]
 }
 
 func (x TrafficPolicySpec_LocalRateLimit_Type) Number() protoreflect.EnumNumber {
@@ -870,11 +916,11 @@ func (x TrafficPolicySpec_ExternalAuth_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_ExternalAuth_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[16].Descriptor()
+	return file_resource_proto_enumTypes[17].Descriptor()
 }
 
 func (TrafficPolicySpec_ExternalAuth_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[16]
+	return &file_resource_proto_enumTypes[17]
 }
 
 func (x TrafficPolicySpec_ExternalAuth_FailureMode) Number() protoreflect.EnumNumber {
@@ -923,11 +969,11 @@ func (x TrafficPolicySpec_JWT_Mode) String() string {
 }
 
 func (TrafficPolicySpec_JWT_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[17].Descriptor()
+	return file_resource_proto_enumTypes[18].Descriptor()
 }
 
 func (TrafficPolicySpec_JWT_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[17]
+	return &file_resource_proto_enumTypes[18]
 }
 
 func (x TrafficPolicySpec_JWT_Mode) Number() protoreflect.EnumNumber {
@@ -972,11 +1018,11 @@ func (x TrafficPolicySpec_BasicAuthentication_Mode) String() string {
 }
 
 func (TrafficPolicySpec_BasicAuthentication_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[18].Descriptor()
+	return file_resource_proto_enumTypes[19].Descriptor()
 }
 
 func (TrafficPolicySpec_BasicAuthentication_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[18]
+	return &file_resource_proto_enumTypes[19]
 }
 
 func (x TrafficPolicySpec_BasicAuthentication_Mode) Number() protoreflect.EnumNumber {
@@ -1025,11 +1071,11 @@ func (x TrafficPolicySpec_APIKey_Mode) String() string {
 }
 
 func (TrafficPolicySpec_APIKey_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[19].Descriptor()
+	return file_resource_proto_enumTypes[20].Descriptor()
 }
 
 func (TrafficPolicySpec_APIKey_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[19]
+	return &file_resource_proto_enumTypes[20]
 }
 
 func (x TrafficPolicySpec_APIKey_Mode) Number() protoreflect.EnumNumber {
@@ -1071,11 +1117,11 @@ func (x TrafficPolicySpec_ExtProc_FailureMode) String() string {
 }
 
 func (TrafficPolicySpec_ExtProc_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[20].Descriptor()
+	return file_resource_proto_enumTypes[21].Descriptor()
 }
 
 func (TrafficPolicySpec_ExtProc_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[20]
+	return &file_resource_proto_enumTypes[21]
 }
 
 func (x TrafficPolicySpec_ExtProc_FailureMode) Number() protoreflect.EnumNumber {
@@ -1124,11 +1170,11 @@ func (x TrafficPolicySpec_ExtProc_BodySendMode) String() string {
 }
 
 func (TrafficPolicySpec_ExtProc_BodySendMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[21].Descriptor()
+	return file_resource_proto_enumTypes[22].Descriptor()
 }
 
 func (TrafficPolicySpec_ExtProc_BodySendMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[21]
+	return &file_resource_proto_enumTypes[22]
 }
 
 func (x TrafficPolicySpec_ExtProc_BodySendMode) Number() protoreflect.EnumNumber {
@@ -1173,11 +1219,11 @@ func (x TrafficPolicySpec_ExtProc_HeaderTrailerSendMode) String() string {
 }
 
 func (TrafficPolicySpec_ExtProc_HeaderTrailerSendMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[22].Descriptor()
+	return file_resource_proto_enumTypes[23].Descriptor()
 }
 
 func (TrafficPolicySpec_ExtProc_HeaderTrailerSendMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[22]
+	return &file_resource_proto_enumTypes[23]
 }
 
 func (x TrafficPolicySpec_ExtProc_HeaderTrailerSendMode) Number() protoreflect.EnumNumber {
@@ -1219,11 +1265,11 @@ func (x TrafficPolicySpec_HostRewrite_Mode) String() string {
 }
 
 func (TrafficPolicySpec_HostRewrite_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[23].Descriptor()
+	return file_resource_proto_enumTypes[24].Descriptor()
 }
 
 func (TrafficPolicySpec_HostRewrite_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[23]
+	return &file_resource_proto_enumTypes[24]
 }
 
 func (x TrafficPolicySpec_HostRewrite_Mode) Number() protoreflect.EnumNumber {
@@ -1277,11 +1323,11 @@ func (x BackendPolicySpec_Ai_BuiltinRegexRule) String() string {
 }
 
 func (BackendPolicySpec_Ai_BuiltinRegexRule) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[24].Descriptor()
+	return file_resource_proto_enumTypes[25].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_BuiltinRegexRule) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[24]
+	return &file_resource_proto_enumTypes[25]
 }
 
 func (x BackendPolicySpec_Ai_BuiltinRegexRule) Number() protoreflect.EnumNumber {
@@ -1326,11 +1372,11 @@ func (x BackendPolicySpec_Ai_ActionKind) String() string {
 }
 
 func (BackendPolicySpec_Ai_ActionKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[25].Descriptor()
+	return file_resource_proto_enumTypes[26].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_ActionKind) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[25]
+	return &file_resource_proto_enumTypes[26]
 }
 
 func (x BackendPolicySpec_Ai_ActionKind) Number() protoreflect.EnumNumber {
@@ -1408,11 +1454,11 @@ func (x BackendPolicySpec_Ai_RouteType) String() string {
 }
 
 func (BackendPolicySpec_Ai_RouteType) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[26].Descriptor()
+	return file_resource_proto_enumTypes[27].Descriptor()
 }
 
 func (BackendPolicySpec_Ai_RouteType) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[26]
+	return &file_resource_proto_enumTypes[27]
 }
 
 func (x BackendPolicySpec_Ai_RouteType) Number() protoreflect.EnumNumber {
@@ -1457,11 +1503,11 @@ func (x BackendPolicySpec_InferenceRouting_FailureMode) String() string {
 }
 
 func (BackendPolicySpec_InferenceRouting_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[27].Descriptor()
+	return file_resource_proto_enumTypes[28].Descriptor()
 }
 
 func (BackendPolicySpec_InferenceRouting_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[27]
+	return &file_resource_proto_enumTypes[28]
 }
 
 func (x BackendPolicySpec_InferenceRouting_FailureMode) Number() protoreflect.EnumNumber {
@@ -1506,11 +1552,11 @@ func (x BackendPolicySpec_BackendTLS_VerificationMode) String() string {
 }
 
 func (BackendPolicySpec_BackendTLS_VerificationMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[28].Descriptor()
+	return file_resource_proto_enumTypes[29].Descriptor()
 }
 
 func (BackendPolicySpec_BackendTLS_VerificationMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[28]
+	return &file_resource_proto_enumTypes[29]
 }
 
 func (x BackendPolicySpec_BackendTLS_VerificationMode) Number() protoreflect.EnumNumber {
@@ -1555,11 +1601,11 @@ func (x BackendPolicySpec_BackendHTTP_HttpVersion) String() string {
 }
 
 func (BackendPolicySpec_BackendHTTP_HttpVersion) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[29].Descriptor()
+	return file_resource_proto_enumTypes[30].Descriptor()
 }
 
 func (BackendPolicySpec_BackendHTTP_HttpVersion) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[29]
+	return &file_resource_proto_enumTypes[30]
 }
 
 func (x BackendPolicySpec_BackendHTTP_HttpVersion) Number() protoreflect.EnumNumber {
@@ -1607,11 +1653,11 @@ func (x BackendPolicySpec_McpAuthentication_McpIDP) String() string {
 }
 
 func (BackendPolicySpec_McpAuthentication_McpIDP) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[30].Descriptor()
+	return file_resource_proto_enumTypes[31].Descriptor()
 }
 
 func (BackendPolicySpec_McpAuthentication_McpIDP) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[30]
+	return &file_resource_proto_enumTypes[31]
 }
 
 func (x BackendPolicySpec_McpAuthentication_McpIDP) Number() protoreflect.EnumNumber {
@@ -1660,11 +1706,11 @@ func (x BackendPolicySpec_McpAuthentication_Mode) String() string {
 }
 
 func (BackendPolicySpec_McpAuthentication_Mode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[31].Descriptor()
+	return file_resource_proto_enumTypes[32].Descriptor()
 }
 
 func (BackendPolicySpec_McpAuthentication_Mode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[31]
+	return &file_resource_proto_enumTypes[32]
 }
 
 func (x BackendPolicySpec_McpAuthentication_Mode) Number() protoreflect.EnumNumber {
@@ -1706,11 +1752,11 @@ func (x AIBackend_AzureResourceType) String() string {
 }
 
 func (AIBackend_AzureResourceType) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[32].Descriptor()
+	return file_resource_proto_enumTypes[33].Descriptor()
 }
 
 func (AIBackend_AzureResourceType) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[32]
+	return &file_resource_proto_enumTypes[33]
 }
 
 func (x AIBackend_AzureResourceType) Number() protoreflect.EnumNumber {
@@ -1767,11 +1813,11 @@ func (x AIBackend_ProviderFormat) String() string {
 }
 
 func (AIBackend_ProviderFormat) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[33].Descriptor()
+	return file_resource_proto_enumTypes[34].Descriptor()
 }
 
 func (AIBackend_ProviderFormat) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[33]
+	return &file_resource_proto_enumTypes[34]
 }
 
 func (x AIBackend_ProviderFormat) Number() protoreflect.EnumNumber {
@@ -1813,11 +1859,11 @@ func (x MCPBackend_StatefulMode) String() string {
 }
 
 func (MCPBackend_StatefulMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[34].Descriptor()
+	return file_resource_proto_enumTypes[35].Descriptor()
 }
 
 func (MCPBackend_StatefulMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[34]
+	return &file_resource_proto_enumTypes[35]
 }
 
 func (x MCPBackend_StatefulMode) Number() protoreflect.EnumNumber {
@@ -1859,11 +1905,11 @@ func (x MCPBackend_PrefixMode) String() string {
 }
 
 func (MCPBackend_PrefixMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[35].Descriptor()
+	return file_resource_proto_enumTypes[36].Descriptor()
 }
 
 func (MCPBackend_PrefixMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[35]
+	return &file_resource_proto_enumTypes[36]
 }
 
 func (x MCPBackend_PrefixMode) Number() protoreflect.EnumNumber {
@@ -1907,11 +1953,11 @@ func (x MCPBackend_FailureMode) String() string {
 }
 
 func (MCPBackend_FailureMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[36].Descriptor()
+	return file_resource_proto_enumTypes[37].Descriptor()
 }
 
 func (MCPBackend_FailureMode) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[36]
+	return &file_resource_proto_enumTypes[37]
 }
 
 func (x MCPBackend_FailureMode) Number() protoreflect.EnumNumber {
@@ -1956,11 +2002,11 @@ func (x MCPTarget_Protocol) String() string {
 }
 
 func (MCPTarget_Protocol) Descriptor() protoreflect.EnumDescriptor {
-	return file_resource_proto_enumTypes[37].Descriptor()
+	return file_resource_proto_enumTypes[38].Descriptor()
 }
 
 func (MCPTarget_Protocol) Type() protoreflect.EnumType {
-	return &file_resource_proto_enumTypes[37]
+	return &file_resource_proto_enumTypes[38]
 }
 
 func (x MCPTarget_Protocol) Number() protoreflect.EnumNumber {
@@ -7908,10 +7954,10 @@ type FrontendPolicySpec_HTTP struct {
 	Http2KeepaliveTimeout     *durationpb.Duration   `protobuf:"bytes,8,opt,name=http2_keepalive_timeout,json=http2KeepaliveTimeout,proto3" json:"http2_keepalive_timeout,omitempty"`
 	MaxConnectionDuration     *durationpb.Duration   `protobuf:"bytes,9,opt,name=max_connection_duration,json=maxConnectionDuration,proto3" json:"max_connection_duration,omitempty"`
 	Http2MaxHeaderSize        *uint32                `protobuf:"varint,10,opt,name=http2_max_header_size,json=http2MaxHeaderSize,proto3,oneof" json:"http2_max_header_size,omitempty"`
-	// Preserve the original HTTP/1 request header casing when encoding responses.
-	Http1PreserveHeaderCase bool `protobuf:"varint,11,opt,name=http1_preserve_header_case,json=http1PreserveHeaderCase,proto3" json:"http1_preserve_header_case,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// Controls HTTP/1 request header casing when encoding responses.
+	Http1HeaderCase FrontendPolicySpec_HTTP_HTTPHeaderCase `protobuf:"varint,11,opt,name=http1_header_case,json=http1HeaderCase,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_HTTP_HTTPHeaderCase" json:"http1_header_case,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FrontendPolicySpec_HTTP) Reset() {
@@ -8014,11 +8060,11 @@ func (x *FrontendPolicySpec_HTTP) GetHttp2MaxHeaderSize() uint32 {
 	return 0
 }
 
-func (x *FrontendPolicySpec_HTTP) GetHttp1PreserveHeaderCase() bool {
+func (x *FrontendPolicySpec_HTTP) GetHttp1HeaderCase() FrontendPolicySpec_HTTP_HTTPHeaderCase {
 	if x != nil {
-		return x.Http1PreserveHeaderCase
+		return x.Http1HeaderCase
 	}
-	return false
+	return FrontendPolicySpec_HTTP_LOWERCASE
 }
 
 type FrontendPolicySpec_TLS struct {
@@ -13590,7 +13636,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\x95!\n" +
+	"\b_retries\"\xf6!\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -13599,7 +13645,7 @@ const file_resource_proto_rawDesc = "" +
 	"\atracing\x18\x05 \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.TracingH\x00R\atracing\x12y\n" +
 	"\x15network_authorization\x18\x06 \x01(\v2B.agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorizationH\x00R\x14networkAuthorization\x12d\n" +
 	"\x0eproxy_protocol\x18\a \x01(\v2;.agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocolH\x00R\rproxyProtocol\x12Q\n" +
-	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\xd3\x06\n" +
+	"\ametrics\x18\b \x01(\v25.agentgateway.dev.resource.FrontendPolicySpec.MetricsH\x00R\ametrics\x1a\xb4\a\n" +
 	"\x04HTTP\x12+\n" +
 	"\x0fmax_buffer_size\x18\x01 \x01(\rH\x00R\rmaxBufferSize\x88\x01\x01\x12/\n" +
 	"\x11http1_max_headers\x18\x02 \x01(\rH\x01R\x0fhttp1MaxHeaders\x88\x01\x01\x12G\n" +
@@ -13611,8 +13657,11 @@ const file_resource_proto_rawDesc = "" +
 	"\x17http2_keepalive_timeout\x18\b \x01(\v2\x19.google.protobuf.DurationR\x15http2KeepaliveTimeout\x12Q\n" +
 	"\x17max_connection_duration\x18\t \x01(\v2\x19.google.protobuf.DurationR\x15maxConnectionDuration\x126\n" +
 	"\x15http2_max_header_size\x18\n" +
-	" \x01(\rH\x05R\x12http2MaxHeaderSize\x88\x01\x01\x12;\n" +
-	"\x1ahttp1_preserve_header_case\x18\v \x01(\bR\x17http1PreserveHeaderCaseB\x12\n" +
+	" \x01(\rH\x05R\x12http2MaxHeaderSize\x88\x01\x01\x12m\n" +
+	"\x11http1_header_case\x18\v \x01(\x0e2A.agentgateway.dev.resource.FrontendPolicySpec.HTTP.HTTPHeaderCaseR\x0fhttp1HeaderCase\"-\n" +
+	"\x0eHTTPHeaderCase\x12\r\n" +
+	"\tLOWERCASE\x10\x00\x12\f\n" +
+	"\bPRESERVE\x10\x01B\x12\n" +
 	"\x10_max_buffer_sizeB\x14\n" +
 	"\x12_http1_max_headersB\x14\n" +
 	"\x12_http2_window_sizeB\x1f\n" +
@@ -14334,7 +14383,7 @@ func file_resource_proto_rawDescGZIP() []byte {
 	return file_resource_proto_rawDescData
 }
 
-var file_resource_proto_enumTypes = make([]protoimpl.EnumInfo, 38)
+var file_resource_proto_enumTypes = make([]protoimpl.EnumInfo, 39)
 var file_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 166)
 var file_resource_proto_goTypes = []any{
 	(Protocol)(0),                                               // 0: agentgateway.dev.resource.Protocol
@@ -14345,502 +14394,504 @@ var file_resource_proto_goTypes = []any{
 	(TLSConfig_MTLSMode)(0),                                     // 5: agentgateway.dev.resource.TLSConfig.MTLSMode
 	(TLSConfig_CipherSuite)(0),                                  // 6: agentgateway.dev.resource.TLSConfig.CipherSuite
 	(TLSConfig_KeyExchangeGroup)(0),                             // 7: agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
-	(FrontendPolicySpec_Logging_OtlpAccessLog_Protocol)(0),      // 8: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
-	(FrontendPolicySpec_Tracing_Protocol)(0),                    // 9: agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
-	(FrontendPolicySpec_ProxyProtocol_Version)(0),               // 10: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
-	(FrontendPolicySpec_ProxyProtocol_Mode)(0),                  // 11: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
-	(TrafficPolicySpec_PolicyPhase)(0),                          // 12: agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
-	(TrafficPolicySpec_RemoteRateLimit_Type)(0),                 // 13: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
-	(TrafficPolicySpec_RemoteRateLimit_FailureMode)(0),          // 14: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
-	(TrafficPolicySpec_LocalRateLimit_Type)(0),                  // 15: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
-	(TrafficPolicySpec_ExternalAuth_FailureMode)(0),             // 16: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
-	(TrafficPolicySpec_JWT_Mode)(0),                             // 17: agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
-	(TrafficPolicySpec_BasicAuthentication_Mode)(0),             // 18: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
-	(TrafficPolicySpec_APIKey_Mode)(0),                          // 19: agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
-	(TrafficPolicySpec_ExtProc_FailureMode)(0),                  // 20: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
-	(TrafficPolicySpec_ExtProc_BodySendMode)(0),                 // 21: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
-	(TrafficPolicySpec_ExtProc_HeaderTrailerSendMode)(0),        // 22: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
-	(TrafficPolicySpec_HostRewrite_Mode)(0),                     // 23: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
-	(BackendPolicySpec_Ai_BuiltinRegexRule)(0),                  // 24: agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
-	(BackendPolicySpec_Ai_ActionKind)(0),                        // 25: agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
-	(BackendPolicySpec_Ai_RouteType)(0),                         // 26: agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
-	(BackendPolicySpec_InferenceRouting_FailureMode)(0),         // 27: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	(BackendPolicySpec_BackendTLS_VerificationMode)(0),          // 28: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
-	(BackendPolicySpec_BackendHTTP_HttpVersion)(0),              // 29: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
-	(BackendPolicySpec_McpAuthentication_McpIDP)(0),             // 30: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 31: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
-	(AIBackend_AzureResourceType)(0),                            // 32: agentgateway.dev.resource.AIBackend.AzureResourceType
-	(AIBackend_ProviderFormat)(0),                               // 33: agentgateway.dev.resource.AIBackend.ProviderFormat
-	(MCPBackend_StatefulMode)(0),                                // 34: agentgateway.dev.resource.MCPBackend.StatefulMode
-	(MCPBackend_PrefixMode)(0),                                  // 35: agentgateway.dev.resource.MCPBackend.PrefixMode
-	(MCPBackend_FailureMode)(0),                                 // 36: agentgateway.dev.resource.MCPBackend.FailureMode
-	(MCPTarget_Protocol)(0),                                     // 37: agentgateway.dev.resource.MCPTarget.Protocol
-	(*Resource)(nil),                                            // 38: agentgateway.dev.resource.Resource
-	(*Bind)(nil),                                                // 39: agentgateway.dev.resource.Bind
-	(*RouteName)(nil),                                           // 40: agentgateway.dev.resource.RouteName
-	(*ListenerName)(nil),                                        // 41: agentgateway.dev.resource.ListenerName
-	(*ResourceName)(nil),                                        // 42: agentgateway.dev.resource.ResourceName
-	(*TypedResourceName)(nil),                                   // 43: agentgateway.dev.resource.TypedResourceName
-	(*Listener)(nil),                                            // 44: agentgateway.dev.resource.Listener
-	(*Route)(nil),                                               // 45: agentgateway.dev.resource.Route
-	(*RouteGroup)(nil),                                          // 46: agentgateway.dev.resource.RouteGroup
-	(*TCPRoute)(nil),                                            // 47: agentgateway.dev.resource.TCPRoute
-	(*ConditionalPolicies)(nil),                                 // 48: agentgateway.dev.resource.ConditionalPolicies
-	(*ConditionalPolicy)(nil),                                   // 49: agentgateway.dev.resource.ConditionalPolicy
-	(*Policy)(nil),                                              // 50: agentgateway.dev.resource.Policy
-	(*Backend)(nil),                                             // 51: agentgateway.dev.resource.Backend
-	(*TLSConfig)(nil),                                           // 52: agentgateway.dev.resource.TLSConfig
-	(*Timeout)(nil),                                             // 53: agentgateway.dev.resource.Timeout
-	(*Retry)(nil),                                               // 54: agentgateway.dev.resource.Retry
-	(*BackendAuthPolicy)(nil),                                   // 55: agentgateway.dev.resource.BackendAuthPolicy
-	(*AuthorizationLocation)(nil),                               // 56: agentgateway.dev.resource.AuthorizationLocation
-	(*Passthrough)(nil),                                         // 57: agentgateway.dev.resource.Passthrough
-	(*Key)(nil),                                                 // 58: agentgateway.dev.resource.Key
-	(*Gcp)(nil),                                                 // 59: agentgateway.dev.resource.Gcp
-	(*Aws)(nil),                                                 // 60: agentgateway.dev.resource.Aws
-	(*Azure)(nil),                                               // 61: agentgateway.dev.resource.Azure
-	(*AwsExplicitConfig)(nil),                                   // 62: agentgateway.dev.resource.AwsExplicitConfig
-	(*AwsImplicit)(nil),                                         // 63: agentgateway.dev.resource.AwsImplicit
-	(*AzureExplicitConfig)(nil),                                 // 64: agentgateway.dev.resource.AzureExplicitConfig
-	(*AzureClientSecret)(nil),                                   // 65: agentgateway.dev.resource.AzureClientSecret
-	(*AzureManagedIdentityCredential)(nil),                      // 66: agentgateway.dev.resource.AzureManagedIdentityCredential
-	(*AzureWorkloadIdentityCredential)(nil),                     // 67: agentgateway.dev.resource.AzureWorkloadIdentityCredential
-	(*AzureDeveloperImplicit)(nil),                              // 68: agentgateway.dev.resource.AzureDeveloperImplicit
-	(*AzureImplicit)(nil),                                       // 69: agentgateway.dev.resource.AzureImplicit
-	(*RouteMatch)(nil),                                          // 70: agentgateway.dev.resource.RouteMatch
-	(*PathMatch)(nil),                                           // 71: agentgateway.dev.resource.PathMatch
-	(*QueryMatch)(nil),                                          // 72: agentgateway.dev.resource.QueryMatch
-	(*MethodMatch)(nil),                                         // 73: agentgateway.dev.resource.MethodMatch
-	(*HeaderMatch)(nil),                                         // 74: agentgateway.dev.resource.HeaderMatch
-	(*CORS)(nil),                                                // 75: agentgateway.dev.resource.CORS
-	(*DirectResponse)(nil),                                      // 76: agentgateway.dev.resource.DirectResponse
-	(*ExpressionHeader)(nil),                                    // 77: agentgateway.dev.resource.ExpressionHeader
-	(*HeaderModifier)(nil),                                      // 78: agentgateway.dev.resource.HeaderModifier
-	(*RequestMirrors)(nil),                                      // 79: agentgateway.dev.resource.RequestMirrors
-	(*RequestRedirect)(nil),                                     // 80: agentgateway.dev.resource.RequestRedirect
-	(*UrlRewrite)(nil),                                          // 81: agentgateway.dev.resource.UrlRewrite
-	(*Header)(nil),                                              // 82: agentgateway.dev.resource.Header
-	(*RouteBackend)(nil),                                        // 83: agentgateway.dev.resource.RouteBackend
-	(*PolicyTarget)(nil),                                        // 84: agentgateway.dev.resource.PolicyTarget
-	(*KeepaliveConfig)(nil),                                     // 85: agentgateway.dev.resource.KeepaliveConfig
-	(*FrontendPolicySpec)(nil),                                  // 86: agentgateway.dev.resource.FrontendPolicySpec
-	(*JWTValidationOptions)(nil),                                // 87: agentgateway.dev.resource.JWTValidationOptions
-	(*TrafficPolicySpec)(nil),                                   // 88: agentgateway.dev.resource.TrafficPolicySpec
-	(*BackendPolicySpec)(nil),                                   // 89: agentgateway.dev.resource.BackendPolicySpec
-	(*StaticBackend)(nil),                                       // 90: agentgateway.dev.resource.StaticBackend
-	(*DynamicForwardProxy)(nil),                                 // 91: agentgateway.dev.resource.DynamicForwardProxy
-	(*AwsBackend)(nil),                                          // 92: agentgateway.dev.resource.AwsBackend
-	(*AwsAgentCoreBackend)(nil),                                 // 93: agentgateway.dev.resource.AwsAgentCoreBackend
-	(*AIBackend)(nil),                                           // 94: agentgateway.dev.resource.AIBackend
-	(*MCPBackend)(nil),                                          // 95: agentgateway.dev.resource.MCPBackend
-	(*MCPTarget)(nil),                                           // 96: agentgateway.dev.resource.MCPTarget
-	(*BackendReference)(nil),                                    // 97: agentgateway.dev.resource.BackendReference
-	(*Alpn)(nil),                                                // 98: agentgateway.dev.resource.Alpn
-	(*AuthorizationLocation_Header)(nil),                        // 99: agentgateway.dev.resource.AuthorizationLocation.Header
-	(*AuthorizationLocation_QueryParameter)(nil),                // 100: agentgateway.dev.resource.AuthorizationLocation.QueryParameter
-	(*AuthorizationLocation_Cookie)(nil),                        // 101: agentgateway.dev.resource.AuthorizationLocation.Cookie
-	(*Gcp_AccessToken)(nil),                                     // 102: agentgateway.dev.resource.Gcp.AccessToken
-	(*Gcp_IdToken)(nil),                                         // 103: agentgateway.dev.resource.Gcp.IdToken
-	(*AzureManagedIdentityCredential_UserAssignedIdentity)(nil), // 104: agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
-	(*RequestMirrors_Mirror)(nil),                               // 105: agentgateway.dev.resource.RequestMirrors.Mirror
-	(*PolicyTarget_ServiceTarget)(nil),                          // 106: agentgateway.dev.resource.PolicyTarget.ServiceTarget
-	(*PolicyTarget_BackendTarget)(nil),                          // 107: agentgateway.dev.resource.PolicyTarget.BackendTarget
-	(*PolicyTarget_GatewayTarget)(nil),                          // 108: agentgateway.dev.resource.PolicyTarget.GatewayTarget
-	(*PolicyTarget_RouteTarget)(nil),                            // 109: agentgateway.dev.resource.PolicyTarget.RouteTarget
-	(*PolicyTarget_ListenerSetTarget)(nil),                      // 110: agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
-	(*FrontendPolicySpec_HTTP)(nil),                             // 111: agentgateway.dev.resource.FrontendPolicySpec.HTTP
-	(*FrontendPolicySpec_TLS)(nil),                              // 112: agentgateway.dev.resource.FrontendPolicySpec.TLS
-	(*FrontendPolicySpec_TCP)(nil),                              // 113: agentgateway.dev.resource.FrontendPolicySpec.TCP
-	(*FrontendPolicySpec_NetworkAuthorization)(nil),             // 114: agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
-	(*FrontendPolicySpec_Logging)(nil),                          // 115: agentgateway.dev.resource.FrontendPolicySpec.Logging
-	(*FrontendPolicySpec_Tracing)(nil),                          // 116: agentgateway.dev.resource.FrontendPolicySpec.Tracing
-	(*FrontendPolicySpec_TracingAttribute)(nil),                 // 117: agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	(*FrontendPolicySpec_ProxyProtocol)(nil),                    // 118: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
-	(*FrontendPolicySpec_Metrics)(nil),                          // 119: agentgateway.dev.resource.FrontendPolicySpec.Metrics
-	(*FrontendPolicySpec_Logging_Field)(nil),                    // 120: agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
-	(*FrontendPolicySpec_Logging_Fields)(nil),                   // 121: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
-	(*FrontendPolicySpec_Logging_OtlpAccessLog)(nil),            // 122: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
-	(*FrontendPolicySpec_Metrics_Field)(nil),                    // 123: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
-	(*FrontendPolicySpec_Metrics_Fields)(nil),                   // 124: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
-	(*TrafficPolicySpec_RemoteRateLimit)(nil),                   // 125: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
-	(*TrafficPolicySpec_LocalRateLimit)(nil),                    // 126: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
-	(*TrafficPolicySpec_ExternalAuth)(nil),                      // 127: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	(*TrafficPolicySpec_RBAC)(nil),                              // 128: agentgateway.dev.resource.TrafficPolicySpec.RBAC
-	(*TrafficPolicySpec_JWTProvider)(nil),                       // 129: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
-	(*TrafficPolicySpec_JWT)(nil),                               // 130: agentgateway.dev.resource.TrafficPolicySpec.JWT
-	(*TrafficPolicySpec_BasicAuthentication)(nil),               // 131: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
-	(*TrafficPolicySpec_APIKey)(nil),                            // 132: agentgateway.dev.resource.TrafficPolicySpec.APIKey
-	(*TrafficPolicySpec_TransformationPolicy)(nil),              // 133: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	(*TrafficPolicySpec_HeaderTransformation)(nil),              // 134: agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	(*TrafficPolicySpec_BodyTransformation)(nil),                // 135: agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
-	(*TrafficPolicySpec_CSRF)(nil),                              // 136: agentgateway.dev.resource.TrafficPolicySpec.CSRF
-	(*TrafficPolicySpec_ExtProc)(nil),                           // 137: agentgateway.dev.resource.TrafficPolicySpec.ExtProc
-	(*TrafficPolicySpec_HostRewrite)(nil),                       // 138: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
-	(*TrafficPolicySpec_RemoteRateLimit_Descriptor)(nil),        // 139: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
-	(*TrafficPolicySpec_RemoteRateLimit_Entry)(nil),             // 140: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
-	(*TrafficPolicySpec_ExternalAuth_BodyOptions)(nil),          // 141: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
-	(*TrafficPolicySpec_ExternalAuth_Cache)(nil),                // 142: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
-	(*TrafficPolicySpec_ExternalAuth_GRPCProtocol)(nil),         // 143: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
-	(*TrafficPolicySpec_ExternalAuth_HTTPProtocol)(nil),         // 144: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
-	nil,                                   // 145: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
-	nil,                                   // 146: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
-	nil,                                   // 147: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
-	nil,                                   // 148: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
-	(*TrafficPolicySpec_JWT_MCP)(nil),     // 149: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
-	(*TrafficPolicySpec_APIKey_User)(nil), // 150: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
-	(*TrafficPolicySpec_TransformationPolicy_Transform)(nil), // 151: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	nil, // 152: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
-	nil, // 153: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
-	nil, // 154: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
-	(*TrafficPolicySpec_ExtProc_NamespacedMetadataContext)(nil), // 155: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
-	(*TrafficPolicySpec_ExtProc_ProcessingOptions)(nil),         // 156: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions
-	nil,                           // 157: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
-	nil,                           // 158: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
-	(*BackendPolicySpec_Ai)(nil),  // 159: agentgateway.dev.resource.BackendPolicySpec.Ai
-	(*BackendPolicySpec_A2A)(nil), // 160: agentgateway.dev.resource.BackendPolicySpec.A2a
-	(*BackendPolicySpec_InferenceRouting)(nil),      // 161: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
-	(*BackendPolicySpec_Eviction)(nil),              // 162: agentgateway.dev.resource.BackendPolicySpec.Eviction
-	(*BackendPolicySpec_Health)(nil),                // 163: agentgateway.dev.resource.BackendPolicySpec.Health
-	(*BackendPolicySpec_BackendTLS)(nil),            // 164: agentgateway.dev.resource.BackendPolicySpec.BackendTLS
-	(*BackendPolicySpec_BackendHTTP)(nil),           // 165: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
-	(*BackendPolicySpec_BackendTunnel)(nil),         // 166: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
-	(*BackendPolicySpec_BackendTCP)(nil),            // 167: agentgateway.dev.resource.BackendPolicySpec.BackendTCP
-	(*BackendPolicySpec_McpAuthorization)(nil),      // 168: agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
-	(*BackendPolicySpec_McpAuthentication)(nil),     // 169: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
-	(*BackendPolicySpec_Ai_Message)(nil),            // 170: agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	(*BackendPolicySpec_Ai_PromptEnrichment)(nil),   // 171: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
-	(*BackendPolicySpec_Ai_RegexRule)(nil),          // 172: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
-	(*BackendPolicySpec_Ai_RegexRules)(nil),         // 173: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	(*BackendPolicySpec_Ai_Webhook)(nil),            // 174: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	(*BackendPolicySpec_Ai_Moderation)(nil),         // 175: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
-	(*BackendPolicySpec_Ai_BedrockGuardrails)(nil),  // 176: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	(*BackendPolicySpec_Ai_GoogleModelArmor)(nil),   // 177: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	(*BackendPolicySpec_Ai_AzureContentSafety)(nil), // 178: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	(*BackendPolicySpec_Ai_RequestRejection)(nil),   // 179: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	(*BackendPolicySpec_Ai_ResponseGuard)(nil),      // 180: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
-	(*BackendPolicySpec_Ai_RequestGuard)(nil),       // 181: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
-	(*BackendPolicySpec_Ai_PromptGuard)(nil),        // 182: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
-	(*BackendPolicySpec_Ai_PromptCaching)(nil),      // 183: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
-	nil, // 184: agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
-	nil, // 185: agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
-	nil, // 186: agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	nil, // 187: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
-	nil, // 188: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
-	(*BackendPolicySpec_McpAuthentication_ResourceMetadata)(nil), // 189: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	nil,                                    // 190: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	(*AIBackend_HostOverride)(nil),         // 191: agentgateway.dev.resource.AIBackend.HostOverride
-	(*AIBackend_OpenAI)(nil),               // 192: agentgateway.dev.resource.AIBackend.OpenAI
-	(*AIBackend_Gemini)(nil),               // 193: agentgateway.dev.resource.AIBackend.Gemini
-	(*AIBackend_Vertex)(nil),               // 194: agentgateway.dev.resource.AIBackend.Vertex
-	(*AIBackend_Anthropic)(nil),            // 195: agentgateway.dev.resource.AIBackend.Anthropic
-	(*AIBackend_Bedrock)(nil),              // 196: agentgateway.dev.resource.AIBackend.Bedrock
-	(*AIBackend_AzureOpenAI)(nil),          // 197: agentgateway.dev.resource.AIBackend.AzureOpenAI
-	(*AIBackend_Azure)(nil),                // 198: agentgateway.dev.resource.AIBackend.Azure
-	(*AIBackend_ProviderFormatConfig)(nil), // 199: agentgateway.dev.resource.AIBackend.ProviderFormatConfig
-	(*AIBackend_Custom)(nil),               // 200: agentgateway.dev.resource.AIBackend.Custom
-	(*AIBackend_Provider)(nil),             // 201: agentgateway.dev.resource.AIBackend.Provider
-	(*AIBackend_ProviderGroup)(nil),        // 202: agentgateway.dev.resource.AIBackend.ProviderGroup
-	(*BackendReference_Service)(nil),       // 203: agentgateway.dev.resource.BackendReference.Service
-	(*workloadapi.Workload)(nil),           // 204: istio.workload.Workload
-	(*workloadapi.Service)(nil),            // 205: istio.workload.Service
-	(*workloadapi.NamespacedHostname)(nil), // 206: istio.workload.NamespacedHostname
-	(*durationpb.Duration)(nil),            // 207: google.protobuf.Duration
-	(*structpb.Struct)(nil),                // 208: google.protobuf.Struct
-	(*structpb.Value)(nil),                 // 209: google.protobuf.Value
+	(FrontendPolicySpec_HTTP_HTTPHeaderCase)(0),                 // 8: agentgateway.dev.resource.FrontendPolicySpec.HTTP.HTTPHeaderCase
+	(FrontendPolicySpec_Logging_OtlpAccessLog_Protocol)(0),      // 9: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
+	(FrontendPolicySpec_Tracing_Protocol)(0),                    // 10: agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
+	(FrontendPolicySpec_ProxyProtocol_Version)(0),               // 11: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
+	(FrontendPolicySpec_ProxyProtocol_Mode)(0),                  // 12: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
+	(TrafficPolicySpec_PolicyPhase)(0),                          // 13: agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
+	(TrafficPolicySpec_RemoteRateLimit_Type)(0),                 // 14: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
+	(TrafficPolicySpec_RemoteRateLimit_FailureMode)(0),          // 15: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
+	(TrafficPolicySpec_LocalRateLimit_Type)(0),                  // 16: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
+	(TrafficPolicySpec_ExternalAuth_FailureMode)(0),             // 17: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
+	(TrafficPolicySpec_JWT_Mode)(0),                             // 18: agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
+	(TrafficPolicySpec_BasicAuthentication_Mode)(0),             // 19: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
+	(TrafficPolicySpec_APIKey_Mode)(0),                          // 20: agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
+	(TrafficPolicySpec_ExtProc_FailureMode)(0),                  // 21: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
+	(TrafficPolicySpec_ExtProc_BodySendMode)(0),                 // 22: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
+	(TrafficPolicySpec_ExtProc_HeaderTrailerSendMode)(0),        // 23: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
+	(TrafficPolicySpec_HostRewrite_Mode)(0),                     // 24: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
+	(BackendPolicySpec_Ai_BuiltinRegexRule)(0),                  // 25: agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
+	(BackendPolicySpec_Ai_ActionKind)(0),                        // 26: agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
+	(BackendPolicySpec_Ai_RouteType)(0),                         // 27: agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
+	(BackendPolicySpec_InferenceRouting_FailureMode)(0),         // 28: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
+	(BackendPolicySpec_BackendTLS_VerificationMode)(0),          // 29: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
+	(BackendPolicySpec_BackendHTTP_HttpVersion)(0),              // 30: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
+	(BackendPolicySpec_McpAuthentication_McpIDP)(0),             // 31: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 32: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
+	(AIBackend_AzureResourceType)(0),                            // 33: agentgateway.dev.resource.AIBackend.AzureResourceType
+	(AIBackend_ProviderFormat)(0),                               // 34: agentgateway.dev.resource.AIBackend.ProviderFormat
+	(MCPBackend_StatefulMode)(0),                                // 35: agentgateway.dev.resource.MCPBackend.StatefulMode
+	(MCPBackend_PrefixMode)(0),                                  // 36: agentgateway.dev.resource.MCPBackend.PrefixMode
+	(MCPBackend_FailureMode)(0),                                 // 37: agentgateway.dev.resource.MCPBackend.FailureMode
+	(MCPTarget_Protocol)(0),                                     // 38: agentgateway.dev.resource.MCPTarget.Protocol
+	(*Resource)(nil),                                            // 39: agentgateway.dev.resource.Resource
+	(*Bind)(nil),                                                // 40: agentgateway.dev.resource.Bind
+	(*RouteName)(nil),                                           // 41: agentgateway.dev.resource.RouteName
+	(*ListenerName)(nil),                                        // 42: agentgateway.dev.resource.ListenerName
+	(*ResourceName)(nil),                                        // 43: agentgateway.dev.resource.ResourceName
+	(*TypedResourceName)(nil),                                   // 44: agentgateway.dev.resource.TypedResourceName
+	(*Listener)(nil),                                            // 45: agentgateway.dev.resource.Listener
+	(*Route)(nil),                                               // 46: agentgateway.dev.resource.Route
+	(*RouteGroup)(nil),                                          // 47: agentgateway.dev.resource.RouteGroup
+	(*TCPRoute)(nil),                                            // 48: agentgateway.dev.resource.TCPRoute
+	(*ConditionalPolicies)(nil),                                 // 49: agentgateway.dev.resource.ConditionalPolicies
+	(*ConditionalPolicy)(nil),                                   // 50: agentgateway.dev.resource.ConditionalPolicy
+	(*Policy)(nil),                                              // 51: agentgateway.dev.resource.Policy
+	(*Backend)(nil),                                             // 52: agentgateway.dev.resource.Backend
+	(*TLSConfig)(nil),                                           // 53: agentgateway.dev.resource.TLSConfig
+	(*Timeout)(nil),                                             // 54: agentgateway.dev.resource.Timeout
+	(*Retry)(nil),                                               // 55: agentgateway.dev.resource.Retry
+	(*BackendAuthPolicy)(nil),                                   // 56: agentgateway.dev.resource.BackendAuthPolicy
+	(*AuthorizationLocation)(nil),                               // 57: agentgateway.dev.resource.AuthorizationLocation
+	(*Passthrough)(nil),                                         // 58: agentgateway.dev.resource.Passthrough
+	(*Key)(nil),                                                 // 59: agentgateway.dev.resource.Key
+	(*Gcp)(nil),                                                 // 60: agentgateway.dev.resource.Gcp
+	(*Aws)(nil),                                                 // 61: agentgateway.dev.resource.Aws
+	(*Azure)(nil),                                               // 62: agentgateway.dev.resource.Azure
+	(*AwsExplicitConfig)(nil),                                   // 63: agentgateway.dev.resource.AwsExplicitConfig
+	(*AwsImplicit)(nil),                                         // 64: agentgateway.dev.resource.AwsImplicit
+	(*AzureExplicitConfig)(nil),                                 // 65: agentgateway.dev.resource.AzureExplicitConfig
+	(*AzureClientSecret)(nil),                                   // 66: agentgateway.dev.resource.AzureClientSecret
+	(*AzureManagedIdentityCredential)(nil),                      // 67: agentgateway.dev.resource.AzureManagedIdentityCredential
+	(*AzureWorkloadIdentityCredential)(nil),                     // 68: agentgateway.dev.resource.AzureWorkloadIdentityCredential
+	(*AzureDeveloperImplicit)(nil),                              // 69: agentgateway.dev.resource.AzureDeveloperImplicit
+	(*AzureImplicit)(nil),                                       // 70: agentgateway.dev.resource.AzureImplicit
+	(*RouteMatch)(nil),                                          // 71: agentgateway.dev.resource.RouteMatch
+	(*PathMatch)(nil),                                           // 72: agentgateway.dev.resource.PathMatch
+	(*QueryMatch)(nil),                                          // 73: agentgateway.dev.resource.QueryMatch
+	(*MethodMatch)(nil),                                         // 74: agentgateway.dev.resource.MethodMatch
+	(*HeaderMatch)(nil),                                         // 75: agentgateway.dev.resource.HeaderMatch
+	(*CORS)(nil),                                                // 76: agentgateway.dev.resource.CORS
+	(*DirectResponse)(nil),                                      // 77: agentgateway.dev.resource.DirectResponse
+	(*ExpressionHeader)(nil),                                    // 78: agentgateway.dev.resource.ExpressionHeader
+	(*HeaderModifier)(nil),                                      // 79: agentgateway.dev.resource.HeaderModifier
+	(*RequestMirrors)(nil),                                      // 80: agentgateway.dev.resource.RequestMirrors
+	(*RequestRedirect)(nil),                                     // 81: agentgateway.dev.resource.RequestRedirect
+	(*UrlRewrite)(nil),                                          // 82: agentgateway.dev.resource.UrlRewrite
+	(*Header)(nil),                                              // 83: agentgateway.dev.resource.Header
+	(*RouteBackend)(nil),                                        // 84: agentgateway.dev.resource.RouteBackend
+	(*PolicyTarget)(nil),                                        // 85: agentgateway.dev.resource.PolicyTarget
+	(*KeepaliveConfig)(nil),                                     // 86: agentgateway.dev.resource.KeepaliveConfig
+	(*FrontendPolicySpec)(nil),                                  // 87: agentgateway.dev.resource.FrontendPolicySpec
+	(*JWTValidationOptions)(nil),                                // 88: agentgateway.dev.resource.JWTValidationOptions
+	(*TrafficPolicySpec)(nil),                                   // 89: agentgateway.dev.resource.TrafficPolicySpec
+	(*BackendPolicySpec)(nil),                                   // 90: agentgateway.dev.resource.BackendPolicySpec
+	(*StaticBackend)(nil),                                       // 91: agentgateway.dev.resource.StaticBackend
+	(*DynamicForwardProxy)(nil),                                 // 92: agentgateway.dev.resource.DynamicForwardProxy
+	(*AwsBackend)(nil),                                          // 93: agentgateway.dev.resource.AwsBackend
+	(*AwsAgentCoreBackend)(nil),                                 // 94: agentgateway.dev.resource.AwsAgentCoreBackend
+	(*AIBackend)(nil),                                           // 95: agentgateway.dev.resource.AIBackend
+	(*MCPBackend)(nil),                                          // 96: agentgateway.dev.resource.MCPBackend
+	(*MCPTarget)(nil),                                           // 97: agentgateway.dev.resource.MCPTarget
+	(*BackendReference)(nil),                                    // 98: agentgateway.dev.resource.BackendReference
+	(*Alpn)(nil),                                                // 99: agentgateway.dev.resource.Alpn
+	(*AuthorizationLocation_Header)(nil),                        // 100: agentgateway.dev.resource.AuthorizationLocation.Header
+	(*AuthorizationLocation_QueryParameter)(nil),                // 101: agentgateway.dev.resource.AuthorizationLocation.QueryParameter
+	(*AuthorizationLocation_Cookie)(nil),                        // 102: agentgateway.dev.resource.AuthorizationLocation.Cookie
+	(*Gcp_AccessToken)(nil),                                     // 103: agentgateway.dev.resource.Gcp.AccessToken
+	(*Gcp_IdToken)(nil),                                         // 104: agentgateway.dev.resource.Gcp.IdToken
+	(*AzureManagedIdentityCredential_UserAssignedIdentity)(nil), // 105: agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
+	(*RequestMirrors_Mirror)(nil),                               // 106: agentgateway.dev.resource.RequestMirrors.Mirror
+	(*PolicyTarget_ServiceTarget)(nil),                          // 107: agentgateway.dev.resource.PolicyTarget.ServiceTarget
+	(*PolicyTarget_BackendTarget)(nil),                          // 108: agentgateway.dev.resource.PolicyTarget.BackendTarget
+	(*PolicyTarget_GatewayTarget)(nil),                          // 109: agentgateway.dev.resource.PolicyTarget.GatewayTarget
+	(*PolicyTarget_RouteTarget)(nil),                            // 110: agentgateway.dev.resource.PolicyTarget.RouteTarget
+	(*PolicyTarget_ListenerSetTarget)(nil),                      // 111: agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
+	(*FrontendPolicySpec_HTTP)(nil),                             // 112: agentgateway.dev.resource.FrontendPolicySpec.HTTP
+	(*FrontendPolicySpec_TLS)(nil),                              // 113: agentgateway.dev.resource.FrontendPolicySpec.TLS
+	(*FrontendPolicySpec_TCP)(nil),                              // 114: agentgateway.dev.resource.FrontendPolicySpec.TCP
+	(*FrontendPolicySpec_NetworkAuthorization)(nil),             // 115: agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
+	(*FrontendPolicySpec_Logging)(nil),                          // 116: agentgateway.dev.resource.FrontendPolicySpec.Logging
+	(*FrontendPolicySpec_Tracing)(nil),                          // 117: agentgateway.dev.resource.FrontendPolicySpec.Tracing
+	(*FrontendPolicySpec_TracingAttribute)(nil),                 // 118: agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	(*FrontendPolicySpec_ProxyProtocol)(nil),                    // 119: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
+	(*FrontendPolicySpec_Metrics)(nil),                          // 120: agentgateway.dev.resource.FrontendPolicySpec.Metrics
+	(*FrontendPolicySpec_Logging_Field)(nil),                    // 121: agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
+	(*FrontendPolicySpec_Logging_Fields)(nil),                   // 122: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
+	(*FrontendPolicySpec_Logging_OtlpAccessLog)(nil),            // 123: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
+	(*FrontendPolicySpec_Metrics_Field)(nil),                    // 124: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
+	(*FrontendPolicySpec_Metrics_Fields)(nil),                   // 125: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
+	(*TrafficPolicySpec_RemoteRateLimit)(nil),                   // 126: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
+	(*TrafficPolicySpec_LocalRateLimit)(nil),                    // 127: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
+	(*TrafficPolicySpec_ExternalAuth)(nil),                      // 128: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	(*TrafficPolicySpec_RBAC)(nil),                              // 129: agentgateway.dev.resource.TrafficPolicySpec.RBAC
+	(*TrafficPolicySpec_JWTProvider)(nil),                       // 130: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
+	(*TrafficPolicySpec_JWT)(nil),                               // 131: agentgateway.dev.resource.TrafficPolicySpec.JWT
+	(*TrafficPolicySpec_BasicAuthentication)(nil),               // 132: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
+	(*TrafficPolicySpec_APIKey)(nil),                            // 133: agentgateway.dev.resource.TrafficPolicySpec.APIKey
+	(*TrafficPolicySpec_TransformationPolicy)(nil),              // 134: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	(*TrafficPolicySpec_HeaderTransformation)(nil),              // 135: agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	(*TrafficPolicySpec_BodyTransformation)(nil),                // 136: agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
+	(*TrafficPolicySpec_CSRF)(nil),                              // 137: agentgateway.dev.resource.TrafficPolicySpec.CSRF
+	(*TrafficPolicySpec_ExtProc)(nil),                           // 138: agentgateway.dev.resource.TrafficPolicySpec.ExtProc
+	(*TrafficPolicySpec_HostRewrite)(nil),                       // 139: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
+	(*TrafficPolicySpec_RemoteRateLimit_Descriptor)(nil),        // 140: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
+	(*TrafficPolicySpec_RemoteRateLimit_Entry)(nil),             // 141: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
+	(*TrafficPolicySpec_ExternalAuth_BodyOptions)(nil),          // 142: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
+	(*TrafficPolicySpec_ExternalAuth_Cache)(nil),                // 143: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
+	(*TrafficPolicySpec_ExternalAuth_GRPCProtocol)(nil),         // 144: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
+	(*TrafficPolicySpec_ExternalAuth_HTTPProtocol)(nil),         // 145: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
+	nil,                                   // 146: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
+	nil,                                   // 147: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
+	nil,                                   // 148: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
+	nil,                                   // 149: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
+	(*TrafficPolicySpec_JWT_MCP)(nil),     // 150: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
+	(*TrafficPolicySpec_APIKey_User)(nil), // 151: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
+	(*TrafficPolicySpec_TransformationPolicy_Transform)(nil), // 152: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	nil, // 153: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
+	nil, // 154: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
+	nil, // 155: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
+	(*TrafficPolicySpec_ExtProc_NamespacedMetadataContext)(nil), // 156: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
+	(*TrafficPolicySpec_ExtProc_ProcessingOptions)(nil),         // 157: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions
+	nil,                           // 158: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
+	nil,                           // 159: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
+	(*BackendPolicySpec_Ai)(nil),  // 160: agentgateway.dev.resource.BackendPolicySpec.Ai
+	(*BackendPolicySpec_A2A)(nil), // 161: agentgateway.dev.resource.BackendPolicySpec.A2a
+	(*BackendPolicySpec_InferenceRouting)(nil),      // 162: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
+	(*BackendPolicySpec_Eviction)(nil),              // 163: agentgateway.dev.resource.BackendPolicySpec.Eviction
+	(*BackendPolicySpec_Health)(nil),                // 164: agentgateway.dev.resource.BackendPolicySpec.Health
+	(*BackendPolicySpec_BackendTLS)(nil),            // 165: agentgateway.dev.resource.BackendPolicySpec.BackendTLS
+	(*BackendPolicySpec_BackendHTTP)(nil),           // 166: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
+	(*BackendPolicySpec_BackendTunnel)(nil),         // 167: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
+	(*BackendPolicySpec_BackendTCP)(nil),            // 168: agentgateway.dev.resource.BackendPolicySpec.BackendTCP
+	(*BackendPolicySpec_McpAuthorization)(nil),      // 169: agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
+	(*BackendPolicySpec_McpAuthentication)(nil),     // 170: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
+	(*BackendPolicySpec_Ai_Message)(nil),            // 171: agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	(*BackendPolicySpec_Ai_PromptEnrichment)(nil),   // 172: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
+	(*BackendPolicySpec_Ai_RegexRule)(nil),          // 173: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
+	(*BackendPolicySpec_Ai_RegexRules)(nil),         // 174: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	(*BackendPolicySpec_Ai_Webhook)(nil),            // 175: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	(*BackendPolicySpec_Ai_Moderation)(nil),         // 176: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
+	(*BackendPolicySpec_Ai_BedrockGuardrails)(nil),  // 177: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	(*BackendPolicySpec_Ai_GoogleModelArmor)(nil),   // 178: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	(*BackendPolicySpec_Ai_AzureContentSafety)(nil), // 179: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	(*BackendPolicySpec_Ai_RequestRejection)(nil),   // 180: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	(*BackendPolicySpec_Ai_ResponseGuard)(nil),      // 181: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
+	(*BackendPolicySpec_Ai_RequestGuard)(nil),       // 182: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
+	(*BackendPolicySpec_Ai_PromptGuard)(nil),        // 183: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
+	(*BackendPolicySpec_Ai_PromptCaching)(nil),      // 184: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
+	nil, // 185: agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
+	nil, // 186: agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
+	nil, // 187: agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
+	nil, // 188: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
+	nil, // 189: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
+	(*BackendPolicySpec_McpAuthentication_ResourceMetadata)(nil), // 190: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	nil,                                    // 191: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	(*AIBackend_HostOverride)(nil),         // 192: agentgateway.dev.resource.AIBackend.HostOverride
+	(*AIBackend_OpenAI)(nil),               // 193: agentgateway.dev.resource.AIBackend.OpenAI
+	(*AIBackend_Gemini)(nil),               // 194: agentgateway.dev.resource.AIBackend.Gemini
+	(*AIBackend_Vertex)(nil),               // 195: agentgateway.dev.resource.AIBackend.Vertex
+	(*AIBackend_Anthropic)(nil),            // 196: agentgateway.dev.resource.AIBackend.Anthropic
+	(*AIBackend_Bedrock)(nil),              // 197: agentgateway.dev.resource.AIBackend.Bedrock
+	(*AIBackend_AzureOpenAI)(nil),          // 198: agentgateway.dev.resource.AIBackend.AzureOpenAI
+	(*AIBackend_Azure)(nil),                // 199: agentgateway.dev.resource.AIBackend.Azure
+	(*AIBackend_ProviderFormatConfig)(nil), // 200: agentgateway.dev.resource.AIBackend.ProviderFormatConfig
+	(*AIBackend_Custom)(nil),               // 201: agentgateway.dev.resource.AIBackend.Custom
+	(*AIBackend_Provider)(nil),             // 202: agentgateway.dev.resource.AIBackend.Provider
+	(*AIBackend_ProviderGroup)(nil),        // 203: agentgateway.dev.resource.AIBackend.ProviderGroup
+	(*BackendReference_Service)(nil),       // 204: agentgateway.dev.resource.BackendReference.Service
+	(*workloadapi.Workload)(nil),           // 205: istio.workload.Workload
+	(*workloadapi.Service)(nil),            // 206: istio.workload.Service
+	(*workloadapi.NamespacedHostname)(nil), // 207: istio.workload.NamespacedHostname
+	(*durationpb.Duration)(nil),            // 208: google.protobuf.Duration
+	(*structpb.Struct)(nil),                // 209: google.protobuf.Struct
+	(*structpb.Value)(nil),                 // 210: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
-	39,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
-	44,  // 1: agentgateway.dev.resource.Resource.listener:type_name -> agentgateway.dev.resource.Listener
-	45,  // 2: agentgateway.dev.resource.Resource.route:type_name -> agentgateway.dev.resource.Route
-	51,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
-	50,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
-	47,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
-	204, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
-	205, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
-	46,  // 8: agentgateway.dev.resource.Resource.route_group:type_name -> agentgateway.dev.resource.RouteGroup
+	40,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
+	45,  // 1: agentgateway.dev.resource.Resource.listener:type_name -> agentgateway.dev.resource.Listener
+	46,  // 2: agentgateway.dev.resource.Resource.route:type_name -> agentgateway.dev.resource.Route
+	52,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
+	51,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
+	48,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
+	205, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
+	206, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
+	47,  // 8: agentgateway.dev.resource.Resource.route_group:type_name -> agentgateway.dev.resource.RouteGroup
 	1,   // 9: agentgateway.dev.resource.Bind.protocol:type_name -> agentgateway.dev.resource.Bind.Protocol
 	2,   // 10: agentgateway.dev.resource.Bind.tunnel_protocol:type_name -> agentgateway.dev.resource.Bind.TunnelProtocol
-	42,  // 11: agentgateway.dev.resource.ListenerName.listener_set:type_name -> agentgateway.dev.resource.ResourceName
-	41,  // 12: agentgateway.dev.resource.Listener.name:type_name -> agentgateway.dev.resource.ListenerName
+	43,  // 11: agentgateway.dev.resource.ListenerName.listener_set:type_name -> agentgateway.dev.resource.ResourceName
+	42,  // 12: agentgateway.dev.resource.Listener.name:type_name -> agentgateway.dev.resource.ListenerName
 	0,   // 13: agentgateway.dev.resource.Listener.protocol:type_name -> agentgateway.dev.resource.Protocol
-	52,  // 14: agentgateway.dev.resource.Listener.tls:type_name -> agentgateway.dev.resource.TLSConfig
-	206, // 15: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
-	40,  // 16: agentgateway.dev.resource.Route.name:type_name -> agentgateway.dev.resource.RouteName
-	70,  // 17: agentgateway.dev.resource.Route.matches:type_name -> agentgateway.dev.resource.RouteMatch
-	83,  // 18: agentgateway.dev.resource.Route.backends:type_name -> agentgateway.dev.resource.RouteBackend
-	88,  // 19: agentgateway.dev.resource.Route.traffic_policies:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	206, // 20: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
-	40,  // 21: agentgateway.dev.resource.TCPRoute.name:type_name -> agentgateway.dev.resource.RouteName
-	83,  // 22: agentgateway.dev.resource.TCPRoute.backends:type_name -> agentgateway.dev.resource.RouteBackend
-	49,  // 23: agentgateway.dev.resource.ConditionalPolicies.policies:type_name -> agentgateway.dev.resource.ConditionalPolicy
-	88,  // 24: agentgateway.dev.resource.ConditionalPolicy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	43,  // 25: agentgateway.dev.resource.Policy.name:type_name -> agentgateway.dev.resource.TypedResourceName
-	84,  // 26: agentgateway.dev.resource.Policy.target:type_name -> agentgateway.dev.resource.PolicyTarget
-	88,  // 27: agentgateway.dev.resource.Policy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	89,  // 28: agentgateway.dev.resource.Policy.backend:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	86,  // 29: agentgateway.dev.resource.Policy.frontend:type_name -> agentgateway.dev.resource.FrontendPolicySpec
-	48,  // 30: agentgateway.dev.resource.Policy.conditional:type_name -> agentgateway.dev.resource.ConditionalPolicies
-	42,  // 31: agentgateway.dev.resource.Backend.name:type_name -> agentgateway.dev.resource.ResourceName
-	90,  // 32: agentgateway.dev.resource.Backend.static:type_name -> agentgateway.dev.resource.StaticBackend
-	94,  // 33: agentgateway.dev.resource.Backend.ai:type_name -> agentgateway.dev.resource.AIBackend
-	95,  // 34: agentgateway.dev.resource.Backend.mcp:type_name -> agentgateway.dev.resource.MCPBackend
-	91,  // 35: agentgateway.dev.resource.Backend.dynamic:type_name -> agentgateway.dev.resource.DynamicForwardProxy
-	92,  // 36: agentgateway.dev.resource.Backend.aws:type_name -> agentgateway.dev.resource.AwsBackend
-	89,  // 37: agentgateway.dev.resource.Backend.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	53,  // 14: agentgateway.dev.resource.Listener.tls:type_name -> agentgateway.dev.resource.TLSConfig
+	207, // 15: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
+	41,  // 16: agentgateway.dev.resource.Route.name:type_name -> agentgateway.dev.resource.RouteName
+	71,  // 17: agentgateway.dev.resource.Route.matches:type_name -> agentgateway.dev.resource.RouteMatch
+	84,  // 18: agentgateway.dev.resource.Route.backends:type_name -> agentgateway.dev.resource.RouteBackend
+	89,  // 19: agentgateway.dev.resource.Route.traffic_policies:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	207, // 20: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
+	41,  // 21: agentgateway.dev.resource.TCPRoute.name:type_name -> agentgateway.dev.resource.RouteName
+	84,  // 22: agentgateway.dev.resource.TCPRoute.backends:type_name -> agentgateway.dev.resource.RouteBackend
+	50,  // 23: agentgateway.dev.resource.ConditionalPolicies.policies:type_name -> agentgateway.dev.resource.ConditionalPolicy
+	89,  // 24: agentgateway.dev.resource.ConditionalPolicy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	44,  // 25: agentgateway.dev.resource.Policy.name:type_name -> agentgateway.dev.resource.TypedResourceName
+	85,  // 26: agentgateway.dev.resource.Policy.target:type_name -> agentgateway.dev.resource.PolicyTarget
+	89,  // 27: agentgateway.dev.resource.Policy.traffic:type_name -> agentgateway.dev.resource.TrafficPolicySpec
+	90,  // 28: agentgateway.dev.resource.Policy.backend:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	87,  // 29: agentgateway.dev.resource.Policy.frontend:type_name -> agentgateway.dev.resource.FrontendPolicySpec
+	49,  // 30: agentgateway.dev.resource.Policy.conditional:type_name -> agentgateway.dev.resource.ConditionalPolicies
+	43,  // 31: agentgateway.dev.resource.Backend.name:type_name -> agentgateway.dev.resource.ResourceName
+	91,  // 32: agentgateway.dev.resource.Backend.static:type_name -> agentgateway.dev.resource.StaticBackend
+	95,  // 33: agentgateway.dev.resource.Backend.ai:type_name -> agentgateway.dev.resource.AIBackend
+	96,  // 34: agentgateway.dev.resource.Backend.mcp:type_name -> agentgateway.dev.resource.MCPBackend
+	92,  // 35: agentgateway.dev.resource.Backend.dynamic:type_name -> agentgateway.dev.resource.DynamicForwardProxy
+	93,  // 36: agentgateway.dev.resource.Backend.aws:type_name -> agentgateway.dev.resource.AwsBackend
+	90,  // 37: agentgateway.dev.resource.Backend.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
 	6,   // 38: agentgateway.dev.resource.TLSConfig.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
 	4,   // 39: agentgateway.dev.resource.TLSConfig.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
 	4,   // 40: agentgateway.dev.resource.TLSConfig.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
 	5,   // 41: agentgateway.dev.resource.TLSConfig.mtls_mode:type_name -> agentgateway.dev.resource.TLSConfig.MTLSMode
 	7,   // 42: agentgateway.dev.resource.TLSConfig.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
 	3,   // 43: agentgateway.dev.resource.TLSConfig.certificate_source:type_name -> agentgateway.dev.resource.TLSConfig.CertificateSource
-	207, // 44: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
-	207, // 45: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
-	207, // 46: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
-	57,  // 47: agentgateway.dev.resource.BackendAuthPolicy.passthrough:type_name -> agentgateway.dev.resource.Passthrough
-	58,  // 48: agentgateway.dev.resource.BackendAuthPolicy.key:type_name -> agentgateway.dev.resource.Key
-	59,  // 49: agentgateway.dev.resource.BackendAuthPolicy.gcp:type_name -> agentgateway.dev.resource.Gcp
-	60,  // 50: agentgateway.dev.resource.BackendAuthPolicy.aws:type_name -> agentgateway.dev.resource.Aws
-	61,  // 51: agentgateway.dev.resource.BackendAuthPolicy.azure:type_name -> agentgateway.dev.resource.Azure
-	99,  // 52: agentgateway.dev.resource.AuthorizationLocation.header:type_name -> agentgateway.dev.resource.AuthorizationLocation.Header
-	100, // 53: agentgateway.dev.resource.AuthorizationLocation.query_parameter:type_name -> agentgateway.dev.resource.AuthorizationLocation.QueryParameter
-	101, // 54: agentgateway.dev.resource.AuthorizationLocation.cookie:type_name -> agentgateway.dev.resource.AuthorizationLocation.Cookie
-	56,  // 55: agentgateway.dev.resource.Passthrough.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	56,  // 56: agentgateway.dev.resource.Key.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	102, // 57: agentgateway.dev.resource.Gcp.access_token:type_name -> agentgateway.dev.resource.Gcp.AccessToken
-	103, // 58: agentgateway.dev.resource.Gcp.id_token:type_name -> agentgateway.dev.resource.Gcp.IdToken
-	62,  // 59: agentgateway.dev.resource.Aws.explicit_config:type_name -> agentgateway.dev.resource.AwsExplicitConfig
-	63,  // 60: agentgateway.dev.resource.Aws.implicit:type_name -> agentgateway.dev.resource.AwsImplicit
-	64,  // 61: agentgateway.dev.resource.Azure.explicit_config:type_name -> agentgateway.dev.resource.AzureExplicitConfig
-	68,  // 62: agentgateway.dev.resource.Azure.developer_implicit:type_name -> agentgateway.dev.resource.AzureDeveloperImplicit
-	69,  // 63: agentgateway.dev.resource.Azure.implicit:type_name -> agentgateway.dev.resource.AzureImplicit
-	65,  // 64: agentgateway.dev.resource.AzureExplicitConfig.client_secret:type_name -> agentgateway.dev.resource.AzureClientSecret
-	66,  // 65: agentgateway.dev.resource.AzureExplicitConfig.managed_identity_credential:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential
-	67,  // 66: agentgateway.dev.resource.AzureExplicitConfig.workload_identity_credential:type_name -> agentgateway.dev.resource.AzureWorkloadIdentityCredential
-	104, // 67: agentgateway.dev.resource.AzureManagedIdentityCredential.user_assigned_identity:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
-	71,  // 68: agentgateway.dev.resource.RouteMatch.path:type_name -> agentgateway.dev.resource.PathMatch
-	74,  // 69: agentgateway.dev.resource.RouteMatch.headers:type_name -> agentgateway.dev.resource.HeaderMatch
-	73,  // 70: agentgateway.dev.resource.RouteMatch.method:type_name -> agentgateway.dev.resource.MethodMatch
-	72,  // 71: agentgateway.dev.resource.RouteMatch.query_params:type_name -> agentgateway.dev.resource.QueryMatch
-	207, // 72: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
-	77,  // 73: agentgateway.dev.resource.DirectResponse.headers:type_name -> agentgateway.dev.resource.ExpressionHeader
-	82,  // 74: agentgateway.dev.resource.HeaderModifier.add:type_name -> agentgateway.dev.resource.Header
-	82,  // 75: agentgateway.dev.resource.HeaderModifier.set:type_name -> agentgateway.dev.resource.Header
-	105, // 76: agentgateway.dev.resource.RequestMirrors.mirrors:type_name -> agentgateway.dev.resource.RequestMirrors.Mirror
-	97,  // 77: agentgateway.dev.resource.RouteBackend.backend:type_name -> agentgateway.dev.resource.BackendReference
-	89,  // 78: agentgateway.dev.resource.RouteBackend.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	108, // 79: agentgateway.dev.resource.PolicyTarget.gateway:type_name -> agentgateway.dev.resource.PolicyTarget.GatewayTarget
-	109, // 80: agentgateway.dev.resource.PolicyTarget.route:type_name -> agentgateway.dev.resource.PolicyTarget.RouteTarget
-	107, // 81: agentgateway.dev.resource.PolicyTarget.backend:type_name -> agentgateway.dev.resource.PolicyTarget.BackendTarget
-	106, // 82: agentgateway.dev.resource.PolicyTarget.service:type_name -> agentgateway.dev.resource.PolicyTarget.ServiceTarget
-	110, // 83: agentgateway.dev.resource.PolicyTarget.listener_set:type_name -> agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
-	207, // 84: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
-	207, // 85: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
-	113, // 86: agentgateway.dev.resource.FrontendPolicySpec.tcp:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TCP
-	112, // 87: agentgateway.dev.resource.FrontendPolicySpec.tls:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TLS
-	111, // 88: agentgateway.dev.resource.FrontendPolicySpec.http:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP
-	115, // 89: agentgateway.dev.resource.FrontendPolicySpec.logging:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging
-	116, // 90: agentgateway.dev.resource.FrontendPolicySpec.tracing:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing
-	114, // 91: agentgateway.dev.resource.FrontendPolicySpec.network_authorization:type_name -> agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
-	118, // 92: agentgateway.dev.resource.FrontendPolicySpec.proxy_protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
-	119, // 93: agentgateway.dev.resource.FrontendPolicySpec.metrics:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics
-	12,  // 94: agentgateway.dev.resource.TrafficPolicySpec.phase:type_name -> agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
-	53,  // 95: agentgateway.dev.resource.TrafficPolicySpec.timeout:type_name -> agentgateway.dev.resource.Timeout
-	54,  // 96: agentgateway.dev.resource.TrafficPolicySpec.retry:type_name -> agentgateway.dev.resource.Retry
-	126, // 97: agentgateway.dev.resource.TrafficPolicySpec.local_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
-	127, // 98: agentgateway.dev.resource.TrafficPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	128, // 99: agentgateway.dev.resource.TrafficPolicySpec.authorization:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RBAC
-	130, // 100: agentgateway.dev.resource.TrafficPolicySpec.jwt:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT
-	133, // 101: agentgateway.dev.resource.TrafficPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	125, // 102: agentgateway.dev.resource.TrafficPolicySpec.remote_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
-	136, // 103: agentgateway.dev.resource.TrafficPolicySpec.csrf:type_name -> agentgateway.dev.resource.TrafficPolicySpec.CSRF
-	137, // 104: agentgateway.dev.resource.TrafficPolicySpec.ext_proc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc
-	78,  // 105: agentgateway.dev.resource.TrafficPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	78,  // 106: agentgateway.dev.resource.TrafficPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	80,  // 107: agentgateway.dev.resource.TrafficPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
-	81,  // 108: agentgateway.dev.resource.TrafficPolicySpec.url_rewrite:type_name -> agentgateway.dev.resource.UrlRewrite
-	79,  // 109: agentgateway.dev.resource.TrafficPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
-	76,  // 110: agentgateway.dev.resource.TrafficPolicySpec.direct_response:type_name -> agentgateway.dev.resource.DirectResponse
-	75,  // 111: agentgateway.dev.resource.TrafficPolicySpec.cors:type_name -> agentgateway.dev.resource.CORS
-	131, // 112: agentgateway.dev.resource.TrafficPolicySpec.basic_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
-	132, // 113: agentgateway.dev.resource.TrafficPolicySpec.api_key_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey
-	138, // 114: agentgateway.dev.resource.TrafficPolicySpec.host_rewrite:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
-	160, // 115: agentgateway.dev.resource.BackendPolicySpec.a2a:type_name -> agentgateway.dev.resource.BackendPolicySpec.A2a
-	161, // 116: agentgateway.dev.resource.BackendPolicySpec.inference_routing:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
-	164, // 117: agentgateway.dev.resource.BackendPolicySpec.backend_tls:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS
-	55,  // 118: agentgateway.dev.resource.BackendPolicySpec.auth:type_name -> agentgateway.dev.resource.BackendAuthPolicy
-	168, // 119: agentgateway.dev.resource.BackendPolicySpec.mcp_authorization:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
-	169, // 120: agentgateway.dev.resource.BackendPolicySpec.mcp_authentication:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
-	159, // 121: agentgateway.dev.resource.BackendPolicySpec.ai:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai
-	78,  // 122: agentgateway.dev.resource.BackendPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	78,  // 123: agentgateway.dev.resource.BackendPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
-	80,  // 124: agentgateway.dev.resource.BackendPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
-	79,  // 125: agentgateway.dev.resource.BackendPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
-	165, // 126: agentgateway.dev.resource.BackendPolicySpec.backend_http:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
-	167, // 127: agentgateway.dev.resource.BackendPolicySpec.backend_tcp:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTCP
-	133, // 128: agentgateway.dev.resource.BackendPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
-	163, // 129: agentgateway.dev.resource.BackendPolicySpec.health:type_name -> agentgateway.dev.resource.BackendPolicySpec.Health
-	166, // 130: agentgateway.dev.resource.BackendPolicySpec.backend_tunnel:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
-	127, // 131: agentgateway.dev.resource.BackendPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	93,  // 132: agentgateway.dev.resource.AwsBackend.agent_core:type_name -> agentgateway.dev.resource.AwsAgentCoreBackend
-	202, // 133: agentgateway.dev.resource.AIBackend.provider_groups:type_name -> agentgateway.dev.resource.AIBackend.ProviderGroup
-	96,  // 134: agentgateway.dev.resource.MCPBackend.targets:type_name -> agentgateway.dev.resource.MCPTarget
-	34,  // 135: agentgateway.dev.resource.MCPBackend.stateful_mode:type_name -> agentgateway.dev.resource.MCPBackend.StatefulMode
-	35,  // 136: agentgateway.dev.resource.MCPBackend.prefix_mode:type_name -> agentgateway.dev.resource.MCPBackend.PrefixMode
-	36,  // 137: agentgateway.dev.resource.MCPBackend.failure_mode:type_name -> agentgateway.dev.resource.MCPBackend.FailureMode
-	97,  // 138: agentgateway.dev.resource.MCPTarget.backend:type_name -> agentgateway.dev.resource.BackendReference
-	37,  // 139: agentgateway.dev.resource.MCPTarget.protocol:type_name -> agentgateway.dev.resource.MCPTarget.Protocol
-	203, // 140: agentgateway.dev.resource.BackendReference.service:type_name -> agentgateway.dev.resource.BackendReference.Service
-	97,  // 141: agentgateway.dev.resource.RequestMirrors.Mirror.backend:type_name -> agentgateway.dev.resource.BackendReference
-	207, // 142: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
-	207, // 143: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
-	207, // 144: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
-	207, // 145: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
-	207, // 146: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
-	98,  // 147: agentgateway.dev.resource.FrontendPolicySpec.TLS.alpn:type_name -> agentgateway.dev.resource.Alpn
-	6,   // 148: agentgateway.dev.resource.FrontendPolicySpec.TLS.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
-	4,   // 149: agentgateway.dev.resource.FrontendPolicySpec.TLS.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	4,   // 150: agentgateway.dev.resource.FrontendPolicySpec.TLS.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
-	7,   // 151: agentgateway.dev.resource.FrontendPolicySpec.TLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
-	85,  // 152: agentgateway.dev.resource.FrontendPolicySpec.TCP.keepalives:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	121, // 153: agentgateway.dev.resource.FrontendPolicySpec.Logging.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
-	122, // 154: agentgateway.dev.resource.FrontendPolicySpec.Logging.otlp_access_log:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
-	97,  // 155: agentgateway.dev.resource.FrontendPolicySpec.Tracing.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
-	117, // 156: agentgateway.dev.resource.FrontendPolicySpec.Tracing.attributes:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	117, // 157: agentgateway.dev.resource.FrontendPolicySpec.Tracing.resources:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
-	9,   // 158: agentgateway.dev.resource.FrontendPolicySpec.Tracing.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
-	10,  // 159: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.version:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
-	11,  // 160: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.mode:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
-	124, // 161: agentgateway.dev.resource.FrontendPolicySpec.Metrics.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
-	120, // 162: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
-	97,  // 163: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
-	89,  // 164: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	8,   // 165: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
-	123, // 166: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
-	139, // 167: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
-	97,  // 168: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.target:type_name -> agentgateway.dev.resource.BackendReference
-	14,  // 169: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
-	207, // 170: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
-	15,  // 171: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
-	97,  // 172: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.target:type_name -> agentgateway.dev.resource.BackendReference
-	143, // 173: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.grpc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
-	144, // 174: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.http:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
-	16,  // 175: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
-	141, // 176: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.include_request_body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
-	142, // 177: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
-	87,  // 178: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
-	17,  // 179: agentgateway.dev.resource.TrafficPolicySpec.JWT.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
-	129, // 180: agentgateway.dev.resource.TrafficPolicySpec.JWT.providers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
-	149, // 181: agentgateway.dev.resource.TrafficPolicySpec.JWT.mcp:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
-	56,  // 182: agentgateway.dev.resource.TrafficPolicySpec.JWT.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	18,  // 183: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
-	56,  // 184: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	150, // 185: agentgateway.dev.resource.TrafficPolicySpec.APIKey.api_keys:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
-	19,  // 186: agentgateway.dev.resource.TrafficPolicySpec.APIKey.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
-	56,  // 187: agentgateway.dev.resource.TrafficPolicySpec.APIKey.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	151, // 188: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.request:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	151, // 189: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.response:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
-	97,  // 190: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.target:type_name -> agentgateway.dev.resource.BackendReference
-	20,  // 191: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
-	153, // 192: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.request_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
-	154, // 193: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.response_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
-	157, // 194: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.metadata_context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
-	156, // 195: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.processing_options:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions
-	23,  // 196: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
-	140, // 197: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.entries:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
-	13,  // 198: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
-	145, // 199: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
-	146, // 200: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
-	147, // 201: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.add_request_headers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
-	148, // 202: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
-	30,  // 203: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	189, // 204: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	208, // 205: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
-	134, // 206: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.set:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	134, // 207: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.add:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
-	135, // 208: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
-	152, // 209: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
-	158, // 210: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
-	21,  // 211: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_body_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
-	21,  // 212: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_body_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
-	22,  // 213: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_header_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
-	22,  // 214: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_header_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
-	22,  // 215: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
-	22,  // 216: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
-	155, // 217: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
-	182, // 218: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
-	184, // 219: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
-	185, // 220: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
-	186, // 221: agentgateway.dev.resource.BackendPolicySpec.Ai.transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	171, // 222: agentgateway.dev.resource.BackendPolicySpec.Ai.prompts:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
-	187, // 223: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
-	183, // 224: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_caching:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
-	188, // 225: agentgateway.dev.resource.BackendPolicySpec.Ai.routes:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
-	97,  // 226: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
-	27,  // 227: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	207, // 228: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
-	162, // 229: agentgateway.dev.resource.BackendPolicySpec.Health.eviction:type_name -> agentgateway.dev.resource.BackendPolicySpec.Eviction
-	28,  // 230: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.verification:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
-	98,  // 231: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.alpn:type_name -> agentgateway.dev.resource.Alpn
-	7,   // 232: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
-	29,  // 233: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.version:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
-	207, // 234: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
-	97,  // 235: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel.proxy:type_name -> agentgateway.dev.resource.BackendReference
-	85,  // 236: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.keepalive:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	207, // 237: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
-	30,  // 238: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
-	189, // 239: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	31,  // 240: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
-	87,  // 241: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
-	56,  // 242: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	170, // 243: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	170, // 244: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
-	24,  // 245: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
-	25,  // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
-	172, // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
-	97,  // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
-	74,  // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
-	89,  // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	89,  // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	89,  // 252: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	89,  // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	179, // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	173, // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	174, // 256: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	177, // 257: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	176, // 258: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	178, // 259: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	179, // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
-	173, // 261: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
-	174, // 262: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
-	175, // 263: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
-	177, // 264: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
-	176, // 265: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
-	178, // 266: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
-	181, // 267: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
-	180, // 268: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
-	26,  // 269: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
-	190, // 270: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	209, // 271: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	32,  // 272: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
-	33,  // 273: agentgateway.dev.resource.AIBackend.ProviderFormatConfig.format:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormat
-	199, // 274: agentgateway.dev.resource.AIBackend.Custom.formats:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormatConfig
-	191, // 275: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
-	97,  // 276: agentgateway.dev.resource.AIBackend.Provider.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
-	192, // 277: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
-	193, // 278: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
-	194, // 279: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
-	195, // 280: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
-	196, // 281: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
-	197, // 282: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
-	198, // 283: agentgateway.dev.resource.AIBackend.Provider.azure:type_name -> agentgateway.dev.resource.AIBackend.Azure
-	200, // 284: agentgateway.dev.resource.AIBackend.Provider.custom:type_name -> agentgateway.dev.resource.AIBackend.Custom
-	89,  // 285: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
-	201, // 286: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
-	287, // [287:287] is the sub-list for method output_type
-	287, // [287:287] is the sub-list for method input_type
-	287, // [287:287] is the sub-list for extension type_name
-	287, // [287:287] is the sub-list for extension extendee
-	0,   // [0:287] is the sub-list for field type_name
+	208, // 44: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
+	208, // 45: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
+	208, // 46: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
+	58,  // 47: agentgateway.dev.resource.BackendAuthPolicy.passthrough:type_name -> agentgateway.dev.resource.Passthrough
+	59,  // 48: agentgateway.dev.resource.BackendAuthPolicy.key:type_name -> agentgateway.dev.resource.Key
+	60,  // 49: agentgateway.dev.resource.BackendAuthPolicy.gcp:type_name -> agentgateway.dev.resource.Gcp
+	61,  // 50: agentgateway.dev.resource.BackendAuthPolicy.aws:type_name -> agentgateway.dev.resource.Aws
+	62,  // 51: agentgateway.dev.resource.BackendAuthPolicy.azure:type_name -> agentgateway.dev.resource.Azure
+	100, // 52: agentgateway.dev.resource.AuthorizationLocation.header:type_name -> agentgateway.dev.resource.AuthorizationLocation.Header
+	101, // 53: agentgateway.dev.resource.AuthorizationLocation.query_parameter:type_name -> agentgateway.dev.resource.AuthorizationLocation.QueryParameter
+	102, // 54: agentgateway.dev.resource.AuthorizationLocation.cookie:type_name -> agentgateway.dev.resource.AuthorizationLocation.Cookie
+	57,  // 55: agentgateway.dev.resource.Passthrough.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	57,  // 56: agentgateway.dev.resource.Key.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	103, // 57: agentgateway.dev.resource.Gcp.access_token:type_name -> agentgateway.dev.resource.Gcp.AccessToken
+	104, // 58: agentgateway.dev.resource.Gcp.id_token:type_name -> agentgateway.dev.resource.Gcp.IdToken
+	63,  // 59: agentgateway.dev.resource.Aws.explicit_config:type_name -> agentgateway.dev.resource.AwsExplicitConfig
+	64,  // 60: agentgateway.dev.resource.Aws.implicit:type_name -> agentgateway.dev.resource.AwsImplicit
+	65,  // 61: agentgateway.dev.resource.Azure.explicit_config:type_name -> agentgateway.dev.resource.AzureExplicitConfig
+	69,  // 62: agentgateway.dev.resource.Azure.developer_implicit:type_name -> agentgateway.dev.resource.AzureDeveloperImplicit
+	70,  // 63: agentgateway.dev.resource.Azure.implicit:type_name -> agentgateway.dev.resource.AzureImplicit
+	66,  // 64: agentgateway.dev.resource.AzureExplicitConfig.client_secret:type_name -> agentgateway.dev.resource.AzureClientSecret
+	67,  // 65: agentgateway.dev.resource.AzureExplicitConfig.managed_identity_credential:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential
+	68,  // 66: agentgateway.dev.resource.AzureExplicitConfig.workload_identity_credential:type_name -> agentgateway.dev.resource.AzureWorkloadIdentityCredential
+	105, // 67: agentgateway.dev.resource.AzureManagedIdentityCredential.user_assigned_identity:type_name -> agentgateway.dev.resource.AzureManagedIdentityCredential.UserAssignedIdentity
+	72,  // 68: agentgateway.dev.resource.RouteMatch.path:type_name -> agentgateway.dev.resource.PathMatch
+	75,  // 69: agentgateway.dev.resource.RouteMatch.headers:type_name -> agentgateway.dev.resource.HeaderMatch
+	74,  // 70: agentgateway.dev.resource.RouteMatch.method:type_name -> agentgateway.dev.resource.MethodMatch
+	73,  // 71: agentgateway.dev.resource.RouteMatch.query_params:type_name -> agentgateway.dev.resource.QueryMatch
+	208, // 72: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
+	78,  // 73: agentgateway.dev.resource.DirectResponse.headers:type_name -> agentgateway.dev.resource.ExpressionHeader
+	83,  // 74: agentgateway.dev.resource.HeaderModifier.add:type_name -> agentgateway.dev.resource.Header
+	83,  // 75: agentgateway.dev.resource.HeaderModifier.set:type_name -> agentgateway.dev.resource.Header
+	106, // 76: agentgateway.dev.resource.RequestMirrors.mirrors:type_name -> agentgateway.dev.resource.RequestMirrors.Mirror
+	98,  // 77: agentgateway.dev.resource.RouteBackend.backend:type_name -> agentgateway.dev.resource.BackendReference
+	90,  // 78: agentgateway.dev.resource.RouteBackend.backend_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	109, // 79: agentgateway.dev.resource.PolicyTarget.gateway:type_name -> agentgateway.dev.resource.PolicyTarget.GatewayTarget
+	110, // 80: agentgateway.dev.resource.PolicyTarget.route:type_name -> agentgateway.dev.resource.PolicyTarget.RouteTarget
+	108, // 81: agentgateway.dev.resource.PolicyTarget.backend:type_name -> agentgateway.dev.resource.PolicyTarget.BackendTarget
+	107, // 82: agentgateway.dev.resource.PolicyTarget.service:type_name -> agentgateway.dev.resource.PolicyTarget.ServiceTarget
+	111, // 83: agentgateway.dev.resource.PolicyTarget.listener_set:type_name -> agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
+	208, // 84: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
+	208, // 85: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
+	114, // 86: agentgateway.dev.resource.FrontendPolicySpec.tcp:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TCP
+	113, // 87: agentgateway.dev.resource.FrontendPolicySpec.tls:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TLS
+	112, // 88: agentgateway.dev.resource.FrontendPolicySpec.http:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP
+	116, // 89: agentgateway.dev.resource.FrontendPolicySpec.logging:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging
+	117, // 90: agentgateway.dev.resource.FrontendPolicySpec.tracing:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing
+	115, // 91: agentgateway.dev.resource.FrontendPolicySpec.network_authorization:type_name -> agentgateway.dev.resource.FrontendPolicySpec.NetworkAuthorization
+	119, // 92: agentgateway.dev.resource.FrontendPolicySpec.proxy_protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol
+	120, // 93: agentgateway.dev.resource.FrontendPolicySpec.metrics:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics
+	13,  // 94: agentgateway.dev.resource.TrafficPolicySpec.phase:type_name -> agentgateway.dev.resource.TrafficPolicySpec.PolicyPhase
+	54,  // 95: agentgateway.dev.resource.TrafficPolicySpec.timeout:type_name -> agentgateway.dev.resource.Timeout
+	55,  // 96: agentgateway.dev.resource.TrafficPolicySpec.retry:type_name -> agentgateway.dev.resource.Retry
+	127, // 97: agentgateway.dev.resource.TrafficPolicySpec.local_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit
+	128, // 98: agentgateway.dev.resource.TrafficPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	129, // 99: agentgateway.dev.resource.TrafficPolicySpec.authorization:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RBAC
+	131, // 100: agentgateway.dev.resource.TrafficPolicySpec.jwt:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT
+	134, // 101: agentgateway.dev.resource.TrafficPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	126, // 102: agentgateway.dev.resource.TrafficPolicySpec.remote_rate_limit:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit
+	137, // 103: agentgateway.dev.resource.TrafficPolicySpec.csrf:type_name -> agentgateway.dev.resource.TrafficPolicySpec.CSRF
+	138, // 104: agentgateway.dev.resource.TrafficPolicySpec.ext_proc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc
+	79,  // 105: agentgateway.dev.resource.TrafficPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	79,  // 106: agentgateway.dev.resource.TrafficPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	81,  // 107: agentgateway.dev.resource.TrafficPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
+	82,  // 108: agentgateway.dev.resource.TrafficPolicySpec.url_rewrite:type_name -> agentgateway.dev.resource.UrlRewrite
+	80,  // 109: agentgateway.dev.resource.TrafficPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
+	77,  // 110: agentgateway.dev.resource.TrafficPolicySpec.direct_response:type_name -> agentgateway.dev.resource.DirectResponse
+	76,  // 111: agentgateway.dev.resource.TrafficPolicySpec.cors:type_name -> agentgateway.dev.resource.CORS
+	132, // 112: agentgateway.dev.resource.TrafficPolicySpec.basic_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication
+	133, // 113: agentgateway.dev.resource.TrafficPolicySpec.api_key_auth:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey
+	139, // 114: agentgateway.dev.resource.TrafficPolicySpec.host_rewrite:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite
+	161, // 115: agentgateway.dev.resource.BackendPolicySpec.a2a:type_name -> agentgateway.dev.resource.BackendPolicySpec.A2a
+	162, // 116: agentgateway.dev.resource.BackendPolicySpec.inference_routing:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting
+	165, // 117: agentgateway.dev.resource.BackendPolicySpec.backend_tls:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS
+	56,  // 118: agentgateway.dev.resource.BackendPolicySpec.auth:type_name -> agentgateway.dev.resource.BackendAuthPolicy
+	169, // 119: agentgateway.dev.resource.BackendPolicySpec.mcp_authorization:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
+	170, // 120: agentgateway.dev.resource.BackendPolicySpec.mcp_authentication:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
+	160, // 121: agentgateway.dev.resource.BackendPolicySpec.ai:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai
+	79,  // 122: agentgateway.dev.resource.BackendPolicySpec.request_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	79,  // 123: agentgateway.dev.resource.BackendPolicySpec.response_header_modifier:type_name -> agentgateway.dev.resource.HeaderModifier
+	81,  // 124: agentgateway.dev.resource.BackendPolicySpec.request_redirect:type_name -> agentgateway.dev.resource.RequestRedirect
+	80,  // 125: agentgateway.dev.resource.BackendPolicySpec.request_mirror:type_name -> agentgateway.dev.resource.RequestMirrors
+	166, // 126: agentgateway.dev.resource.BackendPolicySpec.backend_http:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP
+	168, // 127: agentgateway.dev.resource.BackendPolicySpec.backend_tcp:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTCP
+	134, // 128: agentgateway.dev.resource.BackendPolicySpec.transformation:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy
+	164, // 129: agentgateway.dev.resource.BackendPolicySpec.health:type_name -> agentgateway.dev.resource.BackendPolicySpec.Health
+	167, // 130: agentgateway.dev.resource.BackendPolicySpec.backend_tunnel:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
+	128, // 131: agentgateway.dev.resource.BackendPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
+	94,  // 132: agentgateway.dev.resource.AwsBackend.agent_core:type_name -> agentgateway.dev.resource.AwsAgentCoreBackend
+	203, // 133: agentgateway.dev.resource.AIBackend.provider_groups:type_name -> agentgateway.dev.resource.AIBackend.ProviderGroup
+	97,  // 134: agentgateway.dev.resource.MCPBackend.targets:type_name -> agentgateway.dev.resource.MCPTarget
+	35,  // 135: agentgateway.dev.resource.MCPBackend.stateful_mode:type_name -> agentgateway.dev.resource.MCPBackend.StatefulMode
+	36,  // 136: agentgateway.dev.resource.MCPBackend.prefix_mode:type_name -> agentgateway.dev.resource.MCPBackend.PrefixMode
+	37,  // 137: agentgateway.dev.resource.MCPBackend.failure_mode:type_name -> agentgateway.dev.resource.MCPBackend.FailureMode
+	98,  // 138: agentgateway.dev.resource.MCPTarget.backend:type_name -> agentgateway.dev.resource.BackendReference
+	38,  // 139: agentgateway.dev.resource.MCPTarget.protocol:type_name -> agentgateway.dev.resource.MCPTarget.Protocol
+	204, // 140: agentgateway.dev.resource.BackendReference.service:type_name -> agentgateway.dev.resource.BackendReference.Service
+	98,  // 141: agentgateway.dev.resource.RequestMirrors.Mirror.backend:type_name -> agentgateway.dev.resource.BackendReference
+	208, // 142: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
+	208, // 143: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
+	208, // 144: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
+	208, // 145: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
+	8,   // 146: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_header_case:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP.HTTPHeaderCase
+	208, // 147: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
+	99,  // 148: agentgateway.dev.resource.FrontendPolicySpec.TLS.alpn:type_name -> agentgateway.dev.resource.Alpn
+	6,   // 149: agentgateway.dev.resource.FrontendPolicySpec.TLS.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
+	4,   // 150: agentgateway.dev.resource.FrontendPolicySpec.TLS.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	4,   // 151: agentgateway.dev.resource.FrontendPolicySpec.TLS.max_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
+	7,   // 152: agentgateway.dev.resource.FrontendPolicySpec.TLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	86,  // 153: agentgateway.dev.resource.FrontendPolicySpec.TCP.keepalives:type_name -> agentgateway.dev.resource.KeepaliveConfig
+	122, // 154: agentgateway.dev.resource.FrontendPolicySpec.Logging.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields
+	123, // 155: agentgateway.dev.resource.FrontendPolicySpec.Logging.otlp_access_log:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog
+	98,  // 156: agentgateway.dev.resource.FrontendPolicySpec.Tracing.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
+	118, // 157: agentgateway.dev.resource.FrontendPolicySpec.Tracing.attributes:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	118, // 158: agentgateway.dev.resource.FrontendPolicySpec.Tracing.resources:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TracingAttribute
+	10,  // 159: agentgateway.dev.resource.FrontendPolicySpec.Tracing.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Tracing.Protocol
+	11,  // 160: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.version:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Version
+	12,  // 161: agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.mode:type_name -> agentgateway.dev.resource.FrontendPolicySpec.ProxyProtocol.Mode
+	125, // 162: agentgateway.dev.resource.FrontendPolicySpec.Metrics.fields:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields
+	121, // 163: agentgateway.dev.resource.FrontendPolicySpec.Logging.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.Field
+	98,  // 164: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
+	90,  // 165: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	9,   // 166: agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.protocol:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Logging.OtlpAccessLog.Protocol
+	124, // 167: agentgateway.dev.resource.FrontendPolicySpec.Metrics.Fields.add:type_name -> agentgateway.dev.resource.FrontendPolicySpec.Metrics.Field
+	140, // 168: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
+	98,  // 169: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.target:type_name -> agentgateway.dev.resource.BackendReference
+	15,  // 170: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
+	208, // 171: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
+	16,  // 172: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
+	98,  // 173: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.target:type_name -> agentgateway.dev.resource.BackendReference
+	144, // 174: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.grpc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
+	145, // 175: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.http:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol
+	17,  // 176: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.FailureMode
+	142, // 177: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.include_request_body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.BodyOptions
+	143, // 178: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.cache:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.Cache
+	88,  // 179: agentgateway.dev.resource.TrafficPolicySpec.JWTProvider.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
+	18,  // 180: agentgateway.dev.resource.TrafficPolicySpec.JWT.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.Mode
+	130, // 181: agentgateway.dev.resource.TrafficPolicySpec.JWT.providers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWTProvider
+	150, // 182: agentgateway.dev.resource.TrafficPolicySpec.JWT.mcp:type_name -> agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP
+	57,  // 183: agentgateway.dev.resource.TrafficPolicySpec.JWT.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	19,  // 184: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.Mode
+	57,  // 185: agentgateway.dev.resource.TrafficPolicySpec.BasicAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	151, // 186: agentgateway.dev.resource.TrafficPolicySpec.APIKey.api_keys:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.User
+	20,  // 187: agentgateway.dev.resource.TrafficPolicySpec.APIKey.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.APIKey.Mode
+	57,  // 188: agentgateway.dev.resource.TrafficPolicySpec.APIKey.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	152, // 189: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.request:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	152, // 190: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.response:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform
+	98,  // 191: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.target:type_name -> agentgateway.dev.resource.BackendReference
+	21,  // 192: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.FailureMode
+	154, // 193: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.request_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.RequestAttributesEntry
+	155, // 194: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.response_attributes:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ResponseAttributesEntry
+	158, // 195: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.metadata_context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry
+	157, // 196: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.processing_options:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions
+	24,  // 197: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
+	141, // 198: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.entries:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Entry
+	14,  // 199: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Type
+	146, // 200: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.ContextEntry
+	147, // 201: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol.MetadataEntry
+	148, // 202: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.add_request_headers:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntry
+	149, // 203: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
+	31,  // 204: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	190, // 205: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	209, // 206: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
+	135, // 207: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.set:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	135, // 208: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.add:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
+	136, // 209: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
+	153, // 210: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.MetadataEntry
+	159, // 211: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.context:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext.ContextEntry
+	22,  // 212: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_body_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
+	22,  // 213: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_body_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
+	23,  // 214: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_header_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
+	23,  // 215: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_header_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
+	23,  // 216: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
+	23,  // 217: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
+	156, // 218: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
+	183, // 219: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
+	185, // 220: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
+	186, // 221: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
+	187, // 222: agentgateway.dev.resource.BackendPolicySpec.Ai.transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
+	172, // 223: agentgateway.dev.resource.BackendPolicySpec.Ai.prompts:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
+	188, // 224: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
+	184, // 225: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_caching:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching
+	189, // 226: agentgateway.dev.resource.BackendPolicySpec.Ai.routes:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
+	98,  // 227: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
+	28,  // 228: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
+	208, // 229: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
+	163, // 230: agentgateway.dev.resource.BackendPolicySpec.Health.eviction:type_name -> agentgateway.dev.resource.BackendPolicySpec.Eviction
+	29,  // 231: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.verification:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
+	99,  // 232: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.alpn:type_name -> agentgateway.dev.resource.Alpn
+	7,   // 233: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
+	30,  // 234: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.version:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
+	208, // 235: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
+	98,  // 236: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel.proxy:type_name -> agentgateway.dev.resource.BackendReference
+	86,  // 237: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.keepalive:type_name -> agentgateway.dev.resource.KeepaliveConfig
+	208, // 238: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
+	31,  // 239: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
+	190, // 240: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
+	32,  // 241: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
+	88,  // 242: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
+	57,  // 243: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	171, // 244: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	171, // 245: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
+	25,  // 246: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
+	26,  // 247: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.action:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
+	173, // 248: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules.rules:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
+	98,  // 249: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.backend:type_name -> agentgateway.dev.resource.BackendReference
+	75,  // 250: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.forward_header_matches:type_name -> agentgateway.dev.resource.HeaderMatch
+	90,  // 251: agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 252: agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	90,  // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	180, // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	174, // 256: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	175, // 257: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	178, // 258: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	177, // 259: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	179, // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	180, // 261: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.rejection:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestRejection
+	174, // 262: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.regex:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRules
+	175, // 263: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.webhook:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook
+	176, // 264: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.openai_moderation:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Moderation
+	178, // 265: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.google_model_armor:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.GoogleModelArmor
+	177, // 266: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.bedrock_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BedrockGuardrails
+	179, // 267: agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard.azure_content_safety:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.AzureContentSafety
+	182, // 268: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.request:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RequestGuard
+	181, // 269: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.response:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ResponseGuard
+	27,  // 270: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
+	191, // 271: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	210, // 272: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
+	33,  // 273: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
+	34,  // 274: agentgateway.dev.resource.AIBackend.ProviderFormatConfig.format:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormat
+	200, // 275: agentgateway.dev.resource.AIBackend.Custom.formats:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormatConfig
+	192, // 276: agentgateway.dev.resource.AIBackend.Provider.host_override:type_name -> agentgateway.dev.resource.AIBackend.HostOverride
+	98,  // 277: agentgateway.dev.resource.AIBackend.Provider.provider_backend:type_name -> agentgateway.dev.resource.BackendReference
+	193, // 278: agentgateway.dev.resource.AIBackend.Provider.openai:type_name -> agentgateway.dev.resource.AIBackend.OpenAI
+	194, // 279: agentgateway.dev.resource.AIBackend.Provider.gemini:type_name -> agentgateway.dev.resource.AIBackend.Gemini
+	195, // 280: agentgateway.dev.resource.AIBackend.Provider.vertex:type_name -> agentgateway.dev.resource.AIBackend.Vertex
+	196, // 281: agentgateway.dev.resource.AIBackend.Provider.anthropic:type_name -> agentgateway.dev.resource.AIBackend.Anthropic
+	197, // 282: agentgateway.dev.resource.AIBackend.Provider.bedrock:type_name -> agentgateway.dev.resource.AIBackend.Bedrock
+	198, // 283: agentgateway.dev.resource.AIBackend.Provider.azureopenai:type_name -> agentgateway.dev.resource.AIBackend.AzureOpenAI
+	199, // 284: agentgateway.dev.resource.AIBackend.Provider.azure:type_name -> agentgateway.dev.resource.AIBackend.Azure
+	201, // 285: agentgateway.dev.resource.AIBackend.Provider.custom:type_name -> agentgateway.dev.resource.AIBackend.Custom
+	90,  // 286: agentgateway.dev.resource.AIBackend.Provider.inline_policies:type_name -> agentgateway.dev.resource.BackendPolicySpec
+	202, // 287: agentgateway.dev.resource.AIBackend.ProviderGroup.providers:type_name -> agentgateway.dev.resource.AIBackend.Provider
+	288, // [288:288] is the sub-list for method output_type
+	288, // [288:288] is the sub-list for method input_type
+	288, // [288:288] is the sub-list for extension type_name
+	288, // [288:288] is the sub-list for extension extendee
+	0,   // [0:288] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }
@@ -15078,7 +15129,7 @@ func file_resource_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_resource_proto_rawDesc), len(file_resource_proto_rawDesc)),
-			NumEnums:      38,
+			NumEnums:      39,
 			NumMessages:   166,
 			NumExtensions: 0,
 			NumServices:   0,

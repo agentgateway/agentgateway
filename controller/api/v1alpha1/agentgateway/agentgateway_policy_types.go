@@ -477,6 +477,14 @@ const (
 	ProxyProtocolModeOptional ProxyProtocolMode = "Optional"
 )
 
+// +k8s:enum
+type HTTPHeaderCase string
+
+const (
+	HTTPHeaderCaseLowercase HTTPHeaderCase = "Lowercase"
+	HTTPHeaderCasePreserve  HTTPHeaderCase = "Preserve"
+)
+
 type FrontendProxyProtocol struct {
 	// version controls which PROXY protocol version is accepted.
 	//
@@ -516,11 +524,14 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
 	HTTP1IdleTimeout *metav1.Duration `json:"http1IdleTimeout,omitempty"`
-	// `http1PreserveHeaderCase` preserves the original casing of `HTTP/1.1`
-	// request header names when encoding responses on the same connection.
-	// This only applies to `HTTP/1.1`.
+	// `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+	// HTTP/2 requests are always lower case.
+	//
+	// Modifying the headers from other policies may result in the original case being lost.
+	//
 	// +optional
-	HTTP1PreserveHeaderCase *bool `json:"http1PreserveHeaderCase,omitempty"`
+	HTTP1HeaderCase *HTTPHeaderCase `json:"HTTP1HeaderCase,omitempty"`
 
 	// `http2WindowSize` indicates the initial window size for stream-level flow
 	// control for received data.
