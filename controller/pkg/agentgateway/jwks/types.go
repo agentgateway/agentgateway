@@ -54,8 +54,8 @@ func (s JwksSource) MarshalJSON() ([]byte, error) {
 		OwnerKey:          s.OwnerKey,
 		RequestKey:        s.RequestKey,
 		Target:            s.Target,
-		HasTLSConfig:      s.TLSConfig != nil,
-		HasProxyTLSConfig: s.ProxyTLSConfig != nil,
+		HasTLSConfig:      s.TLSConfig != nil,      // the underlying tls.Config is not serializable, so we will just indicate its presence
+		HasProxyTLSConfig: s.ProxyTLSConfig != nil, // the underlying tls.Config is not serializable, so we will just indicate its presence
 		TTL:               s.TTL,
 	})
 }
@@ -94,8 +94,8 @@ func (r SharedJwksRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(jsonSharedJwksRequest{
 		RequestKey:        r.RequestKey,
 		Target:            r.Target,
-		HasTLSConfig:      r.TLSConfig != nil,
-		HasProxyTLSConfig: r.ProxyTLSConfig != nil,
+		HasTLSConfig:      r.TLSConfig != nil,      // the underlying tls.Config is not serializable, so we will just indicate its presence
+		HasProxyTLSConfig: r.ProxyTLSConfig != nil, // the underlying tls.Config is not serializable, so we will just indicate its presence
 		TTL:               r.TTL,
 	})
 }
