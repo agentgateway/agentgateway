@@ -409,6 +409,7 @@ func translateTrafficPolicyToAgw(
 	// Generate a base policy name from the TrafficPolicy reference
 	basePolicyName := getTrafficPolicyName(policy.Namespace, policy.Name)
 	policyName := config.NamespacedName(policy)
+	inheritance := translatePolicyInheritance(policy.Spec.Strategy)
 
 	appendPolicy := func(kind string) func(*api.Policy, error) {
 		return func(p *api.Policy, err error) {
@@ -418,6 +419,7 @@ func translateTrafficPolicyToAgw(
 				errs = append(errs, err)
 			}
 			if p != nil {
+				p.Inheritance = inheritance
 				agwPolicies = append(agwPolicies, p)
 			}
 		}
@@ -429,6 +431,11 @@ func translateTrafficPolicyToAgw(
 				name := fmt.Sprintf("%s %s", kind, policyName)
 				logger.Error("error processing policy", "policy", name, "error", err)
 				errs = append(errs, err)
+			}
+			for _, p := range policies {
+				if p != nil {
+					p.Inheritance = inheritance
+				}
 			}
 			agwPolicies = append(agwPolicies, policies...)
 		}
@@ -532,6 +539,16 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {
+	if strategy == nil || strategy.Inheritance == nil {
+		return api.Policy_DEFAULT
+	}
+	if *strategy.Inheritance == agentgateway.PolicyInheritanceOverride {
+		return api.Policy_OVERRIDE
+	}
+	return api.Policy_DEFAULT
 }
 
 func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {

@@ -1195,6 +1195,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		key: "frontend/accessLog".into(),
 		name: None,
 		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		inheritance: Default::default(),
 		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
 	});
 	assert!(

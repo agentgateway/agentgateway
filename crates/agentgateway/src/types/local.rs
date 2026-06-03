@@ -1917,6 +1917,7 @@ async fn convert(
 			}),
 			key: p.name.to_string().into(),
 			target: p.target,
+			inheritance: Default::default(),
 			policy: tp,
 		};
 		all_policies.push(tgt_policy);
@@ -2153,11 +2154,13 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	.to_string();
 
 	let mut model_list_inline_policies = vec![
-		TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
-			set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
-			add: vec![],
-			remove: vec![],
-		})),
+		TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(
+			crate::http::filters::HeaderModifier {
+				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+				add: vec![],
+				remove: vec![],
+			},
+		)),
 		TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
 			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
 			body_expression: None,
@@ -2442,11 +2445,13 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	}
 
 	let mut fallback_inline_policies = vec![
-		TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
-			set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
-			add: vec![],
-			remove: vec![],
-		})),
+		TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(
+			crate::http::filters::HeaderModifier {
+				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+				add: vec![],
+				remove: vec![],
+			},
+		)),
 		TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
 			body: Bytes::new(),
 			body_expression: Some(Arc::new(cel::Expression::new_strict(
@@ -2522,6 +2527,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				key,
 				name: None,
 				target: target.clone(),
+				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
 		}
@@ -2531,6 +2537,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				key,
 				name: None,
 				target: target.clone(),
+				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Route).into(),
 			});
 		}
@@ -2546,6 +2553,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 		}),
 		key: strng::new("llm:transformation"),
 		target: PolicyTarget::Gateway(listener_target),
+		inheritance: Default::default(),
 		policy: PolicyType::from((
 			TrafficPolicy::Transformation(RequestPolicy::single(transformation)),
 			PolicyPhase::Gateway,
@@ -2801,6 +2809,7 @@ async fn convert_listener(
 				key,
 				name: None,
 				target: target.clone(),
+				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
 		}
@@ -2938,6 +2947,7 @@ async fn split_frontend_policies(
 			key: key.clone(),
 			name: None,
 			target: PolicyTarget::Gateway(gateway.clone()),
+			inheritance: Default::default(),
 			policy: p.into(),
 		});
 	};
@@ -3039,7 +3049,9 @@ pub(crate) async fn split_policies(
 		)));
 	}
 	if let Some(p) = response_header_modifier {
-		route_policies.push(TrafficPolicy::ResponseHeaderModifier(Arc::new(p)));
+		route_policies.push(TrafficPolicy::ResponseHeaderModifier(
+			RequestPolicy::single(p),
+		));
 	}
 	if let Some(p) = request_redirect {
 		route_policies.push(TrafficPolicy::RequestRedirect(RequestPolicy::single(p)));

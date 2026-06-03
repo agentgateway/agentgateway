@@ -32,7 +32,8 @@ use crate::test_helpers::extprocmock::{
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{MockInstance, ratelimitmock};
 use crate::types::agent::{
-	BackendTarget, BackendTrafficPolicy, PolicyTarget, SimpleBackendReference, Target, TargetedPolicy,
+	BackendTarget, BackendTrafficPolicy, PolicyInheritance, PolicyTarget, SimpleBackendReference,
+	Target, TargetedPolicy,
 };
 use crate::types::discovery::NamespacedHostname;
 use crate::*;
@@ -2450,6 +2451,7 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 	t.with_policy(TargetedPolicy {
 		key: "custom-provider-epp".into(),
 		name: None,
+		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Service {
 			hostname: service.hostname.clone(),
 			namespace: service.namespace.clone(),
@@ -2545,6 +2547,7 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 	t.with_policy(TargetedPolicy {
 		key: "custom-provider-epp".into(),
 		name: None,
+		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Service {
 			hostname: service.hostname.clone(),
 			namespace: service.namespace.clone(),

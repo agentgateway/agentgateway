@@ -38,8 +38,9 @@ use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
 	Backend, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol,
-	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch, PolicyTarget,
-	ResourceName, Route, RouteMatch, SimpleBackendReference, Target, TargetedPolicy,
+	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch,
+	PolicyInheritance, PolicyTarget, ResourceName, Route, RouteMatch, SimpleBackendReference, Target,
+	TargetedPolicy,
 };
 use crate::types::{backend, frontend};
 use crate::{read_body, *};
@@ -2755,6 +2756,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 	t.with_policy(TargetedPolicy {
 		key: strng::literal!("pol/backend-tunnel"),
 		name: None,
+		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Backend {
 			name: strng::literal!("dynamic"),
 			namespace: Default::default(),
@@ -3139,6 +3141,7 @@ impl TestBind {
 		self.with_policy(TargetedPolicy {
 			key: strng::literal!("pol/frontend-connect"),
 			name: None,
+			inheritance: PolicyInheritance::default(),
 			target: PolicyTarget::Gateway(ListenerTarget {
 				gateway_name: strng::literal!("default"),
 				gateway_namespace: strng::literal!("default"),

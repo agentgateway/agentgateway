@@ -54,6 +54,7 @@ type AgentgatewayPolicyList struct {
 
 // +kubebuilder:validation:ExactlyOneOf=targetRefs;targetSelectors
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) || has(self.frontend) || has(self.backend)",message="At least one of traffic, frontend, or backend must be provided."
+// +kubebuilder:validation:XValidation:rule="!has(self.strategy) || !has(self.strategy.inheritance) || (has(self.traffic) && !has(self.frontend) && !has(self.backend))",message="strategy.inheritance may only be set on traffic policies"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.mcp may not be used with a Service target"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))))",message="backend.mcp may not target an AgentgatewayBackend sectionName"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.ai may not be used with a Service target"
@@ -84,6 +85,14 @@ type AgentgatewayPolicySpec struct {
 	// +kubebuilder:validation:XValidation:message="Only one Kind of targetRef can be set on one policy",rule="self.all(l1, !self.exists(l2, l1.kind != l2.kind))"
 	// +optional
 	TargetSelectors []shared.LocalPolicyTargetSelectorWithSectionName `json:"targetSelectors,omitempty"`
+
+	// strategy defines how this policy participates in policy merging and conflict resolution.
+	//
+	// Strategy settings apply to the policy object as a whole. Individual strategy fields may
+	// only be valid for specific policy kinds; for example, inheritance is only valid when this
+	// policy contains traffic settings.
+	// +optional
+	Strategy *PolicyStrategy `json:"strategy,omitempty"`
 
 	// frontend defines settings for how to handle incoming traffic.
 	//
@@ -132,6 +141,41 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	Backend *BackendFull `json:"backend,omitempty"`
 }
+
+type PolicyStrategy struct {
+	// inheritance controls whether less-specific traffic policies prevent more-specific traffic policies
+	// from contributing to the effective policy.
+	//
+	// This field is only valid on traffic policies. Frontend and backend policy merging does not use
+	// inheritance.
+	//
+	// When unset or set to `Default`, traffic policy fields are merged by specificity, with more-specific
+	// attachment points such as routes and route rules able to override fields from less-specific
+	// attachment points such as gateways and listeners.
+	// In other words, this policy provides `Default`s that can be overridden. For example, you may provide a `Default`
+	// timeout policy for the entire Gateway that is overridden by specific routes.
+	//
+	// When set to `Override`, this policy blocks traffic policies at more-specific attachment points from
+	// being included in the effective policy. This is useful when a gateway-level policy must remain
+	// authoritative for all routes below it.
+	//
+	// +optional
+	Inheritance *PolicyInheritance `json:"inheritance,omitempty"`
+}
+
+// PolicyInheritance defines how a traffic policy affects policy inheritance across attachment
+// specificity levels.
+// +k8s:enum
+type PolicyInheritance string
+
+const (
+	// PolicyInheritanceDefault allows the normal traffic policy merge order, where more-specific
+	// policies may override fields from less-specific policies.
+	PolicyInheritanceDefault PolicyInheritance = "Default"
+	// PolicyInheritanceOverride makes the policy authoritative for lower levels, excluding
+	// more-specific traffic policies from the effective policy.
+	PolicyInheritanceOverride PolicyInheritance = "Override"
+)
 
 type BackendSimple struct {
 	// tcp defines settings for managing TCP connections to the backend.
