@@ -259,7 +259,8 @@ backends:
                   capacity: 1
               rejected: {}
     inlinePolicies:
-      - backendTLS: ~
+      - backendTLS:
+          systemRoots: true
       - requestHeaderModifier:
           remove:
             - x-gateway-model-name
