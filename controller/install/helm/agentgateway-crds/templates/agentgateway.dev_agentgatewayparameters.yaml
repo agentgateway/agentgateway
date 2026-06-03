@@ -443,14 +443,11 @@ spec:
                       defaults to `Kubernetes`.
                     type: string
                   enabled:
-                    description: |-
-                      Enabled explicitly turns Istio integration on or off for this gateway, overriding the
-                      control-plane default. When unset, integration is on whenever spec.istio is present (including
-                      an empty `istio: {}`); set this to false to opt a gateway out when integration is enabled by
-                      default control-plane-wide.
+                    description: Enabled explicitly turns Istio integration on or
+                      off for this gateway.
                     type: boolean
                   network:
-                    description: The Istio network this gateway runs in If unset,
+                    description: The Istio network this gateway runs in. If unset,
                       defaults to the empty network.
                     type: string
                   trustDomain:

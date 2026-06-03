@@ -3,13 +3,14 @@ package meshconfig
 import (
 	"testing"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
 
 type alwaysSynced struct{}
