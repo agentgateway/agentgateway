@@ -2610,7 +2610,10 @@ mod tests {
 						},
 						"policies": {
 							"health": {
-								"unhealthyExpression": "response.code == 429"
+								"unhealthyExpression": "response.code == 429",
+								"eviction": {
+									"duration": "1s"
+								}
 							}
 						}
 					}]
