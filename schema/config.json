@@ -6722,6 +6722,7 @@
           "default": "10m0s"
         },
         "http1HeaderCase": {
+          "description": "Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.",
           "$ref": "#/$defs/HTTPHeaderCase",
           "default": "lowercase"
         },

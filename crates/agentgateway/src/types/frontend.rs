@@ -52,6 +52,7 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::http1_idle_timeout")]
 	pub http1_idle_timeout: Duration,
+	/// Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.
 	#[serde(default)]
 	pub http1_header_case: HTTPHeaderCase,
 

@@ -6008,7 +6008,7 @@
 |`frontendPolicies.http.maxBufferSize`|integer||
 |`frontendPolicies.http.http1MaxHeaders`|integer|The maximum number of headers allowed in a request. Changing this value results in a performance<br>degradation, even if set to a lower value than the default (100)|
 |`frontendPolicies.http.http1IdleTimeout`|string||
-|`frontendPolicies.http.http1HeaderCase`|enum|Possible values: `lowercase`, `preserve`.|
+|`frontendPolicies.http.http1HeaderCase`|enum|Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.<br>Possible values: `lowercase`, `preserve`.|
 |`frontendPolicies.http.http2WindowSize`|integer||
 |`frontendPolicies.http.http2ConnectionWindowSize`|integer||
 |`frontendPolicies.http.http2FrameSize`|integer||

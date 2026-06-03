@@ -494,9 +494,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP1HeaderCase; v != nil {
 		switch *v {
 		case agentgateway.HTTPHeaderCasePreserve:
-			spec.HttpHeaderCase = api.FrontendPolicySpec_HTTP_PRESERVE
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_PRESERVE
 		case agentgateway.HTTPHeaderCaseLowercase:
-			spec.HttpHeaderCase = api.FrontendPolicySpec_HTTP_LOWERCASE
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_LOWERCASE
 		}
 	}
 	if v := http.HTTP2WindowSize; v != nil {
