@@ -21,8 +21,8 @@ func TestJwksSourceMarshalJSONOmitsTLSConfigObjects(t *testing.T) {
 		},
 		RequestKey:     remotehttp.FetchKey("request-key"),
 		Target:         remotehttp.FetchTarget{URL: "https://dummy-idp.default.svc/org-one/keys"},
-		TLSConfig:      &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-		ProxyTLSConfig: &tls.Config{ServerName: "proxy.internal"},
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},     //nolint:gosec // purely test data
+		ProxyTLSConfig: &tls.Config{ServerName: "proxy.internal"}, //nolint:gosec // purely test data
 		TTL:            5 * time.Minute,
 	}
 
@@ -51,8 +51,8 @@ func TestSharedJwksRequestMarshalJSONOmitsTLSConfigObjects(t *testing.T) {
 	request := SharedJwksRequest{
 		RequestKey:     remotehttp.FetchKey("request-key"),
 		Target:         remotehttp.FetchTarget{URL: "https://dummy-idp.default.svc/org-one/keys"},
-		TLSConfig:      &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-		ProxyTLSConfig: &tls.Config{ServerName: "proxy.internal"},
+		TLSConfig:      &tls.Config{InsecureSkipVerify: true},     //nolint:gosec // purely test data
+		ProxyTLSConfig: &tls.Config{ServerName: "proxy.internal"}, //nolint:gosec // purely test data
 		TTL:            5 * time.Minute,
 	}
 
