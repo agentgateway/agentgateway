@@ -174,10 +174,7 @@ async fn apply_request_policies(
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
 		.await?;
 
-	rp.buffer = pol
-		.buffer
-		.apply("buffer", c, l, req, rp.headers())
-		.await?;
+	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
 	// The selected config is built into per-request state, which must be retained for
@@ -3323,10 +3320,7 @@ impl ResponsePolicies {
 			.backend_response_header
 			.apply("backend response header modifier", l, resp, rh)
 			.await?;
-		self
-			.buffer
-			.apply("buffer", l, resp, rh)
-			.await?;
+		self.buffer.apply("buffer", l, resp, rh).await?;
 		self
 			.transformation
 			.apply("transformation", l, resp, rh)

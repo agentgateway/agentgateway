@@ -153,4 +153,3 @@ impl crate::store::ResponsePolicyTrait for Buffer {
 		Ok(Default::default())
 	}
 }
-

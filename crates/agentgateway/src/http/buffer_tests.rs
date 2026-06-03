@@ -382,7 +382,9 @@ async fn request_policy_trait_is_noop_when_disabled() {
 #[tokio::test]
 async fn request_policy_trait_propagates_oversize_error() {
 	let policy = enabled_request(64);
-	let mut req = request_with_body(crate::http::Body::from("way too large for the configured limit"));
+	let mut req = request_with_body(crate::http::Body::from(
+		"way too large for the configured limit",
+	));
 	req.extensions_mut().insert(BufferLimit(4));
 
 	let err = crate::test_helpers::test_policy(&policy, &mut req)
