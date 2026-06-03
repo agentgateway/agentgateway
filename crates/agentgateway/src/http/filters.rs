@@ -418,6 +418,9 @@ fn rewrite_path(
 		None => Ok(orig.path_and_query().ok_or(Error::InvalidURI).cloned()?),
 		Some(PathRedirect::Full(r)) => {
 			let mut new_path = r.to_string();
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			// Preserve query parameters from the original URI
 			if let Some(q) = orig.query() {
 				new_path.push('?');
@@ -441,6 +444,9 @@ fn rewrite_path(
 				new_path.pop();
 			}
 			new_path.push_str(rest);
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			if let Some(q) = orig.query() {
 				new_path.push('?');
 				new_path.push_str(q);
