@@ -77,7 +77,9 @@ func translateAuthorizationExtractionLocation(loc *agentgateway.AuthorizationExt
 	if loc == nil {
 		return nil
 	}
-	if translated := translateAuthorizationLocation(&loc.AuthorizationLocation); translated != nil {
+	if translated := translateAuthorizationLocation(&agentgateway.AuthorizationLocation{
+		AuthorizationLocationFields: loc.AuthorizationLocationFields,
+	}); translated != nil {
 		return translated
 	}
 	if loc.Expression != nil {

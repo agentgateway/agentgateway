@@ -883,3 +883,53 @@ spec:
             status: 404
             bodyExpression: "'missing ' + request.path"
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      location:
+        expression: 'request.headers["x-jwt-token"]'
+      providers:
+        - issuer: solo.io
+          jwks:
+            inline: '{"keys":[]}'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: api-key-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    apiKeyAuthentication:
+      location:
+        expression: 'request.headers["x-api-key"]'
+      secretRef:
+        name: api-keys
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: basic-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    basicAuthentication:
+      location:
+        expression: 'request.headers["authorization"]'
+      secretRef:
+        name: basic-users
+---

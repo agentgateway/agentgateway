@@ -5840,10 +5840,6 @@ spec:
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                             == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                            == 1'
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for API key authentication.'
@@ -6028,10 +6024,6 @@ spec:
                         - message: exactly one of the fields in [header queryParameter
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                            == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
                       mode:
                         default: Strict
@@ -7863,10 +7855,6 @@ spec:
                         - message: exactly one of the fields in [header queryParameter
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                            == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
                       mcp:
                         description: |-

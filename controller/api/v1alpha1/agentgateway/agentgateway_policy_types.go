@@ -866,8 +866,7 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
-type AuthorizationLocation struct {
+type AuthorizationLocationFields struct {
 	// +optional
 	Header *AuthorizationHeaderLocation `json:"header,omitempty"`
 	// +optional
@@ -876,9 +875,14 @@ type AuthorizationLocation struct {
 	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
+type AuthorizationLocation struct {
+	AuthorizationLocationFields `json:",inline"`
+}
+
 // +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie;expression
 type AuthorizationExtractionLocation struct {
-	AuthorizationLocation `json:",inline"`
+	AuthorizationLocationFields `json:",inline"`
 
 	// expression extracts the credential from the request using a CEL expression.
 	// +optional
