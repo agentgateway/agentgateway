@@ -531,7 +531,7 @@ type FrontendHTTP struct {
 	// Modifying the headers from other policies may result in the original case being lost.
 	//
 	// +optional
-	HTTP1HeaderCase *HTTPHeaderCase `json:"HTTP1HeaderCase,omitempty"`
+	HTTP1HeaderCase *HTTPHeaderCase `json:"http1HeaderCase,omitempty"`
 
 	// `http2WindowSize` indicates the initial window size for stream-level flow
 	// control for received data.

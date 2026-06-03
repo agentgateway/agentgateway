@@ -2273,8 +2273,11 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FrontendPolicy {
+	#[serde(rename = "http")]
 	HTTP(frontend::HTTP),
+	#[serde(rename = "tls")]
 	TLS(frontend::TLS),
+	#[serde(rename = "tcp")]
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
 	Proxy(frontend::Proxy),

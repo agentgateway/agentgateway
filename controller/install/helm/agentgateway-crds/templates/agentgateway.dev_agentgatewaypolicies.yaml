@@ -5593,11 +5593,13 @@ spec:
                   http:
                     description: http defines settings on managing incoming HTTP requests.
                     properties:
-                      HTTP1HeaderCase:
+                      http1HeaderCase:
                         description: |-
-                          `httpHeaderCase` controls `HTTP/1` request header name casing when
-                          encoding responses on the same connection.
-                          This only applies to `HTTP/1`.
+                          `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+                          This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+                          HTTP/2 requests are always lower case.
+
+                          Modifying the headers from other policies may result in the original case being lost.
                         enum:
                         - Lowercase
                         - Preserve
@@ -5731,11 +5733,11 @@ spec:
                           rule: duration(self) >= duration('1s')
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [HTTP1HeaderCase http1IdleTimeout
+                    - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
                         maxConnectionDuration] must be set
-                      rule: '[has(self.HTTP1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
