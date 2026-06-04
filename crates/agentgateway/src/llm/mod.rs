@@ -34,8 +34,14 @@ pub mod gemini;
 pub mod openai;
 pub mod vertex;
 
+#[cfg(feature = "fuzzing")]
+pub mod conversion;
+#[cfg(not(feature = "fuzzing"))]
 mod conversion;
 pub mod policy;
+#[cfg(feature = "fuzzing")]
+pub mod types;
+#[cfg(not(feature = "fuzzing"))]
 mod types;
 
 pub use types::SimpleChatCompletionMessage;

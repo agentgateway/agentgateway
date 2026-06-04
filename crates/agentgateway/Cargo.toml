@@ -15,6 +15,7 @@ mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
+fuzzing = []
 
 [dependencies]
 agent-core.workspace = true

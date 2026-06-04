@@ -1,0 +1,1 @@
+json(request.body).model == "fast" && json(response.body).ok
