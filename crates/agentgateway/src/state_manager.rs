@@ -259,7 +259,6 @@ fn should_reload_config(
 	current_config_path: Option<&Path>,
 	previous_config_path: Option<&Path>,
 ) -> bool {
-    println!("Event: {:?}", event);
 	let target_changed = current_config_path.is_some() && current_config_path != previous_config_path;
 	if target_changed {
 		return true;
