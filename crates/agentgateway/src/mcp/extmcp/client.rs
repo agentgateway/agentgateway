@@ -16,6 +16,7 @@ use crate::mcp::extmcp::wire::{
 };
 use crate::mcp::extmcp::{ExtMcpDynamicMetadata, FailureMode, HeaderFilter, Outcome, Remote};
 use crate::mcp::upstream::IncomingRequestContext;
+use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 
 pub(crate) async fn check_request(
@@ -26,7 +27,13 @@ pub(crate) async fn check_request(
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
-	let mcp_request = serialize_body(body.as_deref());
+	let mcp_request = match serialize_body(body.as_deref()) {
+		Ok(b) => b,
+		Err(e) => {
+			warn!(method, backend, error = %e, "extMcp: failed to encode request body as Struct");
+			return fail_outcome(remote);
+		},
+	};
 	let http_req = req_ctx.as_request();
 	let metadata_context = build_metadata(&remote.metadata, &http_req);
 	let headers = collect_headers(&remote.request_headers, &http_req);
@@ -171,7 +178,13 @@ pub(crate) async fn check_response(
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome {
-	let mcp_response = serialize_body(Some(&*body));
+	let mcp_response = match serialize_body(Some(&*body)) {
+		Ok(b) => b,
+		Err(e) => {
+			warn!(method, backend, error = %e, "extMcp: failed to encode response body as Struct");
+			return fail_outcome(remote);
+		},
+	};
 	let metadata_context = (!remote.metadata.is_empty())
 		.then(|| build_metadata(&remote.metadata, &req_ctx.as_request()))
 		.flatten();
@@ -273,15 +286,8 @@ fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wir
 	out
 }
 
-fn serialize_body(body: Option<&Value>) -> Option<Struct> {
-	let v = body?;
-	match json_to_struct(v.clone()) {
-		Ok(s) => Some(s),
-		Err(e) => {
-			warn!(error = %e, "extMcp: failed to encode body as Struct; sending empty");
-			None
-		},
-	}
+fn serialize_body(body: Option<&Value>) -> Result<Option<Struct>, ProxyError> {
+	body.map(|v| json_to_struct(v.clone())).transpose()
 }
 
 fn struct_to_json(s: &Struct) -> Result<Value, serde_json::Error> {
