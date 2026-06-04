@@ -3267,7 +3267,7 @@ async fn mcp_extmcp_metadata_consumed_by_authz() {
 	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],
 		vec![Arc::new(
-			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extmcp.tier == "free""#).unwrap(),
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extMcp.tier == "free""#).unwrap(),
 		)],
 		vec![],
 	)));
@@ -3319,7 +3319,7 @@ async fn mcp_extmcp_metadata_consumed_by_list_authz() {
 	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
 		vec![],
 		vec![Arc::new(
-			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extmcp.tier == "free""#).unwrap(),
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && extMcp.tier == "free""#).unwrap(),
 		)],
 		vec![],
 	)));
@@ -3869,7 +3869,7 @@ async fn mcp_extmcp_request_metadata_usable_in_backend_transformation() {
 	let xfm = Transformation::try_from_local_config(
 		LocalTransformationConfig {
 			request: Some(LocalTransform {
-				set: vec![(strng::new("x-from-extmcp"), strng::new("extmcp.tenant"))],
+				set: vec![(strng::new("x-from-extmcp"), strng::new("extMcp.tenant"))],
 				..Default::default()
 			}),
 			response: None,
