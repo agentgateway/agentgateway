@@ -40,19 +40,16 @@ pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 
 /// All currently supported cipher suites (OpenSSL provider).
 #[cfg(feature = "tls-openssl")]
-pub static ALL_CIPHER_SUITES: std::sync::LazyLock<Vec<SupportedCipherSuite>> =
-	std::sync::LazyLock::new(|| {
-		vec![
-			// TLS 1.3 cipher suites
-			rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
-			// TLS 1.2 cipher suites
-			rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		]
-	});
+pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	// TLS 1.3 cipher suites
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	// TLS 1.2 cipher suites
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
 
 // Default cipher suites to use if user does not specify cipher suites
 #[cfg(feature = "tls-aws-lc")]
@@ -66,17 +63,14 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 ];
 
 #[cfg(feature = "tls-openssl")]
-pub static DEFAULT_CIPHER_SUITES: std::sync::LazyLock<Vec<SupportedCipherSuite>> =
-	std::sync::LazyLock::new(|| {
-		vec![
-			rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
-			rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		]
-	});
+pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
 
 #[cfg(feature = "tls-aws-lc")]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
@@ -87,22 +81,13 @@ pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 ];
 
 #[cfg(feature = "tls-openssl")]
-pub static DEFAULT_KEY_EXCHANGE_GROUPS: std::sync::LazyLock<Vec<&'static dyn SupportedKxGroup>> =
-	std::sync::LazyLock::new(|| {
-		let groups: Vec<&'static dyn SupportedKxGroup> = {
-			#[allow(unused_mut)]
-			let mut g = vec![
-				rustls_openssl::kx_group::X25519,
-				rustls_openssl::kx_group::SECP256R1,
-				rustls_openssl::kx_group::SECP384R1,
-			];
-			// X25519MLKEM768 is only available with OpenSSL 3.5+
-			#[cfg(ossl350)]
-			g.push(rustls_openssl::kx_group::X25519MLKEM768);
-			g
-		};
-		groups
-	});
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
+	rustls_openssl::kx_group::X25519,
+	rustls_openssl::kx_group::SECP256R1,
+	rustls_openssl::kx_group::SECP384R1,
+	#[cfg(ossl350)]
+	rustls_openssl::kx_group::X25519MLKEM768,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
