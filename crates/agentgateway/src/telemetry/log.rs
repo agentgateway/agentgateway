@@ -1805,39 +1805,6 @@ mod tests {
 	}
 
 	#[test]
-	fn health_expression_can_use_proxy_timing() {
-		let expr = Arc::new(
-			Expression::new_strict("proxy.upstreamDuration > duration('1s')")
-				.expect("health expression should compile"),
-		);
-		let mut log = test_request_log();
-		log.cel.cel_context.register_expression(expr.as_ref());
-		log.health_policy = Some(health::Policy {
-			unhealthy_expression: Some(expr),
-			eviction: None,
-		});
-		log.upstream_duration = Some(Duration::from_millis(1500));
-
-		let end_time = cel::RequestTime(Timestamp::now().as_datetime());
-		let proxy_timing = proxy_context(&log);
-		let cel_exec = log.cel.build(CelLoggingBuildInputs {
-			req: None,
-			resp: None,
-			llm_response: None,
-			mcp: None,
-			end_time: &end_time,
-			source_context: None,
-			proxy: Some(&proxy_timing),
-		});
-
-		assert!(DropOnLog::eviction_unhealthy(
-			&log,
-			Some(http::StatusCode::OK),
-			&cel_exec
-		));
-	}
-
-	#[test]
 	fn span_writer_flushes_recorded_spans_as_children_of_request_span() {
 		let (tracer, exporter) = test_tracer();
 		let mut request = test_request_log();

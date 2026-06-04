@@ -166,8 +166,6 @@ pub enum OutboundCallSubtype {
 	Guardrail,
 	RateLimit,
 	Oidc,
-	TokenExchange,
-	Activation,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -512,8 +510,8 @@ const CONNECT_DURATION_BUCKET: [f64; 10] = [
 const HTTP_REQUEST_DURATION_BUCKET: [f64; 14] = [
 	0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 80.0,
 ];
-// HTTP request duration buckets - general purpose for all HTTP traffic
-// Covers 1ms to ~80 seconds with exponential growth
+// Internal processing time
+// Covers 50us to 250ms with growth.
 const PROCESSING_DURATION_BUCKETS: [f64; 10] = [
 	0.00005, // 50us
 	0.0001,  // 100us
