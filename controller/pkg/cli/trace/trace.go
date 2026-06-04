@@ -1250,8 +1250,6 @@ func (m *traceModel) addRow(row traceRow) {
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
 		fmt.Sprintf("%d", rowIndex+1),
-		//formatMicros(row.Envelope.EventEnd),
-		//formatDuration(row.Envelope.EventStart, row.Envelope.EventEnd),
 		displayEventType(row.Envelope.Message.Type),
 		row.Summary,
 	} {
