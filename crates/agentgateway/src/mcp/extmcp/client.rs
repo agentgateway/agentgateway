@@ -246,7 +246,10 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 // Snapshot the incoming request headers for the policy server, applying the
 // configured allow/deny filter. Like ext_authz, pseudo-headers are forwarded
 // too. Non-UTF8 values are dropped (the wire type is a UTF8 string).
-fn collect_headers(filter: &HeaderFilter, req_ctx: &IncomingRequestContext) -> Vec<wire::McpHeader> {
+fn collect_headers(
+	filter: &HeaderFilter,
+	req_ctx: &IncomingRequestContext,
+) -> Vec<wire::McpHeader> {
 	let req = req_ctx.as_request();
 	let mut out = Vec::new();
 	// Pseudo-headers are single-valued.
@@ -450,7 +453,11 @@ mod tests {
 		// Non-empty allow = send only listed (minus disallowed); pseudos are
 		// opt-in via the same list.
 		let filter = HeaderFilter {
-			allowed: vec![pseudo("x-multi"), pseudo("authorization"), pseudo(":authority")],
+			allowed: vec![
+				pseudo("x-multi"),
+				pseudo("authorization"),
+				pseudo(":authority"),
+			],
 			disallowed: vec![pseudo("authorization")],
 		};
 		let out = collect_headers(&filter, &ctx_with_headers(headers));

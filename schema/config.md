@@ -160,7 +160,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`binds[].listeners[].routes[].policies.extMcp.drivers`|[]object||
 |`binds[].listeners[].routes[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service`|object||
 |`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service.name`|object||
@@ -2076,7 +2076,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
@@ -2383,7 +2383,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
@@ -3509,7 +3509,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
@@ -4605,7 +4605,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers`|[]object||
 |`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service`|object||
 |`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service.name`|object||
@@ -6434,7 +6434,7 @@
 |`policies[].policy.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`policies[].policy.mcpAuthorization.rules`|[]string||
 |`policies[].policy.extMcp`|object|External MCP policy processors.|
-|`policies[].policy.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`policies[].policy.extMcp.drivers`|[]object||
 |`policies[].policy.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.extMcp.drivers[].target.service`|object||
 |`policies[].policy.extMcp.drivers[].target.service.name`|object||
@@ -8345,7 +8345,7 @@
 |`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].mcp.targets[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
 |`backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
 |`backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
@@ -8652,7 +8652,7 @@
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`backends[].ai.policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`backends[].ai.policies.extMcp.drivers`|[]object||
 |`backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].ai.policies.extMcp.drivers[].target.service`|object||
 |`backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
@@ -9778,7 +9778,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
 |`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
 |`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
@@ -10873,7 +10873,7 @@
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`backends[].policies.extMcp.drivers`|[]object||
 |`backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`backends[].policies.extMcp.drivers[].target.service`|object||
 |`backends[].policies.extMcp.drivers[].target.service.name`|object||
@@ -11791,7 +11791,7 @@
 |`routeGroups[].routes[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`routeGroups[].routes[].policies.extMcp.drivers`|[]object||
 |`routeGroups[].routes[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].policies.extMcp.drivers[].target.service`|object||
 |`routeGroups[].routes[].policies.extMcp.drivers[].target.service.name`|object||
@@ -13707,7 +13707,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
@@ -14014,7 +14014,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers`|[]object||
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
@@ -15140,7 +15140,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
@@ -16236,7 +16236,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`routeGroups[].routes[].backends[].policies.extMcp.drivers`|[]object||
 |`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service`|object||
 |`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service.name`|object||
@@ -18838,7 +18838,7 @@
 |`mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`mcp.targets[].policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`mcp.targets[].policies.extMcp.drivers`|[]object||
 |`mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`mcp.targets[].policies.extMcp.drivers[].target.service`|object||
 |`mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
@@ -18915,7 +18915,7 @@
 |`mcp.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`mcp.policies.mcpAuthorization.rules`|[]string||
 |`mcp.policies.extMcp`|object|External MCP policy processors.|
-|`mcp.policies.extMcp.drivers`|[]object|Non-empty list of drivers MCP methods are run through.|
+|`mcp.policies.extMcp.drivers`|[]object||
 |`mcp.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.extMcp.drivers[].target.service`|object||
 |`mcp.policies.extMcp.drivers[].target.service.name`|object||

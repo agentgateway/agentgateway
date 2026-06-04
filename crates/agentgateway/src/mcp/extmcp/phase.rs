@@ -104,7 +104,10 @@ mod tests {
 		assert_eq!(resolve("tools/list", &m), Phase::Request);
 		// prefix wins even though the suffix literal `/setLevel` is longer than
 		// the prefix literal `logging/`
-		let m = methods(&[("logging/*", Phase::Request), ("*/setLevel", Phase::Response)]);
+		let m = methods(&[
+			("logging/*", Phase::Request),
+			("*/setLevel", Phase::Response),
+		]);
 		assert_eq!(resolve("logging/setLevel", &m), Phase::Request);
 	}
 

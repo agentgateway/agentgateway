@@ -1859,7 +1859,6 @@
       "type": "object",
       "properties": {
         "drivers": {
-          "description": "Non-empty list of drivers MCP methods are run through.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Driver"
