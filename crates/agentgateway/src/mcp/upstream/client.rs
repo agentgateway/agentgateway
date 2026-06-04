@@ -65,7 +65,7 @@ impl McpHttpClient {
 			self
 				.client
 				.with_outbound(OutboundCallKind::Primary, OutboundCallSubtype::Mcp)
-			.call_with_explicit_policies(req, &self.backend, policies),
+				.call_with_explicit_policies(req, &self.backend, policies),
 		)
 		.await?;
 

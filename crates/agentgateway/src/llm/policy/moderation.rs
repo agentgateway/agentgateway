@@ -47,7 +47,7 @@ pub async fn send_request(
 		(),
 	);
 	let resp = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Llm)
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =

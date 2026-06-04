@@ -53,10 +53,7 @@ fn test_client() -> client::Client {
 
 fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	let proxy = setup_proxy_test("{}").expect("proxy test harness");
-	crate::proxy::httpproxy::PolicyClient {
-		inputs: proxy.inputs(),
-		outbound: None,
-	}
+	crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
 }
 
 fn test_jwks() -> JwkSet {

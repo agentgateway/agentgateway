@@ -1216,10 +1216,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		"application/json".parse().unwrap(),
 	);
 
-	let client = PolicyClient {
-		inputs: setup_proxy_test("{}").unwrap().pi,
-		outbound: None,
-	};
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 
 	let result = bedrock
 		.process_response(

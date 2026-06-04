@@ -625,6 +625,14 @@ fn proxy_duration(duration: Option<Duration>) -> Option<cel::CelDuration> {
 		.map(Into::into)
 }
 
+fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
+	cel::ProxyContext {
+		request_processing_duration: proxy_duration(log.request_processing_duration),
+		upstream_duration: proxy_duration(log.upstream_duration),
+		response_processing_duration: proxy_duration(log.response_processing_duration),
+	}
+}
+
 impl RequestLog {
 	pub fn new(
 		cel: CelLogging,
@@ -746,6 +754,7 @@ impl RequestLog {
 		mcp: Option<&MCPInfo>,
 	) {
 		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let proxy_timing = proxy_context(self);
 		let cel_exec = self.cel.build(CelLoggingBuildInputs {
 			req: self.request_snapshot.as_deref(),
 			resp: response_snapshot,
@@ -753,7 +762,7 @@ impl RequestLog {
 			mcp: mcp.filter(|m| !m.is_empty()),
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
-			proxy: None,
+			proxy: Some(&proxy_timing),
 		});
 		let Some(rh) = self.request_handle.take() else {
 			return;
@@ -901,11 +910,7 @@ impl Drop for DropOnLog {
 			{
 				resp.grpc_status = Some(grpc_status);
 			}
-			let proxy_timing = cel::ProxyContext {
-				request_processing_duration: proxy_duration(log.request_processing_duration),
-				upstream_duration: proxy_duration(log.upstream_duration),
-				response_processing_duration: proxy_duration(log.response_processing_duration),
-			};
+			let proxy_timing = proxy_context(&log);
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
@@ -1404,10 +1409,7 @@ impl PolicyGrpcLogExporter {
 		let channel = GrpcReferenceChannel {
 			target,
 			policies: Arc::new(policies),
-			client: crate::proxy::httpproxy::PolicyClient {
-				inputs,
-				outbound: None,
-			},
+			client: crate::proxy::httpproxy::PolicyClient::new(inputs),
 		};
 		let tonic_client =
 			opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(
@@ -1800,6 +1802,39 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
+	}
+
+	#[test]
+	fn health_expression_can_use_proxy_timing() {
+		let expr = Arc::new(
+			Expression::new_strict("proxy.upstreamDuration > duration('1s')")
+				.expect("health expression should compile"),
+		);
+		let mut log = test_request_log();
+		log.cel.cel_context.register_expression(expr.as_ref());
+		log.health_policy = Some(health::Policy {
+			unhealthy_expression: Some(expr),
+			eviction: None,
+		});
+		log.upstream_duration = Some(Duration::from_millis(1500));
+
+		let end_time = cel::RequestTime(Timestamp::now().as_datetime());
+		let proxy_timing = proxy_context(&log);
+		let cel_exec = log.cel.build(CelLoggingBuildInputs {
+			req: None,
+			resp: None,
+			llm_response: None,
+			mcp: None,
+			end_time: &end_time,
+			source_context: None,
+			proxy: Some(&proxy_timing),
+		});
+
+		assert!(DropOnLog::eviction_unhealthy(
+			&log,
+			Some(http::StatusCode::OK),
+			&cel_exec
+		));
 	}
 
 	#[test]

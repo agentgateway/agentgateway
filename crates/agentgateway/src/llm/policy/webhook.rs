@@ -180,7 +180,7 @@ pub async fn send_request(
 	let whr = build_request_for_request(http_headers, messages)?;
 	let res = Box::pin(
 		client
-			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Llm)
+			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 			.call_reference(whr, target),
 	)
 	.await?;
@@ -196,7 +196,7 @@ pub async fn send_response(
 ) -> anyhow::Result<GuardrailsResponseResponse> {
 	let whr = build_request_for_response(http_headers, choices)?;
 	let res = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Llm)
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, target)
 		.await?;
 	let parsed = json::from_response_body(res).await?;

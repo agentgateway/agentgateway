@@ -375,7 +375,7 @@ async fn send_model_armor_request<T: Serialize>(
 	);
 
 	let resp = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Llm)
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 

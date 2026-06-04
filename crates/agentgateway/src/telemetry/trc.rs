@@ -360,10 +360,7 @@ impl PolicyGrpcSpanExporter {
 		let channel = GrpcReferenceChannel {
 			target,
 			policies: Arc::new(policies),
-			client: crate::proxy::httpproxy::PolicyClient {
-				inputs,
-				outbound: None,
-			},
+			client: crate::proxy::httpproxy::PolicyClient::new(inputs),
 		};
 		let tonic_client = opentelemetry_proto::tonic::collector::trace::v1::trace_service_client::TraceServiceClient::new(
 			channel,

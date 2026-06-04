@@ -1242,10 +1242,7 @@ impl HTTPProxy {
 	}
 
 	fn policy_client(&self) -> PolicyClient {
-		PolicyClient {
-			inputs: self.inputs.clone(),
-			outbound: None,
-		}
+		PolicyClient::new(self.inputs.clone())
 	}
 }
 
@@ -1766,10 +1763,7 @@ async fn make_backend_call(
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<Response, ProxyResponse> {
-	let policy_client = PolicyClient {
-		inputs: inputs.clone(),
-		outbound: None,
-	};
+	let policy_client = PolicyClient::new(inputs.clone());
 	let hbone_source = req
 		.extensions()
 		.get::<WaypointService>()
@@ -1974,10 +1968,7 @@ async fn make_backend_call(
 	};
 	apply_backend_policies(
 		backend_info.clone(),
-		PolicyClient {
-			inputs: inputs.clone(),
-			outbound: None,
-		},
+		PolicyClient::new(inputs.clone()),
 		&backend_call,
 		&mut req,
 		&mut log,
@@ -3387,6 +3378,13 @@ pub struct PolicyClient {
 }
 
 impl PolicyClient {
+	pub fn new(inputs: Arc<ProxyInputs>) -> PolicyClient {
+		PolicyClient {
+			inputs,
+			outbound: None,
+		}
+	}
+
 	pub fn with_outbound(
 		&self,
 		kind: OutboundCallKind,

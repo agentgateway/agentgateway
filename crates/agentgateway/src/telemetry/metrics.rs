@@ -163,6 +163,7 @@ pub enum OutboundCallSubtype {
 	// Policy
 	ExtAuthz,
 	ExtProc,
+	Guardrail,
 	RateLimit,
 	Oidc,
 	TokenExchange,
@@ -514,16 +515,16 @@ const HTTP_REQUEST_DURATION_BUCKET: [f64; 14] = [
 // HTTP request duration buckets - general purpose for all HTTP traffic
 // Covers 1ms to ~80 seconds with exponential growth
 const PROCESSING_DURATION_BUCKETS: [f64; 10] = [
-	0.00005,  // 50us
-	0.0001,   // 100us
-	0.00025,  // 250us
-	0.0005,   // 500us
-	0.001,    // 1ms
-	0.0025,   // 2.5ms
-	0.005,    // 5ms
-	0.01,     // 10ms
-	0.05,     // 50ms
-	0.25,     // 250ms
+	0.00005, // 50us
+	0.0001,  // 100us
+	0.00025, // 250us
+	0.0005,  // 500us
+	0.001,   // 1ms
+	0.0025,  // 2.5ms
+	0.005,   // 5ms
+	0.01,    // 10ms
+	0.05,    // 50ms
+	0.25,    // 250ms
 ];
 
 // https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/#metric-gen_aiservertime_per_output_token
