@@ -68,6 +68,7 @@ pub struct Executor<'a> {
 
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
+	#[dynamic(rename = "extMcp")]
 	pub extmcp: ExtensionOrDirect<'a, ExtMcpDynamicMetadata>,
 
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
