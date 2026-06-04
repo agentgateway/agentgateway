@@ -97,46 +97,29 @@ pub struct Remote {
 	pub request_headers: HeaderFilter,
 }
 
-/// Allow/deny filter over request header names. Empty `allowed` forwards every
-/// header (ext_authz gRPC default); `disallowed` always wins. Names are matched
-/// case-insensitively via `HeaderName`.
+/// Allow/deny filter over request headers, mirroring ext_authz: empty `allowed`
+/// forwards every header plus all pseudo-headers (`:authority`, `:method`, ...);
+/// a non-empty `allowed` forwards only the listed names. `disallowed` always
+/// wins. Header names match case-insensitively; pseudo-headers match exactly.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct HeaderFilter {
-	#[serde(
-		skip_serializing_if = "Vec::is_empty",
-		serialize_with = "ser_header_names"
-	)]
-	pub allowed: Vec<::http::HeaderName>,
-	#[serde(
-		skip_serializing_if = "Vec::is_empty",
-		serialize_with = "ser_header_names"
-	)]
-	pub disallowed: Vec<::http::HeaderName>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub allowed: Vec<crate::http::HeaderOrPseudo>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub disallowed: Vec<crate::http::HeaderOrPseudo>,
 }
 
 impl HeaderFilter {
 	fn is_default(&self) -> bool {
 		self.allowed.is_empty() && self.disallowed.is_empty()
 	}
-	/// Whether a header with this name should be sent to the policy server.
-	pub fn allows(&self, name: &::http::HeaderName) -> bool {
+	/// Whether a header (or pseudo-header) should be sent to the policy server.
+	pub fn allows(&self, name: &crate::http::HeaderOrPseudo) -> bool {
 		if self.disallowed.iter().any(|n| n == name) {
 			return false;
 		}
 		self.allowed.is_empty() || self.allowed.iter().any(|n| n == name)
 	}
-}
-
-fn ser_header_names<S: serde::Serializer>(
-	names: &[::http::HeaderName],
-	s: S,
-) -> Result<S::Ok, S::Error> {
-	use serde::ser::SerializeSeq;
-	let mut seq = s.serialize_seq(Some(names.len()))?;
-	for n in names {
-		seq.serialize_element(n.as_str())?;
-	}
-	seq.end()
 }
 
 // Behavior when a driver errors or returns an unhandleable response.

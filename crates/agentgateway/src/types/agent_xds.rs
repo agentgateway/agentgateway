@@ -625,10 +625,10 @@ fn parse_header_names(
 	diagnostics: &mut Diagnostics,
 	field: &str,
 	names: &[String],
-) -> Vec<::http::HeaderName> {
+) -> Vec<HeaderOrPseudo> {
 	names
 		.iter()
-		.filter_map(|n| match ::http::HeaderName::from_bytes(n.as_bytes()) {
+		.filter_map(|n| match HeaderOrPseudo::try_from(n.as_str()) {
 			Ok(h) => Some(h),
 			Err(_) => {
 				diagnostics.add_warning(format!("{field}: invalid header name {n:?}; ignoring"));

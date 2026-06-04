@@ -28,7 +28,7 @@ pub(crate) async fn check_request(
 ) -> Outcome {
 	let mcp_request = serialize_body(body.as_deref());
 	let metadata_context = build_metadata(&remote.metadata, req_ctx);
-	let headers = collect_headers(&remote.request_headers, req_ctx.headers());
+	let headers = collect_headers(&remote.request_headers, req_ctx);
 	let req = McpRequest {
 		service_name: backend.to_string(),
 		method: method.to_string(),
@@ -244,19 +244,32 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 }
 
 // Snapshot the incoming request headers for the policy server, applying the
-// configured allow/deny filter. Multi-value headers yield one entry per value;
-// non-UTF8 values are dropped (the wire type is a UTF8 string).
-fn collect_headers(filter: &HeaderFilter, headers: &::http::HeaderMap) -> Vec<wire::McpHeader> {
-	headers
-		.iter()
-		.filter(|(name, _)| filter.allows(name))
-		.filter_map(|(name, value)| {
-			value.to_str().ok().map(|v| wire::McpHeader {
+// configured allow/deny filter. Like ext_authz, pseudo-headers are forwarded
+// too. Non-UTF8 values are dropped (the wire type is a UTF8 string).
+fn collect_headers(filter: &HeaderFilter, req_ctx: &IncomingRequestContext) -> Vec<wire::McpHeader> {
+	let req = req_ctx.as_request();
+	let mut out = Vec::new();
+	// Pseudo-headers are single-valued.
+	for (pseudo, value) in crate::http::get_request_pseudo_headers(&req) {
+		if filter.allows(&pseudo) {
+			out.push(wire::McpHeader {
+				key: pseudo.to_string(),
+				value,
+			});
+		}
+	}
+	// Real headers: one entry per value to preserve multi-value semantics.
+	for (name, value) in req.headers() {
+		if filter.allows(&crate::http::HeaderOrPseudo::Header(name.clone()))
+			&& let Ok(v) = value.to_str()
+		{
+			out.push(wire::McpHeader {
 				key: name.as_str().to_string(),
 				value: v.to_string(),
-			})
-		})
-		.collect()
+			});
+		}
+	}
+	out
 }
 
 fn serialize_body(body: Option<&Value>) -> Option<Struct> {
@@ -394,6 +407,16 @@ mod tests {
 		assert_eq!(got, vec!["new1", "new2"]);
 	}
 
+	fn ctx_with_headers(headers: ::http::HeaderMap) -> IncomingRequestContext {
+		let mut ctx = IncomingRequestContext::empty();
+		*ctx.headers_mut() = headers;
+		ctx
+	}
+
+	fn pseudo(s: &str) -> crate::http::HeaderOrPseudo {
+		crate::http::HeaderOrPseudo::try_from(s).unwrap()
+	}
+
 	#[test]
 	fn collect_headers_filters_and_preserves_multi_value() {
 		let mut headers = ::http::HeaderMap::new();
@@ -401,13 +424,14 @@ mod tests {
 		headers.append("x-multi", "a".parse().unwrap());
 		headers.append("x-multi", "b".parse().unwrap());
 		headers.insert("x-drop", "1".parse().unwrap());
+		headers.insert("host", "example.com".parse().unwrap());
 
-		// Empty allow = send everything except disallowed.
+		// Empty allow = send everything (incl. pseudo-headers) except disallowed.
 		let filter = HeaderFilter {
 			allowed: vec![],
-			disallowed: vec!["authorization".parse().unwrap()],
+			disallowed: vec![pseudo("authorization")],
 		};
-		let out = collect_headers(&filter, &headers);
+		let out = collect_headers(&filter, &ctx_with_headers(headers.clone()));
 		assert!(!out.iter().any(|h| h.key == "authorization"));
 		let multi: Vec<_> = out
 			.iter()
@@ -415,15 +439,26 @@ mod tests {
 			.map(|h| h.value.as_str())
 			.collect();
 		assert_eq!(multi, vec!["a", "b"]);
+		// Pseudo-headers are forwarded by default.
+		assert!(
+			out
+				.iter()
+				.any(|h| h.key == ":authority" && h.value == "example.com")
+		);
+		assert!(out.iter().any(|h| h.key == ":method"));
 
-		// Non-empty allow = send only listed (minus disallowed).
+		// Non-empty allow = send only listed (minus disallowed); pseudos are
+		// opt-in via the same list.
 		let filter = HeaderFilter {
-			allowed: vec!["x-multi".parse().unwrap(), "authorization".parse().unwrap()],
-			disallowed: vec!["authorization".parse().unwrap()],
+			allowed: vec![pseudo("x-multi"), pseudo("authorization"), pseudo(":authority")],
+			disallowed: vec![pseudo("authorization")],
 		};
-		let out = collect_headers(&filter, &headers);
+		let out = collect_headers(&filter, &ctx_with_headers(headers));
 		let keys: HashSet<_> = out.iter().map(|h| h.key.clone()).collect();
-		assert_eq!(keys, HashSet::from(["x-multi".to_string()]));
+		assert_eq!(
+			keys,
+			HashSet::from([":authority".to_string(), "x-multi".to_string()])
+		);
 	}
 
 	#[test]

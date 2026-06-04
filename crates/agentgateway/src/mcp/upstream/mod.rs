@@ -52,9 +52,6 @@ impl IncomingRequestContext {
 			authority: parts.uri.authority().cloned(),
 		}
 	}
-	pub fn headers(&self) -> &http::HeaderMap {
-		&self.headers
-	}
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
 		&mut self.headers
 	}
