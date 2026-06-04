@@ -352,7 +352,8 @@ impl ExtProcRequest {
 	}
 
 	pub fn take_body_immediate_response(&self) -> Option<http::Response> {
-		self.ext_proc
+		self
+			.ext_proc
 			.as_ref()?
 			.request_body_immediate_response
 			.lock()

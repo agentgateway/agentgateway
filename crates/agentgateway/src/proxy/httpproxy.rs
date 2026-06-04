@@ -2914,11 +2914,12 @@ impl ResponsePolicies {
 	}
 
 	fn take_ext_proc_body_immediate_response(&self) -> Option<http::Response> {
-		for ep in [&self.ext_proc, &self.gateway_ext_proc] {
-			if let Some(ep) = ep {
-				if let Some(resp) = ep.take_body_immediate_response() {
-					return Some(resp);
-				}
+		for ep in [&self.ext_proc, &self.gateway_ext_proc]
+			.into_iter()
+			.flatten()
+		{
+			if let Some(resp) = ep.take_body_immediate_response() {
+				return Some(resp);
 			}
 		}
 		None

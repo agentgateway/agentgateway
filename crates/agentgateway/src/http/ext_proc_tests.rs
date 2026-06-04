@@ -1571,7 +1571,11 @@ mod immediate_and_failure {
 		let dumped = read_body(res.into_body()).await;
 		assert_eq!(dumped.body.as_ref(), b"request");
 		let upstream_requests = mock.received_requests().await.unwrap_or_default();
-		assert_eq!(upstream_requests.len(), 1, "upstream should be contacted exactly once");
+		assert_eq!(
+			upstream_requests.len(),
+			1,
+			"upstream should be contacted exactly once"
+		);
 	}
 
 	#[tokio::test]
