@@ -4,6 +4,33 @@ use crate::llm::policy::pii::recognizer::Recognizer;
 use crate::llm::policy::pii::url_recognizer::UrlRecognizer;
 use crate::llm::policy::pii::{recognizer_result, *};
 
+fn digits_only(s: &str) -> String {
+	s.chars().filter(|c| c.is_ascii_digit()).collect()
+}
+
+fn normalized_matches(results: &[recognizer_result::RecognizerResult]) -> Vec<String> {
+	let mut v: Vec<String> = results.iter().map(|r| digits_only(&r.matched)).collect();
+	v.sort();
+	v.dedup();
+	v
+}
+
+/// International-format numbers (with a `+` country code) are detected
+/// regardless of the configured default regions.
+#[test]
+fn test_phone_detects_international_numbers_any_country() {
+	let text = "JP: +81 3-3224-9999, AU: +61 2 9374 4000, BR: +55 11 2575 8888.";
+	let recognizer = PhoneRecognizer::new();
+	let results = recognizer.recognize(text);
+
+	// Three distinct international numbers from three different countries.
+	let matches = normalized_matches(&results);
+	assert!(
+		matches.len() >= 3,
+		"expected at least 3 international numbers, got {matches:?}"
+	);
+}
+
 #[test]
 fn test_recognize() {
 	let text = "Contact us at support@example.com, call (123) 456-7890, or visit https://example.com for more info. Or try info@domain.org, +1-800-555-1234, and http://another-site.org.";
