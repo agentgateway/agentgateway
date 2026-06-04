@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agent_core::prelude::Strng;
 use axum::response::Response;
@@ -138,7 +138,12 @@ impl App {
 
 		// MCP requires CEL execution after the snapshot so we do not clear extensions
 		let req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
-		if req.uri().path() == "/sse" {
+		if log.request_processing_duration.is_none() {
+			// This is a bit inaccurate but the best we can do for the MCP path without very invasive changes.
+			log.request_processing_duration = Some(log.request_processing_start.elapsed());
+		}
+		let upstream_start = Instant::now();
+		let response = if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
 			let sse = LegacySSEService::new(sessions);
@@ -167,7 +172,14 @@ impl App {
 				},
 			))
 			.await
+		};
+		let upstream_end = Instant::now();
+		// This aggregates the total time; no per-backend timings for fanout.
+		log.upstream_duration = Some(upstream_end - upstream_start);
+		if response.is_ok() {
+			log.response_processing_start = Some(upstream_end);
 		}
+		response
 	}
 
 	fn snapshot_request_without_clearing_extensions(
