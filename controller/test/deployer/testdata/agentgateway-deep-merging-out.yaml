@@ -184,8 +184,10 @@ spec:
           readOnly: true
         - mountPath: /var/run/secrets/istio
           name: istiod-ca-cert
+          readOnly: true
         - mountPath: /var/run/secrets/tokens
           name: istio-token
+          readOnly: true
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start

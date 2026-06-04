@@ -443,6 +443,12 @@ type Frontend struct {
 	// +optional
 	ProxyProtocol *FrontendProxyProtocol `json:"proxyProtocol,omitempty"`
 
+	// connect defines settings for downstream HTTP CONNECT handling.
+	//
+	// If unset, CONNECT requests are rejected with Method Not Allowed.
+	// +optional
+	Connect *FrontendConnect `json:"connect,omitempty"`
+
 	// `accessLog` contains access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
@@ -477,6 +483,14 @@ const (
 	ProxyProtocolModeOptional ProxyProtocolMode = "Optional"
 )
 
+// +k8s:enum
+type HTTPHeaderCase string
+
+const (
+	HTTPHeaderCaseLowercase HTTPHeaderCase = "Lowercase"
+	HTTPHeaderCasePreserve  HTTPHeaderCase = "Preserve"
+)
+
 type FrontendProxyProtocol struct {
 	// version controls which PROXY protocol version is accepted.
 	//
@@ -491,6 +505,26 @@ type FrontendProxyProtocol struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Deny;Route;Tunnel
+type FrontendConnectMode string
+
+const (
+	// Deny rejects downstream CONNECT requests.
+	FrontendConnectModeDeny FrontendConnectMode = "Deny"
+	// Route treats CONNECT as an HTTP request and routes it through the HTTP
+	// matching chain before establishing a raw tunnel to the selected backend.
+	FrontendConnectModeRoute FrontendConnectMode = "Route"
+	// Tunnel terminates CONNECT and sends the upgraded stream through the
+	// addressed gateway bind as a new downstream connection.
+	FrontendConnectModeTunnel FrontendConnectMode = "Tunnel"
+)
+
+type FrontendConnect struct {
+	// mode controls whether downstream CONNECT requests are accepted.
+	// +required
+	Mode FrontendConnectMode `json:"mode"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -516,6 +550,14 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
 	HTTP1IdleTimeout *metav1.Duration `json:"http1IdleTimeout,omitempty"`
+	// `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+	// HTTP/2 requests are always lower case.
+	//
+	// Modifying the headers from other policies may result in the original case being lost.
+	//
+	// +optional
+	HTTP1HeaderCase *HTTPHeaderCase `json:"http1HeaderCase,omitempty"`
 
 	// `http2WindowSize` indicates the initial window size for stream-level flow
 	// control for received data.

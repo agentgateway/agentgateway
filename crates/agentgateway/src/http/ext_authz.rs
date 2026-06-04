@@ -946,8 +946,7 @@ impl crate::store::BackendPolicyTrait for ExtAuthz {
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self
-			.check(client.clone(), req)
+		Box::pin(self.check(client.clone(), req))
 			.await
 			.map_err(ProxyResponse::from)
 	}
@@ -964,8 +963,7 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self
-			.check(client.clone(), req)
+		Box::pin(self.check(client.clone(), req))
 			.await
 			.map_err(ProxyResponse::from)
 	}

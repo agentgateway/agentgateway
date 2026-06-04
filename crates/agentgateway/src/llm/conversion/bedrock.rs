@@ -2742,7 +2742,9 @@ impl ConverseResponseAdapter {
 		for block in &self.message.content {
 			match block {
 				bedrock::ContentBlock::Text(text) => {
-					content = Some(text.clone());
+					// A message may contain multiple text blocks (e.g. text split around
+					// citations); concatenate them into the single OpenAI `content` field.
+					content.get_or_insert_with(String::new).push_str(text);
 				},
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
 					// Extract text from either format

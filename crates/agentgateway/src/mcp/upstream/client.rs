@@ -60,10 +60,12 @@ impl McpHttpClient {
 			policies.override_dest = Some(pinned.0);
 		}
 
-		let resp = self
-			.client
-			.call_with_explicit_policies(req, &self.backend, policies)
-			.await?;
+		let resp = Box::pin(
+			self
+				.client
+				.call_with_explicit_policies(req, &self.backend, policies),
+		)
+		.await?;
 
 		// Capture resolved destination on first request if stateful
 		if self.stateful

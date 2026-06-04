@@ -5743,9 +5743,37 @@ spec:
                         - message: path must start with /
                           rule: '!has(self.path) || self.path.startsWith(''/'')'
                     type: object
+                  connect:
+                    description: |-
+                      connect defines settings for downstream HTTP CONNECT handling.
+
+                      If unset, CONNECT requests are rejected with Method Not Allowed.
+                    properties:
+                      mode:
+                        description: mode controls whether downstream CONNECT requests
+                          are accepted.
+                        enum:
+                        - Deny
+                        - Route
+                        - Tunnel
+                        type: string
+                    required:
+                    - mode
+                    type: object
                   http:
                     description: http defines settings on managing incoming HTTP requests.
                     properties:
+                      http1HeaderCase:
+                        description: |-
+                          `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+                          This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+                          HTTP/2 requests are always lower case.
+
+                          Modifying the headers from other policies may result in the original case being lost.
+                        enum:
+                        - Lowercase
+                        - Preserve
+                        type: string
                       http1IdleTimeout:
                         description: |-
                           `http1IdleTimeout` defines the timeout before an unused connection is
@@ -5875,11 +5903,11 @@ spec:
                           rule: duration(self) >= duration('1s')
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
-                        http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
+                    - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
+                        http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
                         maxConnectionDuration] must be set
-                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -6317,9 +6345,9 @@ spec:
                       rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [accessLog http metrics networkAuthorization
-                    proxyProtocol tcp tls tracing] must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                - message: at least one of the fields in [accessLog connect http metrics
+                    networkAuthorization proxyProtocol tcp tls tracing] must be set
+                  rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               targetRefs:
                 description: |-

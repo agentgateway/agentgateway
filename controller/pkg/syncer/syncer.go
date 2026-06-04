@@ -13,7 +13,6 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
@@ -699,7 +698,7 @@ func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_Tun
 // using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
 func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
 	opts := krtopts.WithPrefix("addresses").ToIstio()
-	clusterId := cluster.ID(cols.ClusterID)
+	clusterId := cluster.ID(cols.IstioClusterId)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
 		SystemNamespace: cols.IstioNamespace,
 		ClusterID:       clusterId,
@@ -714,16 +713,11 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		},
 	}
 
-	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
-	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
-		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
-		if flattened := ptr.Flatten(cm); flattened != nil {
-			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
-				return &ambient.MeshConfig{MeshConfig: mc}
-			}
-		}
-		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
-	}, krtopts.ToOptions("addresses/IstioMeshConfig")...)
+	meshConfig := cols.MeshConfig
+	if meshConfig == nil {
+		defaultConfig := ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
+		meshConfig = krt.NewStatic(&defaultConfig, true, krtopts.ToOptions("addresses/DefaultMeshConfig")...)
+	}
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(

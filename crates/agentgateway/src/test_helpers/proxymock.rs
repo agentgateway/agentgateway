@@ -354,6 +354,10 @@ pub async fn simple_mock() -> MockServer {
 }
 
 // Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
+// Note: wiremock generates test certs via rcgen (which uses aws_lc_rs internally).
+// The OpenSSL KeyProvider cannot parse the DER keys that aws_lc_rs produces,
+// so this function is only available with the tls-aws-lc feature.
+#[cfg(feature = "tls-aws-lc")]
 pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
 	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
 	let certs = wiremock::tls_certs::MockTlsCertificates::random();

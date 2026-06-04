@@ -166,11 +166,16 @@ type AgentgatewayParametersConfigs struct {
 }
 
 type IstioSpec struct {
+	// Enabled explicitly turns Istio integration on or off for this gateway.
+	//
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// The address of the Istio CA. If unset, defaults to `https://istiod.istio-system.svc:15012`.
 	//
 	// +optional
 	CaAddress string `json:"caAddress,omitempty"`
-	// The Istio trust domain. If not set, defaults to `cluster.local`.
+	// The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+	// trust domain for the control plane's istio revision.
 	//
 	// +optional
 	TrustDomain string `json:"trustDomain,omitempty"`
@@ -179,6 +184,14 @@ type IstioSpec struct {
 	//
 	// +optional
 	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
+	// The ID of the cluster this gateway runs in. If unset, defaults to `Kubernetes`.
+	//
+	// +optional
+	ClusterId string `json:"clusterId,omitempty"`
+	// The Istio network this gateway runs in. If unset, defaults to the empty network.
+	//
+	// +optional
+	Network string `json:"network,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="The 'min' value must be less than or equal to the 'max' value."

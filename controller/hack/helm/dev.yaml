@@ -8,3 +8,11 @@ controller:
     # rollingUpdate:
     #   maxSurge: 100%
     #   maxUnavailable: 100%
+securityContext:
+  allowPrivilegeEscalation: false
+  # Ensure Tilt can update binaries
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  capabilities:
+    drop:
+    - ALL

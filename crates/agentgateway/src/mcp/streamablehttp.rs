@@ -63,7 +63,7 @@ impl StreamableHttpService {
 		let method = request.method().clone();
 
 		match (method, self.config.stateful_mode) {
-			(http::Method::POST, _) => self.handle_post(request, inputs).await,
+			(http::Method::POST, _) => Box::pin(self.handle_post(request, inputs)).await,
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request, inputs).await,
 			(http::Method::DELETE, true) => self.handle_delete(request).await,
@@ -111,9 +111,7 @@ impl StreamableHttpService {
 			let relay = inputs.build_new_connections()?;
 			// Use stateless session - not registered in session manager
 			let mut session = self.session_manager.create_stateless_session(relay);
-			let response = session
-				.stateless_send_and_initialize(part.clone(), message)
-				.await;
+			let response = Box::pin(session.stateless_send_and_initialize(part.clone(), message)).await;
 
 			let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 			// Clean up upstream resources (e.g., stdio processes)
@@ -139,7 +137,7 @@ impl StreamableHttpService {
 				return mcp::Error::UnknownSession.into();
 			};
 
-			return session.send(part, message).await;
+			return Box::pin(session.send(part, message)).await;
 		}
 
 		// No session header... we need to create one, if it is an initialize.
@@ -166,7 +164,7 @@ impl StreamableHttpService {
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let relay = inputs.build_new_connections()?;
 		let mut session = self.session_manager.create_session(relay);
-		let mut resp = session.send(part, message).await?;
+		let mut resp = Box::pin(session.send(part, message)).await?;
 
 		let Ok(sid) = session.id.parse() else {
 			return mcp::Error::InvalidSessionIdHeader.into();

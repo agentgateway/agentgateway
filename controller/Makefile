@@ -422,6 +422,24 @@ export AGENTGATEWAY_IMAGE_REPO ?= agentgateway-controller
 agentgateway-controller:
 	 $(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/agentgateway-linux-$(GOARCH) ./cmd/agentgateway
 
+#----------------------------------------------------------------------------------
+# agctl CLI
+#----------------------------------------------------------------------------------
+
+AGCTL_OUTPUT_DIR=$(OUTPUT_DIR)/pkg/agctl
+
+.PHONY: agctl
+agctl: ## Build agctl for the host OS/arch
+	CGO_ENABLED=0 GOARCH=$(GOARCH) go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-$(GOOS)-$(GOARCH) ./cmd/agctl
+
+.PHONY: agctl-linux-amd64
+agctl-linux-amd64: ## Build agctl for linux/amd64
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-amd64 ./cmd/agctl
+
+.PHONY: agctl-linux-arm64
+agctl-linux-arm64: ## Build agctl for linux/arm64
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-arm64 ./cmd/agctl
+
 $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/agentgateway/Dockerfile.agentgateway
 	cp $< $@
 

@@ -428,7 +428,9 @@ pub mod from_completions {
 		for block in resp.content {
 			match block {
 				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
-					content = Some(text.clone())
+					// A message may contain multiple text blocks (e.g. text split around
+					// citations); concatenate them into the single OpenAI `content` field.
+					content.get_or_insert_with(String::new).push_str(&text)
 				},
 				messages::ContentBlock::ToolUse {
 					id, name, input, ..

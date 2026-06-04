@@ -496,6 +496,7 @@ mod response {
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
+		("multiple_text_blocks", ALL_ANTHROPIC),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),

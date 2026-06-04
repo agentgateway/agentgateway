@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::sync::Mutex;
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -349,6 +350,16 @@ impl ExtProcRequest {
 		);
 		Ok(pr)
 	}
+
+	pub fn take_body_immediate_response(&self) -> Option<http::Response> {
+		self
+			.ext_proc
+			.as_ref()?
+			.request_body_immediate_response
+			.lock()
+			.unwrap()
+			.take()
+	}
 }
 
 // Very experimental support for ext_proc
@@ -356,6 +367,7 @@ impl ExtProcRequest {
 struct ExtProcInstance {
 	failure_mode: FailureMode,
 	skipped: bool,
+	request_body_immediate_response: Arc<Mutex<Option<http::Response>>>,
 	protocol_config_sent: bool,
 	mode_state: ModeStateMachine,
 	tx_req: Sender<ProcessingRequest>,
@@ -432,6 +444,7 @@ impl ExtProcInstance {
 		});
 		Self {
 			skipped: Default::default(),
+			request_body_immediate_response: Arc::new(Mutex::new(None)),
 			failure_mode,
 			protocol_config_sent: false,
 			mode_state: processing_options.into(),
@@ -1091,6 +1104,7 @@ impl ExtProcInstance {
 				if !step.eos && request_fsm.body_path != BodyPath::BufferedPartial {
 					request_fsm.enter_streaming_continuation();
 					trace!("spawn body!");
+					let immediate_response = self.request_body_immediate_response.clone();
 					// Move remaining body response handling to an async task so we can return
 					// the request to the caller while body chunks continue to flow.
 					tokio::task::spawn(async move {
@@ -1099,6 +1113,11 @@ impl ExtProcInstance {
 								trace!("done receiving request");
 								return;
 							};
+							if let Some(resp) = to_immediate_response(&presp) {
+								trace!("got immediate response during request body streaming");
+								*immediate_response.lock().unwrap() = resp.direct_response;
+								return;
+							}
 							let response = handle_response_for_request_mutation(
 								request_fsm.expect_body_response,
 								send_request_headers,

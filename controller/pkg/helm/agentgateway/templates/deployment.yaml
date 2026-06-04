@@ -182,6 +182,14 @@ spec:
             - name: ADDITIONAL_TRUST_DOMAINS
               value: {{ $gateway.istio.additionalTrustDomains | join "," | quote }}
             {{- end }}
+            {{- if and (not (hasKey $userEnvNames "CLUSTER_ID")) (hasKey $gateway "istio") $gateway.istio.clusterId }}
+            - name: CLUSTER_ID
+              value: {{ $gateway.istio.clusterId | quote }}
+            {{- end }}
+            {{- if and (not (hasKey $userEnvNames "NETWORK")) (hasKey $gateway "istio") $gateway.istio.network }}
+            - name: NETWORK
+              value: {{ $gateway.istio.network | quote }}
+            {{- end }}
           {{- /* User-specified env vars */}}
           {{- with $gateway.env }}
             {{- toYaml . | nindent 12 }}
@@ -203,8 +211,10 @@ spec:
             {{- if hasKey $gateway "istio" }}
             - mountPath: /var/run/secrets/istio
               name: istiod-ca-cert
+              readOnly: true
             - mountPath: /var/run/secrets/tokens
               name: istio-token
+              readOnly: true
             {{- end }}
       volumes:
         - name: config-volume

@@ -1522,8 +1522,11 @@ mod immediate_and_failure {
 		assert_eq!(body.as_ref(), b"immediate");
 	}
 
+	// An ImmediateResponse sent during the request body phase (after a headers `Continue`) must
+	// be returned to the client instead of the upstream response.  The body channel is dropped so
+	// the upstream may see an empty/truncated body, but the client receives the ext_proc response.
 	#[tokio::test]
-	async fn immediate_response_request_body_is_deferred_to_response() {
+	async fn immediate_response_request_body_short_circuits() {
 		let mock = simple_mock().await;
 		let processing_options = json!({
 			"requestBodyMode": "fullDuplexStreamed",
@@ -1545,6 +1548,39 @@ mod immediate_and_failure {
 		assert_eq!(res.status(), 403);
 		let body = read_body_raw(res.into_body()).await;
 		assert_eq!(body.as_ref(), b"Access denied");
+	}
+
+	// Regression guard: a normal full-duplex request body (no ImmediateResponse) must stream
+	// through unchanged and reach the upstream.
+	#[tokio::test]
+	async fn full_duplex_request_body_passthrough_not_aborted() {
+		let mock = simple_mock().await;
+		let processing_options = json!({
+			"requestBodyMode": "fullDuplexStreamed",
+			"responseBodyMode": "fullDuplexStreamed",
+			"requestHeaderMode": "send",
+			"responseHeaderMode": "send",
+			"requestTrailerMode": "send",
+			"responseTrailerMode": "send",
+		});
+		let (mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_processing_options(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(|| BBRExtProc::new(false)),
+			"{}",
+			Some(processing_options),
+		)
+		.await;
+		let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+		assert_eq!(res.status(), 200);
+		let dumped = read_body(res.into_body()).await;
+		assert_eq!(dumped.body.as_ref(), b"request");
+		let upstream_requests = mock.received_requests().await.unwrap_or_default();
+		assert_eq!(
+			upstream_requests.len(),
+			1,
+			"upstream should be contacted exactly once"
+		);
 	}
 
 	#[tokio::test]

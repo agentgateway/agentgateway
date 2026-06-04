@@ -53,6 +53,7 @@ impl ProxyResponse {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
 			| ProxyError::RouteCycleDetected
@@ -209,6 +210,8 @@ pub enum ProxyError {
 	RateLimitFailed,
 	#[error("invalid request")]
 	InvalidRequest,
+	#[error("method not allowed")]
+	MethodNotAllowed,
 	#[error("request upgrade failed, backend tried {1:?} but {0:?} was requested")]
 	UpgradeFailed(Option<HeaderValue>, Option<HeaderValue>),
 	#[error("mcp: {0}")]
@@ -247,6 +250,7 @@ impl ProxyError {
 			// Should it be 4xx?
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
+			ProxyError::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {

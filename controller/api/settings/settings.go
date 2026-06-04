@@ -145,6 +145,18 @@ type Settings struct {
 	// Defaults to "default".
 	IstioRevision string `split_words:"true" default:"default"`
 
+	// IstioAutoEnabled, when true, enables Istio integration by default on all built-in-class
+	// gateways. Individual gateways can opt out via AgentgatewayParameters spec.istio.enabled=false.
+	// Defaults to false, meaning gateways opt in to Istio integration via spec.istio.
+	IstioAutoEnabled bool `split_words:"true"`
+
+	// IstioClusterId, IstioNetwork, and IstioCaAddress are mesh values applied to gateways that have
+	// Istio integration enabled; they do not enable it themselves. GatewayParameters override per gateway.
+	IstioClusterId string `split_words:"true"`
+	IstioNetwork   string `split_words:"true"`
+	// Defaults to "https://istiod.istio-system.svc:15012".
+	IstioCaAddress string `split_words:"true"`
+
 	// XdsServiceHost is the host that serves xDS config.
 	// It overrides xdsServiceName if set.
 	XdsServiceHost string `split_words:"true"`

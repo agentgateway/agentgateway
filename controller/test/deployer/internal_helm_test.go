@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -130,8 +131,98 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-shutdown",
 		},
 		{
-			Name:      "agentgateway with Istio configuration",
+			Name:      "agentgateway with params level Istio configuration",
 			InputFile: "agentgateway-istio",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from istio.clusterId")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from istio.network")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "not.cluster.local",
+					"explicit params trustDomain should be used as-is")
+			},
+		},
+		{
+			Name:      "agentgateway with controller level Istio auto-enable and mesh trust domain",
+			InputFile: "agentgateway-istio-noparams",
+			Settings: &apisettings.Settings{
+				IstioAutoEnabled: true,
+				IstioClusterId:   "cluster-1",
+				IstioNetwork:     "network-1",
+				IstioNamespace:   "istio-system",
+				IstioRevision:    "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "TRUST_DOMAIN",
+					"deployment should set TRUST_DOMAIN env var")
+				assert.Contains(t, outputYaml, "custom.example.com",
+					"trust domain should be auto-detected from the revisioned mesh ConfigMap")
+			},
+		},
+		{
+			Name:      "agentgateway empty params istio block opts in with defaults",
+			InputFile: "agentgateway-istio-empty",
+			// No control-plane istio settings and auto-enable off: `istio: {}` alone must enable.
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "/var/run/secrets/istio",
+					"an empty istio block should enable integration (istio secret mounts present)")
+				assert.Contains(t, outputYaml, "CA_ADDRESS",
+					"integration enabled via empty istio block should set CA_ADDRESS")
+				assert.Contains(t, outputYaml, "https://istiod.istio-system.svc:15012",
+					"CA_ADDRESS should fall back to the default")
+				assert.Contains(t, outputYaml, "cluster.local",
+					"trust domain should fall back to the istio default")
+			},
+		},
+		{
+			Name:      "agentgateway control-plane istio values without auto-enable stay off",
+			InputFile: "agentgateway-istio-noauto",
+			Settings: &apisettings.Settings{
+				// Mesh values set but auto-enable off: integration must not turn on.
+				IstioClusterId: "cluster-1",
+				IstioNetwork:   "network-1",
+				IstioNamespace: "istio-system",
+				IstioRevision:  "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.NotContains(t, outputYaml, "CLUSTER_ID",
+					"control-plane mesh values alone must not enable Istio integration")
+				assert.NotContains(t, outputYaml, "/var/run/secrets/istio",
+					"istio secret mounts should be absent when integration is off")
+			},
+		},
+		{
+			Name:      "agentgateway opts out of auto-enabled istio via params",
+			InputFile: "agentgateway-istio-optout",
+			Settings: &apisettings.Settings{
+				IstioAutoEnabled: true,
+				IstioClusterId:   "cluster-1",
+				IstioNamespace:   "istio-system",
+				IstioRevision:    "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.NotContains(t, outputYaml, "CLUSTER_ID",
+					"spec.istio.enabled=false must opt the gateway out of auto-enabled integration")
+				assert.NotContains(t, outputYaml, "/var/run/secrets/istio",
+					"istio secret mounts should be absent when the gateway opts out")
+			},
 		},
 		{
 			Name:      "agentgateway with Istio additional trust domains",

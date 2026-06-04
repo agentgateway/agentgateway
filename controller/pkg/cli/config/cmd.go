@@ -59,7 +59,7 @@ func Command() flag.Command {
 func (c *commonFlags) attach(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&c.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.PersistentFlags().StringVarP(&c.configDumpFile, "file", "f", "", "Agentgateway config dump JSON file")
-	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Envoy admin port")
+	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Agentgateway admin port")
 	cmd.PersistentFlags().StringVarP(&c.outputFormat, "output", "o", c.outputFormat, "Output format: one of short|json|yaml")
 }
 

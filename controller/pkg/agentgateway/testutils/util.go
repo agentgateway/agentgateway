@@ -241,7 +241,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		ControllerName:       wellknown.DefaultAgwControllerName,
 		SystemNamespace:      "agentgateway-system",
 		IstioNamespace:       "istio-system",
-		ClusterID:            "Kubernetes",
+		IstioClusterId:       "Kubernetes",
 	}
 	col.SetupIndexes()
 	return col

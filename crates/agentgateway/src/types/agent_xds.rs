@@ -36,6 +36,7 @@ use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
+use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::ext_proc::{
 	BodySendMode as XdsBodySendMode, HeaderTrailerSendMode as XdsHeaderTrailerSendMode,
@@ -1082,6 +1083,7 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::HboneGateway => TunnelProtocol::HboneGateway,
 				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
+				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
 			},
 		})
 	}
@@ -2519,6 +2521,12 @@ fn frontend_policy_from_proto(
 				.http1_idle_timeout
 				.map(convert_duration)
 				.unwrap_or_else(crate::defaults::http1_idle_timeout),
+			http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
+				match header_case {
+					HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
+					HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
+				}
+			})?,
 			http2_window_size: h.http2_window_size,
 			http2_connection_window_size: h.http2_connection_window_size,
 			http2_frame_size: h.http2_frame_size,
@@ -2604,6 +2612,19 @@ fn frontend_policy_from_proto(
 					_ => frontend::ProxyMode::Strict,
 				};
 			FrontendPolicy::Proxy(frontend::Proxy { version, mode })
+		},
+		Some(fps::Kind::Connect(c)) => {
+			let mode =
+				match crate::types::proto::agent::frontend_policy_spec::connect::Mode::try_from(c.mode) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Route) => {
+						frontend::ConnectMode::Route
+					},
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Tunnel) => {
+						frontend::ConnectMode::Tunnel
+					},
+					_ => frontend::ConnectMode::Deny,
+				};
+			FrontendPolicy::Connect(frontend::Connect { mode })
 		},
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
