@@ -542,15 +542,21 @@ fn convert_ext_mcp(
 
 	fn convert_methods(
 		methods: &std::collections::HashMap<String, i32>,
+		diagnostics: &mut Diagnostics,
 	) -> std::collections::HashMap<String, crate::mcp::extmcp::Phase> {
 		methods
 			.iter()
 			.map(|(k, v)| {
-				let phase = match ProtoPhase::try_from(*v).unwrap_or(ProtoPhase::Off) {
-					ProtoPhase::Off => crate::mcp::extmcp::Phase::Off,
-					ProtoPhase::Request => crate::mcp::extmcp::Phase::Request,
-					ProtoPhase::Response => crate::mcp::extmcp::Phase::Response,
-					ProtoPhase::Full => crate::mcp::extmcp::Phase::Full,
+				let phase = match ProtoPhase::try_from(*v) {
+					Ok(ProtoPhase::Off) => crate::mcp::extmcp::Phase::Off,
+					Ok(ProtoPhase::Request) => crate::mcp::extmcp::Phase::Request,
+					Ok(ProtoPhase::Response) => crate::mcp::extmcp::Phase::Response,
+					Ok(ProtoPhase::Full) => crate::mcp::extmcp::Phase::Full,
+					Err(_) => {
+						diagnostics
+							.add_warning(format!("extMcp method {k}: unknown phase value {v}; disabling (Off)"));
+						crate::mcp::extmcp::Phase::Off
+					},
 				};
 				(k.clone(), phase)
 			})
@@ -609,7 +615,7 @@ fn convert_ext_mcp(
 				continue;
 			},
 		};
-		let methods = convert_methods(&processor.methods);
+		let methods = convert_methods(&processor.methods, diagnostics);
 		if methods.is_empty() {
 			diagnostics.add_warning("extMcp processor configured with no methods; it will never run");
 		}
