@@ -616,10 +616,13 @@ impl Relay {
 		// matching the merged result the driver sees (just the one name when there is a
 		// single backend).
 		// TODO: better aggregate service_name than concatenating every backend name.
-		let service_name = self
-			.ext_mcp
-			.as_ref()
-			.map(|_| self.upstreams.iter_named().map(|(n, _)| n.to_string()).join(DELIMITER));
+		let service_name = self.ext_mcp.as_ref().map(|_| {
+			self
+				.upstreams
+				.iter_named()
+				.map(|(n, _)| n.to_string())
+				.join(DELIMITER)
+		});
 
 		// Request-phase hook runs once for the whole client call. params is None for
 		// fanout (no body to rewrite); header/metadata side effects apply to the single
@@ -680,13 +683,8 @@ impl Relay {
 			));
 		}
 
-		let ms = mergestream::MergeStream::new(
-			streams,
-			id.clone(),
-			merge,
-			cel,
-			self.upstreams.failure_mode,
-		);
+		let ms =
+			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
 		match service_name

@@ -153,10 +153,7 @@ impl MergeStream {
 			.merge
 			.take()
 			.expect("merge_terminal_messages called twice");
-		let cel = self
-			.cel
-			.as_ref()
-			.expect("merge is present iff cel is");
+		let cel = self.cel.as_ref().expect("merge is present iff cel is");
 		let res = merge(msgs, cel)?;
 		Ok(ServerJsonRpcMessage::response(res, self.req_id.clone()))
 	}

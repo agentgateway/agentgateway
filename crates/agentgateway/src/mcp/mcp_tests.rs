@@ -3428,14 +3428,12 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 				.as_ref()
 				.and_then(|s| serde_json::to_value(s).ok())
 				.and_then(|v| {
-					v.get("tools")
-						.and_then(|t| t.as_array())
-						.map(|arr| {
-							arr
-								.iter()
-								.filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
-								.collect()
-						})
+					v.get("tools").and_then(|t| t.as_array()).map(|arr| {
+						arr
+							.iter()
+							.filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+							.collect()
+					})
 				})
 				.unwrap_or_default();
 			*cap.lock().unwrap() = Some((req.service_name.clone(), names));
@@ -3480,7 +3478,11 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 		"response hook should run exactly once for the merged fanout result"
 	);
 
-	let (service_name, seen) = captured.lock().unwrap().clone().expect("driver saw tools/list");
+	let (service_name, seen) = captured
+		.lock()
+		.unwrap()
+		.clone()
+		.expect("driver saw tools/list");
 	// Aggregate identity = all backend names concatenated.
 	assert_eq!(service_name, "a_b");
 	// The driver saw the merged, muxed list (prefixed names from both backends).
