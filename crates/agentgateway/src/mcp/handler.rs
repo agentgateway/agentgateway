@@ -806,7 +806,6 @@ pub fn setup_request_log(
 	(_span, log, cel)
 }
 
-#[derive(Clone)]
 pub(crate) struct ExtMcpCtx {
 	pub ext: Arc<crate::mcp::extmcp::ExtMcp>,
 	pub method: String,
@@ -832,6 +831,7 @@ fn wrap_with_extmcp(
 	extmcp: ExtMcpCtx,
 ) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
 	use futures_util::StreamExt;
+	let extmcp = Arc::new(extmcp);
 	stream.then(move |rpc| {
 		let ctx = extmcp.clone();
 		let id = id.clone();

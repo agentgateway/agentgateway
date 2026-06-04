@@ -27,8 +27,9 @@ pub(crate) async fn check_request(
 	client: &PolicyClient,
 ) -> Outcome {
 	let mcp_request = serialize_body(body.as_deref());
-	let metadata_context = build_metadata(&remote.metadata, req_ctx);
-	let headers = collect_headers(&remote.request_headers, req_ctx);
+	let http_req = req_ctx.as_request();
+	let metadata_context = build_metadata(&remote.metadata, &http_req);
+	let headers = collect_headers(&remote.request_headers, &http_req);
 	let req = McpRequest {
 		service_name: backend.to_string(),
 		method: method.to_string(),
@@ -171,7 +172,9 @@ pub(crate) async fn check_response(
 	client: &PolicyClient,
 ) -> Outcome {
 	let mcp_response = serialize_body(Some(&*body));
-	let metadata_context = build_metadata(&remote.metadata, req_ctx);
+	let metadata_context = (!remote.metadata.is_empty())
+		.then(|| build_metadata(&remote.metadata, &req_ctx.as_request()))
+		.flatten();
 	let req = McpResponse {
 		service_name: backend.to_string(),
 		method: method.to_string(),
@@ -206,13 +209,12 @@ pub(crate) async fn check_response(
 
 fn build_metadata(
 	cfg: &HashMap<String, Arc<cel::Expression>>,
-	req_ctx: &IncomingRequestContext,
+	req: &crate::http::Request,
 ) -> Option<Struct> {
 	if cfg.is_empty() {
 		return None;
 	}
-	let cel_req = req_ctx.as_request();
-	let exec = cel::Executor::new_request(&cel_req);
+	let exec = cel::Executor::new_request(req);
 	let fields = cfg
 		.iter()
 		.filter_map(|(k, expr)| match eval_to_value(&exec, expr) {
@@ -246,14 +248,10 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 // Snapshot the incoming request headers for the policy server, applying the
 // configured allow/deny filter. Like ext_authz, pseudo-headers are forwarded
 // too. Non-UTF8 values are dropped (the wire type is a UTF8 string).
-fn collect_headers(
-	filter: &HeaderFilter,
-	req_ctx: &IncomingRequestContext,
-) -> Vec<wire::McpHeader> {
-	let req = req_ctx.as_request();
+fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wire::McpHeader> {
 	let mut out = Vec::new();
 	// Pseudo-headers are single-valued.
-	for (pseudo, value) in crate::http::get_request_pseudo_headers(&req) {
+	for (pseudo, value) in crate::http::get_request_pseudo_headers(req) {
 		if filter.allows(&pseudo) {
 			out.push(wire::McpHeader {
 				key: pseudo.to_string(),
@@ -434,7 +432,7 @@ mod tests {
 			allowed: vec![],
 			disallowed: vec![pseudo("authorization")],
 		};
-		let out = collect_headers(&filter, &ctx_with_headers(headers.clone()));
+		let out = collect_headers(&filter, &ctx_with_headers(headers.clone()).as_request());
 		assert!(!out.iter().any(|h| h.key == "authorization"));
 		let multi: Vec<_> = out
 			.iter()
@@ -460,7 +458,7 @@ mod tests {
 			],
 			disallowed: vec![pseudo("authorization")],
 		};
-		let out = collect_headers(&filter, &ctx_with_headers(headers));
+		let out = collect_headers(&filter, &ctx_with_headers(headers).as_request());
 		let keys: HashSet<_> = out.iter().map(|h| h.key.clone()).collect();
 		assert_eq!(
 			keys,
