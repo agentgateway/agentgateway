@@ -381,7 +381,11 @@ func applyManagedSessionKeyDefaults(gtw *AgentgatewayHelmGateway, gatewayName st
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
-	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	handlers := []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	if g.inputs != nil && g.inputs.AgwCollections != nil && g.inputs.AgwCollections.MeshConfig != nil {
+		handlers = append(handlers, g.inputs.AgwCollections.MeshConfig.AsCollection().HasSynced)
+	}
+	return handlers
 }
 
 // GetResolvedParametersForGateway returns both the GatewayClass-level and Gateway-level
