@@ -1803,6 +1803,7 @@ async fn tls_connection_drains_when_listener_changes() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1835,6 +1836,7 @@ async fn tls_backend_connection() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1876,6 +1878,7 @@ async fn tls_backend_connection_alpn() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http2_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1917,6 +1920,7 @@ async fn tls_backend_http2_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http1_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1958,6 +1962,7 @@ async fn tls_backend_http1_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_version_with_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -2275,6 +2280,7 @@ async fn tunnel_absolute_form() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tunnel_connect() {
 	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
