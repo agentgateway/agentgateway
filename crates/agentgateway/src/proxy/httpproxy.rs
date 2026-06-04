@@ -269,7 +269,7 @@ async fn apply_backend_policies(
 		override_dest: _,
 		// Applied elsewhere
 		health: _,
-	} = &backend_call.backend_policies;
+	} = &*backend_call.backend_policies;
 	rp.backend_response_header = response_header_modifier.as_response_policy();
 
 	let dh = backend::HTTP::default();
@@ -960,7 +960,7 @@ impl HTTPProxy {
 		let backend_call = build_connect_backend_call(
 			self.inputs.as_ref(),
 			&selected_backend.backend.backend,
-			backend_policies,
+			backend_policies.into(),
 			log,
 			req,
 		)?;
@@ -1186,7 +1186,7 @@ impl HTTPProxy {
 			self.inputs.clone(),
 			route_policies.clone(),
 			&selected_backend.backend.backend,
-			backend_policies,
+			backend_policies.into(),
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
@@ -1645,7 +1645,7 @@ async fn apply_inference_routing(
 	response_policies: &mut ResponsePolicies,
 ) -> Result<(http::ext_proc::InferencePoolRouter, ServiceCallOverride), ProxyResponse> {
 	let mut maybe_inference = policies.build_inference(policy_client);
-	let inference_result = maybe_inference.mutate_request(req).await?;
+	let inference_result = Box::pin(maybe_inference.mutate_request(req)).await?;
 	inference_result
 		.policy_response
 		.apply(response_policies.headers())?;
@@ -1673,7 +1673,7 @@ async fn build_simple_backend_call(
 	inputs: &ProxyInputs,
 	policy_client: PolicyClient,
 	backend: &SimpleBackend,
-	policies: BackendPolicies,
+	policies: Arc<BackendPolicies>,
 	req: &mut Request,
 	log: &mut Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
@@ -1701,15 +1701,7 @@ async fn build_simple_backend_call(
 				hbone_source,
 			)?
 		},
-		SimpleBackend::Opaque(_, target) => BackendCall {
-			target: target.clone(),
-			backend_policies: policies,
-			http_version_override: None,
-			transport_override: None,
-			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			network_gateway: None,
-			waypoint: None,
-		},
+		SimpleBackend::Opaque(_, target) => BackendCall::from_shared(target.clone(), policies),
 		SimpleBackend::Aws(_, config) => {
 			http::modify_req_uri(req, |uri| {
 				let host_with_port = format!("{}:443", config.get_host());
@@ -1731,15 +1723,10 @@ async fn build_simple_backend_call(
 				})),
 				..Default::default()
 			};
-			BackendCall {
-				target: Target::Hostname(config.get_host().into(), 443),
-				backend_policies: default_policies.merge(policies),
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
-			}
+			BackendCall::new(
+				Target::Hostname(config.get_host().into(), 443),
+				default_policies.merge(policies.as_ref().clone()),
+			)
 		},
 		SimpleBackend::Invalid => {
 			return Err(ProxyError::BackendDoesNotExist.into());
@@ -1753,7 +1740,7 @@ async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
-	base_policies: BackendPolicies,
+	base_policies: Arc<BackendPolicies>,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
@@ -1786,7 +1773,7 @@ async fn make_backend_call(
 
 				(
 					&Backend::from(target.backend),
-					base_policies.merge(policies),
+					Arc::new(base_policies.as_ref().clone().merge(policies)),
 				)
 			} else {
 				(backend, base_policies)
@@ -1828,7 +1815,7 @@ async fn make_backend_call(
 					Some(&provider_backend.inline_policies),
 				);
 				let effective_policies = provider_defaults
-					.merge(policies)
+					.merge(policies.as_ref().clone())
 					.merge(sub_backend_policies)
 					.merge(provider_backend_policies);
 
@@ -1836,7 +1823,7 @@ async fn make_backend_call(
 					&inputs,
 					policy_client.clone(),
 					&provider_backend.backend,
-					effective_policies,
+					effective_policies.into(),
 					&mut req,
 					&mut log,
 					response_policies,
@@ -1858,9 +1845,11 @@ async fn make_backend_call(
 					},
 				};
 				// Defaults for the provider < Backend level policies < Sub Backend
-				let effective_policies = provider_defaults
-					.merge(policies)
-					.merge(sub_backend_policies);
+				let effective_policies = Arc::new(
+					provider_defaults
+						.merge(policies.as_ref().clone())
+						.merge(sub_backend_policies),
+				);
 				let (maybe_inference, _) = apply_inference_routing(
 					&effective_policies,
 					policy_client.clone(),
@@ -1870,15 +1859,7 @@ async fn make_backend_call(
 				)
 				.await?;
 				(
-					BackendCall {
-						target,
-						backend_policies: effective_policies,
-						http_version_override: None,
-						transport_override: None,
-						hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-						network_gateway: None,
-						waypoint: None,
-					},
+					BackendCall::from_shared(target, effective_policies),
 					maybe_inference,
 				)
 			}
@@ -1934,15 +1915,7 @@ async fn make_backend_call(
 			);
 		},
 		Backend::Dynamic(_, _) => {
-			let backend_call = BackendCall {
-				target: target_from_request(&req)?,
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
-				backend_policies: policies,
-			};
+			let backend_call = BackendCall::from_shared(target_from_request(&req)?, policies);
 			(backend_call, http::ext_proc::InferencePoolRouter::default())
 		},
 		Backend::MCP(name, backend) => {
@@ -1958,7 +1931,7 @@ async fn make_backend_call(
 			let res = inputs
 				.clone()
 				.mcp_state
-				.serve(inputs, name, backend, policies, req, log)
+				.serve(inputs, name, backend, policies.as_ref().clone(), req, log)
 				.await;
 			return res.map_err(ProxyResponse::from);
 		},
@@ -2228,9 +2201,10 @@ async fn make_backend_call(
 	)
 	.await
 	.map_err(ProxyError::Processing)?;
-	let mut resp = if let (Some(llm), Some(llm_request)) =
-		(backend_call.backend_policies.llm_provider, llm_request)
-	{
+	let mut resp = if let (Some(llm), Some(llm_request)) = (
+		backend_call.backend_policies.llm_provider.clone(),
+		llm_request,
+	) {
 		llm
 			.provider
 			.process_response(
@@ -2279,7 +2253,7 @@ fn connect_authority_target(req: &Request) -> Result<Target, ProxyError> {
 fn build_connect_backend_call(
 	inputs: &ProxyInputs,
 	backend: &Backend,
-	policies: BackendPolicies,
+	policies: Arc<BackendPolicies>,
 	log: &mut RequestLog,
 	req: &Request,
 ) -> Result<BackendCall, ProxyError> {
@@ -2297,24 +2271,11 @@ fn build_connect_backend_call(
 				None,
 			)
 		},
-		Backend::Opaque(_, target) => Ok(BackendCall {
-			target: target.clone(),
-			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			http_version_override: None,
-			transport_override: None,
-			network_gateway: None,
-			waypoint: None,
-			backend_policies: policies,
-		}),
-		Backend::Dynamic(_, _) => Ok(BackendCall {
-			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			target: connect_authority_target(req)?,
-			http_version_override: None,
-			transport_override: None,
-			network_gateway: None,
-			waypoint: None,
-			backend_policies: policies,
-		}),
+		Backend::Opaque(_, target) => Ok(BackendCall::from_shared(target.clone(), policies)),
+		Backend::Dynamic(_, _) => Ok(BackendCall::from_shared(
+			connect_authority_target(req)?,
+			policies,
+		)),
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
 		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) => {
 			Err(ProxyError::InvalidBackendType)
@@ -2325,7 +2286,7 @@ fn build_connect_backend_call(
 #[allow(clippy::too_many_arguments)]
 pub fn build_service_call(
 	inputs: &ProxyInputs,
-	backend_policies: BackendPolicies,
+	backend_policies: Arc<BackendPolicies>,
 	log: &mut Option<&mut RequestLog>,
 	service_override: ServiceCallOverride,
 	svc: &Arc<Service>,
@@ -3226,7 +3187,25 @@ pub struct BackendCall {
 	pub hbone_port: u16,
 	pub network_gateway: Option<(GatewayAddress, Vec<Identity>)>, /* For double hbone: (gateway_address, gateway_identities) */
 	pub waypoint: Option<WaypointTarget>,                         // For ingress waypoint routing
-	pub backend_policies: BackendPolicies,
+	pub backend_policies: Arc<BackendPolicies>,
+}
+
+impl BackendCall {
+	pub fn new(target: Target, backend_policies: BackendPolicies) -> Self {
+		Self::from_shared(target, Arc::new(backend_policies))
+	}
+
+	pub fn from_shared(target: Target, backend_policies: Arc<BackendPolicies>) -> Self {
+		Self {
+			target,
+			http_version_override: None,
+			transport_override: None,
+			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
+			network_gateway: None,
+			waypoint: None,
+			backend_policies,
+		}
+	}
 }
 
 /// Information needed to route through a waypoint proxy.
@@ -3433,7 +3412,7 @@ impl PolicyClient {
 				self.inputs.clone(),
 				Arc::new(LLMRequestPolicies::default()),
 				&backend,
-				pols,
+				pols.into(),
 				MustSnapshot::new(&mut req),
 				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
