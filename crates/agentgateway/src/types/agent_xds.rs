@@ -553,8 +553,9 @@ fn convert_ext_mcp(
 					Ok(ProtoPhase::Response) => crate::mcp::extmcp::Phase::Response,
 					Ok(ProtoPhase::Full) => crate::mcp::extmcp::Phase::Full,
 					Err(_) => {
-						diagnostics
-							.add_warning(format!("extMcp method {k}: unknown phase value {v}; disabling (Off)"));
+						diagnostics.add_warning(format!(
+							"extMcp method {k}: unknown phase value {v}; disabling (Off)"
+						));
 						crate::mcp::extmcp::Phase::Off
 					},
 				};
