@@ -57,9 +57,13 @@ docker_build_with_restart(
     image_registry + '/agentgateway-controller',
     context='./tools/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
+    # Run as non-root while ensuring Tilt can do in-place updates of the Go binary
     dockerfile_contents="""
 FROM ubuntu:24.04
-COPY agentgateway-controller /usr/local/bin/agentgateway-controller
+RUN useradd -r -U -u 65532 -s /usr/sbin/nologin agentgateway
+RUN chown agentgateway:agentgateway /usr/local/bin
+COPY --chown=agentgateway:agentgateway agentgateway-controller /usr/local/bin/agentgateway-controller
+USER 65532
 ENTRYPOINT /usr/local/bin/agentgateway-controller
     """,
     # Live update: sync Go binaries
