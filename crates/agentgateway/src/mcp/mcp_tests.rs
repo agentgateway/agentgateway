@@ -3412,8 +3412,10 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 
 	use crate::test_helpers::extmcpmock::{closure_mock, mutated_response_json, pass_request};
 
+	type Captured = Arc<Mutex<Option<(String, Vec<String>)>>>;
+
 	let resp_count = Arc::new(AtomicUsize::new(0));
-	let captured: Arc<Mutex<Option<(String, Vec<String>)>>> = Arc::new(Mutex::new(None));
+	let captured: Captured = Arc::new(Mutex::new(None));
 	let rc = resp_count.clone();
 	let cap = captured.clone();
 	let extmcp_mock = closure_mock(
