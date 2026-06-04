@@ -26,7 +26,8 @@ type backendService struct {
 }
 
 type backendEndpoint struct {
-	Active map[string]backendEndpointState `json:"active"`
+	Active   map[string]backendEndpointState `json:"active"`
+	Rejected map[string]backendEndpointState `json:"rejected"`
 }
 
 type backendEndpointState struct {
@@ -113,38 +114,13 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 	rows := make([]backendRow, 0)
 	for _, service := range dump.Services {
 		for _, endpoints := range service.Endpoints {
-			endpointNames := make([]string, 0, len(endpoints.Active))
-			for endpointName := range endpoints.Active {
-				endpointNames = append(endpointNames, endpointName)
-			}
-			sort.Strings(endpointNames)
-
-			for _, endpointName := range endpointNames {
-				state := endpoints.Active[endpointName]
-				row := buildBackendRow("Service", service.Name, service.Namespace, endpointName, state)
-				if !showAll && row.Requests == 0 {
-					continue
-				}
-				rows = append(rows, row)
-			}
+			rows = append(rows, backendRowsForEndpointSet("Service", service.Name, service.Namespace, endpoints, showAll)...)
 		}
 	}
 	for _, backend := range dump.Backends {
 		for _, variant := range backend.Backend {
 			for _, provider := range variant.providers() {
-				endpointNames := make([]string, 0, len(provider.Active))
-				for endpointName := range provider.Active {
-					endpointNames = append(endpointNames, endpointName)
-				}
-				sort.Strings(endpointNames)
-
-				for _, endpointName := range endpointNames {
-					row := buildBackendRow("Backend", variant.Name, variant.Namespace, endpointName, provider.Active[endpointName])
-					if !showAll && row.Requests == 0 {
-						continue
-					}
-					rows = append(rows, row)
-				}
+				rows = append(rows, backendRowsForEndpointSet("Backend", variant.Name, variant.Namespace, provider, showAll)...)
 			}
 		}
 	}
@@ -163,6 +139,39 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 	})
 
 	return rows, nil
+}
+
+func backendRowsForEndpointSet(backendType, name, namespace string, endpoints backendEndpoint, showAll bool) []backendRow {
+	rows := make([]backendRow, 0, len(endpoints.Active)+len(endpoints.Rejected))
+	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Active, "", showAll)...)
+	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Rejected, "evicted", showAll)...)
+	return rows
+}
+
+func backendRowsForEndpointStates(
+	backendType, name, namespace string,
+	states map[string]backendEndpointState,
+	healthOverride string,
+	showAll bool,
+) []backendRow {
+	endpointNames := make([]string, 0, len(states))
+	for endpointName := range states {
+		endpointNames = append(endpointNames, endpointName)
+	}
+	sort.Strings(endpointNames)
+
+	rows := make([]backendRow, 0, len(endpointNames))
+	for _, endpointName := range endpointNames {
+		row := buildBackendRow(backendType, name, namespace, endpointName, states[endpointName])
+		if healthOverride != "" {
+			row.Health = healthOverride
+		}
+		if !showAll && row.Requests == 0 {
+			continue
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func (v topLevelBackendVariant) providers() []backendEndpoint {
