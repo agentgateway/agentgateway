@@ -1,8 +1,13 @@
 //! External MCP policy hooks (extMcp).
 //!
-//! Hooks fire server-facing in the upstream's native namespace — drivers see
-//! unmuxed identifiers (`echo`, not `serverA_echo`) and the backend name as
-//! metadata. Fanout methods run the hook once per upstream.
+//! Single-target methods (`tools/call`, ...) fire server-facing in the upstream's
+//! native namespace — drivers see unmuxed names (`echo`, not `serverA_echo`) and the
+//! backend name as `service_name`. Fanout methods (`*/list`, ...) run the hook once
+//! for the whole client call (request hook before fanout, response hook on the merged
+//! result). Names and `service_name` there match the client-facing view, which tracks
+//! the multiplexing config rather than the method: muxed names and all backend names
+//! joined when multiplexing, but a single backend's unmuxed names and lone name when
+//! there is just one (the usual single-backend case).
 
 use std::collections::HashMap;
 use std::sync::Arc;

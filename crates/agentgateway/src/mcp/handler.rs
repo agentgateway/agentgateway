@@ -286,7 +286,7 @@ impl Relay {
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams, cels| {
+		Box::new(move |streams, cel| {
 			let tools = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -294,20 +294,17 @@ impl Relay {
 						ServerResult::ListToolsResult(ltr) => ltr.tools,
 						_ => vec![],
 					};
-					let cel = cels.get(&server_name);
 					tools
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
-							cel.is_some_and(|cel| {
-								policies.validate(
-									&rbac::ResourceType::Tool(rbac::ResourceId::new(
-										server_name.to_string(),
-										t.name.to_string(),
-									)),
-									cel,
-								)
-							})
+							policies.validate(
+								&rbac::ResourceType::Tool(rbac::ResourceId::new(
+									server_name.to_string(),
+									t.name.to_string(),
+								)),
+								cel,
+							)
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
@@ -333,7 +330,7 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
-		Box::new(move |s, _cels| {
+		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
@@ -373,7 +370,7 @@ impl Relay {
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams, cels| {
+		Box::new(move |streams, cel| {
 			let prompts = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -381,19 +378,16 @@ impl Relay {
 						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
 						_ => vec![],
 					};
-					let cel = cels.get(&server_name);
 					prompts
 						.into_iter()
 						.filter(|p| {
-							cel.is_some_and(|cel| {
-								policies.validate(
-									&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-										server_name.to_string(),
-										p.name.to_string(),
-									)),
-									cel,
-								)
-							})
+							policies.validate(
+								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+									server_name.to_string(),
+									p.name.to_string(),
+								)),
+								cel,
+							)
 						})
 						.map(|mut p| {
 							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
@@ -415,7 +409,7 @@ impl Relay {
 	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams, cels| {
+		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -423,19 +417,16 @@ impl Relay {
 						ServerResult::ListResourcesResult(lrr) => lrr.resources,
 						_ => vec![],
 					};
-					let cel = cels.get(&server_name);
 					resources
 						.into_iter()
 						.filter(|r| {
-							cel.is_some_and(|cel| {
-								policies.validate(
-									&rbac::ResourceType::Resource(rbac::ResourceId::new(
-										server_name.to_string(),
-										r.uri.to_string(),
-									)),
-									cel,
-								)
-							})
+							policies.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									server_name.to_string(),
+									r.uri.to_string(),
+								)),
+								cel,
+							)
 						})
 						// Prefix URI with service name when multiplexing to avoid conflicts
 						.map(|mut r| {
@@ -458,7 +449,7 @@ impl Relay {
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams, cels| {
+		Box::new(move |streams, cel| {
 			let resource_templates = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -466,19 +457,16 @@ impl Relay {
 						ServerResult::ListResourceTemplatesResult(lrr) => lrr.resource_templates,
 						_ => vec![],
 					};
-					let cel = cels.get(&server_name);
 					resource_templates
 						.into_iter()
 						.filter(|rt| {
-							cel.is_some_and(|cel| {
-								policies.validate(
-									&rbac::ResourceType::Resource(rbac::ResourceId::new(
-										server_name.to_string(),
-										rt.uri_template.to_string(),
-									)),
-									cel,
-								)
-							})
+							policies.validate(
+								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+									server_name.to_string(),
+									rt.uri_template.to_string(),
+								)),
+								cel,
+							)
 						})
 						// Prefix uri_template with service name when multiplexing
 						.map(|mut rt| {
@@ -503,7 +491,7 @@ impl Relay {
 		})
 	}
 	pub fn merge_empty(&self) -> Box<MergeFn> {
-		Box::new(move |_, _| Ok(rmcp::model::ServerResult::empty(())))
+		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
 	}
 	pub async fn send_single(
 		&self,
@@ -616,7 +604,7 @@ impl Relay {
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		ctx: IncomingRequestContext,
+		mut ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
@@ -624,71 +612,52 @@ impl Relay {
 		let method = r.request.method().to_string();
 		let method = method.as_str();
 
+		// service_name for the single fanout-wide extMcp hook: every backend name joined,
+		// matching the merged result the driver sees (just the one name when there is a
+		// single backend).
+		// TODO: better aggregate service_name than concatenating every backend name.
+		let service_name = self
+			.ext_mcp
+			.as_ref()
+			.map(|_| self.upstreams.iter_named().map(|(n, _)| n.to_string()).join(DELIMITER));
+
+		// Request-phase hook runs once for the whole client call. params is None for
+		// fanout (no body to rewrite); header/metadata side effects apply to the single
+		// shared ctx forwarded to every upstream. A reject fails the whole call.
+		if let Some(ext) = self.ext_mcp.as_ref() {
+			let outcome = crate::mcp::extmcp::run_call_request(
+				ext,
+				&mut crate::mcp::extmcp::CallRequestCtx {
+					backend: service_name.as_deref().unwrap_or_default(),
+					method,
+					params: None,
+				},
+				&mut ctx,
+				&self.policy_client,
+			)
+			.await;
+			if let crate::mcp::extmcp::Outcome::Reject(rej) = outcome {
+				return Err(UpstreamError::ExtMcp(rej));
+			}
+		}
+
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
 			.map(|(name, con)| {
 				let r = r.clone();
-				let shared_ctx = &ctx;
-				// Only clone ctx per-upstream when extMcp may mutate it (CEL metadata or
-				// headers) before forwarding; otherwise share the borrow across upstreams.
-				let mut owned_ctx = self.ext_mcp.as_ref().map(|_| ctx.clone());
-				async move {
-					// Request-phase hook for fanout methods. The `methods` allowlist + phase
-					// resolution inside run_call_request is the gate; unconfigured methods
-					// no-op before any RPC. params is None for fanout (no body to rewrite).
-					if let Some(ext) = self.ext_mcp.as_ref() {
-						let outcome = {
-							let ctx = owned_ctx
-								.as_mut()
-								.expect("ctx is cloned whenever extMcp is configured");
-							crate::mcp::extmcp::run_call_request(
-								ext,
-								&mut crate::mcp::extmcp::CallRequestCtx {
-									backend: &name,
-									method,
-									params: None,
-								},
-								ctx,
-								&self.policy_client,
-							)
-							.await
-						};
-						if let crate::mcp::extmcp::Outcome::Reject(rej) = outcome {
-							return (name, owned_ctx, Err(UpstreamError::ExtMcp(rej)));
-						}
-					}
-					let res = con
-						.generic_stream(r, owned_ctx.as_ref().unwrap_or(shared_ctx))
-						.await;
-					(name, owned_ctx, res)
-				}
+				let ctx = &ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
 			})
 			.collect();
 
 		let fut_results = futures::future::join_all(futs).await;
 
-		// each upstream request has its own CEL context, modified by the
-		// per-upstream call to extmcp
-		let mut cels = HashMap::new();
-		for (name, octx, result) in fut_results {
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let req_ctx = octx.as_ref().unwrap_or(&ctx);
-					cels.insert(
-						name.clone(),
-						CelExecWrapper::new(req_ctx.as_request().map(|_| ())),
-					);
-					// apply extmcp wrappers per-upstream so that they see an unmuxed view
-					// TODO this is consistent with extauth but has a huge latency cost
-					let msg = match octx
-						.as_ref()
-						.and_then(|c| self.build_extmcp_ctx(&r, c, &name))
-					{
-						Some(extmcp) => Messages::from_stream(wrap_with_extmcp(id.clone(), s, extmcp)),
-						None => s,
-					};
-					streams.push((name, msg));
+					streams.push((name, s));
 				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -715,10 +684,18 @@ impl Relay {
 			streams,
 			id.clone(),
 			merge,
-			cels,
+			cel,
 			self.upstreams.failure_mode,
 		);
-		messages_to_response(id, ms, None)
+
+		// Response-phase hook runs once on the merged (muxed) result.
+		match service_name
+			.as_deref()
+			.and_then(|sn| self.build_extmcp_ctx(&r, &ctx, sn))
+		{
+			Some(extmcp) => messages_to_response(id.clone(), wrap_with_extmcp(id, ms, extmcp), None),
+			None => messages_to_response(id, ms, None),
+		}
 	}
 	pub async fn send_notification(
 		&self,

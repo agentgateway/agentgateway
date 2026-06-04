@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::anyhow;
 use futures_core::Stream;
 use futures_core::stream::BoxStream;
@@ -27,13 +25,6 @@ impl Messages {
 
 	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
-	}
-
-	pub fn from_stream<S>(s: S) -> Self
-	where
-		S: Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
-	{
-		Messages(s.boxed())
 	}
 }
 
@@ -98,8 +89,8 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 
 pub type MergeFn = dyn FnOnce(
 		Vec<(Strng, ServerResult)>,
-		// per-upstream CEL context
-		&HashMap<Strng, CelExecWrapper>,
+		// Request CEL context, shared across all upstreams.
+		&CelExecWrapper,
 	) -> Result<ServerResult, ClientError>
 	+ Send
 	+ Sync
@@ -112,34 +103,29 @@ pub struct MergeStream {
 	complete: bool,
 	req_id: RequestId,
 	merge: Option<Box<MergeFn>>,
-	cels: HashMap<Strng, CelExecWrapper>,
+	// Present iff `merge` is; supplied to the merge fn for RBAC filtering.
+	cel: Option<CelExecWrapper>,
 	failure_mode: FailureMode,
 }
 
 impl MergeStream {
 	pub fn new_without_merge(streams: Vec<(Strng, Messages)>, failure_mode: FailureMode) -> Self {
-		Self::new_internal(
-			streams,
-			RequestId::Number(0),
-			None,
-			HashMap::new(),
-			failure_mode,
-		)
+		Self::new_internal(streams, RequestId::Number(0), None, None, failure_mode)
 	}
 	pub fn new(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Box<MergeFn>,
-		cels: HashMap<Strng, CelExecWrapper>,
+		cel: CelExecWrapper,
 		failure_mode: FailureMode,
 	) -> Self {
-		Self::new_internal(streams, req_id, Some(merge), cels, failure_mode)
+		Self::new_internal(streams, req_id, Some(merge), Some(cel), failure_mode)
 	}
 	fn new_internal(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Option<Box<MergeFn>>,
-		cels: HashMap<Strng, CelExecWrapper>,
+		cel: Option<CelExecWrapper>,
 		failure_mode: FailureMode,
 	) -> Self {
 		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
@@ -149,7 +135,7 @@ impl MergeStream {
 			req_id,
 			complete: false,
 			merge,
-			cels,
+			cel,
 			failure_mode,
 		}
 	}
@@ -167,7 +153,11 @@ impl MergeStream {
 			.merge
 			.take()
 			.expect("merge_terminal_messages called twice");
-		let res = merge(msgs, &self.cels)?;
+		let cel = self
+			.cel
+			.as_ref()
+			.expect("merge is present iff cel is");
+		let res = merge(msgs, cel)?;
 		Ok(ServerJsonRpcMessage::response(res, self.req_id.clone()))
 	}
 }

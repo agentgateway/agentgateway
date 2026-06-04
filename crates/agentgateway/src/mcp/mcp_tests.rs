@@ -2220,6 +2220,10 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
 }
 
+fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
+	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
+}
+
 fn persisted_session(
 	target_name: &str,
 	session: &str,
@@ -2522,7 +2526,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		),
 	];
 
-	let result = merge_fn(results, &Default::default()).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2583,7 +2587,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results, &Default::default()).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2634,7 +2638,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results, &Default::default()).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2672,7 +2676,7 @@ async fn test_runtime_fanout_fail_open() {
 	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
 
 	let merge = Box::new(
-		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cels: &_| {
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
 			// Just return the first one for simplicity in this test
 			Ok(results.into_iter().next().unwrap().1)
 		},
@@ -2682,7 +2686,7 @@ async fn test_runtime_fanout_fail_open() {
 		streams,
 		RequestId::Number(1),
 		merge,
-		Default::default(),
+		empty_cel(),
 		FailureMode::FailOpen,
 	);
 
@@ -2709,7 +2713,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 	let streams = vec![("bad1".into(), err_stream1), ("bad2".into(), err_stream2)];
 
 	let merge = Box::new(
-		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cels: &_| {
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
 			// All failed, so results should be empty.
 			// Return an empty success result (idiomatic for FailOpen).
 			assert!(results.is_empty());
@@ -2727,7 +2731,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 		streams,
 		RequestId::Number(1),
 		merge,
-		Default::default(),
+		empty_cel(),
 		FailureMode::FailOpen,
 	);
 
@@ -3394,6 +3398,99 @@ async fn mcp_extmcp_filtered_list_via_response_mutation() {
 		.expect("list_tools should succeed");
 	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
 	assert_eq!(names, vec!["echo".to_string()]);
+}
+
+// Fanout (multi-backend) runs the response hook ONCE on the merged, muxed result
+// rather than once per upstream: the driver sees a single checkResponse carrying
+// the prefixed (`a_echo`, `b_echo`) tools and an aggregate service_name.
+#[tokio::test]
+async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::{Arc, Mutex};
+
+	use protos::ext_mcp::McpResponse;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, mutated_response_json, pass_request};
+
+	let resp_count = Arc::new(AtomicUsize::new(0));
+	let captured: Arc<Mutex<Option<(String, Vec<String>)>>> = Arc::new(Mutex::new(None));
+	let rc = resp_count.clone();
+	let cap = captured.clone();
+	let extmcp_mock = closure_mock(
+		move |_| pass_request(),
+		move |req: &McpResponse| {
+			if req.method != "tools/list" {
+				return crate::test_helpers::extmcpmock::pass_response();
+			}
+			rc.fetch_add(1, Ordering::SeqCst);
+			let names: Vec<String> = req
+				.mcp_response
+				.as_ref()
+				.and_then(|s| serde_json::to_value(s).ok())
+				.and_then(|v| {
+					v.get("tools")
+						.and_then(|t| t.as_array())
+						.map(|arr| {
+							arr
+								.iter()
+								.filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+								.collect()
+						})
+				})
+				.unwrap_or_default();
+			*cap.lock().unwrap() = Some((req.service_name.clone(), names));
+			// Mutating the merged list proves the hook operates on the aggregate.
+			mutated_response_json(serde_json::json!({
+				"tools": [{
+					"name": "a_echo",
+					"description": "Repeat what you say",
+					"inputSchema": { "type": "object" },
+				}],
+			}))
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![extmcp_test_support::policy(extmcp_mock.address)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed");
+	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
+
+	// One RPC for the whole fanout, not one per backend.
+	assert_eq!(
+		resp_count.load(Ordering::SeqCst),
+		1,
+		"response hook should run exactly once for the merged fanout result"
+	);
+
+	let (service_name, seen) = captured.lock().unwrap().clone().expect("driver saw tools/list");
+	// Aggregate identity = all backend names concatenated.
+	assert_eq!(service_name, "a_b");
+	// The driver saw the merged, muxed list (prefixed names from both backends).
+	assert!(
+		seen.iter().any(|n| n == "a_echo") && seen.iter().any(|n| n == "b_echo"),
+		"driver should see muxed names from both backends, got: {seen:?}"
+	);
+
+	// The mutation on the merged result is what reaches the client.
+	assert_eq!(names, vec!["a_echo".to_string()]);
 }
 
 // A mutated `tools/call` result must round-trip back through `ServerResult` and

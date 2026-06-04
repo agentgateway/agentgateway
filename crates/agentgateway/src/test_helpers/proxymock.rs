@@ -720,6 +720,16 @@ impl TestBind {
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
 	) -> Self {
+		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+	}
+
+	pub fn with_multiplex_mcp_backend_policies(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
+	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
@@ -758,7 +768,13 @@ impl TestBind {
 					Backend::Opaque(name, Target::Address(b)).into(),
 				)
 			}
-			bw.insert_backend(b.name(), b.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
 		}
 		self
 	}
