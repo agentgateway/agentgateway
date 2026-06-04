@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultProxyAdminPort = 15000
-	prettyOutput          = "pretty"
+	shortOutput           = "short"
 	jsonOutput            = "json"
 	yamlOutput            = "yaml"
 )
@@ -38,7 +38,7 @@ type configDumpSource struct {
 func Command() flag.Command {
 	common := &commonFlags{
 		proxyAdminPort: defaultProxyAdminPort,
-		outputFormat:   prettyOutput,
+		outputFormat:   shortOutput,
 	}
 
 	return flag.Command{
@@ -60,7 +60,7 @@ func (c *commonFlags) attach(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&c.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.PersistentFlags().StringVarP(&c.configDumpFile, "file", "f", "", "Agentgateway config dump JSON file")
 	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Agentgateway admin port")
-	cmd.PersistentFlags().StringVarP(&c.outputFormat, "output", "o", c.outputFormat, "Output format: one of pretty|json|yaml")
+	cmd.PersistentFlags().StringVarP(&c.outputFormat, "output", "o", c.outputFormat, "Output format: one of short|json|yaml")
 }
 
 func (c *commonFlags) validateArgs(cmd *cobra.Command, args []string) error {
@@ -75,7 +75,7 @@ func (c *commonFlags) validateArgs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid --proxy-admin-port %d", c.proxyAdminPort)
 	}
 	switch c.outputFormat {
-	case prettyOutput, jsonOutput, yamlOutput:
+	case shortOutput, jsonOutput, yamlOutput:
 	default:
 		return fmt.Errorf("output format %q not supported", c.outputFormat)
 	}
