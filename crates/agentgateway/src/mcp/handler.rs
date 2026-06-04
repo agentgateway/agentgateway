@@ -606,6 +606,7 @@ impl Relay {
 			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
 			ServerCapabilities::builder()
 				.enable_tools()
+				.enable_tool_list_changed()
 				.enable_prompts()
 				.enable_resources()
 				.build()

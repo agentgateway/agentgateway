@@ -234,6 +234,25 @@ async fn stream_to_multiplex_resources() {
 }
 
 #[tokio::test]
+async fn multiplex_advertises_tool_list_changed() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let caps = &client.peer_info().unwrap().capabilities;
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
+}
+
+#[tokio::test]
 async fn stateless_multiplex_tool_call_initializes_only_target() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
