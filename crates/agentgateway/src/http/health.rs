@@ -92,10 +92,17 @@ impl Policy {
 		let health = !unhealthy;
 		let ev = self.eviction.as_ref();
 		let eviction_duration = if unhealthy {
-			let base_duration = self
-				.eviction_duration()
-				.or(fallback_duration)
-				.or(Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
+			let base_duration =
+				self
+					.eviction_duration()
+					.or(fallback_duration)
+					.or(if self.eviction.is_some() {
+						// If we have eviction, but no duration set, use the default
+						Some(Duration::from_secs(DEFAULT_EVICTION_SECS))
+					} else {
+						// Else there is no eviction
+						None
+					});
 			let health_threshold = ev.and_then(|e| e.health_threshold);
 			let consecutive_failures = ev.and_then(|e| e.consecutive_failures);
 			// +1 because the current failure hasn't been recorded yet.
@@ -264,7 +271,7 @@ mod tests {
 	fn unhealthy_default_eviction_duration() {
 		let policy = Policy::default();
 		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, None);
-		assert_eq!(eviction, Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
+		assert_eq!(eviction, None);
 	}
 
 	// --- health_threshold only ---
