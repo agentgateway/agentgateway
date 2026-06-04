@@ -35,7 +35,7 @@ impl StateManager {
 		config: Arc<crate::Config>,
 		client: client::Client,
 		xds_metrics: agent_xds::Metrics,
-        metrics: Arc<metrics::Metrics>,
+		metrics: Arc<metrics::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
@@ -75,7 +75,7 @@ impl StateManager {
 					listener_name: None,
 					port: None,
 				},
-                metrics
+				metrics,
 			};
 			Box::pin(local_client.run()).await?;
 		}
@@ -102,7 +102,7 @@ pub struct LocalClient {
 	pub stores: Stores,
 	pub client: Client,
 	pub gateway: ListenerTarget,
-    pub metrics: Arc<metrics::Metrics>,
+	pub metrics: Arc<metrics::Metrics>,
 }
 
 impl LocalClient {
@@ -188,11 +188,11 @@ impl LocalClient {
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
 							next_state = nxt;
-                            lc.metrics.config_synchronized.set(1);
+							lc.metrics.config_synchronized.set(1);
 							debug!("Config reloaded successfully")
 						},
 						Err(e) => {
-                            lc.metrics.config_synchronized.set(0);
+							lc.metrics.config_synchronized.set(0);
 							error!("Failed to reload config: {}", e)
 						},
 					}

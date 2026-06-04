@@ -152,7 +152,7 @@ pub struct Metrics {
 	// metrics for request retries
 	pub retries: Counter,
 
-    pub config_synchronized: prometheus_client::metrics::gauge::Gauge,
+	pub config_synchronized: prometheus_client::metrics::gauge::Gauge,
 }
 
 // FilteredRegistry is a wrapper around Registry that allows to filter out certain metrics.
@@ -373,16 +373,16 @@ impl Metrics {
 				"retries",
 				"The total number of request retries",
 			),
-            config_synchronized: {
-                let m = prometheus_client::metrics::gauge::Gauge::default();
-                m.set(1);
-                registry.register(
+			config_synchronized: {
+				let m = prometheus_client::metrics::gauge::Gauge::default();
+				m.set(1);
+				registry.register(
                     "config_synchronized",
                     "Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration",
                     m.clone()
                 );
-                m
-            },
+				m
+			},
 		}
 	}
 }
