@@ -8,6 +8,7 @@ use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
+use crate::telemetry::metrics;
 use crate::types::agent::ListenerTarget;
 use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
@@ -34,6 +35,7 @@ impl StateManager {
 		config: Arc<crate::Config>,
 		client: client::Client,
 		xds_metrics: agent_xds::Metrics,
+        metrics: Arc<metrics::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
@@ -73,6 +75,7 @@ impl StateManager {
 					listener_name: None,
 					port: None,
 				},
+                metrics
 			};
 			Box::pin(local_client.run()).await?;
 		}
@@ -99,6 +102,7 @@ pub struct LocalClient {
 	pub stores: Stores,
 	pub client: Client,
 	pub gateway: ListenerTarget,
+    pub metrics: Arc<metrics::Metrics>,
 }
 
 impl LocalClient {
@@ -184,9 +188,11 @@ impl LocalClient {
 					match lc.reload_config(next_state.clone()).await {
 						Ok(nxt) => {
 							next_state = nxt;
+                            lc.metrics.config_synchronized.set(1);
 							debug!("Config reloaded successfully")
 						},
 						Err(e) => {
+                            lc.metrics.config_synchronized.set(0);
 							error!("Failed to reload config: {}", e)
 						},
 					}
@@ -253,6 +259,7 @@ fn should_reload_config(
 	current_config_path: Option<&Path>,
 	previous_config_path: Option<&Path>,
 ) -> bool {
+    println!("Event: {:?}", event);
 	let target_changed = current_config_path.is_some() && current_config_path != previous_config_path;
 	if target_changed {
 		return true;
