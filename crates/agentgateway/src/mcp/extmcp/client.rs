@@ -318,8 +318,8 @@ fn on_grpc_error(
 ) -> Outcome {
 	debug!(method, backend, rpc, code = ?status.code(), message = %status.message(), "extMcp: gRPC error");
 	match remote.failure_mode {
-		FailureMode::Allow => Outcome::Pass,
-		FailureMode::Deny => Outcome::Reject(ErrorData::new(
+		FailureMode::FailOpen => Outcome::Pass,
+		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
 			format!("extMcp {rpc} failed: {}", status.message()),
 			None,
@@ -330,8 +330,8 @@ fn on_grpc_error(
 fn on_protocol_violation(remote: &Remote, method: &str, backend: &str, reason: &str) -> Outcome {
 	warn!(method, backend, reason, "extMcp: protocol violation");
 	match remote.failure_mode {
-		FailureMode::Allow => Outcome::Pass,
-		FailureMode::Deny => Outcome::Reject(ErrorData::new(
+		FailureMode::FailOpen => Outcome::Pass,
+		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
 			format!("extMcp protocol violation: {reason}"),
 			None,
@@ -341,8 +341,8 @@ fn on_protocol_violation(remote: &Remote, method: &str, backend: &str, reason: &
 
 fn fail_outcome(remote: &Remote) -> Outcome {
 	match remote.failure_mode {
-		FailureMode::Allow => Outcome::Pass,
-		FailureMode::Deny => Outcome::Reject(ErrorData::new(
+		FailureMode::FailOpen => Outcome::Pass,
+		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
 			"extMcp internal error".to_string(),
 			None,

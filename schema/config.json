@@ -1173,6 +1173,18 @@
           ],
           "default": null
         },
+        "extMcp": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtMcp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "authorization": {
           "description": "Authorization policies for HTTP access.",
           "anyOf": [
@@ -1842,6 +1854,108 @@
       "required": [
         "rules"
       ]
+    },
+    "ExtMcp": {
+      "type": "object",
+      "properties": {
+        "drivers": {
+          "description": "Non-empty list of drivers MCP methods are run through.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Driver"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "drivers"
+      ]
+    },
+    "Driver": {
+      "type": "object",
+      "properties": {
+        "methods": {
+          "description": "Allowlist: only methods listed here run through this driver, at the\nconfigured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),\nor suffix (`*/list`) wildcards, or `*` for all methods. Methods matching\nno key bypass this driver; see [`phase::resolve`] for match precedence.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Phase"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "description": "Reference to the external MCP policy service backend.",
+              "$ref": "#/$defs/SimpleLocalBackend"
+            },
+            "failureMode": {
+              "description": "Behavior when the driver is unavailable or returns an error.",
+              "$ref": "#/$defs/FailureMode",
+              "default": "failClosed"
+            },
+            "metadata": {
+              "description": "CEL expressions evaluated per request and sent to the driver as metadata.",
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/Expression"
+              }
+            },
+            "requestHeaders": {
+              "description": "Which incoming request headers are forwarded to the policy server.",
+              "$ref": "#/$defs/HeaderFilter"
+            },
+            "kind": {
+              "type": "string",
+              "const": "remote"
+            }
+          },
+          "required": [
+            "kind",
+            "target"
+          ]
+        }
+      ]
+    },
+    "Phase": {
+      "type": "string",
+      "enum": [
+        "off",
+        "request",
+        "response",
+        "full"
+      ]
+    },
+    "FailureMode": {
+      "type": "string",
+      "enum": [
+        "failClosed",
+        "failOpen"
+      ]
+    },
+    "HeaderFilter": {
+      "description": "Allow/deny filter over request headers, mirroring ext_authz: empty `allowed`\nforwards every header plus all pseudo-headers (`:authority`, `:method`, ...);\na non-empty `allowed` forwards only the listed names. `disallowed` always\nwins. Header names match case-insensitively; pseudo-headers match exactly.",
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        },
+        "disallowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "HeaderOrPseudo": {
+      "type": "string"
     },
     "Authorization": {
       "$ref": "#/$defs/RuleSet"
@@ -3644,7 +3758,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode",
+          "$ref": "#/$defs/FailureMode2",
           "default": "failClosed"
         }
       },
@@ -3776,7 +3890,7 @@
         "value"
       ]
     },
-    "FailureMode": {
+    "FailureMode2": {
       "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
       "oneOf": [
         {
@@ -3813,7 +3927,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode",
+          "$ref": "#/$defs/FailureMode2",
           "default": "failClosed"
         }
       },
@@ -4275,7 +4389,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4466,7 +4580,7 @@
         }
       ]
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "oneOf": [
         {
           "type": "string",
@@ -4491,9 +4605,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "HeaderOrPseudo": {
-      "type": "string"
     },
     "BodyOptions": {
       "type": "object",
@@ -4570,7 +4681,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4720,7 +4831,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -4831,7 +4942,7 @@
         }
       ]
     },
-    "FailureMode3": {
+    "FailureMode4": {
       "type": "string",
       "enum": [
         "failClosed",
@@ -4912,7 +5023,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5311,7 +5422,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode4"
+              "$ref": "#/$defs/FailureMode5"
             },
             {
               "type": "null"
@@ -5609,6 +5720,18 @@
             }
           ],
           "default": null
+        },
+        "extMcp": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtMcp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -5627,7 +5750,7 @@
         "conditional"
       ]
     },
-    "FailureMode4": {
+    "FailureMode5": {
       "oneOf": [
         {
           "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
@@ -6155,6 +6278,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extMcp": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtMcp"
             },
             {
               "type": "null"
@@ -7979,7 +8114,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode4"
+              "$ref": "#/$defs/FailureMode5"
             },
             {
               "type": "null"

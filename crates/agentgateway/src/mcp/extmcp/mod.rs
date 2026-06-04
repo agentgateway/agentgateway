@@ -45,28 +45,32 @@ pub mod wire {
 	pub use protos::ext_mcp::*;
 }
 
-#[derive(Debug, Default, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default)]
 pub struct ExtMcp {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
+	// Processed in order; first `Reject` short-circuits. Drivers may run on the request
+	// or response side, or both; see `Driver.methods`.
+	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
 	pub drivers: Vec<Driver>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Driver {
 	/// Allowlist: only methods listed here run through this driver, at the
 	/// configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
 	/// or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching
 	/// no key bypass this driver; see [`phase::resolve`] for match precedence.
-	#[serde(skip_serializing_if = "HashMap::is_empty")]
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
 	#[serde(flatten)]
 	pub kind: DriverKind,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum DriverKind {
 	Remote(Remote),
 }
@@ -84,16 +88,18 @@ impl ExtMcp {
 }
 
 // TLS, retries, and load balancing come from the backend referenced by `target`.
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
 pub struct Remote {
-	#[serde(skip)]
+	/// Reference to the external MCP policy service backend.
 	pub target: Arc<SimpleBackendReference>,
+	/// Behavior when the driver is unavailable or returns an error.
+	#[serde(default)]
 	pub failure_mode: FailureMode,
-	#[serde(skip_serializing_if = "HashMap::is_empty", skip_deserializing)]
+	/// CEL expressions evaluated per request and sent to the driver as metadata.
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 	pub metadata: HashMap<String, Arc<cel::Expression>>,
 	/// Which incoming request headers are forwarded to the policy server.
-	#[serde(skip_serializing_if = "HeaderFilter::is_default", skip_deserializing)]
+	#[serde(default, skip_serializing_if = "HeaderFilter::is_default")]
 	pub request_headers: HeaderFilter,
 }
 
@@ -101,11 +107,12 @@ pub struct Remote {
 /// forwards every header plus all pseudo-headers (`:authority`, `:method`, ...);
 /// a non-empty `allowed` forwards only the listed names. `disallowed` always
 /// wins. Header names match case-insensitively; pseudo-headers match exactly.
-#[derive(Debug, Clone, Default, serde::Serialize)]
+#[apply(schema!)]
+#[derive(Default)]
 pub struct HeaderFilter {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub allowed: Vec<crate::http::HeaderOrPseudo>,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub disallowed: Vec<crate::http::HeaderOrPseudo>,
 }
 
@@ -126,9 +133,9 @@ impl HeaderFilter {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum FailureMode {
-	Allow,
 	#[default]
-	Deny,
+	FailClosed,
+	FailOpen,
 }
 
 /// `params` is `None` for methods with no per-request body (e.g. `*/list`);
@@ -232,4 +239,51 @@ pub async fn run_response(
 		}
 	}
 	composed
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn deser_local_config() {
+		let cfg = r#"
+drivers:
+  - kind: remote
+    methods: { "tools/call": request, "*/list": response }
+    target: { host: 127.0.0.1:9999 }
+    failureMode: failOpen
+    requestHeaders:
+      allowed: [x-tenant]
+      disallowed: [":authority"]
+  - kind: remote
+    methods: { "tools/call": full }
+    target: { backend: my-backend }
+"#;
+		let ext: ExtMcp = serde_yaml::from_str(cfg).expect("deser ExtMcp");
+		assert_eq!(ext.drivers.len(), 2);
+
+		let d0 = &ext.drivers[0];
+		assert_eq!(d0.methods.get("tools/call"), Some(&Phase::Request));
+		assert_eq!(d0.methods.get("*/list"), Some(&Phase::Response));
+		let DriverKind::Remote(r0) = &d0.kind;
+		assert!(matches!(
+			r0.target.as_ref(),
+			SimpleBackendReference::InlineBackend(_)
+		));
+		assert_eq!(r0.failure_mode, FailureMode::FailOpen);
+		assert_eq!(r0.request_headers.allowed.len(), 1);
+		assert!(
+			r0.request_headers
+				.disallowed
+				.contains(&crate::http::HeaderOrPseudo::Authority)
+		);
+
+		let DriverKind::Remote(r1) = &ext.drivers[1].kind;
+		assert!(matches!(
+			r1.target.as_ref(),
+			SimpleBackendReference::Backend(_)
+		));
+		assert_eq!(r1.failure_mode, FailureMode::FailClosed);
+	}
 }

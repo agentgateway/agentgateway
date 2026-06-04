@@ -2933,7 +2933,7 @@ mod extmcp_test_support {
 	pub fn policy(addr: SocketAddr) -> BackendTrafficPolicy {
 		policy_with(
 			addr,
-			extmcp::FailureMode::Deny,
+			extmcp::FailureMode::FailClosed,
 			default_methods(),
 			HashMap::new(),
 		)
@@ -3213,7 +3213,7 @@ async fn mcp_extmcp_metadata_cel_evaluated_per_request() {
 	);
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
-		extmcp::FailureMode::Deny,
+		extmcp::FailureMode::FailClosed,
 		extmcp_test_support::default_methods(),
 		metadata,
 	);
@@ -3459,7 +3459,7 @@ async fn mcp_extmcp_fail_open_on_grpc_error() {
 
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
-		extmcp::FailureMode::Allow,
+		extmcp::FailureMode::FailOpen,
 		extmcp_test_support::default_methods(),
 		HashMap::new(),
 	);
@@ -3497,7 +3497,7 @@ async fn mcp_extmcp_fail_closed_on_grpc_error() {
 
 	let policy = extmcp_test_support::policy_with(
 		extmcp_mock.address,
-		extmcp::FailureMode::Deny,
+		extmcp::FailureMode::FailClosed,
 		extmcp_test_support::default_methods(),
 		HashMap::new(),
 	);

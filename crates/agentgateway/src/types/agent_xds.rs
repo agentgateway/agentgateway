@@ -562,8 +562,8 @@ fn convert_ext_mcp(
 		diagnostics: &mut Diagnostics,
 	) -> Result<crate::mcp::extmcp::Remote, ProtoError> {
 		let failure_mode = match ProtoFailureMode::try_from(r.failure_mode).ok() {
-			Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::Allow,
-			_ => crate::mcp::extmcp::FailureMode::Deny,
+			Some(ProtoFailureMode::Allow) => crate::mcp::extmcp::FailureMode::FailOpen,
+			_ => crate::mcp::extmcp::FailureMode::FailClosed,
 		};
 		let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
 		let metadata = r
