@@ -1315,8 +1315,8 @@ type AwsAuth struct {
 	// `Secret`, containing the AWS credentials. When using the default Secret
 	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
-	// +required
-	SecretRef shared.LocalSecretObjectRef `json:"secretRef"`
+	// +optional
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
 	// Ambient AWS credentials are used as the source credentials for STS.

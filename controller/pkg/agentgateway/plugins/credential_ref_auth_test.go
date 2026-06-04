@@ -7,6 +7,7 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,15 +33,11 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 		}, kubeutils.NewSecretCredentialResolver(secrets))
 
 	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{}, "default")
-	if err != nil {
-		t.Fatalf("buildAwsAuthPolicy() error = %v, want nil", err)
-	}
-	if policy != nil {
-		t.Fatalf("buildAwsAuthPolicy() policy = %v, want nil", policy)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, policy != nil, true)
 
 	_, err = buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
-		SecretRef: shared.LocalSecretObjectRef{
+		SecretRef: &shared.LocalSecretObjectRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
 			Name:  "file",

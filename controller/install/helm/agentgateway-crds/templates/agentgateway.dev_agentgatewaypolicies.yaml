@@ -361,8 +361,6 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: secretRef and assumeRole
@@ -1031,8 +1029,6 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: secretRef and assumeRole
@@ -1698,8 +1694,6 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: secretRef and assumeRole
@@ -2582,8 +2576,6 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: secretRef and assumeRole
@@ -3252,8 +3244,6 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: secretRef and assumeRole
@@ -4191,8 +4181,6 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
-                        required:
-                        - secretRef
                         type: object
                         x-kubernetes-validations:
                         - message: secretRef and assumeRole are mutually exclusive

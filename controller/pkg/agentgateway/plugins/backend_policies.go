@@ -885,7 +885,7 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 			errs = append(errs, errors.New("secretRef and assumeRole are mutually exclusive"))
 		}
 		// Get secret using the SecretIndex
-		data, err := ctx.ResolveCredentialRef(auth.SecretRef, namespace)
+		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
 		if err != nil {
 			errs = append(errs, err)
 		} else {
@@ -906,7 +906,6 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 			// Extract session token (optional)
 			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SessionToken); exists {
 				sessionToken = new(value)
-
 			}
 		}
 		awsAuth.Kind = &api.Aws_ExplicitConfig{
