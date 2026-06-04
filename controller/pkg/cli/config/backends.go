@@ -93,7 +93,7 @@ func backendsCommand(common *commonFlags) flag.Command {
 			if err != nil {
 				return err
 			}
-			if common.outputFormat == shortOutput {
+			if common.outputFormat == prettyOutput {
 				printBackendTable(cmd.OutOrStdout(), rows)
 			} else {
 				printData(cmd.OutOrStdout(), common.outputFormat, rows)

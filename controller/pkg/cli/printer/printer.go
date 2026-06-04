@@ -14,8 +14,8 @@ type Printer interface {
 
 func New(format string) (Printer, error) {
 	switch format {
-	case "short":
-		return &shortPrinter{}, nil
+	case "pretty":
+		return &prettyPrinter{}, nil
 	case "json":
 		return &jsonPrinter{}, nil
 	case "yaml":
@@ -28,7 +28,7 @@ func New(format string) (Printer, error) {
 type jsonPrinter struct{}
 
 func (p *jsonPrinter) Print(w io.Writer, v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
@@ -47,10 +47,10 @@ func (p *yamlPrinter) Print(w io.Writer, v any) error {
 	return nil
 }
 
-// shortPrinter uses pretty-printed JSON as the default human-readable format.
-type shortPrinter struct{}
+// prettyPrinter uses indented JSON for human-readable output.
+type prettyPrinter struct{}
 
-func (p *shortPrinter) Print(w io.Writer, v any) error {
+func (p *prettyPrinter) Print(w io.Writer, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
