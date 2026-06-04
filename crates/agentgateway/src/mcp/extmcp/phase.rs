@@ -21,35 +21,48 @@ impl Phase {
 	}
 }
 
+// Match precedence, most specific first:
+//   1. exact match (`tools/call`)
+//   2. prefix wildcard (`tools/*`) beats suffix wildcard (`*/list`) -- method
+//      names are namespaced left-to-right, so the namespace owner wins
+//   3. suffix wildcard beats the `*` catchall
+//   4. within the same kind, the longer pattern wins (`notifications/tools/*`
+//      over `notifications/*`); the trailing `*` is constant within a kind so
+//      it cancels out
+//   5. ties broken alphabetically so resolution is deterministic
 pub fn resolve(method: &str, methods: &HashMap<String, Phase>) -> Phase {
 	if let Some(p) = methods.get(method) {
 		return *p;
 	}
 	methods
 		.iter()
-		.filter_map(|(pat, phase)| wildcard_literal_len(pat, method).map(|len| (len, *phase)))
-		.max_by_key(|(len, _)| *len)
-		.map(|(_, phase)| phase)
+		.filter_map(|(pat, phase)| match_kind(pat, method).map(|kind| (kind, pat, *phase)))
+		// (kind, len) ascending; alphabetically-first pattern wins the final tie
+		.max_by(|a, b| {
+			(a.0, a.1.len())
+				.cmp(&(b.0, b.1.len()))
+				.then_with(|| b.1.cmp(a.1))
+		})
+		.map(|(_, _, phase)| phase)
 		.unwrap_or_default()
 }
 
-// tiebreaker: if the same method matches multiple patterns, the one with the
-// longest literal prefix/suffix wins (~most specific).
-fn wildcard_literal_len(pattern: &str, method: &str) -> Option<usize> {
+// Higher rank = more specific. None if the pattern doesn't match.
+fn match_kind(pattern: &str, method: &str) -> Option<u8> {
 	if pattern == "*" {
-		return Some(0);
+		return Some(1);
 	}
 	if let Some(prefix) = pattern.strip_suffix('*')
 		&& !prefix.contains('*')
 		&& method.starts_with(prefix)
 	{
-		return Some(prefix.len());
+		return Some(3);
 	}
 	if let Some(suffix) = pattern.strip_prefix('*')
 		&& !suffix.contains('*')
 		&& method.ends_with(suffix)
 	{
-		return Some(suffix.len());
+		return Some(2);
 	}
 	None
 }
@@ -78,12 +91,42 @@ mod tests {
 	}
 
 	#[test]
-	fn most_specific_wins() {
-		// exact beats wildcard
+	fn exact_beats_wildcard() {
 		let m = methods(&[("tools/*", Phase::Request), ("tools/call", Phase::Full)]);
 		assert_eq!(resolve("tools/call", &m), Phase::Full);
-		// longest literal beats shorter / catchall
+		assert_eq!(resolve("tools/list", &m), Phase::Request);
+	}
+
+	#[test]
+	fn prefix_beats_suffix() {
+		// tools/list matches both; prefix (namespace owner) wins
+		let m = methods(&[("tools/*", Phase::Request), ("*/list", Phase::Response)]);
+		assert_eq!(resolve("tools/list", &m), Phase::Request);
+		// prefix wins even though the suffix literal `/setLevel` is longer than
+		// the prefix literal `logging/`
+		let m = methods(&[("logging/*", Phase::Request), ("*/setLevel", Phase::Response)]);
+		assert_eq!(resolve("logging/setLevel", &m), Phase::Request);
+	}
+
+	#[test]
+	fn wildcards_beat_catchall() {
+		// suffix beats `*`
+		let m = methods(&[("*", Phase::Request), ("*/list", Phase::Response)]);
+		assert_eq!(resolve("resources/list", &m), Phase::Response);
+		// prefix beats `*`
 		let m = methods(&[("*", Phase::Request), ("tools/*", Phase::Full)]);
 		assert_eq!(resolve("tools/call", &m), Phase::Full);
+	}
+
+	#[test]
+	fn longer_prefix_wins() {
+		// resources/templates/list matches both prefixes; the more specific
+		// (longer) namespace wins
+		let m = methods(&[
+			("resources/*", Phase::Request),
+			("resources/templates/*", Phase::Response),
+		]);
+		assert_eq!(resolve("resources/templates/list", &m), Phase::Response);
+		assert_eq!(resolve("resources/read", &m), Phase::Request);
 	}
 }
