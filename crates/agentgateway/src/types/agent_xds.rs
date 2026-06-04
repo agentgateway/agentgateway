@@ -951,19 +951,34 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
+			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
+				role_arn: assume_role.role_arn,
+			});
 			let aws_auth = match a.kind {
-				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
-					access_key_id: config.access_key_id.into(),
-					secret_access_key: config.secret_access_key.into(),
-					region: if config.region.is_empty() {
-						None
-					} else {
-						Some(config.region.clone())
-					},
-					session_token: config.session_token.map(|token| token.into()),
-					service_name,
+				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
+					if assume_role.is_some() {
+						return Err(ProtoError::Generic(
+							"explicit AWS credentials cannot be combined with assumeRole".to_string(),
+						));
+					}
+					AwsAuth::ExplicitConfig {
+						access_key_id: config.access_key_id.into(),
+						secret_access_key: config.secret_access_key.into(),
+						region: if config.region.is_empty() {
+							None
+						} else {
+							Some(config.region.clone())
+						},
+						session_token: config.session_token.map(|token| token.into()),
+						service_name,
+					}
 				},
-				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit { service_name },
+				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
+					service_name,
+					assume_role,
+					source_credentials_cache: Default::default(),
+					assume_role_cache: Default::default(),
+				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Aws(aws_auth)
@@ -1274,6 +1289,8 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								source_credentials_cache: Default::default(),
+								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {

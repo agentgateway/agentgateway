@@ -3009,10 +3009,34 @@
                 "string",
                 "null"
               ]
+            },
+            "assumeRole": {
+              "description": "Optional AWS STS role to assume before signing requests.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AwsAssumeRole"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false
         }
+      ]
+    },
+    "AwsAssumeRole": {
+      "type": "object",
+      "properties": {
+        "roleArn": {
+          "description": "AWS IAM role ARN to assume.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "roleArn"
       ]
     },
     "AzureAuth": {

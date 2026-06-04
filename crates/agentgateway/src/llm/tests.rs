@@ -286,6 +286,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let bedrock =
@@ -318,6 +320,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 		let vertex_provider = vertex::Provider {
 			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
@@ -352,6 +356,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		for (name, providers) in RESPONSES_REQUESTS {
@@ -377,6 +383,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let cohere_provider = bedrock::Provider {
@@ -384,6 +392,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let vertex_provider = vertex::Provider {
@@ -636,6 +646,8 @@ mod response {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		});
 		let (p, r) = match provider {
 			RESPONSES_TO_RESPONSES => (
@@ -1156,6 +1168,8 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1224,6 +1238,8 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1444,6 +1460,8 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",

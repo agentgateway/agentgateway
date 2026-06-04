@@ -329,6 +329,8 @@ message Aws {
   // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
   // If unset, typed AWS backends may provide this automatically.
   string service_name = 3;
+  // Optional STS role to assume before signing requests.
+  AwsAssumeRole assume_role = 4;
 }
 
 // Azure-specific backend authentication.
@@ -354,6 +356,12 @@ message AwsExplicitConfig {
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
 message AwsImplicit {}
+
+// AWS STS AssumeRole configuration.
+message AwsAssumeRole {
+  // Role ARN to assume before signing backend requests.
+  string role_arn = 1;
+}
 
 // Explicit Azure credentials configuration
 message AzureExplicitConfig {

@@ -1308,13 +1308,21 @@ type GcpAuth struct {
 }
 
 // AwsAuth specifies the authentication method to use for the backend.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
 	// `secretRef` references a credential source, defaulting to a Kubernetes
 	// `Secret`, containing the AWS credentials. When using the default Secret
 	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
-	// +required
-	SecretRef shared.LocalSecretObjectRef `json:"secretRef"`
+	// +optional
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+
+	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+	// Ambient AWS credentials are used as the source credentials for STS.
+	//
+	// +optional
+	AssumeRole *AwsAssumeRole `json:"assumeRole,omitempty"`
 
 	// `serviceName` is the AWS SigV4 signing service name (for example,
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
@@ -1322,6 +1330,16 @@ type AwsAuth struct {
 	//
 	// +optional
 	ServiceName *ShortString `json:"serviceName,omitempty"`
+}
+
+// AwsAssumeRole configures AWS STS AssumeRole for backend authentication.
+type AwsAssumeRole struct {
+	// `roleArn` is the AWS IAM role ARN to assume.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
+	// +required
+	RoleArn string `json:"roleArn"`
 }
 
 type AzureAuth struct {

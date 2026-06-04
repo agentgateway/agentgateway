@@ -238,7 +238,12 @@ impl TCPProxy {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit { service_name: None },
+						http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							source_credentials_cache: Default::default(),
+							assume_role_cache: Default::default(),
+						},
 					)),
 					..Default::default()
 				};
@@ -909,7 +914,11 @@ mod tests {
 			matches!(
 				&result.backend_policies.backend_auth,
 				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit { service_name: None }
+					crate::http::auth::AwsAuth::Implicit {
+						service_name: None,
+						assume_role: None,
+						..
+					}
 				))
 			),
 			"should default to AWS implicit auth"

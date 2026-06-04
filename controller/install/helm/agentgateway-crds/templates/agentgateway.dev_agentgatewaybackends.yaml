@@ -686,6 +686,22 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                                  properties:
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -741,9 +757,13 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
-                                                              required:
-                                                              - secretRef
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: secretRef
+                                                                  and assumeRole are
+                                                                  mutually exclusive
+                                                                rule: '!(has(self.secretRef)
+                                                                  && has(self.assumeRole))'
                                                             azure:
                                                               description: Azure specifies
                                                                 an Azure authentication
@@ -1440,6 +1460,22 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                                  properties:
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -1495,9 +1531,13 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
-                                                              required:
-                                                              - secretRef
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: secretRef
+                                                                  and assumeRole are
+                                                                  mutually exclusive
+                                                                rule: '!(has(self.secretRef)
+                                                                  && has(self.assumeRole))'
                                                             azure:
                                                               description: Azure specifies
                                                                 an Azure authentication
@@ -2190,6 +2230,22 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                                  properties:
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -2245,9 +2301,13 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
-                                                              required:
-                                                              - secretRef
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: secretRef
+                                                                  and assumeRole are
+                                                                  mutually exclusive
+                                                                rule: '!(has(self.secretRef)
+                                                                  && has(self.assumeRole))'
                                                             azure:
                                                               description: Azure specifies
                                                                 an Azure authentication
@@ -3166,6 +3226,22 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                                  properties:
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -3221,9 +3297,13 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
-                                                              required:
-                                                              - secretRef
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: secretRef
+                                                                  and assumeRole are
+                                                                  mutually exclusive
+                                                                rule: '!(has(self.secretRef)
+                                                                  && has(self.assumeRole))'
                                                             azure:
                                                               description: Azure specifies
                                                                 an Azure authentication
@@ -3920,6 +4000,22 @@ spec:
                                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                                               properties:
+                                                                assumeRole:
+                                                                  description: |-
+                                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                                  properties:
+                                                                    roleArn:
+                                                                      description: '`roleArn`
+                                                                        is the AWS
+                                                                        IAM role ARN
+                                                                        to assume.'
+                                                                      minLength: 1
+                                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                                      type: string
+                                                                  required:
+                                                                  - roleArn
+                                                                  type: object
                                                                 secretRef:
                                                                   description: |-
                                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -3975,9 +4071,13 @@ spec:
                                                                   maxLength: 256
                                                                   minLength: 1
                                                                   type: string
-                                                              required:
-                                                              - secretRef
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: secretRef
+                                                                  and assumeRole are
+                                                                  mutually exclusive
+                                                                rule: '!(has(self.secretRef)
+                                                                  && has(self.assumeRole))'
                                                             azure:
                                                               description: Azure specifies
                                                                 an Azure authentication
@@ -4953,6 +5053,20 @@ spec:
                                           Auth specifies an explicit AWS authentication method for the backend.
                                           When omitted, we will try to use the default AWS SDK authentication methods.
                                         properties:
+                                          assumeRole:
+                                            description: |-
+                                              `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                              Ambient AWS credentials are used as the source credentials for STS.
+                                            properties:
+                                              roleArn:
+                                                description: '`roleArn` is the AWS
+                                                  IAM role ARN to assume.'
+                                                minLength: 1
+                                                pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                type: string
+                                            required:
+                                            - roleArn
+                                            type: object
                                           secretRef:
                                             description: |-
                                               `secretRef` references a credential source, defaulting to a Kubernetes
@@ -4995,9 +5109,11 @@ spec:
                                             maxLength: 256
                                             minLength: 1
                                             type: string
-                                        required:
-                                        - secretRef
                                         type: object
+                                        x-kubernetes-validations:
+                                        - message: secretRef and assumeRole are mutually
+                                            exclusive
+                                          rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                       azure:
                                         description: Azure specifies an Azure authentication
                                           method for the backend.
@@ -6574,6 +6690,20 @@ spec:
                                         Auth specifies an explicit AWS authentication method for the backend.
                                         When omitted, we will try to use the default AWS SDK authentication methods.
                                       properties:
+                                        assumeRole:
+                                          description: |-
+                                            `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                            Ambient AWS credentials are used as the source credentials for STS.
+                                          properties:
+                                            roleArn:
+                                              description: '`roleArn` is the AWS IAM
+                                                role ARN to assume.'
+                                              minLength: 1
+                                              pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                              type: string
+                                          required:
+                                          - roleArn
+                                          type: object
                                         secretRef:
                                           description: |-
                                             `secretRef` references a credential source, defaulting to a Kubernetes
@@ -6615,9 +6745,11 @@ spec:
                                           maxLength: 256
                                           minLength: 1
                                           type: string
-                                      required:
-                                      - secretRef
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: secretRef and assumeRole are mutually
+                                          exclusive
+                                        rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                     azure:
                                       description: Azure specifies an Azure authentication
                                         method for the backend.
@@ -7430,6 +7562,20 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -7473,9 +7619,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -8082,6 +8230,20 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -8125,9 +8287,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -8731,6 +8895,20 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -8774,9 +8952,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -9597,6 +9777,20 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -9640,9 +9834,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -10249,6 +10445,20 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
                                                     `secretRef` references a credential source, defaulting to a Kubernetes
@@ -10292,9 +10502,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -11174,6 +11386,20 @@ spec:
                           Auth specifies an explicit AWS authentication method for the backend.
                           When omitted, we will try to use the default AWS SDK authentication methods.
                         properties:
+                          assumeRole:
+                            description: |-
+                              `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                              Ambient AWS credentials are used as the source credentials for STS.
+                            properties:
+                              roleArn:
+                                description: '`roleArn` is the AWS IAM role ARN to
+                                  assume.'
+                                minLength: 1
+                                pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                type: string
+                            required:
+                            - roleArn
+                            type: object
                           secretRef:
                             description: |-
                               `secretRef` references a credential source, defaulting to a Kubernetes
@@ -11213,9 +11439,10 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
-                        required:
-                        - secretRef
                         type: object
+                        x-kubernetes-validations:
+                        - message: secretRef and assumeRole are mutually exclusive
+                          rule: '!(has(self.secretRef) && has(self.assumeRole))'
                       azure:
                         description: Azure specifies an Azure authentication method
                           for the backend.
