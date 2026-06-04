@@ -1716,6 +1716,12 @@ async fn build_simple_backend_call(
 				region: config.region().to_string(),
 			});
 
+			req
+				.extensions_mut()
+				.insert(auth::aws::DefaultAwsServiceName(
+					config.service_name().to_string(),
+				));
+
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {

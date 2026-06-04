@@ -15,6 +15,9 @@ use tokio::sync::{Mutex, OnceCell};
 use crate::llm::bedrock::AwsRegion;
 use crate::*;
 
+#[derive(Clone, Debug)]
+pub struct DefaultAwsServiceName(pub String);
+
 #[apply(schema!)]
 #[serde(untagged)]
 pub enum AwsAuth {
@@ -116,6 +119,18 @@ impl AwsAuth {
 	}
 }
 
+fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'a str {
+	aws_auth
+		.service_name()
+		.or_else(|| {
+			req
+				.extensions()
+				.get::<DefaultAwsServiceName>()
+				.map(|default| default.0.as_str())
+		})
+		.unwrap_or("bedrock")
+}
+
 pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
@@ -143,7 +158,7 @@ pub(super) async fn sign_request(
 	};
 	let creds = load_credentials(aws_auth, region).await?.into();
 
-	let service = aws_auth.service_name().unwrap_or("bedrock");
+	let service = signing_service_name(req, aws_auth);
 	trace!("AWS signing with region: {}, service: {}", region, service);
 
 	// Sign the request

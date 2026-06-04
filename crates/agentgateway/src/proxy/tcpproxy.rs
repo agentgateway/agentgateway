@@ -955,7 +955,10 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+					service_name: None,
+					..
+				}))
 			),
 			"user-provided auth should override default implicit auth"
 		);
