@@ -243,6 +243,36 @@ fn build_proxy_v2_header(src: &str, dst: &str) -> Vec<u8> {
 	.unwrap()
 }
 
+async fn raw_header_backend() -> (std::net::SocketAddr, oneshot::Receiver<String>) {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (tx, rx) = oneshot::channel();
+	tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = stream.read(&mut chunk).await.unwrap();
+			assert!(
+				n > 0,
+				"raw header backend connection closed before request headers"
+			);
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		tx.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+		stream
+			.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+	});
+	(addr, rx)
+}
+
 async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
 	let token_response = Arc::new(StdMutex::new(None));
 	let mock = MockServer::start().await;
@@ -282,6 +312,42 @@ async fn basic_handling() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn http_header_case_preserve_forwards_original_case_to_backend() {
+	let (backend_addr, captured_request) = raw_header_backend().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(backend_addr)
+		.with_bind(simple_bind())
+		.with_route(basic_route(backend_addr));
+	t.attach_frontend_policy(json!({
+		"http": {
+			"http1HeaderCase": "preserve",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve(BIND_KEY);
+	io.write_all(
+		b"GET / HTTP/1.1\r\nHost: lo\r\nX-Case-Probe: preserve-me\r\nConnection: close\r\n\r\n",
+	)
+	.await
+	.unwrap();
+
+	let captured_request = tokio::time::timeout(Duration::from_secs(5), captured_request)
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(
+		captured_request.contains("\r\nX-Case-Probe: preserve-me\r\n"),
+		"backend request did not preserve header case:\n{captured_request}"
+	);
+	assert!(
+		!captured_request.contains("\r\nx-case-probe: preserve-me\r\n"),
+		"backend request lowercased preserved header:\n{captured_request}"
+	);
 }
 
 #[tokio::test]
