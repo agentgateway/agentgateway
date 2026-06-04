@@ -50,7 +50,8 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 								"info": {
 									"health": 0.0,
 									"request_latency": 0.5,
-									"total_requests": 3
+									"total_requests": 3,
+									"evictedUntil": "3.34s"
 								}
 							}
 						}
@@ -85,7 +86,7 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 	if got, want := formatLatencyMS(rows[1]), "302.91ms"; got != want {
 		t.Fatalf("latency = %q, want %q", got, want)
 	}
-	if rows[2].Endpoint != "echo-evicted" || rows[2].Health != "evicted" {
+	if rows[2].Endpoint != "echo-evicted" || rows[2].Health != "Evict (3.3s)" {
 		t.Fatalf("unexpected rejected endpoint row: %#v", rows[2])
 	}
 	if got, want := rows[2].Requests, int64(3); got != want {
