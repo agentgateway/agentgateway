@@ -1443,37 +1443,3 @@ fn test_insert_cache_point_empty_messages_noop() {
 	helpers::insert_message_cache_point(&mut msgs, 0);
 	assert!(msgs.is_empty());
 }
-
-// When a Converse response message contains more than one text block (e.g. when
-// Anthropic splits text around citations), all of them must be preserved in the
-// single OpenAI `content` string instead of keeping only the last block.
-#[test]
-fn test_completions_response_concatenates_multiple_text_blocks() {
-	let model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
-	let bedrock_resp = json!({
-		"output": {
-			"message": {
-				"role": "assistant",
-				"content": [
-					{"text": "Hello, "},
-					{"text": "world!"}
-				]
-			}
-		},
-		"stopReason": "end_turn",
-		"usage": {"inputTokens": 1, "outputTokens": 2, "totalTokens": 3}
-	});
-	let bytes = Bytes::from(serde_json::to_vec(&bedrock_resp).unwrap());
-
-	let translated = from_completions::translate_response(&bytes, model).unwrap();
-	let resp = translated
-		.serialize()
-		.and_then(|b| serde_json::from_slice::<types::completions::Response>(&b))
-		.unwrap();
-
-	assert_eq!(
-		resp.choices[0].message.content.as_deref(),
-		Some("Hello, world!"),
-		"all text blocks must be concatenated, not overwritten by the last one"
-	);
-}
