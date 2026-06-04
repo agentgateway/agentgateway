@@ -25,8 +25,8 @@ type Section struct {
 }
 
 // ResourceHandler is implemented once per resource type.
-// OSS handlers are registered via init(); enterprise handlers are registered
-// from enterprise binary startup before Execute() is called.
+// AgentGateway handlers are registered via init(); out-of-tree handlers are registered
+// from out-of-tree binary startup before Execute() is called.
 type ResourceHandler interface {
 	// Mapping returns the GroupVersionResource and Kind for this resource type.
 	Mapping() meta.RESTMapping
@@ -49,7 +49,7 @@ var (
 
 // Register adds a handler to the global registry.
 // It is safe to call from init() in each resource-specific file
-// or from enterprise code at startup before Execute().
+// or from out-of-tree code at startup before Execute().
 func Register(h ResourceHandler) {
 	canonical := canonicalName(h.Mapping().Resource.Resource)
 	if _, exists := handlers[canonical]; exists {
