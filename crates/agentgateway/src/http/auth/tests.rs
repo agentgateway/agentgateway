@@ -1,10 +1,16 @@
-use secrecy::SecretString;
-use serde_json::Map;
+use std::collections::HashMap;
 
+use base64::Engine;
+use secrecy::SecretString;
+use serde_json::{Map, Value, json};
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+
+use super::idjag::IdentityAssertion;
 use super::*;
 use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
-use crate::test_helpers::proxymock::setup_proxy_test;
+use crate::test_helpers::proxymock::{TestBind, setup_proxy_test};
 
 #[test]
 fn test_aws_auth_deserializes_assume_role() {
@@ -393,4 +399,349 @@ async fn test_aws_sign_request_implicit_with_extension() {
 	}
 
 	result.expect("signing failed");
+}
+
+// ---------------------------------------------------------------------------
+// Identity Assertion (ID-JAG / Cross App Access) — BackendAuth::IdentityAssertion
+// ---------------------------------------------------------------------------
+
+// EC P-256 (ES256) private key used only for the private_key_jwt signing test.
+const TEST_EC_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
+7OtwJIZ/dpm8ygE2MBTjPCY3hgahRANCAARYzu50EeBrT0rELmTGroaGtn0zdjxL
+1lOGr9fGw5wOGcXO0+Gn5F5sIxGyTM0FwnUHFNz2SoixZR5dtxhNc+Lo
+-----END PRIVATE KEY-----
+";
+
+/// Build a request carrying an authenticated identity (a JWT + `sub` claim), as the
+/// `jwtAuthentication` policy would leave it.
+fn request_with_identity(sub: &str, raw_jwt: &str) -> crate::http::Request {
+	let mut inner = Map::new();
+	inner.insert("sub".into(), json!(sub));
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.extensions_mut().insert(Claims {
+		inner,
+		jwt: SecretString::new(raw_jwt.into()),
+	});
+	req
+}
+
+fn idjag_backend_info(t: &TestBind) -> BackendInfo {
+	BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs: t.inputs(),
+	}
+}
+
+fn idjag_config(idp: &MockServer, resource_as: &MockServer, idp_auth: Value) -> Value {
+	json!({
+		"idp": {
+			"tokenEndpoint": format!("{}/token", idp.uri()),
+			"clientId": "gw-idp",
+			"clientAuth": idp_auth,
+		},
+		"resourceAs": {
+			"tokenEndpoint": format!("{}/token", resource_as.uri()),
+			"clientId": "gw-ras",
+			"clientAuth": { "clientSecretPost": { "clientSecret": "ras-secret" } },
+		},
+		"audience": "https://resource-as.example/",
+		"scope": "chat.read chat.history",
+	})
+}
+
+/// Parse the last form-urlencoded request body received by a mock server into a map.
+async fn last_form(server: &MockServer) -> HashMap<String, String> {
+	let reqs = server.received_requests().await.expect("recording enabled");
+	let last = reqs.last().expect("at least one request");
+	serde_urlencoded::from_bytes(&last.body).expect("form-encoded body")
+}
+
+async fn mount_idp(server: &MockServer, expect: u64) {
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"issued_token_type": "urn:ietf:params:oauth:token-type:id-jag",
+			"access_token": "the-id-jag",
+			"token_type": "N_A",
+			"scope": "chat.read chat.history",
+			"expires_in": 300,
+		})))
+		.expect(expect)
+		.mount(server)
+		.await;
+}
+
+async fn mount_resource_as(server: &MockServer, expect: u64) {
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"token_type": "Bearer",
+			"access_token": "backend-access-token",
+			"expires_in": 3600,
+			"scope": "chat.read chat.history",
+		})))
+		.expect(expect)
+		.mount(server)
+		.await;
+}
+
+#[tokio::test]
+async fn test_identity_assertion_happy_path_sends_spec_params() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	mount_idp(&idp, 1).await;
+	mount_resource_as(&resource_as, 1).await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+
+	let mut req = request_with_identity("user-1", "header.payload.signature");
+	apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect("apply backend auth");
+
+	let auth = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header set");
+	assert_eq!(auth.to_str().unwrap(), "Bearer backend-access-token");
+	assert!(auth.is_sensitive());
+
+	// Step 1 (IdP) carried the exact RFC 8693 / ID-JAG parameters.
+	let idp_form = last_form(&idp).await;
+	assert_eq!(
+		idp_form.get("grant_type").map(String::as_str),
+		Some("urn:ietf:params:oauth:grant-type:token-exchange")
+	);
+	assert_eq!(
+		idp_form.get("requested_token_type").map(String::as_str),
+		Some("urn:ietf:params:oauth:token-type:id-jag")
+	);
+	assert_eq!(
+		idp_form.get("subject_token").map(String::as_str),
+		Some("header.payload.signature")
+	);
+	assert_eq!(
+		idp_form.get("subject_token_type").map(String::as_str),
+		Some("urn:ietf:params:oauth:token-type:id_token")
+	);
+	assert_eq!(
+		idp_form.get("audience").map(String::as_str),
+		Some("https://resource-as.example/")
+	);
+
+	// Step 2 (resource AS) presented the ID-JAG as a JWT bearer assertion.
+	let ras_form = last_form(&resource_as).await;
+	assert_eq!(
+		ras_form.get("grant_type").map(String::as_str),
+		Some("urn:ietf:params:oauth:grant-type:jwt-bearer")
+	);
+	assert_eq!(
+		ras_form.get("assertion").map(String::as_str),
+		Some("the-id-jag")
+	);
+	// The configured scope must be forwarded on the jwt-bearer leg too; the resource AS does
+	// not default to the ID-JAG's scopes.
+	assert_eq!(
+		ras_form.get("scope").map(String::as_str),
+		Some("chat.read chat.history")
+	);
+	// client_secret_post credentials on the resource AS leg.
+	assert_eq!(
+		ras_form.get("client_id").map(String::as_str),
+		Some("gw-ras")
+	);
+	assert_eq!(
+		ras_form.get("client_secret").map(String::as_str),
+		Some("ras-secret")
+	);
+}
+
+#[tokio::test]
+async fn test_identity_assertion_second_call_is_cached() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	// expect exactly one call to each endpoint despite two apply() invocations.
+	mount_idp(&idp, 1).await;
+	mount_resource_as(&resource_as, 1).await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+	let auth = BackendAuth::IdentityAssertion(Box::new(cfg));
+
+	for _ in 0..2 {
+		let mut req = request_with_identity("user-1", "header.payload.signature");
+		apply_backend_auth(&idjag_backend_info(&t), &auth, &mut req)
+			.await
+			.expect("apply backend auth");
+		assert_eq!(
+			req.headers().get(http::header::AUTHORIZATION).unwrap(),
+			"Bearer backend-access-token"
+		);
+	}
+	// .expect(1) on each mock is verified when the servers drop.
+	assert_eq!(idp.received_requests().await.unwrap().len(), 1);
+	assert_eq!(resource_as.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_identity_assertion_client_secret_basic() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	mount_idp(&idp, 1).await;
+	mount_resource_as(&resource_as, 1).await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+
+	let mut req = request_with_identity("user-1", "header.payload.signature");
+	apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect("apply backend auth");
+
+	let reqs = idp.received_requests().await.unwrap();
+	let auth = reqs[0]
+		.headers
+		.get(http::header::AUTHORIZATION)
+		.expect("idp request has basic auth");
+	let expected = format!(
+		"Basic {}",
+		base64::engine::general_purpose::STANDARD.encode("gw-idp:idp-secret")
+	);
+	assert_eq!(auth.to_str().unwrap(), expected);
+}
+
+#[tokio::test]
+async fn test_identity_assertion_private_key_jwt() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	mount_idp(&idp, 1).await;
+	mount_resource_as(&resource_as, 1).await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({
+			"privateKeyJwt": {
+				"signingKey": TEST_EC_PRIVATE_KEY_PEM,
+				"alg": "ES256",
+				"kid": "test-kid",
+			}
+		}),
+	))
+	.expect("config deserializes");
+
+	let mut req = request_with_identity("user-1", "header.payload.signature");
+	apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect("apply backend auth");
+
+	let idp_form = last_form(&idp).await;
+	assert_eq!(
+		idp_form.get("client_assertion_type").map(String::as_str),
+		Some("urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
+	);
+	let assertion = idp_form
+		.get("client_assertion")
+		.expect("client_assertion present");
+
+	// Decode the JWT payload (signature not verified here) and check the claims.
+	let payload_b64 = assertion.split('.').nth(1).expect("jwt has a payload");
+	let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+		.decode(payload_b64)
+		.expect("payload is base64url");
+	let claims: Value = serde_json::from_slice(&payload).expect("payload is json");
+	assert_eq!(claims["iss"], "gw-idp");
+	assert_eq!(claims["sub"], "gw-idp");
+	assert_eq!(claims["aud"], format!("{}/token", idp.uri()));
+	assert!(claims.get("jti").and_then(Value::as_str).is_some());
+}
+
+#[tokio::test]
+async fn test_identity_assertion_idp_error_is_surfaced() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(401).set_body_json(json!({ "error": "invalid_grant" })))
+		.mount(&idp)
+		.await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+
+	let mut req = request_with_identity("user-1", "header.payload.signature");
+	let err = apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect_err("should fail when the IdP rejects the exchange");
+	assert!(req.headers().get(http::header::AUTHORIZATION).is_none());
+	assert!(err.to_string().contains("401") || err.to_string().contains("ID-JAG"));
+}
+
+#[tokio::test]
+async fn test_identity_assertion_missing_identity_is_rejected() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+
+	// No Claims inserted into the request.
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let err = apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect_err("should fail without an authenticated identity");
+	assert!(err.to_string().contains("authenticated request"));
 }

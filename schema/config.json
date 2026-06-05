@@ -2753,6 +2753,18 @@
             "azure"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "identityAssertion": {
+              "$ref": "#/$defs/IdentityAssertion"
+            }
+          },
+          "required": [
+            "identityAssertion"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -3076,6 +3088,170 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "IdentityAssertion": {
+      "description": "Configuration for the Identity Assertion (ID-JAG) backend auth grant.",
+      "type": "object",
+      "properties": {
+        "idp": {
+          "description": "The user's IdP authorization server, used for the RFC 8693 token exchange (step 1).",
+          "$ref": "#/$defs/TokenEndpointConfig"
+        },
+        "resourceAs": {
+          "description": "The resource's authorization server, which exchanges the ID-JAG for an access token (step 2).",
+          "$ref": "#/$defs/TokenEndpointConfig"
+        },
+        "audience": {
+          "description": "Identifier of the resource authorization server. Sent as the `audience` of the token\nexchange; the issued ID-JAG is bound to it and may not be reused for another server.",
+          "type": "string"
+        },
+        "resource": {
+          "description": "Identifier of the protected resource (RFC 8707). If unset, defaults to the backend\nhostname (`https://<host>`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "description": "Space-separated scopes to request. The authorization server may grant a subset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cacheTtl": {
+          "description": "Upper bound on how long an issued access token is cached. The effective TTL is the\nsmaller of this and the token's own `expires_in`. Defaults to the token's `expires_in`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "idp",
+        "resourceAs",
+        "audience"
+      ]
+    },
+    "TokenEndpointConfig": {
+      "description": "A single OAuth token endpoint plus the client credentials used to authenticate to it.",
+      "type": "object",
+      "properties": {
+        "tokenEndpoint": {
+          "description": "Absolute URL of the token endpoint.",
+          "type": "string"
+        },
+        "clientId": {
+          "description": "Client identifier registered at this authorization server.",
+          "type": "string"
+        },
+        "clientAuth": {
+          "description": "How the gateway authenticates as the client to this endpoint.",
+          "$ref": "#/$defs/ClientAuth"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tokenEndpoint",
+        "clientId",
+        "clientAuth"
+      ]
+    },
+    "ClientAuth": {
+      "description": "Client authentication method for a token endpoint.",
+      "oneOf": [
+        {
+          "description": "`client_secret_basic`: HTTP Basic auth with the client id and secret.",
+          "type": "object",
+          "properties": {
+            "clientSecretBasic": {
+              "type": "object",
+              "properties": {
+                "clientSecret": {
+                  "$ref": "#/$defs/FileOrInline"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "clientSecret"
+              ]
+            }
+          },
+          "required": [
+            "clientSecretBasic"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "`client_secret_post`: client id and secret sent as form parameters.",
+          "type": "object",
+          "properties": {
+            "clientSecretPost": {
+              "type": "object",
+              "properties": {
+                "clientSecret": {
+                  "$ref": "#/$defs/FileOrInline"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "clientSecret"
+              ]
+            }
+          },
+          "required": [
+            "clientSecretPost"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "`private_key_jwt`: a signed JWT client assertion (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "privateKeyJwt": {
+              "type": "object",
+              "properties": {
+                "signingKey": {
+                  "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "alg": {
+                  "description": "Signing algorithm. Defaults to RS256.",
+                  "$ref": "#/$defs/SigningAlg",
+                  "default": "RS256"
+                },
+                "kid": {
+                  "description": "Optional `kid` header to include in the client assertion.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "signingKey"
+              ]
+            }
+          },
+          "required": [
+            "privateKeyJwt"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SigningAlg": {
+      "description": "Signing algorithm for the `private_key_jwt` client assertion.",
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "ES256",
+        "ES384"
       ]
     },
     "HTTP": {
