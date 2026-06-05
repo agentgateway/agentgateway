@@ -115,7 +115,7 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: 'failed to build extAuth: backendRef denied-chain-backend/backend-ns
+        message: 'failed to build extAuth: backendRef backend-ns/denied-chain-backend
           not accessible to an AgentgatewayPolicy in namespace "default" (missing
           a ReferenceGrant?)'
         reason: PartiallyValid

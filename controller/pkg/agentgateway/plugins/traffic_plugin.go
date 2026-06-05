@@ -1621,7 +1621,7 @@ func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaul
 			gk,
 			ctx.Collections.Settings.BackendRefGrantMode,
 		) {
-			return fmt.Errorf("backendRef %v/%v not accessible to an AgentgatewayPolicy in namespace %q (missing a ReferenceGrant?)", ref.Name, *ref.Namespace, defaultNS)
+			return fmt.Errorf("backendRef %v/%v not accessible to an AgentgatewayPolicy in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, defaultNS)
 		}
 	}
 	return nil

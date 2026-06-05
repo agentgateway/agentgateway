@@ -34,7 +34,7 @@ func TestReferences(t *testing.T) {
 
 func TestPolicyReferenceGrants(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/references-policy-refgrants", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
-		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeAll
+		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeRouteAndPolicy
 		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {

@@ -40,9 +40,9 @@ const (
 	XdsModeTLS       XdsMode = "tls"
 	XdsModeEither    XdsMode = "either"
 
-	BackendRefGrantModeAll   BackendRefGrantMode = "all"
-	BackendRefGrantModeRoute BackendRefGrantMode = "route"
-	BackendRefGrantModeNone  BackendRefGrantMode = "none"
+	BackendRefGrantModeRouteAndPolicy BackendRefGrantMode = "route-and-policy"
+	BackendRefGrantModeRoute          BackendRefGrantMode = "route"
+	BackendRefGrantModeNone           BackendRefGrantMode = "none"
 )
 
 // Decode implements envconfig.Decoder.
@@ -79,20 +79,20 @@ func (m *XdsMode) Decode(value string) error {
 func (m *BackendRefGrantMode) Decode(value string) error {
 	mode := BackendRefGrantMode(strings.ToLower(value))
 	switch mode {
-	case BackendRefGrantModeAll, BackendRefGrantModeRoute, BackendRefGrantModeNone:
+	case BackendRefGrantModeRouteAndPolicy, BackendRefGrantModeRoute, BackendRefGrantModeNone:
 		*m = mode
 		return nil
 	default:
-		return fmt.Errorf("invalid backend ReferenceGrant mode: %q (supported: all, route, none)", value)
+		return fmt.Errorf("invalid backend ReferenceGrant mode: %q (supported: route-and-policy, route, none)", value)
 	}
 }
 
 func (m BackendRefGrantMode) RequireRouteBackendGrant() bool {
-	return m == "" || m == BackendRefGrantModeAll || m == BackendRefGrantModeRoute
+	return m == "" || m == BackendRefGrantModeRouteAndPolicy || m == BackendRefGrantModeRoute
 }
 
 func (m BackendRefGrantMode) RequirePolicyBackendGrant() bool {
-	return m == BackendRefGrantModeAll
+	return m == BackendRefGrantModeRouteAndPolicy
 }
 
 // GatewayClassParametersRefs maps GatewayClass names to ParametersReference
@@ -206,7 +206,7 @@ type Settings struct {
 
 	// BackendRefGrantMode controls when ReferenceGrant is required for cross-namespace backend refs.
 	// Secret refs always require ReferenceGrant.
-	// - all: require ReferenceGrant for Route -> Backend and AgentgatewayPolicy -> Backend
+	// - route-and-policy: require ReferenceGrant for Route -> Backend and AgentgatewayPolicy -> Backend
 	// - route: require ReferenceGrant only for Route -> Backend
 	// - none: do not require ReferenceGrant for backend refs
 	BackendRefGrantMode BackendRefGrantMode `split_words:"true" default:"route"`
