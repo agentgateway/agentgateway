@@ -890,6 +890,272 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	assert_eq!(llm_request.params.max_tokens, Some(1024));
 }
 
+fn messages_backend_info() -> crate::http::auth::BackendInfo {
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	crate::http::auth::BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 443)),
+		inputs,
+	}
+}
+
+async fn process_messages_json(
+	provider: AIProvider,
+	uri: &str,
+	body: Value,
+) -> (::http::Uri, Value, LLMRequest) {
+	let req = ::http::Request::builder()
+		.method("POST")
+		.uri(uri)
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_messages_request(&messages_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let uri = forwarded.uri().clone();
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	(uri, forwarded_json, llm_request)
+}
+
+#[tokio::test]
+async fn anthropic_messages_lifts_system_role_message() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let (uri, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages?beta=true",
+		json!({
+			"model": "claude-sonnet-4-6",
+			"max_tokens": 128,
+			"messages": [
+				{"role": "system", "content": "You are helpful."},
+				{"role": "user", "content": "Say hi"}
+			],
+			"metadata": {"user_id": "test-user"}
+		}),
+	)
+	.await;
+
+	assert_eq!(
+		uri.path_and_query().unwrap().as_str(),
+		"/v1/messages?beta=true"
+	);
+	assert_eq!(forwarded_json["system"], json!("You are helpful."));
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": "Say hi"}
+		])
+	);
+	assert_eq!(forwarded_json["metadata"], json!({"user_id": "test-user"}));
+}
+
+#[tokio::test]
+async fn anthropic_messages_appends_lifted_system_to_existing_system() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let (_, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages",
+		json!({
+			"model": "claude-sonnet-4-6",
+			"max_tokens": 128,
+			"system": "Existing system.",
+			"messages": [
+				{"role": "system", "content": "Lifted system."},
+				{"role": "user", "content": "Say hi"}
+			]
+		}),
+	)
+	.await;
+
+	assert_eq!(
+		forwarded_json["system"],
+		json!([
+			{"type": "text", "text": "Existing system."},
+			{"type": "text", "text": "Lifted system."}
+		])
+	);
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": "Say hi"}
+		])
+	);
+}
+
+#[tokio::test]
+async fn anthropic_messages_lifts_multiple_system_role_messages_in_order() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let (_, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages",
+		json!({
+			"model": "claude-sonnet-4-6",
+			"max_tokens": 128,
+			"messages": [
+				{"role": "system", "content": "First system."},
+				{"role": "system", "content": "Second system."},
+				{"role": "user", "content": "Say hi"}
+			]
+		}),
+	)
+	.await;
+
+	assert_eq!(
+		forwarded_json["system"],
+		json!([
+			{"type": "text", "text": "First system."},
+			{"type": "text", "text": "Second system."}
+		])
+	);
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": "Say hi"}
+		])
+	);
+}
+
+#[tokio::test]
+async fn anthropic_messages_lifts_non_leading_system_role_message() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let (_, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages",
+		json!({
+			"model": "claude-sonnet-4-6",
+			"max_tokens": 128,
+			"messages": [
+				{"role": "user", "content": "First user."},
+				{"role": "system", "content": "Middle system."},
+				{"role": "assistant", "content": "Assistant reply."}
+			]
+		}),
+	)
+	.await;
+
+	assert_eq!(forwarded_json["system"], json!("Middle system."));
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": "First user."},
+			{"role": "assistant", "content": "Assistant reply."}
+		])
+	);
+}
+
+#[tokio::test]
+async fn anthropic_messages_lifts_content_block_system_message() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let (_, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages",
+		json!({
+			"model": "claude-sonnet-4-6",
+			"max_tokens": 128,
+			"messages": [
+				{
+					"role": "system",
+					"content": [
+						{
+							"type": "text",
+							"text": "Block system.",
+							"cache_control": {"type": "ephemeral"}
+						}
+					]
+				},
+				{"role": "user", "content": "Say hi"}
+			]
+		}),
+	)
+	.await;
+
+	assert_eq!(
+		forwarded_json["system"],
+		json!([
+			{
+				"type": "text",
+				"text": "Block system.",
+				"cache_control": {"type": "ephemeral"}
+			}
+		])
+	);
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": "Say hi"}
+		])
+	);
+}
+
+#[tokio::test]
+async fn anthropic_messages_without_system_role_messages_remain_unchanged() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let input = json!({
+		"model": "claude-sonnet-4-6",
+		"max_tokens": 128,
+		"system": "Existing system.",
+		"messages": [
+			{"role": "user", "content": "Say hi"},
+			{"role": "assistant", "content": "Hi"}
+		],
+		"temperature": 0.2
+	});
+	let (_, forwarded_json, _) = process_messages_json(provider, "/v1/messages", input.clone()).await;
+
+	assert_eq!(forwarded_json, input);
+}
+
+#[tokio::test]
+async fn bedrock_messages_accepts_system_role_message_after_normalization() {
+	let provider = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	});
+	let (_, forwarded_json, _) = process_messages_json(
+		provider,
+		"/v1/messages",
+		json!({
+			"model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+			"max_tokens": 128,
+			"messages": [
+				{"role": "system", "content": "You are helpful."},
+				{"role": "user", "content": "Say hi"}
+			]
+		}),
+	)
+	.await;
+
+	assert_eq!(
+		forwarded_json["system"],
+		json!([
+			{"text": "You are helpful."}
+		])
+	);
+	assert_eq!(
+		forwarded_json["messages"],
+		json!([
+			{"role": "user", "content": [{"text": "Say hi"}]}
+		])
+	);
+}
+
 #[test]
 fn openai_token_limit_normalization_keeps_explicit_max_completion_tokens() {
 	let mut request: types::completions::Request = serde_json::from_value(json!({

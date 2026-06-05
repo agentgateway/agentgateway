@@ -73,6 +73,63 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+impl From<ContentPart> for TextPart {
+	fn from(part: ContentPart) -> Self {
+		match part {
+			ContentPart::Text { r#type, text, rest } => TextPart::Text { r#type, text, rest },
+			ContentPart::Unknown(value) => TextPart::Unknown(value),
+		}
+	}
+}
+
+impl From<ContentBlock> for TextBlock {
+	fn from(content: ContentBlock) -> Self {
+		match content {
+			ContentBlock::Text(text) => TextBlock::Text(text),
+			ContentBlock::Array(parts) => {
+				TextBlock::Array(parts.into_iter().map(TextPart::from).collect())
+			},
+		}
+	}
+}
+
+fn text_part(text: String) -> TextPart {
+	TextPart::Text {
+		r#type: "text".to_string(),
+		text,
+		rest: Default::default(),
+	}
+}
+
+fn text_block_into_parts(block: TextBlock) -> Vec<TextPart> {
+	match block {
+		TextBlock::Text(text) => vec![text_part(text)],
+		TextBlock::Array(parts) => parts,
+	}
+}
+
+fn append_lifted_system_content(system: &mut Option<TextBlock>, lifted: Vec<TextBlock>) {
+	if lifted.is_empty() {
+		return;
+	}
+
+	if system.is_none() && lifted.len() == 1 {
+		*system = lifted.into_iter().next();
+		return;
+	}
+
+	let mut parts = match std::mem::take(system) {
+		Some(existing) => text_block_into_parts(existing),
+		None => Vec::new(),
+	};
+
+	for block in lifted {
+		parts.extend(text_block_into_parts(block));
+	}
+
+	*system = Some(TextBlock::Array(parts));
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
 	pub id: String,
@@ -177,6 +234,26 @@ pub fn get_messages_helper(
 		}
 	}));
 	out
+}
+
+impl Request {
+	pub(crate) fn normalize_system_role_messages(&mut self) {
+		let mut lifted_system = Vec::new();
+		let mut messages = Vec::with_capacity(self.messages.len());
+
+		for message in std::mem::take(&mut self.messages) {
+			if message.role == "system" {
+				if let Some(content) = message.content {
+					lifted_system.push(TextBlock::from(content));
+				}
+			} else {
+				messages.push(message);
+			}
+		}
+
+		self.messages = messages;
+		append_lifted_system_content(&mut self.system, lifted_system);
+	}
 }
 
 impl RequestType for Request {
@@ -289,21 +366,15 @@ pub fn prepend_prompts_helper(
 	if !system_prompts.is_empty() {
 		let mut items: Vec<TextPart> = match std::mem::take(system) {
 			Some(TextBlock::Array(existing)) => existing,
-			Some(TextBlock::Text(text)) => vec![TextPart::Text {
-				r#type: "text".to_string(),
-				text,
-				rest: Default::default(),
-			}],
+			Some(TextBlock::Text(text)) => vec![text_part(text)],
 			None => Vec::new(),
 		};
 
 		items.splice(
 			0..0,
-			system_prompts.into_iter().map(|p| TextPart::Text {
-				r#type: "text".to_string(),
-				text: p.content.to_string(),
-				rest: Default::default(),
-			}),
+			system_prompts
+				.into_iter()
+				.map(|p| text_part(p.content.to_string())),
 		);
 
 		*system = Some(TextBlock::Array(items));
@@ -325,20 +396,16 @@ pub fn append_prompts_helper(
 
 	if !system_prompts.is_empty() {
 		let mut items: Vec<TextPart> = match std::mem::take(system) {
-			Some(TextBlock::Text(text)) => vec![TextPart::Text {
-				r#type: "text".to_string(),
-				text,
-				rest: Default::default(),
-			}],
+			Some(TextBlock::Text(text)) => vec![text_part(text)],
 			Some(TextBlock::Array(existing)) => existing,
 			None => Vec::new(),
 		};
 
-		items.extend(system_prompts.into_iter().map(|p| TextPart::Text {
-			r#type: "text".to_string(),
-			text: p.content.to_string(),
-			rest: Default::default(),
-		}));
+		items.extend(
+			system_prompts
+				.into_iter()
+				.map(|p| text_part(p.content.to_string())),
+		);
 
 		*system = Some(TextBlock::Array(items));
 	}

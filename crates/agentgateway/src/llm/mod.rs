@@ -684,9 +684,10 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let (parts, req) = self
+		let (parts, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
 			.await?;
+		req.normalize_system_role_messages();
 
 		self
 			.process_request(
