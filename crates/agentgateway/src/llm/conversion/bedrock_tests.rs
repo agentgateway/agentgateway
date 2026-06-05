@@ -40,43 +40,37 @@ fn test_extract_beta_headers_variants() {
 	assert!(helpers::extract_beta_headers(&headers).unwrap().is_none());
 
 	let mut headers = HeaderMap::new();
-	headers.insert(
-		"anthropic-beta",
-		"prompt-caching-2024-07-31".parse().unwrap(),
-	);
+	headers.insert("anthropic-beta", "computer-use-2025-01-24".parse().unwrap());
 	assert_eq!(
 		helpers::extract_beta_headers(&headers).unwrap().unwrap(),
-		vec![json!("prompt-caching-2024-07-31")]
+		vec![json!("computer-use-2025-01-24")]
 	);
 
 	let mut headers = HeaderMap::new();
 	headers.insert(
 		"anthropic-beta",
-		"cache-control-2024-08-15,computer-use-2024-10-22"
+		"cache-control-2024-08-15,computer-use-2025-01-24,tool-examples-2025-10-29"
 			.parse()
 			.unwrap(),
 	);
 	assert_eq!(
 		helpers::extract_beta_headers(&headers).unwrap().unwrap(),
 		vec![
-			json!("cache-control-2024-08-15"),
-			json!("computer-use-2024-10-22"),
+			json!("computer-use-2025-01-24"),
+			json!("tool-examples-2025-10-29"),
 		]
 	);
 
 	let mut headers = HeaderMap::new();
 	headers.insert(
 		"anthropic-beta",
-		" cache-control-2024-08-15 , computer-use-2024-10-22 "
+		" cache-control-2024-08-15 , computer-use-2025-01-24 "
 			.parse()
 			.unwrap(),
 	);
 	assert_eq!(
 		helpers::extract_beta_headers(&headers).unwrap().unwrap(),
-		vec![
-			json!("cache-control-2024-08-15"),
-			json!("computer-use-2024-10-22"),
-		]
+		vec![json!("computer-use-2025-01-24"),]
 	);
 
 	let mut headers = HeaderMap::new();
@@ -84,7 +78,14 @@ fn test_extract_beta_headers_variants() {
 		"anthropic-beta",
 		"cache-control-2024-08-15".parse().unwrap(),
 	);
-	headers.append("anthropic-beta", "computer-use-2024-10-22".parse().unwrap());
+	headers.append(
+		"anthropic-beta",
+		"interleaved-thinking-2025-05-14".parse().unwrap(),
+	);
+	headers.append(
+		"anthropic-beta",
+		"tool-search-tool-2025-10-19".parse().unwrap(),
+	);
 	let mut beta_features = helpers::extract_beta_headers(&headers)
 		.unwrap()
 		.unwrap()
@@ -95,10 +96,17 @@ fn test_extract_beta_headers_variants() {
 	assert_eq!(
 		beta_features,
 		vec![
-			"cache-control-2024-08-15".to_string(),
-			"computer-use-2024-10-22".to_string(),
+			"interleaved-thinking-2025-05-14".to_string(),
+			"tool-search-tool-2025-10-19".to_string(),
 		]
 	);
+
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"anthropic-beta",
+		"prompt-caching-2024-07-31".parse().unwrap(),
+	);
+	assert!(helpers::extract_beta_headers(&headers).unwrap().is_none());
 }
 
 #[test]

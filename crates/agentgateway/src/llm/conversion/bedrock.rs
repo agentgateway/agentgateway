@@ -2667,6 +2667,20 @@ mod helpers {
 	pub fn extract_beta_headers(
 		headers: &crate::http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+		// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
+		const ALLOWED_BETA_HEADERS: &[&str] = &[
+			"computer-use-2025-01-24",
+			"token-efficient-tools-2025-02-19",
+			"interleaved-thinking-2025-05-14",
+			"output-128k-2025-02-19",
+			"dev-full-thinking-2025-05-14",
+			"context-1m-2025-08-07",
+			"context-management-2025-06-27",
+			"effort-2025-11-24",
+			"tool-search-tool-2025-10-19",
+			"tool-examples-2025-10-29",
+		];
+
 		let mut beta_features = Vec::new();
 
 		// Collect all anthropic-beta header values
@@ -2678,7 +2692,7 @@ mod helpers {
 			// Handle comma-separated values within a single header
 			for feature in header_str.split(',') {
 				let trimmed = feature.trim();
-				if !trimmed.is_empty() {
+				if ALLOWED_BETA_HEADERS.contains(&trimmed) {
 					// Add each beta feature as a string value in the array
 					beta_features.push(serde_json::Value::String(trimmed.to_string()));
 				}
