@@ -1393,6 +1393,10 @@ pub struct McpBackend {
 	#[serde(with = "crate::serdes::serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub session_idle_ttl: Duration,
+	/// When true, `.well-known/` OAuth discovery requests are forwarded to the backend
+	/// MCP server instead of being handled by the gateway. This enables hosting MCP servers
+	/// that have their own OAuth flow behind the gateway while preserving observability.
+	pub oauth_passthrough: bool,
 }
 
 impl McpBackend {

@@ -648,6 +648,56 @@ impl TestBind {
 		self.with_mcp_backend_policies(b, stateful, legacy_sse, Default::default())
 	}
 
+	pub fn with_mcp_backend_oauth_passthrough(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendTrafficPolicy>,
+	) -> Self {
+		let opb = Backend::Opaque(
+			ResourceName::new(strng::format!("basic-{}", b), "".into()),
+			Target::Address(b),
+		);
+		let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", b));
+		let b = Backend::MCP(
+			ResourceName::new(strng::format!("{}", b), "".into()),
+			McpBackend {
+				targets: vec![Arc::new(McpTarget {
+					name: "mcp".into(),
+					spec: if !legacy_sse {
+						McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
+							backend: sb,
+							path: "/mcp".to_string(),
+						})
+					} else {
+						McpTargetSpec::Sse(SseTargetSpec {
+							backend: sb,
+							path: "/sse".to_string(),
+						})
+					},
+				})],
+				stateful,
+				always_use_prefix: false,
+				failure_mode: FailureMode::FailClosed,
+				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				oauth_passthrough: true,
+			},
+		);
+		{
+			let mut bw = self.pi.stores.binds.write();
+			bw.insert_backend(opb.name(), opb.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
+		}
+		self
+	}
+
 	pub fn with_mcp_backend_policies(
 		self,
 		b: SocketAddr,
@@ -681,6 +731,7 @@ impl TestBind {
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				oauth_passthrough: false,
 			},
 		);
 		{
@@ -730,6 +781,7 @@ impl TestBind {
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				oauth_passthrough: false,
 			},
 		);
 		{

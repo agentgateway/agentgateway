@@ -1044,6 +1044,7 @@ impl LocalBackend {
 					}),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					oauth_passthrough: tgt.oauth_passthrough,
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1115,6 +1116,11 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// When true, `.well-known/` OAuth discovery requests are forwarded to the backend
+	/// MCP server instead of being handled by the gateway. Use this when the target MCP
+	/// server has its own OAuth flow.
+	#[serde(default)]
+	pub oauth_passthrough: bool,
 }
 
 #[apply(schema_de!)]

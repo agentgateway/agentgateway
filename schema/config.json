@@ -5341,6 +5341,11 @@
               "type": "null"
             }
           ]
+        },
+        "oauthPassthrough": {
+          "description": "When true, `.well-known/` OAuth discovery requests are forwarded to the backend\nMCP server instead of being handled by the gateway. Use this when the target MCP\nserver has its own OAuth flow.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -8054,6 +8059,11 @@
               "type": "null"
             }
           ]
+        },
+        "oauthPassthrough": {
+          "description": "When true, `.well-known/` OAuth discovery requests are forwarded to the backend\nMCP server instead of being handled by the gateway. Use this when the target MCP\nserver has its own OAuth flow.",
+          "type": "boolean",
+          "default": false
         },
         "policies": {
           "anyOf": [

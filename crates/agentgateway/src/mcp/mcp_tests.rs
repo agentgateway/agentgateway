@@ -996,6 +996,97 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 	);
 }
 
+#[tokio::test]
+async fn mcp_oauth_passthrough_forwards_well_known_to_backend() {
+	// Start a simple HTTP server that responds to .well-known requests with a custom header
+	// to prove the request was forwarded rather than handled by the gateway.
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let _server = tokio::spawn(async move {
+		loop {
+			let (stream, _) = listener.accept().await.unwrap();
+			tokio::spawn(async move {
+				let io = hyper_util::rt::TokioIo::new(stream);
+				let service =
+					hyper::service::service_fn(|req: hyper::Request<hyper::body::Incoming>| async move {
+						if req.uri().path().contains("/.well-known/") {
+							Ok::<_, std::convert::Infallible>(
+								hyper::Response::builder()
+									.status(200)
+									.header("content-type", "application/json")
+									.header("x-oauth-source", "backend-mcp")
+									.body(http_body_util::Full::new(bytes::Bytes::from(
+										r#"{"resource":"https://backend-mcp.example.com"}"#,
+									)))
+									.unwrap(),
+							)
+						} else {
+							Ok(
+								hyper::Response::builder()
+									.status(404)
+									.body(http_body_util::Full::new(bytes::Bytes::new()))
+									.unwrap(),
+							)
+						}
+					});
+				let _ = hyper::server::conn::http1::Builder::new()
+					.serve_connection(io, service)
+					.await;
+			});
+		}
+	});
+
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: "https://issuer.example.com".to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![],
+			crate::http::jwt::Mode::Strict,
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+		)),
+		mode: crate::types::agent::McpAuthenticationMode::Strict,
+		client_id: None,
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_oauth_passthrough(
+			addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(addr));
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	// With oauth_passthrough=true, .well-known/ requests should be forwarded to the backend
+	// instead of being intercepted by the gateway's OAuth handler.
+	let resp = reqwest::Client::new()
+		.get(format!(
+			"http://{io}/.well-known/oauth-protected-resource/mcp"
+		))
+		.send()
+		.await
+		.expect("metadata request should complete");
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	// The backend's custom header proves the request was forwarded, not handled locally
+	assert_eq!(
+		resp
+			.headers()
+			.get("x-oauth-source")
+			.and_then(|v| v.to_str().ok()),
+		Some("backend-mcp"),
+		"request should have been forwarded to the backend MCP server"
+	);
+}
+
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
 	let tools = client.list_tools(None).await.unwrap();
 	let t = tools
