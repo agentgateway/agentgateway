@@ -196,14 +196,20 @@ func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Se
 	checksumHex := hex.EncodeToString(checksum[:])
 
 	for _, obj := range rendered {
-		deployment, ok := obj.(*appsv1.Deployment)
-		if !ok {
+		var template *corev1.PodTemplateSpec
+		switch workload := obj.(type) {
+		case *appsv1.Deployment:
+			template = &workload.Spec.Template
+		case *appsv1.DaemonSet:
+			template = &workload.Spec.Template
+		default:
 			continue
 		}
-		if deployment.Spec.Template.Annotations == nil {
-			deployment.Spec.Template.Annotations = map[string]string{}
+
+		if template.Annotations == nil {
+			template.Annotations = map[string]string{}
 		}
-		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation] = checksumHex
+		template.Annotations[sessionKeyChecksumAnnotation] = checksumHex
 	}
 
 	return nil

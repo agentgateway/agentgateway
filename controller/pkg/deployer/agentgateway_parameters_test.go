@@ -462,6 +462,7 @@ func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
 
 func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 	deployment := &appsv1.Deployment{}
+	daemonSet := &appsv1.DaemonSet{}
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "gw-session-key",
@@ -472,11 +473,11 @@ func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
 		},
 	}
 
-	err := addSessionKeyChecksumAnnotation([]client.Object{deployment}, secret)
+	err := addSessionKeyChecksumAnnotation([]client.Object{deployment, daemonSet}, secret)
 	require.NoError(t, err)
+	checksum := "2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737"
 	require.NotNil(t, deployment.Spec.Template.Annotations)
-	assert.Equal(t,
-		"2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737",
-		deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation],
-	)
+	assert.Equal(t, checksum, deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation])
+	require.NotNil(t, daemonSet.Spec.Template.Annotations)
+	assert.Equal(t, checksum, daemonSet.Spec.Template.Annotations[sessionKeyChecksumAnnotation])
 }
