@@ -42,7 +42,7 @@ pub struct Executor<'a> {
 
 	pub response: Option<ResponseRef<'a>>,
 
-	pub proxy: Option<&'a ProxyContext>,
+	pub proxy: ExtensionOrDirect<'a, ProxyContext>,
 
 	pub env: EnvContext,
 
@@ -88,6 +88,26 @@ pub struct ProxyContext {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub response_processing_duration: Option<CelDuration>,
+}
+
+impl ProxyContext {
+	pub fn from_std_durations(
+		request_processing_duration: Option<std::time::Duration>,
+		upstream_duration: Option<std::time::Duration>,
+		response_processing_duration: Option<std::time::Duration>,
+	) -> Self {
+		fn proxy_duration(duration: Option<std::time::Duration>) -> Option<CelDuration> {
+			duration
+				.and_then(|duration| chrono::Duration::from_std(duration).ok())
+				.map(Into::into)
+		}
+
+		Self {
+			request_processing_duration: proxy_duration(request_processing_duration),
+			upstream_duration: proxy_duration(upstream_duration),
+			response_processing_duration: proxy_duration(response_processing_duration),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -446,6 +466,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Extension(resp.extensions());
 		if let Some(llm) = resp.extensions().get::<LLMContext>() {
 			self.llm = ExtensionOrDirect::Direct(Some(llm));
 		}
@@ -458,6 +479,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Direct(resp.proxy.as_ref());
 		if let Some(metadata) = resp.metadata.as_ref() {
 			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
 		}
@@ -504,7 +526,9 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
-		this.proxy = proxy;
+		if this.proxy.deref().is_none() {
+			this.proxy = ExtensionOrDirect::Direct(proxy);
+		}
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
@@ -682,6 +706,7 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
 		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
+		proxy: resp.extensions_mut().remove::<ProxyContext>(),
 	}
 }
 
@@ -772,6 +797,7 @@ pub struct ResponseSnapshot {
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
 	pub metadata: Option<TransformationMetadata>,
+	pub proxy: Option<ProxyContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -1766,7 +1792,7 @@ impl ExecutorSerde {
 				},
 			});
 		}
-		exec.proxy = self.proxy.as_ref();
+		exec.proxy = ExtensionOrDirect::Direct(self.proxy.as_ref());
 		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields

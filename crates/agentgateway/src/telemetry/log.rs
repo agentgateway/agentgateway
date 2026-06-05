@@ -619,18 +619,12 @@ impl From<RequestLog> for DropOnLog {
 	}
 }
 
-fn proxy_duration(duration: Option<Duration>) -> Option<cel::CelDuration> {
-	duration
-		.and_then(|duration| chrono::Duration::from_std(duration).ok())
-		.map(Into::into)
-}
-
 fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
-	cel::ProxyContext {
-		request_processing_duration: proxy_duration(log.request_processing_duration),
-		upstream_duration: proxy_duration(log.upstream_duration),
-		response_processing_duration: proxy_duration(log.response_processing_duration),
-	}
+	cel::ProxyContext::from_std_durations(
+		log.request_processing_duration,
+		log.upstream_duration,
+		log.response_processing_duration,
+	)
 }
 
 impl RequestLog {
@@ -911,6 +905,9 @@ impl Drop for DropOnLog {
 				resp.grpc_status = Some(grpc_status);
 			}
 			let proxy_timing = proxy_context(&log);
+			if let Some(resp) = log.response_snapshot.as_mut() {
+				resp.proxy = Some(proxy_timing.clone());
+			}
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),

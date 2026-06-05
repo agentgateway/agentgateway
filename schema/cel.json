@@ -127,6 +127,37 @@
       },
       "additionalProperties": false
     },
+    "proxy": {
+      "description": "`proxy` contains proxy timing information for the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "requestProcessingDuration": {
+          "description": "Time spent processing the request before sending the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstreamDuration": {
+          "description": "Time spent waiting for the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseProcessingDuration": {
+          "description": "Time spent processing the primary outbound response before sending the downstream response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "env": {
       "description": "`env` contains selected process environment attributes exposed to CEL.\nThis does NOT expose raw environment variables, but rather a subset of well-known variables.",
       "type": [

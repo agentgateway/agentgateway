@@ -2243,6 +2243,13 @@ async fn make_backend_call(
 	});
 	let mut resp = resp?;
 	if let Some(log) = log.as_ref() {
+		resp
+			.extensions_mut()
+			.insert(cel::ProxyContext::from_std_durations(
+				log.request_processing_duration,
+				log.upstream_duration,
+				log.response_processing_duration,
+			));
 		dtrace::snapshot!(Response, "raw response", log, &resp);
 	}
 	a2a::apply_to_response(
