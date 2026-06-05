@@ -116,7 +116,7 @@ func buildPath(f *flags) (string, error) {
 
 	var directives []string
 	for _, s := range f.set {
-		for _, part := range strings.Split(s, ",") {
+		for part := range strings.SplitSeq(s, ",") {
 			part = strings.TrimSpace(part)
 			if part == "" {
 				continue

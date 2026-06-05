@@ -103,7 +103,7 @@ func buildPath(f *flags) (string, error) {
 
 	params := url.Values{}
 	for _, s := range f.set {
-		for _, part := range strings.Split(s, ",") {
+		for part := range strings.SplitSeq(s, ",") {
 			part = strings.TrimSpace(part)
 			if part == "" {
 				continue
