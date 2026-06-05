@@ -129,6 +129,76 @@ pub mod from_rerank {
 	}
 }
 
+fn bedrock_target_model<'a>(
+	provider: &'a crate::llm::bedrock::Provider,
+	request_model: &'a str,
+) -> &'a str {
+	provider.model.as_deref().unwrap_or(request_model)
+}
+
+fn requires_adaptive_thinking(model: &str) -> bool {
+	model
+		.split(['.', '/', ':'])
+		.any(is_claude_opus_48_model_part)
+}
+
+fn is_claude_opus_48_model_part(part: &str) -> bool {
+	if part == "claude-opus-4-8" {
+		return true;
+	}
+
+	part
+		.strip_prefix("claude-opus-4-8-")
+		.and_then(|suffix| suffix.rsplit('-').next())
+		.and_then(|version| version.strip_prefix('v'))
+		.is_some_and(|version| !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit()))
+}
+
+fn thinking_budget_to_adaptive_effort(budget_tokens: u64) -> &'static str {
+	if budget_tokens <= 1024 {
+		"low"
+	} else if budget_tokens <= 2048 {
+		"medium"
+	} else {
+		"high"
+	}
+}
+
+fn adaptive_thinking_request_fields(effort: &'static str) -> serde_json::Value {
+	serde_json::json!({
+		"thinking": {
+			"type": "adaptive"
+		},
+		"output_config": {
+			"effort": effort
+		}
+	})
+}
+
+fn upsert_adaptive_thinking_effort(
+	additional_fields: &mut Option<serde_json::Value>,
+	effort: &'static str,
+) {
+	let fields =
+		additional_fields.get_or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+	if !fields.is_object() {
+		*fields = serde_json::Value::Object(serde_json::Map::new());
+	}
+	let Some(fields) = fields.as_object_mut() else {
+		return;
+	};
+	let output_config = fields
+		.entry("output_config".to_string())
+		.or_insert_with(|| serde_json::json!({}));
+	if let Some(output_config) = output_config.as_object_mut() {
+		output_config
+			.entry("effort".to_string())
+			.or_insert_with(|| serde_json::json!(effort));
+	} else {
+		*output_config = serde_json::json!({ "effort": effort });
+	}
+}
+
 pub mod from_embeddings {
 	use crate::json;
 	use crate::llm::bedrock::Provider;
@@ -282,7 +352,10 @@ pub mod from_completions {
 	use types::bedrock;
 	use types::completions::typed as completions;
 
-	use super::helpers;
+	use super::{
+		adaptive_thinking_request_fields, bedrock_target_model, helpers, requires_adaptive_thinking,
+		thinking_budget_to_adaptive_effort,
+	};
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
@@ -588,21 +661,31 @@ pub mod from_completions {
 		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
 		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
-		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+		let target_model_requires_adaptive_thinking =
+			requires_adaptive_thinking(bedrock_target_model(provider, &model_id));
+		let additional_model_request_fields = if target_model_requires_adaptive_thinking {
 			req
 				.reasoning_effort
 				.as_ref()
-				.and_then(reasoning_effort_to_enabled_budget)
-		});
-
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
-			serde_json::json!({
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": budget
-				}
+				.and_then(reasoning_effort_to_adaptive_effort)
+				.or_else(|| explicit_thinking_budget.map(thinking_budget_to_adaptive_effort))
+				.map(adaptive_thinking_request_fields)
+		} else {
+			let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+				req
+					.reasoning_effort
+					.as_ref()
+					.and_then(reasoning_effort_to_enabled_budget)
+			});
+			enabled_thinking_budget.map(|budget| {
+				serde_json::json!({
+					"thinking": {
+						"type": "enabled",
+						"budget_tokens": budget
+					}
+				})
 			})
-		});
+		};
 		let output_config = req
 			.response_format
 			.as_ref()
@@ -678,6 +761,18 @@ pub mod from_completions {
 			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some(1024),
 			completions::ReasoningEffort::Medium => Some(2048),
 			completions::ReasoningEffort::High | completions::ReasoningEffort::Xhigh => Some(4096),
+		}
+	}
+
+	fn reasoning_effort_to_adaptive_effort(
+		effort: &completions::ReasoningEffort,
+	) -> Option<&'static str> {
+		match effort {
+			completions::ReasoningEffort::None => None,
+			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some("low"),
+			completions::ReasoningEffort::Medium => Some("medium"),
+			completions::ReasoningEffort::High => Some("high"),
+			completions::ReasoningEffort::Xhigh => Some("xhigh"),
 		}
 	}
 
@@ -1008,7 +1103,10 @@ pub mod from_messages {
 	use types::bedrock;
 	use types::messages::typed as messages;
 
-	use super::helpers;
+	use super::{
+		bedrock_target_model, helpers, requires_adaptive_thinking, thinking_budget_to_adaptive_effort,
+		upsert_adaptive_thinking_effort,
+	};
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
@@ -1042,6 +1140,8 @@ pub mod from_messages {
 		//   https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
 		let requested_thinking = req.thinking.as_ref();
 		let requested_output_config = req.output_config.as_ref();
+		let target_model_requires_adaptive_thinking =
+			requires_adaptive_thinking(bedrock_target_model(provider, &req.model));
 		let output_config = requested_output_config
 			.and_then(|cfg| cfg.format.as_ref())
 			.and_then(messages_output_format_to_bedrock_output_config);
@@ -1063,8 +1163,9 @@ pub mod from_messages {
 		});
 
 		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
-		let thinking_enabled = requested_thinking
-			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
+		let thinking_enabled = !target_model_requires_adaptive_thinking
+			&& requested_thinking
+				.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
@@ -1338,10 +1439,17 @@ pub mod from_messages {
 		// Build Anthropic model-specific fields under Converse's additionalModelRequestFields.
 		let mut additional_fields = requested_thinking.map(|thinking| {
 			let thinking_json = match thinking {
-				messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
-					"type": "enabled",
-					"budget_tokens": budget_tokens
-				}),
+				messages::ThinkingInput::Enabled { .. } if target_model_requires_adaptive_thinking => {
+					serde_json::json!({
+						"type": "adaptive"
+					})
+				},
+				messages::ThinkingInput::Enabled { budget_tokens } => {
+					serde_json::json!({
+						"type": "enabled",
+						"budget_tokens": budget_tokens
+					})
+				},
 				messages::ThinkingInput::Disabled {} => serde_json::json!({
 					"type": "disabled"
 				}),
@@ -1394,6 +1502,16 @@ pub mod from_messages {
 			upsert_additional_field("metadata", serde_json::json!(metadata));
 		}
 
+		if target_model_requires_adaptive_thinking
+			&& let Some(messages::ThinkingInput::Enabled { budget_tokens }) = requested_thinking
+		{
+			let effort = requested_output_config
+				.and_then(|cfg| cfg.effort)
+				.map(messages_thinking_effort_to_adaptive_effort)
+				.unwrap_or_else(|| thinking_budget_to_adaptive_effort(*budget_tokens));
+			upsert_adaptive_thinking_effort(&mut additional_fields, effort);
+		}
+
 		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
 		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
 		let metadata = helpers::extract_metadata_from_headers(headers).unwrap_or_default();
@@ -1444,6 +1562,16 @@ pub mod from_messages {
 				},
 			}),
 		})
+	}
+
+	fn messages_thinking_effort_to_adaptive_effort(effort: messages::ThinkingEffort) -> &'static str {
+		match effort {
+			messages::ThinkingEffort::Low => "low",
+			messages::ThinkingEffort::Medium => "medium",
+			messages::ThinkingEffort::High => "high",
+			messages::ThinkingEffort::Xhigh => "xhigh",
+			messages::ThinkingEffort::Max => "max",
+		}
 	}
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
@@ -1749,7 +1877,10 @@ pub mod from_responses {
 	use types::bedrock;
 	use types::responses::typed as responses;
 
-	use super::helpers;
+	use super::{
+		adaptive_thinking_request_fields, bedrock_target_model, helpers, requires_adaptive_thinking,
+		thinking_budget_to_adaptive_effort,
+	};
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
@@ -2063,21 +2194,33 @@ pub mod from_responses {
 			.text
 			.as_ref()
 			.and_then(responses_text_format_to_bedrock_output_config);
-		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+		let target_model_requires_adaptive_thinking =
+			requires_adaptive_thinking(bedrock_target_model(provider, &model_id));
+		let additional_model_request_fields = if target_model_requires_adaptive_thinking {
 			req
 				.reasoning
 				.as_ref()
 				.and_then(|r| r.effort.as_ref())
-				.and_then(responses_reasoning_effort_to_enabled_budget)
-		});
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
-			serde_json::json!({
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": budget
-				}
+				.and_then(responses_reasoning_effort_to_adaptive_effort)
+				.or_else(|| explicit_thinking_budget.map(thinking_budget_to_adaptive_effort))
+				.map(adaptive_thinking_request_fields)
+		} else {
+			let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
+				req
+					.reasoning
+					.as_ref()
+					.and_then(|r| r.effort.as_ref())
+					.and_then(responses_reasoning_effort_to_enabled_budget)
+			});
+			enabled_thinking_budget.map(|budget| {
+				serde_json::json!({
+					"thinking": {
+						"type": "enabled",
+						"budget_tokens": budget
+					}
+				})
 			})
-		});
+		};
 
 		// Convert tools from typed Responses API format to Bedrock format
 		let (tools, tool_choice) = if let Some(response_tools) = &req.tools {
@@ -2225,6 +2368,18 @@ pub mod from_responses {
 			responses::ReasoningEffort::Minimal | responses::ReasoningEffort::Low => Some(1024),
 			responses::ReasoningEffort::Medium => Some(2048),
 			responses::ReasoningEffort::High | responses::ReasoningEffort::Xhigh => Some(4096),
+		}
+	}
+
+	fn responses_reasoning_effort_to_adaptive_effort(
+		effort: &responses::ReasoningEffort,
+	) -> Option<&'static str> {
+		match effort {
+			responses::ReasoningEffort::None => None,
+			responses::ReasoningEffort::Minimal | responses::ReasoningEffort::Low => Some("low"),
+			responses::ReasoningEffort::Medium => Some("medium"),
+			responses::ReasoningEffort::High => Some("high"),
+			responses::ReasoningEffort::Xhigh => Some("xhigh"),
 		}
 	}
 
