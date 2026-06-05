@@ -99,7 +99,7 @@ func ResolvePodsForResource(kubeClient kube.CLIClient, resourceName, namespace s
 // ResolveControllerPods returns all controller pods in namespace, identified
 // by the app.kubernetes.io/name=agentgateway label, sorted by name.
 func ResolveControllerPods(ctx context.Context, kubeClient kube.CLIClient, namespace string) ([]Pod, error) {
-	selector := fmt.Sprintf("%s=%s", wellknown.KubernetesAppNameLabel, wellknown.KubernetesAppNameValue)
+	selector := fmt.Sprintf("%s=%s", wellknown.AgentgatewayLabel, wellknown.AgentgatewayLabelValue)
 	list, err := kubeClient.Kube().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: selector,
 	})
