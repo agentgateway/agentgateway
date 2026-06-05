@@ -30,6 +30,35 @@ type ResourceOverlays struct {
 	VerticalPodAutoscaler   *agentgateway.KubernetesResourceOverlay
 }
 
+type gatewayWorkload struct {
+	name      string
+	namespace string
+	labels    map[string]string
+	selector  *metav1.LabelSelector
+	gvk       schema.GroupVersionKind
+}
+
+func gatewayWorkloadFromDeployment(deployment *appsv1.Deployment) *gatewayWorkload {
+	if deployment == nil {
+		return nil
+	}
+	return &gatewayWorkload{
+		name:      deployment.Name,
+		namespace: deployment.Namespace,
+		labels:    maps.Clone(deployment.GetLabels()),
+		selector:  deployment.Spec.Selector,
+		gvk:       wellknown.DeploymentGVK,
+	}
+}
+
+func (w *gatewayWorkload) targetRef() autoscalingv2.CrossVersionObjectReference {
+	return autoscalingv2.CrossVersionObjectReference{
+		APIVersion: w.gvk.GroupVersion().String(),
+		Kind:       w.gvk.Kind,
+		Name:       w.name,
+	}
+}
+
 // FromAgentgatewayParameters converts AgentgatewayParameters overlays to generic ResourceOverlays.
 func FromAgentgatewayParameters(params *agentgateway.AgentgatewayParameters) *ResourceOverlays {
 	if params == nil {
@@ -73,6 +102,7 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 			break
 		}
 	}
+	workload := gatewayWorkloadFromDeployment(deployment)
 
 	for i, obj := range objs {
 		var overlay *agentgateway.KubernetesResourceOverlay
@@ -106,8 +136,8 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 	}
 
 	// Create PDB if overlay is present
-	if a.overlays.PodDisruptionBudget != nil && deployment != nil {
-		pdb, err := createPodDisruptionBudget(deployment, a.overlays.PodDisruptionBudget)
+	if a.overlays.PodDisruptionBudget != nil && workload != nil {
+		pdb, err := createPodDisruptionBudget(workload, a.overlays.PodDisruptionBudget)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create PodDisruptionBudget: %w", err)
 		}
@@ -115,8 +145,8 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 	}
 
 	// Create HPA if overlay is present
-	if a.overlays.HorizontalPodAutoscaler != nil && deployment != nil {
-		hpa, err := createHorizontalPodAutoscaler(deployment, a.overlays.HorizontalPodAutoscaler)
+	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil {
+		hpa, err := createHorizontalPodAutoscaler(workload, a.overlays.HorizontalPodAutoscaler)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HorizontalPodAutoscaler: %w", err)
 		}
@@ -252,22 +282,22 @@ func deserializeToObject(data []byte, gvk schema.GroupVersionKind) (client.Objec
 	return clientObj, nil
 }
 
-// createPodDisruptionBudget creates a PodDisruptionBudget for the given Deployment
+// createPodDisruptionBudget creates a PodDisruptionBudget for the selected workload
 // with the overlay applied.
-func createPodDisruptionBudget(deployment *appsv1.Deployment, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
-	// Create base PDB with selector matching the Deployment
+func createPodDisruptionBudget(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+	// Create base PDB with selector matching the workload
 	pdb := &policyv1.PodDisruptionBudget{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
 			Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      deployment.Name,
-			Namespace: deployment.Namespace,
-			Labels:    maps.Clone(deployment.GetLabels()),
+			Name:      workload.name,
+			Namespace: workload.namespace,
+			Labels:    maps.Clone(workload.labels),
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			Selector: deployment.Spec.Selector,
+			Selector: workload.selector,
 		},
 	}
 
@@ -282,24 +312,20 @@ func createPodDisruptionBudget(deployment *appsv1.Deployment, overlay *agentgate
 
 // createHorizontalPodAutoscaler creates a HorizontalPodAutoscaler for the given Deployment
 // with the overlay applied.
-func createHorizontalPodAutoscaler(deployment *appsv1.Deployment, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
-	// Create base HPA with scaleTargetRef pointing to the Deployment
+func createHorizontalPodAutoscaler(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+	// Create base HPA with scaleTargetRef pointing to the workload
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
 			Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      deployment.Name,
-			Namespace: deployment.Namespace,
-			Labels:    maps.Clone(deployment.GetLabels()),
+			Name:      workload.name,
+			Namespace: workload.namespace,
+			Labels:    maps.Clone(workload.labels),
 		},
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
-			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
-				APIVersion: wellknown.DeploymentGVK.GroupVersion().String(),
-				Kind:       wellknown.DeploymentGVK.Kind,
-				Name:       deployment.Name,
-			},
+			ScaleTargetRef: workload.targetRef(),
 		},
 	}
 

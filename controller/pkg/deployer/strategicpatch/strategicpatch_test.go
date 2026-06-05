@@ -362,7 +362,7 @@ func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &agentgateway.KubernetesResourceOverlay{}
 
-	obj, err := createPodDisruptionBudget(dep, overlay)
+	obj, err := createPodDisruptionBudget(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	pdb := obj.(*policyv1.PodDisruptionBudget)
@@ -377,7 +377,7 @@ func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 		},
 	}
 
-	obj, err := createPodDisruptionBudget(dep, overlay)
+	obj, err := createPodDisruptionBudget(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	pdb := obj.(*policyv1.PodDisruptionBudget)
@@ -391,7 +391,7 @@ func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &agentgateway.KubernetesResourceOverlay{}
 
-	obj, err := createHorizontalPodAutoscaler(dep, overlay)
+	obj, err := createHorizontalPodAutoscaler(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	hpa := obj.(*autoscalingv2.HorizontalPodAutoscaler)
@@ -406,7 +406,7 @@ func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 		},
 	}
 
-	obj, err := createHorizontalPodAutoscaler(dep, overlay)
+	obj, err := createHorizontalPodAutoscaler(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	hpa := obj.(*autoscalingv2.HorizontalPodAutoscaler)
@@ -453,7 +453,7 @@ func TestCreatePodDisruptionBudget_DeploymentLabelsNotMutated(t *testing.T) {
 		},
 	}
 
-	_, err := createPodDisruptionBudget(dep, overlay)
+	_, err := createPodDisruptionBudget(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	// The original deployment labels must not have been mutated.
