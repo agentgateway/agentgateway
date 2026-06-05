@@ -625,6 +625,19 @@ pub mod from_messages {
 		}
 	}
 
+	fn system_message_text(content: Vec<messages::ContentBlock>) -> Option<String> {
+		let text = content
+			.into_iter()
+			.filter_map(|block| match block {
+				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => Some(text),
+				_ => None,
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+
+		(!text.is_empty()).then_some(text)
+	}
+
 	#[allow(deprecated)]
 	fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
@@ -815,6 +828,16 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
+							},
+						));
+					}
+				},
+				messages::Role::System => {
+					if let Some(text) = system_message_text(msg.content) {
+						msgs.push(completions::RequestMessage::System(
+							completions::RequestSystemMessage {
+								content: completions::RequestSystemMessageContent::Text(text),
+								name: None,
 							},
 						));
 					}

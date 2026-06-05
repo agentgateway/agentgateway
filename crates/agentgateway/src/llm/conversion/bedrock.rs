@@ -330,7 +330,7 @@ pub mod from_completions {
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
@@ -893,7 +893,7 @@ pub mod from_messages {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
 		let xlated = translate_internal(typed, provider, headers)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
@@ -940,7 +940,7 @@ pub mod from_messages {
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
-		let system_content = req.system.as_ref().map(|sys| {
+		let mut system_content = req.system.as_ref().map(|sys| {
 			let mut result = Vec::new();
 			match sys {
 				messages::SystemPrompt::Text(text) => {
@@ -971,151 +971,168 @@ pub mod from_messages {
 		});
 
 		// Convert typed Anthropic messages to Bedrock messages
-		let messages: Vec<bedrock::Message> = req
-			.messages
-			.into_iter()
-			.map(|msg| -> Result<bedrock::Message, AIError> {
-				let role = match msg.role {
-					messages::Role::Assistant => bedrock::Role::Assistant,
-					messages::Role::User => bedrock::Role::User,
-				};
-
-				// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
-				let mut content = Vec::with_capacity(msg.content.len() * 2);
-				for block in msg.content {
-					let (bedrock_block, has_cache_control) = match block {
-						messages::ContentBlock::Text(messages::ContentTextBlock {
+		let mut messages = Vec::new();
+		for msg in req.messages {
+			let role = match msg.role {
+				messages::Role::Assistant => bedrock::Role::Assistant,
+				messages::Role::User => bedrock::Role::User,
+				messages::Role::System => {
+					for block in msg.content {
+						if let messages::ContentBlock::Text(messages::ContentTextBlock {
 							text,
 							cache_control,
 							..
-						}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
-						messages::ContentBlock::Image(messages::ContentImageBlock {
-							source,
-							cache_control,
-						}) => {
-							if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
-								&& let Some(data) = source.get("data").and_then(|v| v.as_str())
-							{
-								let format = media_type
-									.strip_prefix("image/")
-									.unwrap_or(media_type)
-									.to_string();
-								(
-									bedrock::ContentBlock::Image(bedrock::ImageBlock {
-										format,
-										source: bedrock::ImageSource {
-											bytes: data.to_string(),
-										},
-									}),
-									cache_control.is_some(),
-									)
-								} else {
-									return Err(AIError::UnsupportedConversion(strng::literal!(
-										"bedrock image source must be base64 (media_type + data); URL image sources are unsupported"
-									)));
-								}
-							},
-						messages::ContentBlock::ToolUse {
-							id,
-							name,
-							input,
-							cache_control,
-						} => (
-							bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-								tool_use_id: id,
-								name,
-								input,
-							}),
-							cache_control.is_some(),
-						),
-						messages::ContentBlock::ToolResult {
-							tool_use_id,
-							content: tool_content,
-							is_error,
-							cache_control,
-						} => {
-							let bedrock_content = match tool_content {
-								messages::ToolResultContent::Text(text) => {
-									vec![bedrock::ToolResultContentBlock::Text(text)]
-								},
-								messages::ToolResultContent::Array(parts) => parts
-									.into_iter()
-									.filter_map(|part| match part {
-										messages::ToolResultContentPart::Text { text, .. } => {
-											Some(bedrock::ToolResultContentBlock::Text(text))
-										},
-										messages::ToolResultContentPart::Image { source, .. } => {
-											if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
-												&& let Some(data) = source.get("data").and_then(|v| v.as_str())
-											{
-												let format = media_type
-													.strip_prefix("image/")
-													.unwrap_or(media_type)
-													.to_string();
-												Some(bedrock::ToolResultContentBlock::Image(
-													bedrock::ImageBlock {
-														format,
-														source: bedrock::ImageSource {
-															bytes: data.to_string(),
-														},
-													},
-												))
-											} else {
-												None
-											}
-										},
-										_ => None,
-									})
-									.collect(),
-							};
+						}) = block
+						{
+							let system_content = system_content.get_or_insert_with(Vec::new);
+							system_content.push(bedrock::SystemContentBlock::Text { text });
+							if cache_control.is_some() && cache_points_used < 4 {
+								system_content.push(bedrock::SystemContentBlock::CachePoint {
+									cache_point: helpers::create_cache_point(),
+								});
+								cache_points_used += 1;
+							}
+						}
+					}
+					continue;
+				},
+			};
 
-							let status = is_error.map(|is_err| match is_err {
-								true => bedrock::ToolResultStatus::Error,
-								false => bedrock::ToolResultStatus::Success,
-							});
-
+			// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
+			let mut content = Vec::with_capacity(msg.content.len() * 2);
+			for block in msg.content {
+				let (bedrock_block, has_cache_control) = match block {
+					messages::ContentBlock::Text(messages::ContentTextBlock {
+						text,
+						cache_control,
+						..
+					}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
+					messages::ContentBlock::Image(messages::ContentImageBlock {
+						source,
+						cache_control,
+					}) => {
+						if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
+							&& let Some(data) = source.get("data").and_then(|v| v.as_str())
+						{
+							let format = media_type
+								.strip_prefix("image/")
+								.unwrap_or(media_type)
+								.to_string();
 							(
-								bedrock::ContentBlock::ToolResult(bedrock::ToolResultBlock {
-									tool_use_id,
-									content: bedrock_content,
-									status,
+								bedrock::ContentBlock::Image(bedrock::ImageBlock {
+									format,
+									source: bedrock::ImageSource {
+										bytes: data.to_string(),
+									},
 								}),
 								cache_control.is_some(),
 							)
-						},
-						messages::ContentBlock::Thinking {
-							thinking,
-							signature,
-						} => (
-							bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
-								reasoning_text: bedrock::ReasoningText {
-									text: thinking,
-									signature: Some(signature),
-								},
+						} else {
+							return Err(AIError::UnsupportedConversion(strng::literal!(
+								"bedrock image source must be base64 (media_type + data); URL image sources are unsupported"
+							)));
+						}
+					},
+					messages::ContentBlock::ToolUse {
+						id,
+						name,
+						input,
+						cache_control,
+					} => (
+						bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+							tool_use_id: id,
+							name,
+							input,
+						}),
+						cache_control.is_some(),
+					),
+					messages::ContentBlock::ToolResult {
+						tool_use_id,
+						content: tool_content,
+						is_error,
+						cache_control,
+					} => {
+						let bedrock_content = match tool_content {
+							messages::ToolResultContent::Text(text) => {
+								vec![bedrock::ToolResultContentBlock::Text(text)]
+							},
+							messages::ToolResultContent::Array(parts) => parts
+								.into_iter()
+								.filter_map(|part| match part {
+									messages::ToolResultContentPart::Text { text, .. } => {
+										Some(bedrock::ToolResultContentBlock::Text(text))
+									},
+									messages::ToolResultContentPart::Image { source, .. } => {
+										if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
+											&& let Some(data) = source.get("data").and_then(|v| v.as_str())
+										{
+											let format = media_type
+												.strip_prefix("image/")
+												.unwrap_or(media_type)
+												.to_string();
+											Some(bedrock::ToolResultContentBlock::Image(
+												bedrock::ImageBlock {
+													format,
+													source: bedrock::ImageSource {
+														bytes: data.to_string(),
+													},
+												},
+											))
+										} else {
+											None
+										}
+									},
+									_ => None,
+								})
+								.collect(),
+						};
+
+						let status = is_error.map(|is_err| match is_err {
+							true => bedrock::ToolResultStatus::Error,
+							false => bedrock::ToolResultStatus::Success,
+						});
+
+						(
+							bedrock::ContentBlock::ToolResult(bedrock::ToolResultBlock {
+								tool_use_id,
+								content: bedrock_content,
+								status,
 							}),
-							false,
-						),
-						messages::ContentBlock::WebSearchToolResult { .. } => continue,
-						messages::ContentBlock::RedactedThinking { .. } => continue,
-						messages::ContentBlock::Document(_) => continue,
-						messages::ContentBlock::SearchResult(_) => continue,
-						messages::ContentBlock::ServerToolUse { .. } => continue,
-						messages::ContentBlock::Unknown => continue,
-					};
+							cache_control.is_some(),
+						)
+					},
+					messages::ContentBlock::Thinking {
+						thinking,
+						signature,
+					} => (
+						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
+							reasoning_text: bedrock::ReasoningText {
+								text: thinking,
+								signature: Some(signature),
+							},
+						}),
+						false,
+					),
+					messages::ContentBlock::WebSearchToolResult { .. } => continue,
+					messages::ContentBlock::RedactedThinking { .. } => continue,
+					messages::ContentBlock::Document(_) => continue,
+					messages::ContentBlock::SearchResult(_) => continue,
+					messages::ContentBlock::ServerToolUse { .. } => continue,
+					messages::ContentBlock::Unknown => continue,
+				};
 
-					content.push(bedrock_block);
+				content.push(bedrock_block);
 
-					if has_cache_control && cache_points_used < 4 {
-						content.push(bedrock::ContentBlock::CachePoint(
-							helpers::create_cache_point(),
-						));
-						cache_points_used += 1;
-					}
+				if has_cache_control && cache_points_used < 4 {
+					content.push(bedrock::ContentBlock::CachePoint(
+						helpers::create_cache_point(),
+					));
+					cache_points_used += 1;
 				}
+			}
 
-					Ok(bedrock::Message { role, content })
-				})
-				.collect::<Result<Vec<_>, AIError>>()?;
+			messages.push(bedrock::Message { role, content });
+		}
 
 		// Build inference config from typed fields
 		let inference_config = bedrock::InferenceConfiguration {

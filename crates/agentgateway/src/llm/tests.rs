@@ -279,6 +279,7 @@ mod requests {
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
+		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
 	];

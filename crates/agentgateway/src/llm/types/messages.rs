@@ -435,6 +435,7 @@ pub mod typed {
 		#[default]
 		User,
 		Assistant,
+		System,
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug)]
