@@ -337,9 +337,9 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 	return nil
 }
 
-// PruneRemovedResources deletes PDB/HPA/VPA resources that are owned by the owner
-// but are no longer in the desired set of objects. This prevents stale autoscaling
-// resources from persisting when configuration changes.
+// PruneRemovedResources deletes generated resources associated with the owner when they are
+// no longer in the desired set. This removes stale workloads after workload-kind switches
+// and stale autoscaling or disruption resources after configuration changes.
 func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
 	ownerNamespace := owner.GetNamespace()
 	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, owner.GetName())
@@ -356,6 +356,8 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 	// Check each target GVK for resources to prune
 	targetGVKs := []schema.GroupVersionKind{
+		wellknown.DeploymentGVK,
+		wellknown.DaemonSetGVK,
 		wellknown.PodDisruptionBudgetGVK,
 		wellknown.HorizontalPodAutoscalerGVK,
 		wellknown.VerticalPodAutoscalerGVK,
@@ -385,6 +387,12 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 		// Check each resource for pruning
 		for _, item := range list.Items {
+			// Workloads can share the Gateway label with user-managed objects. Require a
+			// controller owner reference before pruning them.
+			if isWorkloadGVK(gvk) && !hasControllerOwnerRef(owner, &item) {
+				continue
+			}
+
 			// Check if resource is in desired set
 			resourceName := item.GetName()
 			if desiredSet, exists := desiredByGVK[gvk]; exists && desiredSet[resourceName] {
@@ -418,6 +426,27 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 	}
 
 	return nil
+}
+
+func isWorkloadGVK(gvk schema.GroupVersionKind) bool {
+	return gvk == wellknown.DeploymentGVK || gvk == wellknown.DaemonSetGVK
+}
+
+func hasControllerOwnerRef(owner client.Object, obj client.Object) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.APIVersion != wellknown.GatewayGVK.GroupVersion().String() ||
+			ref.Kind != wellknown.GatewayGVK.Kind ||
+			ref.Name != owner.GetName() ||
+			ref.Controller == nil ||
+			!*ref.Controller {
+			continue
+		}
+		if owner.GetUID() != "" && ref.UID != owner.GetUID() {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func (d *Deployer) gvkToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
