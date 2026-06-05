@@ -8,6 +8,7 @@ import (
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/smallset"
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -332,6 +333,7 @@ func TestPruneRemovedResources(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      gwName,
 				Namespace: ns,
+				UID:       "gateway-uid",
 			},
 			Spec: gwv1.GatewaySpec{
 				GatewayClassName: wellknown.DefaultAgwClassName,
@@ -386,6 +388,50 @@ func TestPruneRemovedResources(t *testing.T) {
 			},
 		}
 		return hpa
+	}
+
+	ownerRefForGateway := func(gw *gwv1.Gateway, controller bool) []metav1.OwnerReference {
+		return []metav1.OwnerReference{{
+			APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
+			Kind:       wellknown.GatewayGVK.Kind,
+			Name:       gw.GetName(),
+			UID:        gw.GetUID(),
+			Controller: &controller,
+		}}
+	}
+
+	createDeployment := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       wellknown.DeploymentGVK.Kind,
+				APIVersion: wellknown.DeploymentGVK.GroupVersion().String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name,
+				Namespace:       ns,
+				OwnerReferences: ownerRefs,
+				Labels: map[string]string{
+					wellknown.GatewayNameLabel: gatewayName,
+				},
+			},
+		}
+	}
+
+	createDaemonSet := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.DaemonSet {
+		return &appsv1.DaemonSet{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       wellknown.DaemonSetGVK.Kind,
+				APIVersion: wellknown.DaemonSetGVK.GroupVersion().String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name,
+				Namespace:       ns,
+				OwnerReferences: ownerRefs,
+				Labels: map[string]string{
+					wellknown.GatewayNameLabel: gatewayName,
+				},
+			},
+		}
 	}
 
 	t.Run("prunes PDB when not in desired set", func(t *testing.T) {
@@ -544,5 +590,80 @@ func TestPruneRemovedResources(t *testing.T) {
 		hpaList, err := fc.Dynamic().Resource(hpaGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(hpaList.Items))
+	})
+
+	t.Run("prunes stale Deployment when desired workload is DaemonSet", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, ownerRefForGateway(gw, true))
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(deploymentList.Items))
+	})
+
+	t.Run("prunes stale DaemonSet when desired workload is Deployment", func(t *testing.T) {
+		gw := createGateway()
+		daemonSet := createDaemonSet(gwName, gwName, ownerRefForGateway(gw, true))
+		desiredDeployment := createDeployment(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, daemonSet)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDeployment})
+		assert.NoError(t, err)
+
+		daemonSetGVR, err := wellknown.GVKToGVR(wellknown.DaemonSetGVK)
+		assert.NoError(t, err)
+		daemonSetList, err := fc.Dynamic().Resource(daemonSetGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(daemonSetList.Items))
+	})
+
+	t.Run("keeps stale workload without Gateway owner reference", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, nil)
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(deploymentList.Items))
+	})
+
+	t.Run("keeps stale workload with non-controller Gateway owner reference", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, ownerRefForGateway(gw, false))
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		_, err = fc.Dynamic().Resource(deploymentGVR).Namespace(ns).Get(ctx, gwName, metav1.GetOptions{})
+		assert.NoError(t, err)
 	})
 }
