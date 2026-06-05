@@ -23,6 +23,7 @@ import (
 // ResourceOverlays contains all the overlays that can be applied to rendered objects.
 type ResourceOverlays struct {
 	Deployment              *agentgateway.KubernetesResourceOverlay
+	DaemonSet               *agentgateway.KubernetesResourceOverlay
 	Service                 *agentgateway.KubernetesResourceOverlay
 	ServiceAccount          *agentgateway.KubernetesResourceOverlay
 	PodDisruptionBudget     *agentgateway.KubernetesResourceOverlay
@@ -51,6 +52,31 @@ func gatewayWorkloadFromDeployment(deployment *appsv1.Deployment) *gatewayWorklo
 	}
 }
 
+func gatewayWorkloadFromDaemonSet(daemonSet *appsv1.DaemonSet) *gatewayWorkload {
+	if daemonSet == nil {
+		return nil
+	}
+	return &gatewayWorkload{
+		name:      daemonSet.Name,
+		namespace: daemonSet.Namespace,
+		labels:    maps.Clone(daemonSet.GetLabels()),
+		selector:  daemonSet.Spec.Selector,
+		gvk:       wellknown.DaemonSetGVK,
+	}
+}
+
+func gatewayWorkloadFromObjects(objs []client.Object) *gatewayWorkload {
+	for _, obj := range objs {
+		switch typed := obj.(type) {
+		case *appsv1.Deployment:
+			return gatewayWorkloadFromDeployment(typed)
+		case *appsv1.DaemonSet:
+			return gatewayWorkloadFromDaemonSet(typed)
+		}
+	}
+	return nil
+}
+
 func (w *gatewayWorkload) targetRef() autoscalingv2.CrossVersionObjectReference {
 	return autoscalingv2.CrossVersionObjectReference{
 		APIVersion: w.gvk.GroupVersion().String(),
@@ -67,6 +93,7 @@ func FromAgentgatewayParameters(params *agentgateway.AgentgatewayParameters) *Re
 	overlays := params.Spec.AgentgatewayParametersOverlays
 	return &ResourceOverlays{
 		Deployment:              overlays.Deployment,
+		DaemonSet:               overlays.DaemonSet,
 		Service:                 overlays.Service,
 		ServiceAccount:          overlays.ServiceAccount,
 		PodDisruptionBudget:     overlays.PodDisruptionBudget,
@@ -94,15 +121,7 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 		return objs, nil
 	}
 
-	// Find the Deployment first - we need it for PDB/HPA/VPA creation
-	var deployment *appsv1.Deployment
-	for _, obj := range objs {
-		if dep, ok := obj.(*appsv1.Deployment); ok {
-			deployment = dep
-			break
-		}
-	}
-	workload := gatewayWorkloadFromDeployment(deployment)
+	workload := gatewayWorkloadFromObjects(objs)
 
 	for i, obj := range objs {
 		var overlay *agentgateway.KubernetesResourceOverlay
@@ -114,6 +133,9 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 		case *appsv1.Deployment:
 			overlay = a.overlays.Deployment
 			gvk = wellknown.DeploymentGVK
+		case *appsv1.DaemonSet:
+			overlay = a.overlays.DaemonSet
+			gvk = wellknown.DaemonSetGVK
 		case *corev1.Service:
 			overlay = a.overlays.Service
 			gvk = wellknown.ServiceGVK
@@ -145,7 +167,7 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 	}
 
 	// Create HPA if overlay is present
-	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil {
+	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil && workload.gvk == wellknown.DeploymentGVK {
 		hpa, err := createHorizontalPodAutoscaler(workload, a.overlays.HorizontalPodAutoscaler)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HorizontalPodAutoscaler: %w", err)
@@ -153,9 +175,9 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 		objs = append(objs, hpa)
 	}
 
-	// Create VPA if overlay is present
-	if a.overlays.VerticalPodAutoscaler != nil && deployment != nil {
-		vpa, err := createVerticalPodAutoscaler(deployment, a.overlays.VerticalPodAutoscaler)
+	// Create VPA if overlay is present (VPA targets Deployments only)
+	if a.overlays.VerticalPodAutoscaler != nil && workload != nil && workload.gvk == wellknown.DeploymentGVK {
+		vpa, err := createVerticalPodAutoscaler(workload, a.overlays.VerticalPodAutoscaler)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create VerticalPodAutoscaler: %w", err)
 		}
@@ -239,6 +261,8 @@ func getDataObjectForGVK(gvk schema.GroupVersionKind) (runtime.Object, error) {
 	switch gvk.Kind {
 	case wellknown.DeploymentGVK.Kind:
 		return &appsv1.Deployment{}, nil
+	case wellknown.DaemonSetGVK.Kind:
+		return &appsv1.DaemonSet{}, nil
 	case wellknown.ServiceGVK.Kind:
 		return &corev1.Service{}, nil
 	case wellknown.ServiceAccountGVK.Kind:
@@ -338,30 +362,31 @@ func createHorizontalPodAutoscaler(workload *gatewayWorkload, overlay *agentgate
 	return patched, nil
 }
 
-// createVerticalPodAutoscaler creates a VerticalPodAutoscaler for the given Deployment
+// createVerticalPodAutoscaler creates a VerticalPodAutoscaler for the selected workload
 // with the overlay applied.
-func createVerticalPodAutoscaler(deployment *appsv1.Deployment, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+func createVerticalPodAutoscaler(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
 	// Create base VPA with targetRef pointing to the Deployment
 	// VPA is a CRD, so we use unstructured
+	targetRef := workload.targetRef()
 	vpa := &unstructured.Unstructured{
 		Object: map[string]any{
 			"apiVersion": wellknown.VerticalPodAutoscalerGVK.GroupVersion().String(),
 			"kind":       wellknown.VerticalPodAutoscalerGVK.Kind,
 			"metadata": map[string]any{
-				"name":      deployment.Name,
-				"namespace": deployment.Namespace,
+				"name":      workload.name,
+				"namespace": workload.namespace,
 			},
 			"spec": map[string]any{
 				"targetRef": map[string]any{
-					"apiVersion": wellknown.DeploymentGVK.GroupVersion().String(),
-					"kind":       wellknown.DeploymentGVK.Kind,
-					"name":       deployment.Name,
+					"apiVersion": targetRef.APIVersion,
+					"kind":       targetRef.Kind,
+					"name":       targetRef.Name,
 				},
 			},
 		},
 	}
 	vpa.SetGroupVersionKind(wellknown.VerticalPodAutoscalerGVK)
-	vpa.SetLabels(maps.Clone(deployment.GetLabels()))
+	vpa.SetLabels(maps.Clone(workload.labels))
 
 	// Apply the overlay - for VPA we need to handle it specially since it's unstructured
 	if overlay.Metadata != nil {
