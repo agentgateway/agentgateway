@@ -11,7 +11,8 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
+	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerResult,
 };
 use tracing::{debug, warn};
 
@@ -53,6 +54,24 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
+fn rewrite_resource_update_message(
+	default_target_name: Option<&String>,
+	target: &str,
+	mut message: ServerJsonRpcMessage,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::ResourceUpdatedNotification(resource_updated) =
+			&mut notification.notification
+	{
+		resource_updated.params.uri = resource_uri(
+			default_target_name,
+			target,
+			resource_updated.params.uri.as_str(),
+		);
+	}
+	message
+}
+
 #[derive(Debug, Clone)]
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
@@ -87,6 +106,14 @@ impl Relay {
 			upstreams: self.upstreams.clone(),
 			policies,
 		}
+	}
+
+	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
+		let target = target.to_string();
+		let default_target_name = self.upstreams.default_target_name.clone();
+		stream.map_server_messages(move |message| {
+			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
+		})
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(
@@ -232,6 +259,7 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
+		let resource_subscribe = self.upstreams.stateful();
 		Box::new(move |s| {
 			if !multiplexing {
 				// Happy case: we can forward everything
@@ -244,7 +272,7 @@ impl Relay {
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, multiplexing, Vec::new()).into());
+				return Ok(Self::get_info(pv, resource_subscribe, Vec::new()).into());
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -265,7 +293,7 @@ impl Relay {
 				}
 			}
 
-			Ok(Self::get_info(lowest_version, multiplexing, upstream_instructions).into())
+			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
 		})
 	}
 
@@ -408,7 +436,8 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let stream = us.generic_stream(r, &ctx).await?;
+		let stream =
+			self.rewrite_outbound_server_messages(service_name, us.generic_stream(r, &ctx).await?);
 
 		messages_to_response(id, stream, mcp_log)
 	}
@@ -463,7 +492,10 @@ impl Relay {
 
 		for (name, result) in fut_results {
 			match result {
-				Ok(s) => streams.push((name, s)),
+				Ok(s) => {
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					streams.push((name, s));
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
@@ -520,7 +552,10 @@ impl Relay {
 
 		for (name, result) in fut_results {
 			match result {
-				Ok(s) => streams.push((name, s)),
+				Ok(s) => {
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					streams.push((name, s));
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
@@ -598,24 +633,21 @@ impl Relay {
 
 	fn get_info(
 		pv: ProtocolVersion,
-		multiplexing: bool,
+		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
-		let capabilities = if multiplexing {
+		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
 			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
-			ServerCapabilities::builder()
+			let mut builder = ServerCapabilities::builder()
 				.enable_tools()
 				.enable_tool_list_changed()
 				.enable_prompts()
-				.enable_resources()
-				.build()
-		} else {
-			ServerCapabilities::builder()
-				.enable_tools()
-				.enable_prompts()
-				.enable_resources()
-				.build()
+				.enable_resources();
+			if resource_subscribe {
+				builder = builder.enable_resources_subscribe();
+			}
+			builder.build()
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {

@@ -313,6 +313,10 @@ impl UpstreamGroup {
 		self.by_name.get_key_value(name).map(|(k, _)| k.as_str())
 	}
 
+	pub(crate) fn stateful(&self) -> bool {
+		self.backend.stateful
+	}
+
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
 		trace!("connecting to target: {}", target.name);
 		let target = match &target.spec {
