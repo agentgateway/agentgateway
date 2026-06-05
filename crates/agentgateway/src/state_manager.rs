@@ -8,7 +8,6 @@ use tokio::fs;
 
 use crate::client::Client;
 use crate::store::Stores;
-use crate::telemetry::metrics;
 use crate::types::agent::ListenerTarget;
 use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
@@ -34,8 +33,7 @@ impl StateManager {
 	pub async fn new(
 		config: Arc<crate::Config>,
 		client: client::Client,
-		xds_metrics: agent_xds::Metrics,
-		metrics: Arc<metrics::Metrics>,
+		config_metrics: Arc<agent_xds::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
@@ -58,7 +56,7 @@ impl StateManager {
 				.with_watched_handler::<XdsAddress>(ADDRESS_TYPE, stores.clone().discovery.clone())
 				.with_watched_handler::<ADPResource>(ADP_TYPE, stores.clone().binds.clone())
 				// .with_watched_handler::<XdsAuthorization>(AUTHORIZATION_TYPE, state)
-				.build(xds_metrics, awaiting_ready),
+				.build(config_metrics.clone(), awaiting_ready),
 			)
 		} else {
 			None
@@ -75,7 +73,7 @@ impl StateManager {
 					listener_name: None,
 					port: None,
 				},
-				metrics,
+				metrics: config_metrics,
 			};
 			Box::pin(local_client.run()).await?;
 		}
@@ -102,7 +100,7 @@ pub struct LocalClient {
 	pub stores: Stores,
 	pub client: Client,
 	pub gateway: ListenerTarget,
-	pub metrics: Arc<metrics::Metrics>,
+	pub metrics: Arc<agent_xds::Metrics>,
 }
 
 impl LocalClient {

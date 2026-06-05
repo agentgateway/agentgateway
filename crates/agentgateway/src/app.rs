@@ -83,8 +83,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let state_mgr = state_manager::StateManager::new(
 		config.clone(),
 		control_client.clone(),
-		xds_metrics,
-		metrics_handle.clone(),
+		Arc::new(xds_metrics),
 		xds_tx,
 	)
 	.await?;
