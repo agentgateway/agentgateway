@@ -1388,6 +1388,9 @@ struct LocalLLMPolicy {
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
+	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
+	#[serde(default)]
+	cors: Option<http::cors::Cors>,
 	/// Rate limit incoming requests. State is kept local.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
@@ -2035,6 +2038,7 @@ async fn convert_llm_config(
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
+			cors,
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
@@ -2042,6 +2046,7 @@ async fn convert_llm_config(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
+				cors,
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),

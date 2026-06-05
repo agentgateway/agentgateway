@@ -7990,6 +7990,18 @@
           ],
           "default": null
         },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "localRateLimit": {
           "description": "Rate limit incoming requests. State is kept local.",
           "type": "array",

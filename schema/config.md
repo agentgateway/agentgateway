@@ -18622,6 +18622,13 @@
 |`llm.policies.apiKey.location.expression.expression`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
+|`llm.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`llm.policies.cors.allowCredentials`|boolean||
+|`llm.policies.cors.allowHeaders`|[]string||
+|`llm.policies.cors.allowMethods`|[]string||
+|`llm.policies.cors.allowOrigins`|[]string||
+|`llm.policies.cors.exposeHeaders`|[]string||
+|`llm.policies.cors.maxAge`|string||
 |`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
 |`llm.policies.localRateLimit[].maxTokens`|integer||
 |`llm.policies.localRateLimit[].tokensPerFill`|integer||
