@@ -192,6 +192,7 @@ impl ContextBuilder {
 		if self.any_has(Attributes::Source)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
+			|| self.any_has(Attributes::Proxy)
 			|| self.any_has(Attributes::Backend)
 			|| self.any_has(Attributes::Jwt)
 			|| self.any_has(Attributes::ApiKey)

@@ -76,6 +76,18 @@ pub struct Executor<'a> {
 #[derive(cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct ProxyContext {
+	/// The bind that accepted the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bind: Option<Strng>,
+	/// The selected Gateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub gateway: Option<ProxyGatewayContext>,
+	/// The selected listener.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub listener: Option<ProxyListenerContext>,
+	/// The selected route.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub route: Option<ProxyRouteContext>,
 	/// Time spent processing the request before sending the primary outbound call.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -96,22 +108,62 @@ impl ProxyContext {
 		upstream_duration: Option<std::time::Duration>,
 		response_processing_duration: Option<std::time::Duration>,
 	) -> Self {
-		fn proxy_duration(duration: Option<std::time::Duration>) -> Option<CelDuration> {
-			duration
-				.and_then(|duration| chrono::Duration::from_std(duration).ok())
-				.map(Into::into)
-		}
-
 		Self {
-			request_processing_duration: proxy_duration(request_processing_duration),
-			upstream_duration: proxy_duration(upstream_duration),
-			response_processing_duration: proxy_duration(response_processing_duration),
+			bind: None,
+			gateway: None,
+			listener: None,
+			route: None,
+			request_processing_duration: request_processing_duration.and_then(CelDuration::from_std),
+			upstream_duration: upstream_duration.and_then(CelDuration::from_std),
+			response_processing_duration: response_processing_duration.and_then(CelDuration::from_std),
 		}
 	}
 }
 
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyGatewayContext {
+	/// The namespace of the selected Gateway.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The name of the selected Gateway.
+	#[serde(default)]
+	pub name: Strng,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyListenerContext {
+	/// The name of the selected listener.
+	#[serde(default)]
+	pub name: Strng,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyRouteContext {
+	/// The namespace of the selected route.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The name of the selected route.
+	#[serde(default)]
+	pub name: Strng,
+	/// The kind of the selected route.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub kind: Option<Strng>,
+	/// The selected route rule name, when available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub rule: Option<Strng>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CelDuration(pub chrono::Duration);
+
+impl CelDuration {
+	pub fn from_std(duration: std::time::Duration) -> Option<Self> {
+		chrono::Duration::from_std(duration).ok().map(Into::into)
+	}
+}
 
 impl From<chrono::Duration> for CelDuration {
 	fn from(duration: chrono::Duration) -> Self {
@@ -450,6 +502,7 @@ impl<'a> Executor<'a> {
 		self.extproc = ExtensionOrDirect::Extension(ext);
 		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
+		self.proxy = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
 	}
 	fn set_request_snapshot(&mut self, req: &'a RequestSnapshot) {
@@ -462,6 +515,7 @@ impl<'a> Executor<'a> {
 		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
 		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
+		self.proxy = ExtensionOrDirect::Direct(req.proxy.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
@@ -526,8 +580,8 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
-		if this.proxy.deref().is_none() {
-			this.proxy = ExtensionOrDirect::Direct(proxy);
+		if let Some(proxy) = proxy {
+			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
 		}
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
@@ -687,6 +741,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		api_key: ext::<apikey::Claims>(req, clear),
 		basic_auth: ext::<basicauth::Claims>(req, clear),
 		backend: ext::<BackendContext>(req, clear),
+		proxy: ext::<ProxyContext>(req, clear),
 		source: ext::<SourceContext>(req, clear),
 		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
 		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
@@ -734,6 +789,8 @@ pub struct RequestSnapshot {
 	pub basic_auth: Option<basicauth::Claims>,
 
 	pub backend: Option<BackendContext>,
+
+	pub proxy: Option<ProxyContext>,
 
 	pub source: Option<SourceContext>,
 
@@ -1882,6 +1939,20 @@ pub fn full_example_executor() -> ExecutorSerde {
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
 		}),
 		proxy: Some(ProxyContext {
+			bind: Some("bind".into()),
+			gateway: Some(ProxyGatewayContext {
+				namespace: "ns-1".into(),
+				name: "gw-1".into(),
+			}),
+			listener: Some(ProxyListenerContext {
+				name: "http".into(),
+			}),
+			route: Some(ProxyRouteContext {
+				namespace: "ns-1".into(),
+				name: "route-1".into(),
+				kind: Some("HTTPRoute".into()),
+				rule: Some("rule-1".into()),
+			}),
 			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
 			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),

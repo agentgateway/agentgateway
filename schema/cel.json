@@ -134,6 +134,82 @@
         "null"
       ],
       "properties": {
+        "bind": {
+          "description": "The bind that accepted the request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The selected Gateway.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "listener": {
+          "description": "The selected listener.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The name of the selected listener.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "description": "The selected route.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "kind": {
+              "description": "The kind of the selected route.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rule": {
+              "description": "The selected route rule name, when available.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
         "requestProcessingDuration": {
           "description": "Time spent processing the request before sending the primary outbound call.",
           "type": [

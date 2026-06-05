@@ -619,11 +619,35 @@ impl From<RequestLog> for DropOnLog {
 }
 
 fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
-	cel::ProxyContext::from_std_durations(
-		log.request_processing_duration,
-		log.upstream_duration,
-		log.response_processing_duration,
-	)
+	cel::ProxyContext {
+		bind: log.bind_name.clone(),
+		gateway: log
+			.listener_name
+			.as_ref()
+			.map(|l| cel::ProxyGatewayContext {
+				namespace: l.gateway_namespace.clone(),
+				name: l.gateway_name.clone(),
+			}),
+		listener: log
+			.listener_name
+			.as_ref()
+			.map(|l| cel::ProxyListenerContext {
+				name: l.listener_name.clone(),
+			}),
+		route: log.route_name.as_ref().map(|r| cel::ProxyRouteContext {
+			namespace: r.namespace.clone(),
+			name: r.name.clone(),
+			kind: r.kind.clone(),
+			rule: r.rule_name.clone(),
+		}),
+		request_processing_duration: log
+			.request_processing_duration
+			.and_then(cel::CelDuration::from_std),
+		upstream_duration: log.upstream_duration.and_then(cel::CelDuration::from_std),
+		response_processing_duration: log
+			.response_processing_duration
+			.and_then(cel::CelDuration::from_std),
+	}
 }
 
 impl RequestLog {

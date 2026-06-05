@@ -44,6 +44,25 @@ fn build_test_request() -> crate::http::Request {
 		protocol: BackendProtocol::http,
 	};
 	req.extensions_mut().insert(backend);
+	req.extensions_mut().insert(ProxyContext {
+		bind: Some("bind".into()),
+		gateway: Some(ProxyGatewayContext {
+			namespace: "default".into(),
+			name: "gateway".into(),
+		}),
+		listener: Some(ProxyListenerContext {
+			name: "http".into(),
+		}),
+		route: Some(ProxyRouteContext {
+			namespace: "default".into(),
+			name: "route".into(),
+			kind: Some("HTTPRoute".into()),
+			rule: Some("rule".into()),
+		}),
+		request_processing_duration: None,
+		upstream_duration: None,
+		response_processing_duration: None,
+	});
 	req.extensions_mut().insert(RequestTime(
 		chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:00Z").unwrap(),
 	));
@@ -108,8 +127,31 @@ fn test_request_start_time_is_native_timestamp() {
 }
 
 #[test]
+fn test_route_metadata_context() {
+	let req = build_test_request();
+	let executor = Executor::new_request(&req);
+	let expr = Expression::new_strict(
+		"proxy.bind == 'bind' && \
+		 proxy.gateway.namespace == 'default' && \
+		 proxy.gateway.name == 'gateway' && \
+		 proxy.listener.name == 'http' && \
+		 proxy.route.namespace == 'default' && \
+		 proxy.route.name == 'route' && \
+		 proxy.route.kind == 'HTTPRoute' && \
+		 proxy.route.rule == 'rule'",
+	)
+	.unwrap();
+
+	assert!(executor.eval_bool(&expr));
+}
+
+#[test]
 fn test_proxy_timing_is_native_duration() {
 	let proxy = ProxyContext {
+		bind: None,
+		gateway: None,
+		listener: None,
+		route: None,
 		request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
 		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
@@ -248,15 +290,29 @@ fn test_executor_snapshot_json_to_cel() {
 			"type": "service",
 			"protocol": "http"
 		},
+		"proxy": {
+			"bind": "bind",
+			"gateway": {
+				"namespace": "default",
+				"name": "gateway"
+			},
+			"listener": {
+				"name": "http"
+			},
+			"route": {
+				"namespace": "default",
+				"name": "route",
+				"kind": "HTTPRoute",
+				"rule": "rule"
+			},
+			"requestProcessingDuration": "12ms",
+			"upstreamDuration": "675ms",
+			"responseProcessingDuration": "6ms"
+		},
 		"jwt": {
 			"sub": "test-user",
 			"role": "admin"
 		},
-		"proxy": {
-			"requestProcessingDuration": "12ms",
-			"upstreamDuration": "675ms",
-			"responseProcessingDuration": "6ms"
-		}
 	});
 
 	// Deserialize into ExecutorSerde
@@ -276,6 +332,8 @@ fn test_executor_snapshot_json_to_cel() {
 	assert_eq!(cel_json["request"]["path"], "/test");
 	assert_eq!(cel_json["source"]["address"], "10.0.0.1");
 	assert_eq!(cel_json["backend"]["name"], "my-backend");
+	assert_eq!(cel_json["proxy"]["listener"]["name"], "http");
+	assert_eq!(cel_json["proxy"]["route"]["rule"], "rule");
 	assert_eq!(cel_json["jwt"]["sub"], "test-user");
 	assert_eq!(cel_json["proxy"]["requestProcessingDuration"], "0.012s");
 	assert_eq!(cel_json["proxy"]["upstreamDuration"], "0.675s");

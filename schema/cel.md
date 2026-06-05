@@ -20,6 +20,17 @@
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.bind`|string|The bind that accepted the request.|
+|`proxy.gateway`|object|The selected Gateway.|
+|`proxy.gateway.namespace`|string|The namespace of the selected Gateway.|
+|`proxy.gateway.name`|string|The name of the selected Gateway.|
+|`proxy.listener`|object|The selected listener.|
+|`proxy.listener.name`|string|The name of the selected listener.|
+|`proxy.route`|object|The selected route.|
+|`proxy.route.namespace`|string|The namespace of the selected route.|
+|`proxy.route.name`|string|The name of the selected route.|
+|`proxy.route.kind`|string|The kind of the selected route.|
+|`proxy.route.rule`|string|The selected route rule name, when available.|
 |`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
 |`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
 |`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
