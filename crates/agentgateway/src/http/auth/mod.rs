@@ -173,7 +173,8 @@ pub async fn apply_backend_auth(
 						"identityAssertion requires a non-empty `sub` claim in the inbound JWT"
 					)));
 				}
-				(claims.jwt.expose_secret().to_string(), subject.to_string())
+				// Keep the token wrapped in SecretString; expose_secret() is deferred to the form body.
+				(claims.jwt.clone(), subject.to_string())
 			};
 			let token = idjag::get_token(
 				&backend_info.inputs.upstream,

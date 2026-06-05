@@ -209,10 +209,10 @@ pub(super) async fn get_token(
 	client: &Client,
 	cfg: &IdentityAssertion,
 	call_target: &Target,
-	subject_token: &str,
+	subject_token: &SecretString,
 	subject: &str,
 ) -> anyhow::Result<HeaderValue> {
-	if subject_token.is_empty() {
+	if subject_token.expose_secret().is_empty() {
 		bail!("identityAssertion requires a non-empty inbound JWT as the subject token");
 	}
 
@@ -256,18 +256,18 @@ pub(super) async fn get_token(
 	header.set_sensitive(true);
 
 	// Only cache when we can bound the token's lifetime: prefer the token's own `expires_in`
-	// (capped by `cache_ttl`), else fall back to `cache_ttl` if configured. If neither is
-	// available, skip caching rather than risk reusing a token of unknown lifetime.
+	// (capped by `cache_ttl`), else fall back to `cache_ttl` if configured. A small skew is
+	// applied uniformly so we refresh before the real expiry; if that leaves no useful
+	// lifetime (or neither bound is available), skip caching rather than risk reuse.
 	let ttl = match (access.expires_in, cfg.cache_ttl) {
-		(Some(secs), cap) => Some(
-			Duration::from_secs(secs)
-				.saturating_sub(CACHE_EXPIRY_SKEW)
-				.min(cap.unwrap_or(Duration::MAX)),
-		),
+		(Some(secs), cap) => Some(Duration::from_secs(secs).min(cap.unwrap_or(Duration::MAX))),
 		(None, Some(cap)) => Some(cap),
 		(None, None) => None,
-	};
-	if let Some(ttl) = ttl {
+	}
+	.map(|d| d.saturating_sub(CACHE_EXPIRY_SKEW));
+	if let Some(ttl) = ttl
+		&& !ttl.is_zero()
+	{
 		cfg.cache.0.lock().unwrap().insert(
 			key,
 			CachedToken {
@@ -283,14 +283,14 @@ pub(super) async fn get_token(
 async fn exchange_for_id_jag(
 	client: &Client,
 	cfg: &IdentityAssertion,
-	subject_token: &str,
+	subject_token: &SecretString,
 	resource: Option<&str>,
 ) -> anyhow::Result<String> {
 	let mut form: Vec<(&str, String)> = vec![
 		("grant_type", GRANT_TYPE_TOKEN_EXCHANGE.to_string()),
 		("requested_token_type", TOKEN_TYPE_ID_JAG.to_string()),
 		("audience", cfg.audience.clone()),
-		("subject_token", subject_token.to_string()),
+		("subject_token", subject_token.expose_secret().to_string()),
 		("subject_token_type", TOKEN_TYPE_ID_TOKEN.to_string()),
 	];
 	if let Some(resource) = resource {
@@ -356,9 +356,11 @@ async fn post_token(
 		.await
 		.map_err(|e| anyhow!("failed to read token response body: {e}"))?;
 	if status != StatusCode::OK {
+		// Log the upstream body only at trace; do not echo it into the returned error, which can
+		// surface in client responses / higher-level logs and may contain sensitive diagnostics.
 		let detail = String::from_utf8_lossy(&body[..body.len().min(1024)]);
 		trace!(endpoint = %ep.token_endpoint, %status, error = %detail, "identityAssertion: token endpoint error");
-		bail!("token endpoint returned {status}: {detail}");
+		bail!("token endpoint {} returned {status}", ep.token_endpoint);
 	}
 	serde_json::from_slice::<TokenResponse>(&body).context("failed to decode token response")
 }
