@@ -9,9 +9,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
-
-const defaultProxyAdminPort = 15000
 
 type flags struct {
 	namespace      string
@@ -21,7 +20,7 @@ type flags struct {
 }
 
 func Command() *cobra.Command {
-	f := &flags{proxyAdminPort: defaultProxyAdminPort}
+	f := &flags{proxyAdminPort: wellknown.ProxyAdminPort}
 
 	cmd := &cobra.Command{
 		Use:   "log [resource]",
@@ -52,7 +51,7 @@ prefixed per pod. All pods are attempted even if one fails.`,
 	}
 
 	cmd.Flags().StringVarP(&f.namespace, "namespace", "n", "", "Namespace for proxy pod resolution")
-	cmd.Flags().IntVar(&f.proxyAdminPort, "proxy-admin-port", f.proxyAdminPort, "Proxy admin port")
+	cmd.Flags().IntVarP(&f.proxyAdminPort, "proxy-admin-port", "p", f.proxyAdminPort, "Proxy admin port")
 	cmd.Flags().StringVar(&f.level, "level", "", "Set global log level (error|warn|info|debug|trace|off)")
 	cmd.Flags().StringArrayVar(&f.set, "set", nil, "Set module log level: module=level (may be repeated or comma-separated)")
 

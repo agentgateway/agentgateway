@@ -46,7 +46,7 @@ is prefixed per pod. All pods are attempted even if one fails.`,
 	}
 
 	cmd.Flags().StringVarP(&f.namespace, "namespace", "n", namespaces.DefaultNamespace, "Namespace where the controller is running")
-	cmd.Flags().IntVar(&f.controllerAdminPort, "controller-admin-port", f.controllerAdminPort, "Controller admin port")
+	cmd.Flags().IntVarP(&f.controllerAdminPort, "controller-admin-port", "p", f.controllerAdminPort, "Controller admin port")
 	cmd.Flags().StringVar(&f.level, "level", "", "Set log level for all components (error|warn|info|debug|trace)")
 	cmd.Flags().StringArrayVar(&f.set, "set", nil, "Set a component log level: component=level (may be repeated)")
 

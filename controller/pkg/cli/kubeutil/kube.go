@@ -9,12 +9,13 @@ import (
 	istiocli "istio.io/istio/istioctl/pkg/cli"
 	"istio.io/istio/istioctl/pkg/util/handlers"
 	"istio.io/istio/pkg/kube"
-	"k8s.io/apimachinery/pkg/util/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/clientcmd"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // Pod identifies a single Kubernetes pod by name and namespace.
@@ -66,6 +67,10 @@ func ResolveResourceName(ctx context.Context, kubeClient kube.CLIClient, namespa
 // all pods, use ResolvePodsForResource with ForEachPod.
 func ResolvePodForResource(kubeClient kube.CLIClient, resourceName, namespace string) (string, string, error) {
 	pods, err := ResolvePodsForResource(kubeClient, resourceName, namespace)
+	// ResolvePodsForResource errors on empty, but guard explicitly in case that changes.
+	if len(pods) == 0 {
+		return "", "", fmt.Errorf("no pods found for resource %q", resourceName)
+	}
 	if err != nil {
 		return "", "", err
 	}
@@ -94,14 +99,15 @@ func ResolvePodsForResource(kubeClient kube.CLIClient, resourceName, namespace s
 // ResolveControllerPods returns all controller pods in namespace, identified
 // by the app.kubernetes.io/name=agentgateway label, sorted by name.
 func ResolveControllerPods(ctx context.Context, kubeClient kube.CLIClient, namespace string) ([]Pod, error) {
+	selector := fmt.Sprintf("%s=%s", wellknown.KubernetesAppNameLabel, wellknown.KubernetesAppNameValue)
 	list, err := kubeClient.Kube().CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "app.kubernetes.io/name=agentgateway",
+		LabelSelector: selector,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list controller pods in namespace %q: %w", namespace, err)
 	}
 	if len(list.Items) == 0 {
-		return nil, fmt.Errorf("no controller pods found in namespace %q (label app.kubernetes.io/name=agentgateway)", namespace)
+		return nil, fmt.Errorf("no controller pods found in namespace %q (label %s)", namespace, selector)
 	}
 	pods := make([]Pod, len(list.Items))
 	for i, p := range list.Items {
