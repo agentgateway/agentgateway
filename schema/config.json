@@ -7619,6 +7619,17 @@
           "description": "provider of the LLM we are connecting too",
           "$ref": "#/$defs/LocalModelAIProvider"
         },
+        "passthrough": {
+          "description": "passthrough controls how requests are handled.\nBy default, requests will be parsed and translated as needed.\nWith passthrough, they will be unmodified and optionally inspected (with `detect`).\nIn this mode, requests must be sent in the native format of the provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMPassthrough"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "defaults": {
           "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
           "type": [
@@ -7883,6 +7894,20 @@
             "custom"
           ],
           "additionalProperties": false
+        }
+      ]
+    },
+    "LocalLLMPassthrough": {
+      "oneOf": [
+        {
+          "description": "Pass through the request while extracting LLM telemetry and rate-limit inputs when possible.",
+          "type": "string",
+          "const": "detect"
+        },
+        {
+          "description": "Pass through the request without interpreting it as LLM traffic.",
+          "type": "string",
+          "const": "opaque"
         }
       ]
     },

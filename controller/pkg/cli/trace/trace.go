@@ -70,6 +70,13 @@ type traceEvent struct {
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
 	Details         string            `json:"details,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	RouteType       string            `json:"routeType,omitempty"`
+	InputFormat     string            `json:"inputFormat,omitempty"`
+	NativeFormat    *string           `json:"nativeFormat,omitempty"`
+	RequestModel    string            `json:"requestModel,omitempty"`
+	Streaming       *bool             `json:"streaming,omitempty"`
+	StreamFormat    string            `json:"streamFormat,omitempty"`
 }
 
 type traceAuthzRule struct {
@@ -636,6 +643,12 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "llmRouteResolved":
+		return "LLM Route"
+	case "llmRequestDetected":
+		return "LLM Request"
+	case "llmStreamingTranslation":
+		return "LLM Stream"
 	default:
 		return eventType
 	}
@@ -686,6 +699,45 @@ func summarizeEvent(event traceEvent) string {
 		return "request finished"
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "llmRouteResolved":
+		return strings.TrimSpace(fmt.Sprintf(
+			"%s %s",
+			event.Provider,
+			event.RouteType,
+		))
+	case "llmRequestDetected":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.RequestModel != "" {
+			parts = append(parts, "model="+event.RequestModel)
+		}
+		if event.Streaming != nil && *event.Streaming {
+			parts = append(parts, "streaming")
+		}
+		return truncate(strings.Join(parts, " "), 120)
+	case "llmStreamingTranslation":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.StreamFormat != "" {
+			parts = append(parts, "stream="+event.StreamFormat)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	default:
 		return truncate(compactJSON(event), 120)
 	}

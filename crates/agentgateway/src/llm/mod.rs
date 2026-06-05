@@ -958,6 +958,9 @@ impl AIProvider {
 		}
 
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
+		if original_format == InputFormat::Detect {
+			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
+		}
 		llm_info.native_format = native_format;
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
@@ -1424,6 +1427,18 @@ impl AIProvider {
 		};
 
 		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		let stream_format = match self {
+			AIProvider::Bedrock(_) => "awsEventStream",
+			_ => "sseJson",
+		};
+		crate::proxy::dtrace::trace(|trace| {
+			trace.llm_streaming_translation(
+				self.provider().to_string(),
+				format!("{input_format:?}"),
+				native_format.map(|f| format!("{f:?}")),
+				stream_format.to_string(),
+			)
+		});
 		Ok(match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
@@ -1464,6 +1479,9 @@ impl AIProvider {
 			},
 			(AIProvider::Vertex(_), InputFormat::Completions, _) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Detect, _) => {
+				types::detect::passthrough_aws_stream(logger, resp)
 			},
 			(_, InputFormat::Detect, _) => types::detect::passthrough_stream(logger, resp),
 			// Responses with OpenAI: just passthrough

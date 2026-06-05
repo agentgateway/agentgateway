@@ -152,7 +152,7 @@ async fn test_validate_examples() {
 	setup();
 	let mut failures = Vec::new();
 
-	for path in dbg!(example_configs()) {
+	for path in example_configs() {
 		let name = example_name(&path);
 		if example_requires_keycloak(&path) && !keycloak_available() {
 			continue;

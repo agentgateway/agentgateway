@@ -212,7 +212,7 @@ policies:
           request:
             set:
               - - x-gateway-model-name
-                - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\nrequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\njson(request.body).model\n"
+                - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\n\trequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\n\t(request.path.endsWith(\"/invoke-with-response-stream\") || request.path.endsWith(\"/invoke\") ?\n\trequest.path.regexReplace(\"^.*/model/(.+?)/invoke.*\", \"${1}\") :\n\tjson(request.body).model)\n"
           response: {}
   - key: frontend/accessLog
     name: ~

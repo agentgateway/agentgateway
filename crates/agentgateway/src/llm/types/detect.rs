@@ -4,6 +4,7 @@ use http::HeaderMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tracing::debug;
+use x509_parser::nom::AsBytes;
 
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::PromptCachingConfig;
@@ -135,6 +136,26 @@ impl RequestType for Request {
 	}
 }
 
+pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
+	if path.ends_with(":streamRawPredict") || path.ends_with("/invoke-with-response-stream") {
+		llm_info.streaming = true;
+	}
+	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
+		path
+			.split_once("/publishers/anthropic/models/")
+			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
+	} else if path.ends_with("/invoke-with-response-stream") || path.ends_with("/invoke") {
+		path
+			.split_once("/model/")
+			.and_then(|(_, rest)| rest.split_once("/invoke").map(|(model, _)| model))
+	} else {
+		None
+	};
+	if let Some(model) = model {
+		llm_info.request_model = model.into();
+	}
+}
+
 #[derive(Debug, Clone)]
 pub enum Response {
 	Raw(Bytes),
@@ -157,7 +178,7 @@ impl Response {
 }
 
 mod lookups {
-	pub const MODEL: [&[&str]; 1] = [&["model"]];
+	pub const MODEL: [&[&str]; 2] = [&["model"], &["message", "model"]];
 	pub const TEMPERATURE: [&[&str]; 1] = [&["temperature"]];
 	pub const STREAM: [&[&str]; 1] = [&["stream"]];
 	pub const TOP_P: [&[&str]; 1] = [&["top_p"]];
@@ -167,19 +188,28 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 3] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 5] = [
 		&["usage", "input_tokens"],
 		// Responses streaming
 		&["response", "usage", "input_tokens"],
 		&["usage", "prompt_tokens"],
+		// Bedrock converse
+		&["usage", "inputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "inputTokens"],
 	];
-	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 3] = [
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 5] = [
 		&["usage", "output_tokens"],
 		// Responses streaming
 		&["response", "usage", "output_tokens"],
 		&["usage", "completion_tokens"],
+		// Bedrock converse
+		&["usage", "outputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "outputTokens"],
 	];
-	pub const USAGE_TOTAL_TOKENS: [&[&str]; 1] = [&["usage", "total_tokens"]];
+	pub const USAGE_TOTAL_TOKENS: [&[&str]; 2] =
+		[&["usage", "total_tokens"], &["usage", "totalTokens"]];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
 	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
@@ -202,8 +232,13 @@ mod lookups {
 		// Completions
 		&["usage", "completion_tokens_details", "reasoning_tokens"],
 	];
-	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 1] = [&["usage", "cache_creation_input_tokens"]];
-	pub const CACHED_INPUT_TOKENS: [&[&str]; 4] = [
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 3] = [
+		&["usage", "cache_creation_input_tokens"],
+		&["usage", "cacheWriteInputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "cacheWriteInputTokensCount"],
+	];
+	pub const CACHED_INPUT_TOKENS: [&[&str]; 6] = [
 		// Message
 		&["usage", "cache_read_input_tokens"],
 		// Responses
@@ -212,6 +247,9 @@ mod lookups {
 		&["response", "usage", "input_tokens_details", "cached_tokens"],
 		// Completions
 		&["usage", "prompt_tokens_details", "cached_tokens"],
+		&["usage", "cacheReadInputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "cacheReadInputTokenCount"],
 	];
 	pub const SERVICE_TIER: [&[&str]; 3] = [
 		// Completions
@@ -302,6 +340,101 @@ impl StreamResponse {
 	}
 }
 
+fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
+	let input_tokens = f.set_if(
+		log,
+		lookups::USAGE_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_tokens = Some(v),
+	);
+	let output_tokens = f.set_if(
+		log,
+		lookups::USAGE_OUTPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_tokens = Some(v),
+	);
+	let _input_image_tokens = f.set_if(
+		log,
+		lookups::INPUT_IMAGE_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_image_tokens = Some(v),
+	);
+	let _input_text_tokens = f.set_if(
+		log,
+		lookups::INPUT_TEXT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_text_tokens = Some(v),
+	);
+	let _input_audio_tokens = f.set_if(
+		log,
+		lookups::INPUT_AUDIO_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_audio_tokens = Some(v),
+	);
+	let _output_image_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_IMAGE_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_image_tokens = Some(v),
+	);
+	let _output_text_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_TEXT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_text_tokens = Some(v),
+	);
+	let _output_audio_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_AUDIO_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_audio_tokens = Some(v),
+	);
+	let total_tokens = f.set_if(
+		log,
+		lookups::USAGE_TOTAL_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.total_tokens = Some(v),
+	);
+	let _reasoning_tokens = f.set_if(
+		log,
+		lookups::REASONING,
+		|v| v.as_u64(),
+		|l, v| l.response.reasoning_tokens = Some(v),
+	);
+	let _cache_creation_input_tokens = f.set_if(
+		log,
+		lookups::CACHE_CREATION_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.cache_creation_input_tokens = Some(v),
+	);
+	let _cached_input_tokens = f.set_if(
+		log,
+		lookups::CACHED_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.cached_input_tokens = Some(v),
+	);
+	let _provider_model = f.set_if(
+		log,
+		lookups::MODEL,
+		|v| v.as_str(),
+		|l, v| l.response.provider_model = Some(v.into()),
+	);
+	f.set_if(
+		log,
+		lookups::SERVICE_TIER,
+		|v| v.as_str(),
+		|l, v| l.response.service_tier = Some(v.into()),
+	);
+	if total_tokens.is_none()
+		&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
+	{
+		log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
+	}
+	if input_tokens.is_some() || output_tokens.is_some() || total_tokens.is_some() {
+		log.report_rate_limit();
+	}
+}
+
 pub fn passthrough_stream(
 	mut log: AmendOnDrop,
 	resp: crate::http::Response,
@@ -310,103 +443,38 @@ pub fn passthrough_stream(
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
 			Some(Ok(f)) => {
-				let input_tokens = f.set_if(
-					&log,
-					lookups::USAGE_INPUT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.input_tokens = Some(v),
-				);
-				let output_tokens = f.set_if(
-					&log,
-					lookups::USAGE_OUTPUT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.output_tokens = Some(v),
-				);
-				let _input_image_tokens = f.set_if(
-					&log,
-					lookups::INPUT_IMAGE_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.input_image_tokens = Some(v),
-				);
-				let _input_text_tokens = f.set_if(
-					&log,
-					lookups::INPUT_TEXT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.input_text_tokens = Some(v),
-				);
-				let _input_audio_tokens = f.set_if(
-					&log,
-					lookups::INPUT_AUDIO_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.input_audio_tokens = Some(v),
-				);
-				let _output_image_tokens = f.set_if(
-					&log,
-					lookups::OUTPUT_IMAGE_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.output_image_tokens = Some(v),
-				);
-				let _output_text_tokens = f.set_if(
-					&log,
-					lookups::OUTPUT_TEXT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.output_text_tokens = Some(v),
-				);
-				let _output_audio_tokens = f.set_if(
-					&log,
-					lookups::OUTPUT_AUDIO_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.output_audio_tokens = Some(v),
-				);
-				let total_tokens = f.set_if(
-					&log,
-					lookups::USAGE_TOTAL_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.total_tokens = Some(v),
-				);
-				let _reasoning_tokens = f.set_if(
-					&log,
-					lookups::REASONING,
-					|v| v.as_u64(),
-					|l, v| l.response.reasoning_tokens = Some(v),
-				);
-				let _cache_creation_input_tokens = f.set_if(
-					&log,
-					lookups::CACHE_CREATION_INPUT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.cache_creation_input_tokens = Some(v),
-				);
-				let _cached_input_tokens = f.set_if(
-					&log,
-					lookups::CACHED_INPUT_TOKENS,
-					|v| v.as_u64(),
-					|l, v| l.response.cached_input_tokens = Some(v),
-				);
-				let _provider_model = f.set_if(
-					&log,
-					lookups::MODEL,
-					|v| v.as_str(),
-					|l, v| l.response.provider_model = Some(v.into()),
-				);
-				f.set_if(
-					&log,
-					lookups::SERVICE_TIER,
-					|v| v.as_str(),
-					|l, v| l.response.service_tier = Some(v.into()),
-				);
-				if total_tokens.is_none()
-					&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
-				{
-					log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
-				}
-				if input_tokens.is_some() || output_tokens.is_some() || total_tokens.is_some() {
-					log.report_rate_limit();
-				}
+				amend_from_stream_response(&mut log, &f);
 			},
 			Some(Err(e)) => {
 				debug!("failed to parse streaming response: {e}");
 			},
 			None => {},
+		})
+	})
+}
+
+pub fn passthrough_aws_stream(
+	mut log: AmendOnDrop,
+	resp: crate::http::Response,
+) -> crate::http::Response {
+	use base64::Engine;
+	let buffer_limit = crate::http::response_buffer_limit(&resp);
+	resp.map(|b| {
+		parse::aws_sse::inspect(b, buffer_limit, move |msg| {
+			if let Ok(parsed) = serde_json::from_slice::<StreamResponse>(msg.payload()) {
+				// Unfortunately bedrock invoke double-nests the actual content in an inner `bytes` key base64 encoded.
+				if let Some(obj) = parsed.rest.as_object()
+					&& obj.len() <= 2
+					&& let Some(serde_json::Value::String(s)) = obj.get("bytes")
+					&& let Ok(by) = base64::prelude::BASE64_STANDARD.decode(s)
+					&& let Ok(v) = serde_json::from_slice(by.as_bytes())
+				{
+					let ns = crate::llm::types::detect::StreamResponse { rest: v };
+					amend_from_stream_response(&mut log, &ns);
+				} else {
+					amend_from_stream_response(&mut log, &parsed);
+				}
+			}
 		})
 	})
 }

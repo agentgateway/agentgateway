@@ -1997,6 +1997,10 @@ async fn make_backend_call(
 				.map(|policy| policy.resolve_route(req.uri().path()))
 				.unwrap_or(llm::RouteType::Completions);
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
+			let llm_provider = llm.provider.provider().to_string();
+			dtrace::trace(|trace| {
+				trace.llm_route_resolved(llm_provider.clone(), format!("{route_type:?}"))
+			});
 			// First, we process the incoming request. This entails translating to the relevant provider,
 			// and parsing the request to build the LLMRequest for logging/etc, and applying LLM policies like
 			// prompt enrichment, prompt guard, etc.
@@ -2070,6 +2074,15 @@ async fn make_backend_call(
 						RequestResult::Success(r, lr) => (r, lr),
 						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
 					};
+					dtrace::trace(|trace| {
+						trace.llm_request_detected(
+							llm_provider.clone(),
+							format!("{:?}", llm_request.input_format),
+							llm_request.native_format.map(|f| format!("{f:?}")),
+							llm_request.request_model.to_string(),
+							llm_request.streaming,
+						);
+					});
 					// If a user doesn't configure explicit overrides for connecting to a provider, setup default
 					// paths, TLS, etc.
 					llm

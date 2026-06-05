@@ -493,6 +493,12 @@ pub struct LocalLLMModels {
 	params: LocalLLMParams,
 	/// provider of the LLM we are connecting too
 	provider: LocalModelAIProvider,
+	/// passthrough controls how requests are handled.
+	/// By default, requests will be parsed and translated as needed.
+	/// With passthrough, they will be unmodified and optionally inspected (with `detect`).
+	/// In this mode, requests must be sent in the native format of the provider.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	passthrough: Option<LocalLLMPassthrough>,
 
 	// Policies
 	/// defaults allows setting default values for the request. If these are not present in the request body, they will be set.
@@ -530,6 +536,23 @@ pub struct LocalLLMModels {
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	matches: Vec<LLMRouteMatch>,
+}
+
+#[apply(schema_de!)]
+pub enum LocalLLMPassthrough {
+	/// Pass through the request while extracting LLM telemetry and rate-limit inputs when possible.
+	Detect,
+	/// Pass through the request without interpreting it as LLM traffic.
+	Opaque,
+}
+
+impl LocalLLMPassthrough {
+	fn route_type(&self) -> crate::llm::RouteType {
+		match self {
+			LocalLLMPassthrough::Detect => crate::llm::RouteType::Detect,
+			LocalLLMPassthrough::Opaque => crate::llm::RouteType::Passthrough,
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -2074,8 +2097,10 @@ async fn convert_llm_config(
 					strng::new(
 						r#"
 request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
-request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
-json(request.body).model
+	request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+	(request.path.endsWith("/invoke-with-response-stream") || request.path.endsWith("/invoke") ?
+	request.path.regexReplace("^.*/model/(.+?)/invoke.*", "${1}") :
+	json(request.body).model)
 "#,
 					),
 				)],
@@ -2161,6 +2186,48 @@ json(request.body).model
 		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
 		let p = model_config.params.clone();
 		let model = p.model;
+		let llm_routes = if let Some(passthrough) = model_config.passthrough.as_ref() {
+			vec![(strng::new("*"), passthrough.route_type())]
+		} else {
+			vec![
+				(
+					strng::new("/v1/chat/completions"),
+					crate::llm::RouteType::Completions,
+				),
+				(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
+				// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
+				(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
+				(
+					strng::new(":streamRawPredict"),
+					crate::llm::RouteType::Messages,
+				),
+				(
+					strng::new("/v1/responses"),
+					crate::llm::RouteType::Responses,
+				),
+				(
+					strng::new("/v1/images/generations"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/images/edits"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/images/variations"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/responses/compact"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/embeddings"),
+					crate::llm::RouteType::Embeddings,
+				),
+				(strng::new("*"), crate::llm::RouteType::Passthrough),
+			]
+		};
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
@@ -2345,46 +2412,7 @@ json(request.body).model
 				inline_policies: vec![],
 			}],
 			inline_policies: vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-				routes: [
-					(
-						strng::new("/v1/chat/completions"),
-						crate::llm::RouteType::Completions,
-					),
-					(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
-					// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
-					(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-					(
-						strng::new(":streamRawPredict"),
-						crate::llm::RouteType::Messages,
-					),
-					(
-						strng::new("/v1/responses"),
-						crate::llm::RouteType::Responses,
-					),
-					(
-						strng::new("/v1/images/generations"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/images/edits"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/images/variations"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/responses/compact"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/embeddings"),
-						crate::llm::RouteType::Embeddings,
-					),
-					(strng::new("*"), crate::llm::RouteType::Passthrough),
-				]
-				.into_iter()
-				.collect(),
+				routes: llm_routes.into_iter().collect(),
 				..Default::default()
 			}))],
 		};
