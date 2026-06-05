@@ -826,3 +826,39 @@ async fn test_identity_assertion_not_cached_without_expiry() {
 	assert_eq!(idp.received_requests().await.unwrap().len(), 2);
 	assert_eq!(resource_as.received_requests().await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn test_identity_assertion_rejects_non_bearer_token() {
+	let idp = MockServer::start().await;
+	let resource_as = MockServer::start().await;
+	mount_idp(&idp, 1).await;
+	// Resource AS returns a sender-constrained (DPoP) token, which we don't support.
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"token_type": "DPoP",
+			"access_token": "constrained-token",
+			"expires_in": 3600,
+		})))
+		.mount(&resource_as)
+		.await;
+
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let cfg: IdentityAssertion = serde_json::from_value(idjag_config(
+		&idp,
+		&resource_as,
+		json!({ "clientSecretBasic": { "clientSecret": "idp-secret" } }),
+	))
+	.expect("config deserializes");
+
+	let mut req = request_with_identity("user-1", "header.payload.signature");
+	let err = apply_backend_auth(
+		&idjag_backend_info(&t),
+		&BackendAuth::IdentityAssertion(Box::new(cfg)),
+		&mut req,
+	)
+	.await
+	.expect_err("a non-Bearer token_type must be rejected");
+	assert!(req.headers().get(http::header::AUTHORIZATION).is_none());
+	assert!(err.to_string().contains("Bearer"));
+}

@@ -11,7 +11,7 @@
 //!    server, yielding a Bearer access token.
 //!
 //! The Bearer token is attached to the outbound backend request and cached per
-//! `(subject, audience, scope, resource)` until shortly before it expires.
+//! `(subject, audience, scope, resource, target)` until shortly before it expires.
 //!
 //! Out of scope for now (see issue #2029): DPoP sender-constraint (RFC 9449), `.well-known`
 //! endpoint discovery (RFC 8414), XDS/proto transport, and SAML / refresh-token subjects.
@@ -177,7 +177,7 @@ impl SigningAlg {
 #[derive(Clone, Debug, Default)]
 struct TokenCache(Arc<Mutex<HashMap<CacheKey, CachedToken>>>);
 
-type CacheKey = (String, String, String, String);
+type CacheKey = (String, String, String, String, String);
 
 #[derive(Clone, Debug)]
 struct CachedToken {
@@ -191,13 +191,18 @@ impl CachedToken {
 	}
 }
 
-/// JSON token-endpoint response, shared by both legs. `token_type` is intentionally not
-/// asserted: the token exchange returns `N_A` per the spec, and the resource AS returns `Bearer`.
+/// JSON token-endpoint response, shared by both legs. The token exchange (leg 1) returns
+/// `token_type: N_A` plus an `issued_token_type`; the resource AS (leg 2) returns
+/// `token_type: Bearer`. Each is validated when present by the respective exchange function.
 #[derive(serde::Deserialize)]
 struct TokenResponse {
 	access_token: String,
 	#[serde(default)]
 	expires_in: Option<u64>,
+	#[serde(default)]
+	issued_token_type: Option<String>,
+	#[serde(default)]
+	token_type: Option<String>,
 }
 
 /// Entry point invoked from `apply_backend_auth`. Returns a sensitive `Authorization`
@@ -222,11 +227,19 @@ pub(super) async fn get_token(
 	});
 	let scope = cfg.scope.clone().unwrap_or_default();
 
+	// Include a stable per-backend identifier so a token is never reused across different
+	// targets, even when no `resource` is configured or derivable.
+	let target_key = match call_target {
+		Target::Address(addr) => addr.to_string(),
+		Target::Hostname(host, port) => format!("{host}:{port}"),
+		Target::UnixSocket(path) => format!("unix:{}", path.display()),
+	};
 	let key: CacheKey = (
 		subject.to_string(),
 		cfg.audience.clone(),
 		scope,
 		resource.clone().unwrap_or_default(),
+		target_key,
 	);
 
 	// Fast path: return a still-valid cached token. The lock is never held across an await.
@@ -302,6 +315,11 @@ async fn exchange_for_id_jag(
 	let resp = post_token(client, &cfg.idp, form)
 		.await
 		.context("ID-JAG token exchange failed")?;
+	if let Some(ty) = &resp.issued_token_type
+		&& ty != TOKEN_TYPE_ID_JAG
+	{
+		bail!("ID-JAG token exchange returned unexpected issued_token_type {ty:?}");
+	}
 	Ok(resp.access_token)
 }
 
@@ -320,9 +338,19 @@ async fn exchange_id_jag_for_token(
 	if let Some(scope) = scope {
 		form.push(("scope", scope.to_string()));
 	}
-	post_token(client, resource_as, form)
+	let resp = post_token(client, resource_as, form)
 		.await
-		.context("ID-JAG access token request failed")
+		.context("ID-JAG access token request failed")?;
+	// The result is attached as `Authorization: Bearer …`, so reject sender-constrained or other
+	// token types (e.g. DPoP) rather than mislabeling them as Bearer.
+	if let Some(ty) = &resp.token_type
+		&& !ty.eq_ignore_ascii_case("bearer")
+	{
+		bail!(
+			"resource authorization server returned unsupported token_type {ty:?} (only Bearer is supported)"
+		);
+	}
+	Ok(resp)
 }
 
 /// POST a form-encoded body to a token endpoint and parse the JSON response.
