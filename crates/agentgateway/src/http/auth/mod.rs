@@ -161,15 +161,19 @@ pub async fn apply_backend_auth(
 						"identityAssertion requires an authenticated request (no JWT found)"
 					))
 				})?;
-				(
-					claims.jwt.expose_secret().to_string(),
-					claims
-						.inner
-						.get("sub")
-						.and_then(|v| v.as_str())
-						.unwrap_or_default()
-						.to_string(),
-				)
+				// A missing/empty `sub` would collapse distinct users onto the same cache key, so
+				// reject it rather than defaulting to an empty subject.
+				let subject = claims
+					.inner
+					.get("sub")
+					.and_then(|v| v.as_str())
+					.unwrap_or_default();
+				if subject.is_empty() {
+					return Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
+						"identityAssertion requires a non-empty `sub` claim in the inbound JWT"
+					)));
+				}
+				(claims.jwt.expose_secret().to_string(), subject.to_string())
 			};
 			let token = idjag::get_token(
 				&backend_info.inputs.upstream,

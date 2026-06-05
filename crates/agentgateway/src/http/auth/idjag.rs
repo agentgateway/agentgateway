@@ -2,7 +2,7 @@
 //!
 //! Implements the *client* side of `draft-ietf-oauth-identity-assertion-authz-grant`.
 //! On a backend call, the validated inbound user identity (a JWT placed in the request
-//! extensions by the `jwtAuthentication` policy) is turned into a backend-scoped access
+//! extensions by the `jwtAuth` policy) is turned into a backend-scoped access
 //! token via two token-endpoint calls:
 //!
 //! 1. RFC 8693 token exchange against the user's IdP authorization server, yielding an
@@ -182,15 +182,12 @@ type CacheKey = (String, String, String, String);
 #[derive(Clone, Debug)]
 struct CachedToken {
 	header: HeaderValue,
-	expires_at: Option<Instant>,
+	expires_at: Instant,
 }
 
 impl CachedToken {
 	fn is_valid(&self) -> bool {
-		match self.expires_at {
-			None => true,
-			Some(at) => Instant::now() < at,
-		}
+		Instant::now() < self.expires_at
 	}
 }
 
@@ -258,19 +255,27 @@ pub(super) async fn get_token(
 		.context("backend access token is not a valid header value")?;
 	header.set_sensitive(true);
 
-	let expires_at = access.expires_in.map(|secs| {
-		let ttl = Duration::from_secs(secs)
-			.saturating_sub(CACHE_EXPIRY_SKEW)
-			.min(cfg.cache_ttl.unwrap_or(Duration::MAX));
-		Instant::now() + ttl
-	});
-	cfg.cache.0.lock().unwrap().insert(
-		key,
-		CachedToken {
-			header: header.clone(),
-			expires_at,
-		},
-	);
+	// Only cache when we can bound the token's lifetime: prefer the token's own `expires_in`
+	// (capped by `cache_ttl`), else fall back to `cache_ttl` if configured. If neither is
+	// available, skip caching rather than risk reusing a token of unknown lifetime.
+	let ttl = match (access.expires_in, cfg.cache_ttl) {
+		(Some(secs), cap) => Some(
+			Duration::from_secs(secs)
+				.saturating_sub(CACHE_EXPIRY_SKEW)
+				.min(cap.unwrap_or(Duration::MAX)),
+		),
+		(None, Some(cap)) => Some(cap),
+		(None, None) => None,
+	};
+	if let Some(ttl) = ttl {
+		cfg.cache.0.lock().unwrap().insert(
+			key,
+			CachedToken {
+				header: header.clone(),
+				expires_at: Instant::now() + ttl,
+			},
+		);
+	}
 
 	Ok(header)
 }
@@ -366,15 +371,17 @@ fn apply_client_auth(
 ) -> anyhow::Result<Builder> {
 	Ok(match &ep.client_auth {
 		ClientAuth::ClientSecretBasic { client_secret } => {
-			let auth = format!(
+			let mut value = HeaderValue::from_str(&format!(
 				"Basic {}",
 				base64::engine::general_purpose::STANDARD.encode(format!(
 					"{}:{}",
 					form_urlencode_component(&ep.client_id),
 					form_urlencode_component(client_secret.expose_secret())
 				))
-			);
-			builder.header(header::AUTHORIZATION, auth)
+			))
+			.context("failed to build basic auth header")?;
+			value.set_sensitive(true);
+			builder.header(header::AUTHORIZATION, value)
 		},
 		ClientAuth::ClientSecretPost { client_secret } => {
 			form.push(("client_id", ep.client_id.clone()));
@@ -393,6 +400,9 @@ fn apply_client_auth(
 				*alg,
 				kid.as_deref(),
 			)?;
+			// client_id is OPTIONAL per RFC 7521 but many authorization servers require it
+			// alongside the assertion; include it to maximize interop.
+			form.push(("client_id", ep.client_id.clone()));
 			form.push((
 				"client_assertion_type",
 				CLIENT_ASSERTION_TYPE_JWT_BEARER.to_string(),
