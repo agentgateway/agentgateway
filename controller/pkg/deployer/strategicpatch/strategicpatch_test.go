@@ -420,7 +420,7 @@ func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
 	overlay := &agentgateway.KubernetesResourceOverlay{}
 
-	obj, err := createVerticalPodAutoscaler(dep, overlay)
+	obj, err := createVerticalPodAutoscaler(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	vpa := obj.(*unstructured.Unstructured)
@@ -435,7 +435,7 @@ func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 		},
 	}
 
-	obj, err := createVerticalPodAutoscaler(dep, overlay)
+	obj, err := createVerticalPodAutoscaler(gatewayWorkloadFromDeployment(dep), overlay)
 	require.NoError(t, err)
 
 	vpa := obj.(*unstructured.Unstructured)
