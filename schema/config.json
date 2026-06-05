@@ -7580,6 +7580,16 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "tls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",

@@ -17087,6 +17087,14 @@
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
+|`llm.tls`|object||
+|`llm.tls.cert`|string||
+|`llm.tls.key`|string||
+|`llm.tls.root`|string||
+|`llm.tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
+|`llm.tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
+|`llm.tls.maxTLSVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
+|`llm.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|

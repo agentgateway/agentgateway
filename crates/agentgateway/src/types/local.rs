@@ -295,6 +295,8 @@ pub struct LocalConfig {
 pub struct LocalLLMConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	tls: Option<LocalTLSServerConfig>,
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
@@ -2049,10 +2051,12 @@ async fn convert_llm_config(
 	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
+		tls,
 		models,
 		policies,
 	} = llm_config;
 	let port = port.unwrap_or(DEFAULT_LLM_PORT);
+	let tls = tls.map(TryInto::try_into).transpose()?;
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -2432,11 +2436,15 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 		listener_name: strng::new("llm"),
 		listener_set: None,
 	};
+	let tls_enabled = tls.is_some();
 	let listener = Listener {
 		key: listener_key.clone(),
 		name: listener_name.clone(),
 		hostname: strng::new("*"),
-		protocol: ListenerProtocol::HTTP,
+		protocol: match tls {
+			Some(tls) => ListenerProtocol::HTTPS(tls),
+			None => ListenerProtocol::HTTP,
+		},
 	};
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
@@ -2492,7 +2500,11 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	let bind = Bind {
 		key: strng::format!("bind/{}", port),
 		address: sockaddr,
-		protocol: BindProtocol::http,
+		protocol: if tls_enabled {
+			BindProtocol::tls
+		} else {
+			BindProtocol::http
+		},
 		listeners: listener_set,
 		tunnel_protocol: TunnelProtocol::Direct,
 	};
