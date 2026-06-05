@@ -1264,7 +1264,11 @@ async fn handle_upgrade(
 		upgrade,
 	} = req_upgrade_type;
 	let resp_upgrade_type = get_upgrade_type(resp.headers());
-	if Some(&upgrade_type) != resp_upgrade_type.as_ref() {
+	// Case insensitive: https://www.rfc-editor.org/rfc/rfc6455.html#section-4.2.1
+	if !resp_upgrade_type
+		.as_ref()
+		.is_some_and(|rt| upgrade_type.as_bytes().eq_ignore_ascii_case(rt.as_bytes()))
+	{
 		return Err(ProxyError::UpgradeFailed(
 			Some(upgrade_type),
 			resp_upgrade_type,
