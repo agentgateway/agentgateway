@@ -1,7 +1,7 @@
 {{- $gateway := .Values.agentgateway }}
-{{- if eq (($gateway.workload).kind | default "Deployment") "Deployment" }}
+{{- if eq (($gateway.workload).kind | default "Deployment") "DaemonSet" }}
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: {{ include "kgateway.gateway.fullname" . }}
   {{- with $gateway.gatewayAnnotations }}

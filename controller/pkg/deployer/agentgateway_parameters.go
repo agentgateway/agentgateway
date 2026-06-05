@@ -113,6 +113,12 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 	res := vals.Agentgateway.AgentgatewayParametersConfigs
 
 	// Do a manual merge of the fields.
+	if configs.Workload != nil {
+		if res.Workload == nil {
+			res.Workload = &agentgateway.AgentgatewayParametersWorkload{}
+		}
+		setIfNonZero(&res.Workload.Kind, configs.Workload.Kind)
+	}
 	if configs.Image != nil {
 		if res.Image == nil {
 			res.Image = &agentgateway.Image{}
