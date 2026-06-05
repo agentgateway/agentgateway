@@ -167,7 +167,13 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 	}
 
 	// Create HPA if overlay is present
-	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil && workload.gvk == wellknown.DeploymentGVK {
+	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil {
+		if workload.gvk != wellknown.DeploymentGVK {
+			return nil, fmt.Errorf(
+				"horizontalPodAutoscaler overlay is not supported for %s workload",
+				workload.gvk.Kind,
+			)
+		}
 		hpa, err := createHorizontalPodAutoscaler(workload, a.overlays.HorizontalPodAutoscaler)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create HorizontalPodAutoscaler: %w", err)
