@@ -265,43 +265,70 @@ func populateInferredMarkerFields(parser *crd.Parser) error {
 	fieldCache := make(map[crd.TypeIdent][]string)
 	inProgress := make(map[crd.TypeIdent]bool)
 
-	for typ, info := range parser.Types {
-		needInferredFields := false
-		for _, raw := range info.Markers[atLeastOneFieldSetMarker] {
-			marker, err := asAtLeastOneFieldSet(raw)
-			if err != nil {
-				return fmt.Errorf("%s: %w", typ, err)
-			}
-			if len(marker.Fields) == 0 {
-				needInferredFields = true
-				break
-			}
-		}
-		if !needInferredFields {
-			continue
-		}
+	candidates, err := inferredMarkerCandidates(parser)
+	if err != nil {
+		return err
+	}
 
-		inferredFields, err := allJSONFieldNamesForType(parser, typ, info, fieldCache, inProgress)
+	for _, candidate := range candidates {
+		inferredFields, err := allJSONFieldNamesForType(parser, candidate.typ, candidate.info, fieldCache, inProgress)
 		if err != nil {
-			return fmt.Errorf("%s: %w", typ, err)
+			return fmt.Errorf("%s: %w", candidate.typ, err)
 		}
 
-		if markerVals, ok := info.Markers[atLeastOneFieldSetMarker]; ok {
+		if markerVals, ok := candidate.info.Markers[atLeastOneFieldSetMarker]; ok {
 			for i, raw := range markerVals {
 				marker, err := asAtLeastOneFieldSet(raw)
 				if err != nil {
-					return fmt.Errorf("%s: %w", typ, err)
+					return fmt.Errorf("%s: %w", candidate.typ, err)
 				}
 				if len(marker.Fields) == 0 {
 					marker.Fields = append([]string(nil), inferredFields...)
 					markerVals[i] = marker
 				}
 			}
-			info.Markers[atLeastOneFieldSetMarker] = markerVals
+			candidate.info.Markers[atLeastOneFieldSetMarker] = markerVals
 		}
 	}
 
 	return nil
+}
+
+type inferredMarkerCandidate struct {
+	typ  crd.TypeIdent
+	info *markers.TypeInfo
+}
+
+func inferredMarkerCandidates(parser *crd.Parser) ([]inferredMarkerCandidate, error) {
+	candidates := make([]inferredMarkerCandidate, 0, len(parser.Types))
+	for typ, info := range parser.Types {
+		needInferredFields := false
+		for _, raw := range info.Markers[atLeastOneFieldSetMarker] {
+			marker, err := asAtLeastOneFieldSet(raw)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", typ, err)
+			}
+			if len(marker.Fields) == 0 {
+				needInferredFields = true
+				break
+			}
+		}
+		if needInferredFields {
+			candidates = append(candidates, inferredMarkerCandidate{typ: typ, info: info})
+		}
+	}
+
+	// Inference can load imported packages into parser.Types. Snapshot first so
+	// generated validation does not depend on Go map iteration over new entries.
+	sort.Slice(candidates, func(i, j int) bool {
+		iPkg := loader.NonVendorPath(candidates[i].typ.Package.PkgPath)
+		jPkg := loader.NonVendorPath(candidates[j].typ.Package.PkgPath)
+		if iPkg != jPkg {
+			return iPkg < jPkg
+		}
+		return candidates[i].typ.Name < candidates[j].typ.Name
+	})
+	return candidates, nil
 }
 
 func asAtLeastOneFieldSet(raw any) (AtLeastOneFieldSet, error) {
