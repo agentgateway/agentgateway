@@ -23,6 +23,7 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingC
 
 const OTEL_ATTRIBUTE_COUNT_LIMIT: &str = "OTEL_ATTRIBUTE_COUNT_LIMIT";
 const OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT: &str = "OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT";
+static SPAN_ATTRIBUTE_COUNT_LIMIT: OnceCell<Option<u32>> = OnceCell::new();
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -132,32 +133,34 @@ fn apply_span_attribute_limit(attributes: Vec<KeyValue>) -> (Vec<KeyValue>, u32)
 
 fn apply_span_attribute_limit_with_limit(
 	mut attributes: Vec<KeyValue>,
-	limit: Option<usize>,
+	limit: Option<u32>,
 ) -> (Vec<KeyValue>, u32) {
 	let Some(limit) = limit else {
 		return (attributes, 0);
 	};
+	let limit = usize::try_from(limit).unwrap_or(usize::MAX);
 	let dropped = attributes.len().saturating_sub(limit);
 	attributes.truncate(limit);
 	(attributes, dropped.min(u32::MAX as usize) as u32)
 }
 
-fn span_attribute_count_limit_from_env() -> Option<usize> {
-	span_attribute_count_limit(
-		std::env::var(OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT)
-			.ok()
-			.as_deref(),
-		std::env::var(OTEL_ATTRIBUTE_COUNT_LIMIT).ok().as_deref(),
-	)
+fn span_attribute_count_limit_from_env() -> Option<u32> {
+	*SPAN_ATTRIBUTE_COUNT_LIMIT.get_or_init(|| {
+		span_attribute_count_limit(
+			std::env::var(OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT)
+				.ok()
+				.as_deref(),
+			std::env::var(OTEL_ATTRIBUTE_COUNT_LIMIT).ok().as_deref(),
+		)
+	})
 }
 
 fn span_attribute_count_limit(
 	span_attribute_count_limit: Option<&str>,
 	attribute_count_limit: Option<&str>,
-) -> Option<usize> {
+) -> Option<u32> {
 	parse_attribute_count_limit(span_attribute_count_limit)
 		.or_else(|| parse_attribute_count_limit(attribute_count_limit))
-		.map(|limit| limit as usize)
 }
 
 fn parse_attribute_count_limit(value: Option<&str>) -> Option<u32> {
@@ -168,9 +171,7 @@ fn build_tracer_provider(resource: Resource, processor: SharedSpanProcessor) -> 
 	let mut builder = opentelemetry_sdk::trace::SdkTracerProvider::builder()
 		.with_resource(resource)
 		.with_span_processor(processor);
-	if let Some(limit) = span_attribute_count_limit_from_env()
-		&& let Ok(limit) = u32::try_from(limit)
-	{
+	if let Some(limit) = span_attribute_count_limit_from_env() {
 		builder = builder.with_max_attributes_per_span(limit);
 	}
 	builder.build()
