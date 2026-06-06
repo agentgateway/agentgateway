@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -19,6 +20,9 @@ pub use traceparent::TraceParent;
 use crate::cel;
 use crate::telemetry::log::{CelLoggingExecutor, LoggingFields, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingConfig};
+
+const OTEL_ATTRIBUTE_COUNT_LIMIT: &str = "OTEL_ATTRIBUTE_COUNT_LIMIT";
+const OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT: &str = "OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT";
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
@@ -95,6 +99,7 @@ pub fn trace_span_data(
 	end_time: std::time::SystemTime,
 	attributes: Vec<KeyValue>,
 ) -> SpanData {
+	let (attributes, dropped_attributes_count) = apply_span_attribute_limit(attributes);
 	let parent_span_id = parent
 		.map(|parent| SpanId::from(parent.span_id))
 		.unwrap_or(SpanId::INVALID);
@@ -113,12 +118,62 @@ pub fn trace_span_data(
 		start_time,
 		end_time,
 		attributes,
-		dropped_attributes_count: 0,
+		dropped_attributes_count,
 		events: SpanEvents::default(),
 		links: SpanLinks::default(),
 		status: Status::default(),
 		instrumentation_scope: InstrumentationScope::builder("agentgateway").build(),
 	}
+}
+
+fn apply_span_attribute_limit(attributes: Vec<KeyValue>) -> (Vec<KeyValue>, u32) {
+	apply_span_attribute_limit_with_limit(attributes, span_attribute_count_limit_from_env())
+}
+
+fn apply_span_attribute_limit_with_limit(
+	mut attributes: Vec<KeyValue>,
+	limit: Option<usize>,
+) -> (Vec<KeyValue>, u32) {
+	let Some(limit) = limit else {
+		return (attributes, 0);
+	};
+	let dropped = attributes.len().saturating_sub(limit);
+	attributes.truncate(limit);
+	(attributes, dropped.min(u32::MAX as usize) as u32)
+}
+
+fn span_attribute_count_limit_from_env() -> Option<usize> {
+	span_attribute_count_limit(
+		std::env::var(OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT)
+			.ok()
+			.as_deref(),
+		std::env::var(OTEL_ATTRIBUTE_COUNT_LIMIT).ok().as_deref(),
+	)
+}
+
+fn span_attribute_count_limit(
+	span_attribute_count_limit: Option<&str>,
+	attribute_count_limit: Option<&str>,
+) -> Option<usize> {
+	parse_attribute_count_limit(span_attribute_count_limit)
+		.or_else(|| parse_attribute_count_limit(attribute_count_limit))
+		.map(|limit| limit as usize)
+}
+
+fn parse_attribute_count_limit(value: Option<&str>) -> Option<u32> {
+	value.and_then(|value| u32::from_str(value).ok())
+}
+
+fn build_tracer_provider(resource: Resource, processor: SharedSpanProcessor) -> SdkTracerProvider {
+	let mut builder = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+		.with_resource(resource)
+		.with_span_processor(processor);
+	if let Some(limit) = span_attribute_count_limit_from_env()
+		&& let Ok(limit) = u32::try_from(limit)
+	{
+		builder = builder.with_max_attributes_per_span(limit);
+	}
+	builder.build()
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Copy, Eq, PartialEq, Clone, Debug)]
@@ -224,10 +279,7 @@ impl Tracer {
 				exporter_runtime.clone(),
 			);
 			let processor = new_trace_processor(&resource, exporter);
-			let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-				.with_resource(resource.clone())
-				.with_span_processor(processor.clone())
-				.build();
+			let provider = build_tracer_provider(resource.clone(), processor.clone());
 			(provider, processor)
 		} else {
 			let path = config.path.clone();
@@ -243,10 +295,7 @@ impl Tracer {
 				.with_endpoint(path)
 				.build()?;
 			let processor = new_trace_processor(&resource, exporter);
-			let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-				.with_resource(resource.clone())
-				.with_span_processor(processor.clone())
-				.build();
+			let provider = build_tracer_provider(resource.clone(), processor.clone());
 			(provider, processor)
 		};
 		Ok(Tracer {
@@ -769,6 +818,57 @@ mod tests {
 			},
 			exporter,
 		)
+	}
+
+	#[test]
+	fn span_attribute_count_limit_uses_generic_limit() {
+		assert_eq!(span_attribute_count_limit(None, Some("256")), Some(256));
+	}
+
+	#[test]
+	fn span_attribute_count_limit_prefers_span_specific_limit() {
+		assert_eq!(
+			span_attribute_count_limit(Some("64"), Some("256")),
+			Some(64)
+		);
+	}
+
+	#[test]
+	fn span_attribute_count_limit_falls_back_to_generic_when_span_specific_is_invalid() {
+		assert_eq!(
+			span_attribute_count_limit(Some("invalid"), Some("256")),
+			Some(256)
+		);
+	}
+
+	#[test]
+	fn apply_span_attribute_limit_truncates_and_counts_dropped_attributes() {
+		let attrs = vec![
+			KeyValue::new("first", "1"),
+			KeyValue::new("second", "2"),
+			KeyValue::new("third", "3"),
+		];
+
+		let (attrs, dropped) = apply_span_attribute_limit_with_limit(attrs, Some(2));
+
+		assert_eq!(attrs.len(), 2);
+		assert_eq!(attrs[0].key.as_str(), "first");
+		assert_eq!(attrs[1].key.as_str(), "second");
+		assert_eq!(dropped, 1);
+	}
+
+	#[test]
+	fn apply_span_attribute_limit_keeps_all_attributes_without_limit() {
+		let attrs = vec![
+			KeyValue::new("first", "1"),
+			KeyValue::new("second", "2"),
+			KeyValue::new("third", "3"),
+		];
+
+		let (attrs, dropped) = apply_span_attribute_limit_with_limit(attrs, None);
+
+		assert_eq!(attrs.len(), 3);
+		assert_eq!(dropped, 0);
 	}
 
 	fn test_request_log() -> RequestLog {
