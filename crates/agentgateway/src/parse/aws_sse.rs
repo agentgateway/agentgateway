@@ -59,6 +59,10 @@ impl From<aws_smithy_eventstream::error::Error> for EventStreamError {
 	}
 }
 
+/// Length in bytes of the AWS EventStream message prelude: total length, headers
+/// length, and prelude CRC, each a big-endian `u32`.
+const EVENTSTREAM_PRELUDE_LEN: usize = 3 * std::mem::size_of::<u32>();
+
 /// A `tokio_util::codec::Decoder` wrapper around AWS Smithy's `MessageFrameDecoder`.
 ///
 /// This provides a streaming decoder for AWS EventStream binary protocol messages,
@@ -76,25 +80,31 @@ impl EventStreamCodec {
 
 	pub fn with_max_size(max_frame_size: usize) -> Self {
 		Self {
-			inner: MessageFrameDecoder::new(),
 			max_frame_size: Some(max_frame_size),
+			..Self::default()
 		}
 	}
 
-	fn validate_frame_size(&self, src: &BytesMut) -> Result<(), EventStreamError> {
+	/// Reads the declared total frame length from the prelude, or `None` if the prelude
+	/// (the first [`EVENTSTREAM_PRELUDE_LEN`] bytes) has not fully arrived yet.
+	fn frame_len(src: &BytesMut) -> Option<usize> {
+		if src.len() < EVENTSTREAM_PRELUDE_LEN {
+			return None;
+		}
+		// AWS EventStream prelude starts with a big-endian u32 total frame length.
+		Some(u32::from_be_bytes(src[..4].try_into().expect("slice length already checked")) as usize)
+	}
+
+	fn validate_frame_size(&self, frame_len: usize) -> Result<(), EventStreamError> {
 		let Some(limit) = self.max_frame_size else {
 			return Ok(());
 		};
-
-		// AWS EventStream prelude starts with a big-endian u32 total frame length.
-		if src.len() >= std::mem::size_of::<u32>() {
-			let actual =
-				u32::from_be_bytes(src[..4].try_into().expect("slice length already checked")) as usize;
-			if actual > limit {
-				return Err(EventStreamError::FrameTooLarge { actual, limit });
-			}
+		if frame_len > limit {
+			return Err(EventStreamError::FrameTooLarge {
+				actual: frame_len,
+				limit,
+			});
 		}
-
 		Ok(())
 	}
 }
@@ -104,7 +114,20 @@ impl Decoder for EventStreamCodec {
 	type Error = EventStreamError;
 
 	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-		self.validate_frame_size(src)?;
+		// Only hand a frame to `decode_frame` once it is fully buffered. The decoder
+		// drains the prelude from `src` as soon as it is available — even for an
+		// incomplete frame — which would leave the buffer positioned mid-frame, so a
+		// later length read (and the size guard) would interpret body bytes as a frame
+		// length and spuriously trip `FrameTooLarge`. Reading the declared length up
+		// front also lets us reject oversized frames before buffering their body.
+		let Some(frame_len) = Self::frame_len(src) else {
+			return Ok(None);
+		};
+		self.validate_frame_size(frame_len)?;
+		if src.len() < frame_len {
+			return Ok(None);
+		}
+
 		match self.inner.decode_frame(src)? {
 			DecodedFrame::Complete(message) => Ok(Some(message)),
 			DecodedFrame::Incomplete => Ok(None),
@@ -209,6 +232,46 @@ mod tests {
 		));
 	}
 
+	#[test]
+	fn eventstream_codec_handles_prelude_split_across_decodes() {
+		// Regression: `MessageFrameDecoder` drains the 12-byte prelude as soon as it
+		// is available, even for an incomplete frame. The old size guard then misread
+		// the post-prelude bytes of the next `decode()` call as a frame length and
+		// spuriously returned `FrameTooLarge`. This reproduces the production failure,
+		// where a Bedrock event-stream frame's prelude arrives in one chunk and its
+		// body in a later one. The 0xFF payload bytes make that misread look like a
+		// ~4 GiB length — far over the limit — so this test fails on the old code.
+		let payload = vec![0xFFu8; 32];
+		let message = Message::new(Bytes::from(payload.clone()));
+		let mut encoded = BytesMut::new();
+		write_message_to(&message, &mut encoded).expect("message should encode");
+		assert!(
+			encoded.len() > EVENTSTREAM_PRELUDE_LEN,
+			"frame must be larger than the prelude to split"
+		);
+
+		// Limit larger than the real frame (~48 bytes) but far smaller than the bogus
+		// length the old code would compute from the 0xFF payload bytes.
+		let mut codec = EventStreamCodec::with_max_size(1024);
+
+		let mut buf = BytesMut::new();
+		buf.extend_from_slice(&encoded[..EVENTSTREAM_PRELUDE_LEN]); // prelude only
+		assert!(
+			codec
+				.decode(&mut buf)
+				.expect("prelude-only decode must not error")
+				.is_none(),
+			"frame body is incomplete, decode should yield None"
+		);
+
+		buf.extend_from_slice(&encoded[EVENTSTREAM_PRELUDE_LEN..]); // remainder of frame
+		let decoded = codec
+			.decode(&mut buf)
+			.expect("completing a prelude-split frame must not error")
+			.expect("frame should now be complete");
+		assert_eq!(decoded.payload().as_ref(), payload.as_slice());
+	}
+
 	#[tokio::test]
 	async fn inspect_passes_through_invalid_eventstream_bytes() {
 		let input = Bytes::from_static(b"not an aws eventstream");
@@ -219,5 +282,43 @@ mod tests {
 
 		let output = body.collect().await.unwrap().to_bytes();
 		assert_eq!(output, input);
+	}
+
+	#[tokio::test]
+	async fn transform_decodes_frame_split_across_body_chunks() {
+		// End-to-end analogue of the production failure: a single event-stream frame
+		// delivered in two body chunks, split immediately after the prelude. Before the
+		// fix the transformed body aborted with `FrameTooLarge` ("error from user's Body
+		// stream") because the post-prelude bytes were misread as a frame length.
+		let payload = vec![0xFFu8; 64];
+		let message = Message::new(Bytes::from(payload.clone()));
+		let mut encoded = BytesMut::new();
+		write_message_to(&message, &mut encoded).expect("message should encode");
+
+		let body = http::Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+			vec![
+				Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::copy_from_slice(
+					&encoded[..EVENTSTREAM_PRELUDE_LEN],
+				))),
+				Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::copy_from_slice(
+					&encoded[EVENTSTREAM_PRELUDE_LEN..],
+				))),
+			],
+		)));
+
+		let decoded = Arc::new(Mutex::new(vec![]));
+		let decoded_clone = decoded.clone();
+		// `buffer_limit` far above the real ~48-byte frame, but below the multi-gigabyte
+		// length the old guard computed from the 0xFF payload bytes.
+		let out = transform(body, 1024, move |msg: Message| {
+			decoded_clone.lock().unwrap().push(msg.payload().to_vec());
+			Some(msg.payload().len())
+		});
+
+		out
+			.collect()
+			.await
+			.expect("transformed body must complete without error");
+		assert_eq!(decoded.lock().unwrap().clone(), vec![payload]);
 	}
 }
