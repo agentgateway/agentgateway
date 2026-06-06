@@ -17,8 +17,12 @@ import (
 
 const (
 	localForwardAddress = "127.0.0.1"
-	localRuntimeAddress = "localhost"
+	localRuntimeAddress = "127.0.0.1"
+	heapProfileTimeout  = 30 * time.Second
+	profileTimeoutGrace = 10 * time.Second
 )
+
+var profileHTTPClient = &http.Client{}
 
 type profileKind string
 
@@ -135,12 +139,15 @@ func profileURL(adminAddress string, kind profileKind, seconds int) string {
 }
 
 func downloadProfile(ctx context.Context, adminAddress string, kind profileKind, seconds int, outputFile string) error {
+	client := *profileHTTPClient
+	client.Timeout = profileTimeout(kind, seconds)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, profileURL(adminAddress, kind, seconds), nil)
 	if err != nil {
 		return fmt.Errorf("failed to construct profile request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch %s profile: %w", kind, err)
 	}
@@ -155,14 +162,29 @@ func downloadProfile(ctx context.Context, adminAddress string, kind profileKind,
 	if err != nil {
 		return fmt.Errorf("failed to create output file %s: %w", outputFile, err)
 	}
-	defer file.Close()
 
 	if _, err := io.Copy(file, resp.Body); err != nil {
+		closeErr := file.Close()
+		_ = os.Remove(outputFile)
+		if closeErr != nil {
+			return fmt.Errorf("failed to write output file %s: %w", outputFile, closeErr)
+		}
 		return fmt.Errorf("failed to write output file %s: %w", outputFile, err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(outputFile)
+		return fmt.Errorf("failed to close output file %s: %w", outputFile, err)
 	}
 	return nil
 }
 
 func defaultOutputFile(kind profileKind, t time.Time) string {
 	return fmt.Sprintf("agentgateway-%s-%s.pb.gz", kind, t.Format("20060102-150405"))
+}
+
+func profileTimeout(kind profileKind, seconds int) time.Duration {
+	if kind == profileKindCPU {
+		return time.Duration(seconds)*time.Second + profileTimeoutGrace
+	}
+	return heapProfileTimeout
 }
