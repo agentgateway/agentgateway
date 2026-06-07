@@ -282,6 +282,10 @@ mod requests {
 		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
+		// Replaying a prior assistant `thinking` block to Bedrock Converse must preserve its
+		// cryptographic `signature` (mapped to reasoningContent.reasoningText.signature) so
+		// Bedrock can validate the replayed thinking.
+		("reasoning_replay", &[BEDROCK]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[BEDROCK, GEMINI]),
