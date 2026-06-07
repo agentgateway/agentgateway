@@ -276,18 +276,16 @@ func populateInferredMarkerFields(parser *crd.Parser) error {
 			return fmt.Errorf("%s: %w", candidate.typ, err)
 		}
 
-		if markerVals, ok := candidate.info.Markers[atLeastOneFieldSetMarker]; ok {
-			for i, raw := range markerVals {
-				marker, err := asAtLeastOneFieldSet(raw)
-				if err != nil {
-					return fmt.Errorf("%s: %w", candidate.typ, err)
-				}
-				if len(marker.Fields) == 0 {
-					marker.Fields = append([]string(nil), inferredFields...)
-					markerVals[i] = marker
-				}
+		markerVals := candidate.info.Markers[atLeastOneFieldSetMarker]
+		for i, raw := range markerVals {
+			marker, err := asAtLeastOneFieldSet(raw)
+			if err != nil {
+				return fmt.Errorf("%s: %w", candidate.typ, err)
 			}
-			candidate.info.Markers[atLeastOneFieldSetMarker] = markerVals
+			if len(marker.Fields) == 0 {
+				marker.Fields = append([]string(nil), inferredFields...)
+				markerVals[i] = marker
+			}
 		}
 	}
 
@@ -299,6 +297,11 @@ type inferredMarkerCandidate struct {
 	info *markers.TypeInfo
 }
 
+// inferredMarkerCandidates returns types with AtLeastOneFieldSet markers that need field
+// inference. Snapshot before inference: walking inline embedded fields can call
+// parser.NeedPackage and mutate parser.Types. Late-loaded types must not join this pass by
+// map-iteration luck; markers left without inferred fields are resolved later from their
+// generated schema node in ApplyToSchema.
 func inferredMarkerCandidates(parser *crd.Parser) ([]inferredMarkerCandidate, error) {
 	candidates := make([]inferredMarkerCandidate, 0, len(parser.Types))
 	for typ, info := range parser.Types {
@@ -318,8 +321,7 @@ func inferredMarkerCandidates(parser *crd.Parser) ([]inferredMarkerCandidate, er
 		}
 	}
 
-	// Inference can load imported packages into parser.Types. Snapshot first so
-	// generated validation does not depend on Go map iteration over new entries.
+	// Sort so processing order (and which error surfaces first) is deterministic.
 	sort.Slice(candidates, func(i, j int) bool {
 		iPkg := loader.NonVendorPath(candidates[i].typ.Package.PkgPath)
 		jPkg := loader.NonVendorPath(candidates[j].typ.Package.PkgPath)
