@@ -99,8 +99,8 @@ verifySupported() {
 # checkDesiredVersion checks if the desired version is available.
 checkDesiredVersion() {
   if [ "x$DESIRED_VERSION" == "x" ]; then
-    # Pick the latest stable tag (vX.Y.Z, no suffix); releases are not flagged
-    # as pre-release on GitHub. Use --version to install a pre-release.
+    # Pick the highest stable tag (vX.Y.Z, no suffix), skipping drafts and
+    # pre-releases. Use --version to install a pre-release.
     local latest_release_url="https://api.github.com/repos/agentgateway/agentgateway/releases?per_page=100"
     local latest_release_response=""
     if [ "${HAS_CURL}" == "true" ]; then
@@ -108,7 +108,7 @@ checkDesiredVersion() {
     elif [ "${HAS_WGET}" == "true" ]; then
       latest_release_response=$( wget "$latest_release_url" -q -O - 2>&1 || true )
     fi
-    TAG=$( echo "$latest_release_response" | jq -r '[.[] | select(.draft == false) | .tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | .[0] // empty' )
+    TAG=$( echo "$latest_release_response" | jq -r '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(ltrimstr("v") | split(".") | map(tonumber)) | last // empty' )
     if [ "x$TAG" == "x" ]; then
       printf "Could not retrieve the latest stable release tag information from %s: %s\n" "${latest_release_url}" "${latest_release_response}"
       exit 1
@@ -190,7 +190,7 @@ downloadToFile() {
   if [ "${HAS_CURL}" == "true" ]; then
     curl -SsL --fail "$url" -o "$dest"
   else
-    wget -q -O "$dest" "$url"
+    wget -nv -O "$dest" "$url"
   fi
 }
 
