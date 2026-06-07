@@ -643,7 +643,9 @@ impl Relay {
 				.enable_tools()
 				.enable_tool_list_changed()
 				.enable_prompts()
-				.enable_resources();
+				.enable_prompts_list_changed()
+				.enable_resources()
+				.enable_resources_list_changed();
 			if resource_subscribe {
 				builder = builder.enable_resources_subscribe();
 			}

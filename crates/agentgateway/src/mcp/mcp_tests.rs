@@ -251,6 +251,8 @@ async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
 	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, Some(true));
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, Some(true));
 	assert_eq!(caps.resources.as_ref().unwrap().subscribe, Some(true));
 }
 
