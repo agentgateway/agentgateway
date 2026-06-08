@@ -2554,8 +2554,50 @@ pub mod from_anthropic_token_count {
 
 mod helpers {
 	use std::collections::HashMap;
+	use std::sync::LazyLock;
 
 	use crate::llm::AIError;
+
+	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
+	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+		"computer-use-2025-01-24",
+		"token-efficient-tools-2025-02-19",
+		"interleaved-thinking-2025-05-14",
+		"output-128k-2025-02-19",
+		"dev-full-thinking-2025-05-14",
+		"context-1m-2025-08-07",
+		"context-management-2025-06-27",
+		"effort-2025-11-24",
+		"tool-search-tool-2025-10-19",
+		"tool-examples-2025-10-29",
+	];
+	const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS";
+	const DEFAULT_SENTINEL: &str = "default";
+
+	static ALLOWED_BETA_HEADERS: LazyLock<Vec<String>> = LazyLock::new(|| {
+		let default_allowed_beta_headers = || {
+			DEFAULT_ALLOWED_BETA_HEADERS
+				.iter()
+				.map(|feature| feature.to_string())
+				.collect::<Vec<_>>()
+		};
+		let Ok(env) = std::env::var(ALLOWED_BETA_HEADERS_ENV) else {
+			return default_allowed_beta_headers();
+		};
+
+		env
+			.split(',')
+			.map(str::trim)
+			.filter(|feature| !feature.is_empty())
+			.flat_map(|feature| {
+				if feature == DEFAULT_SENTINEL {
+					default_allowed_beta_headers()
+				} else {
+					vec![feature.to_string()]
+				}
+			})
+			.collect()
+	});
 	use crate::llm::types::bedrock;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
@@ -2667,20 +2709,13 @@ mod helpers {
 	pub fn extract_beta_headers(
 		headers: &crate::http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
-		// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
-		const ALLOWED_BETA_HEADERS: &[&str] = &[
-			"computer-use-2025-01-24",
-			"token-efficient-tools-2025-02-19",
-			"interleaved-thinking-2025-05-14",
-			"output-128k-2025-02-19",
-			"dev-full-thinking-2025-05-14",
-			"context-1m-2025-08-07",
-			"context-management-2025-06-27",
-			"effort-2025-11-24",
-			"tool-search-tool-2025-10-19",
-			"tool-examples-2025-10-29",
-		];
+		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
+	}
 
+	pub fn extract_beta_headers_with_allowed(
+		headers: &crate::http::HeaderMap,
+		allowed_beta_headers: &[String],
+	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		let mut beta_features = Vec::new();
 
 		// Collect all anthropic-beta header values
@@ -2692,7 +2727,10 @@ mod helpers {
 			// Handle comma-separated values within a single header
 			for feature in header_str.split(',') {
 				let trimmed = feature.trim();
-				if ALLOWED_BETA_HEADERS.contains(&trimmed) {
+				if allowed_beta_headers
+					.iter()
+					.any(|feature| feature == trimmed)
+				{
 					// Add each beta feature as a string value in the array
 					beta_features.push(serde_json::Value::String(trimmed.to_string()));
 				}
