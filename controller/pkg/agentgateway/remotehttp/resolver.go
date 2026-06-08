@@ -23,7 +23,8 @@ type Inputs struct {
 type ResolveInput struct {
 	ParentName       string
 	DefaultNamespace string
-	BackendRef       gwv1.BackendObjectReference
+	BackendRef       *gwv1.BackendObjectReference
+	URL              *string
 	Path             string
 	DefaultPort      string
 }
@@ -49,8 +50,18 @@ func NewResolver(inputs Inputs) Resolver {
 }
 
 func (r *defaultResolver) Resolve(krtctx krt.HandlerContext, input ResolveInput) (*ResolvedTarget, error) {
+	if input.URL != nil {
+		target := FetchTarget{URL: *input.URL}
+		return &ResolvedTarget{
+			Key:    target.Key(),
+			Target: target,
+		}, nil
+	}
+	if input.BackendRef == nil {
+		return nil, fmt.Errorf("backendRef or url is required")
+	}
 	path := strings.TrimPrefix(input.Path, "/")
-	resolved, err := r.resolveConnection(krtctx, input.ParentName, input.DefaultNamespace, input.BackendRef, input.DefaultPort)
+	resolved, err := r.resolveConnection(krtctx, input.ParentName, input.DefaultNamespace, *input.BackendRef, input.DefaultPort)
 	if err != nil {
 		return nil, err
 	}

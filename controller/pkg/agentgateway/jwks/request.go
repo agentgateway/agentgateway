@@ -27,6 +27,22 @@ func ResolveEndpoint(
 		ParentName:       policyName,
 		DefaultNamespace: defaultNS,
 		BackendRef:       remoteProvider.BackendRef,
-		Path:             remoteProvider.JwksPath,
+		URL:              stringPtr(remoteProvider.URL),
+		Path:             ptrOrEmpty(remoteProvider.JwksPath),
 	})
+}
+
+func stringPtr(s *agentgateway.LongString) *string {
+	if s == nil {
+		return nil
+	}
+	v := string(*s)
+	return &v
+}
+
+func ptrOrEmpty(s *agentgateway.LongString) string {
+	if s == nil {
+		return ""
+	}
+	return string(*s)
 }

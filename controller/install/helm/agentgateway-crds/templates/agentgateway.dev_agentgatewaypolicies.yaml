@@ -851,9 +851,8 @@ spec:
                                             behavior like `HTTPS_PROXY`) to the backend.'
                                           properties:
                                             backendRef:
-                                              description: |-
-                                                `backendRef` references the proxy server to reach.
-                                                Supported types: `Service` and `Backend`.
+                                              description: '`backendRef` references
+                                                a Kubernetes backend to reach.'
                                               properties:
                                                 group:
                                                   default: ""
@@ -925,9 +924,19 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
-                                          required:
-                                          - backendRef
+                                            url:
+                                              description: |-
+                                                `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^?#]+$
+                                              type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: url must not include a path for
+                                              backend tunnel
+                                            rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                       type: object
                                     region:
                                       description: |-
@@ -1519,9 +1528,8 @@ spec:
                                             behavior like `HTTPS_PROXY`) to the backend.'
                                           properties:
                                             backendRef:
-                                              description: |-
-                                                `backendRef` references the proxy server to reach.
-                                                Supported types: `Service` and `Backend`.
+                                              description: '`backendRef` references
+                                                a Kubernetes backend to reach.'
                                               properties:
                                                 group:
                                                   default: ""
@@ -1593,9 +1601,19 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
-                                          required:
-                                          - backendRef
+                                            url:
+                                              description: |-
+                                                `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^?#]+$
+                                              type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: url must not include a path for
+                                              backend tunnel
+                                            rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                       type: object
                                     projectId:
                                       description: ProjectID is the Google Cloud project
@@ -2184,9 +2202,8 @@ spec:
                                             behavior like `HTTPS_PROXY`) to the backend.'
                                           properties:
                                             backendRef:
-                                              description: |-
-                                                `backendRef` references the proxy server to reach.
-                                                Supported types: `Service` and `Backend`.
+                                              description: '`backendRef` references
+                                                a Kubernetes backend to reach.'
                                               properties:
                                                 group:
                                                   default: ""
@@ -2258,9 +2275,19 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
-                                          required:
-                                          - backendRef
+                                            url:
+                                              description: |-
+                                                `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^?#]+$
+                                              type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: url must not include a path for
+                                              backend tunnel
+                                            rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                       type: object
                                   type: object
                                 regex:
@@ -3066,9 +3093,8 @@ spec:
                                             behavior like `HTTPS_PROXY`) to the backend.'
                                           properties:
                                             backendRef:
-                                              description: |-
-                                                `backendRef` references the proxy server to reach.
-                                                Supported types: `Service` and `Backend`.
+                                              description: '`backendRef` references
+                                                a Kubernetes backend to reach.'
                                               properties:
                                                 group:
                                                   default: ""
@@ -3140,9 +3166,19 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
-                                          required:
-                                          - backendRef
+                                            url:
+                                              description: |-
+                                                `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^?#]+$
+                                              type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: url must not include a path for
+                                              backend tunnel
+                                            rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                       type: object
                                     region:
                                       description: |-
@@ -3734,9 +3770,8 @@ spec:
                                             behavior like `HTTPS_PROXY`) to the backend.'
                                           properties:
                                             backendRef:
-                                              description: |-
-                                                `backendRef` references the proxy server to reach.
-                                                Supported types: `Service` and `Backend`.
+                                              description: '`backendRef` references
+                                                a Kubernetes backend to reach.'
                                               properties:
                                                 group:
                                                   default: ""
@@ -3808,9 +3843,19 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
-                                          required:
-                                          - backendRef
+                                            url:
+                                              description: |-
+                                                `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                                When the scheme is `https`, backend TLS is enabled automatically.
+                                              maxLength: 1024
+                                              minLength: 1
+                                              pattern: ^https?://[^?#]+$
+                                              type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: url must not include a path for
+                                              backend tunnel
+                                            rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                       type: object
                                     projectId:
                                       description: ProjectID is the Google Cloud project
@@ -4409,10 +4454,8 @@ spec:
                       sent to this backend.
                     properties:
                       backendRef:
-                        description: |-
-                          `backendRef` references the External Authorization server to reach.
-
-                          Supported types: `Service` and `Backend`.
+                        description: '`backendRef` references a Kubernetes backend
+                          to reach.'
                         properties:
                           group:
                             default: ""
@@ -4669,6 +4712,14 @@ spec:
                             maxProperties: 64
                             type: object
                         type: object
+                      url:
+                        description: |-
+                          `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^?#]+$
+                        type: string
                     type: object
                     x-kubernetes-validations:
                     - message: cache requires grpc
@@ -4812,12 +4863,8 @@ spec:
                               the JWT.
                             properties:
                               backendRef:
-                                description: |-
-                                  `backendRef` references the remote JWKS server to reach.
-                                  Supported types are `Service` and static `Backend`. An
-                                  `AgentgatewayPolicy` containing backend TLS config can then be attached
-                                  to the `Service` or `Backend` in order to set TLS options for a
-                                  connection to the remote `jwks` source.
+                                description: '`backendRef` references a Kubernetes
+                                  backend to reach.'
                                 properties:
                                   group:
                                     default: ""
@@ -4895,16 +4942,32 @@ spec:
                                 - message: cacheDuration must be at least 5m.
                                   rule: duration(self) >= duration('5m')
                               jwksPath:
+                                allOf:
+                                - maxLength: 1024
+                                  minLength: 1
+                                - maxLength: 2000
+                                  minLength: 1
                                 description: |-
                                   Path to the IdP `jwks` endpoint, relative to the root, commonly
                                   `".well-known/jwks.json"`.
-                                maxLength: 2000
-                                minLength: 1
                                 type: string
-                            required:
-                            - backendRef
-                            - jwksPath
+                              url:
+                                description: |-
+                                  `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                  When the scheme is `https`, backend TLS is enabled automatically.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^https?://[^?#]+$
+                                type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: exactly one of backendRef or url must be set
+                              rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                == 1'
+                            - message: jwksPath is required when backendRef is set
+                              rule: 'has(self.backendRef) ? has(self.jwksPath) : true'
+                            - message: jwksPath may not be set when url is set
+                              rule: 'has(self.url) ? !has(self.jwksPath) : true'
                           mode:
                             default: Strict
                             description: '`mode` is the validation mode for JWT authentication.'
@@ -5436,9 +5499,8 @@ spec:
                       (with behavior like `HTTPS_PROXY`) to the backend.'
                     properties:
                       backendRef:
-                        description: |-
-                          `backendRef` references the proxy server to reach.
-                          Supported types: `Service` and `Backend`.
+                        description: '`backendRef` references a Kubernetes backend
+                          to reach.'
                         properties:
                           group:
                             default: ""
@@ -5507,9 +5569,18 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
-                    required:
-                    - backendRef
+                      url:
+                        description: |-
+                          `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^?#]+$
+                        type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: url must not include a path for backend tunnel
+                      rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [ai auth extAuth health http
@@ -5589,9 +5660,8 @@ spec:
                           OpenTelemetry-compatible backend.
                         properties:
                           backendRef:
-                            description: |-
-                              `backendRef` references the OTLP server to send access logs to.
-                              Supported types: `Service` and `AgentgatewayBackend`.
+                            description: '`backendRef` references a Kubernetes backend
+                              to reach.'
                             properties:
                               group:
                                 default: ""
@@ -5675,8 +5745,14 @@ spec:
                             - GRPC
                             - HTTP
                             type: string
-                        required:
-                        - backendRef
+                          url:
+                            description: |-
+                              `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                              When the scheme is `https`, backend TLS is enabled automatically.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^https?://[^?#]+$
+                            type: string
                         type: object
                         x-kubernetes-validations:
                         - message: path is only valid with protocol HTTP
@@ -6149,9 +6225,8 @@ spec:
                           rule: '[has(self.add),has(self.remove)].filter(x,x==true).size()
                             >= 1'
                       backendRef:
-                        description: |-
-                          `backendRef` references the OTLP server to reach.
-                          Supported types: `Service` and `AgentgatewayBackend`.
+                        description: '`backendRef` references a Kubernetes backend
+                          to reach.'
                         properties:
                           group:
                             default: ""
@@ -6276,8 +6351,14 @@ spec:
                           - name
                           type: object
                         type: array
-                    required:
-                    - backendRef
+                      url:
+                        description: |-
+                          `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^?#]+$
+                        type: string
                     type: object
                     x-kubernetes-validations:
                     - message: path is only valid with protocol HTTP
@@ -7245,10 +7326,8 @@ spec:
                       An extAuth policy can be conditionally set by nesting configuration under the `conditional` field.
                     properties:
                       backendRef:
-                        description: |-
-                          `backendRef` references the External Authorization server to reach.
-
-                          Supported types: `Service` and `Backend`.
+                        description: '`backendRef` references a Kubernetes backend
+                          to reach.'
                         properties:
                           group:
                             default: ""
@@ -7383,10 +7462,8 @@ spec:
                               description: '`policy` definition.'
                               properties:
                                 backendRef:
-                                  description: |-
-                                    `backendRef` references the External Authorization server to reach.
-
-                                    Supported types: `Service` and `Backend`.
+                                  description: '`backendRef` references a Kubernetes
+                                    backend to reach.'
                                   properties:
                                     group:
                                       default: ""
@@ -7643,10 +7720,19 @@ spec:
                                       maxProperties: 64
                                       type: object
                                   type: object
+                                url:
+                                  description: |-
+                                    `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                    When the scheme is `https`, backend TLS is enabled automatically.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  pattern: ^https?://[^?#]+$
+                                  type: string
                               type: object
                               x-kubernetes-validations:
-                              - message: backendRef is required
-                                rule: has(self.backendRef)
+                              - message: exactly one of backendRef or url is required
+                                rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                  == 1'
                               - message: exactly one of the fields in [grpc http]
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
@@ -7803,26 +7889,33 @@ spec:
                             maxProperties: 64
                             type: object
                         type: object
+                      url:
+                        description: |-
+                          `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^?#]+$
+                        type: string
                     type: object
                     x-kubernetes-validations:
+                    - message: exactly one of backendRef or url must be set unless
+                        conditional is set
+                      rule: 'has(self.conditional) ? (!has(self.backendRef) && !has(self.url))
+                        : [has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                        == 1'
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
                     - message: cache requires grpc
                       rule: '!has(self.cache) || has(self.grpc)'
-                    - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
-                        == 0 : true'
-                    - message: 'backendRef: Required value'
-                      rule: 'has(self.conditional) ? true : has(self.backendRef)'
                   extProc:
                     description: extProc specifies the external processing configuration
                       for the policy.
                     properties:
                       backendRef:
-                        description: |-
-                          `backendRef` references the External Processor server to reach.
-                          Supported types: `Service` and `Backend`.
+                        description: '`backendRef` references a Kubernetes backend
+                          to reach.'
                         properties:
                           group:
                             default: ""
@@ -7909,9 +8002,8 @@ spec:
                               description: '`policy` definition.'
                               properties:
                                 backendRef:
-                                  description: |-
-                                    `backendRef` references the External Processor server to reach.
-                                    Supported types: `Service` and `Backend`.
+                                  description: '`backendRef` references a Kubernetes
+                                    backend to reach.'
                                   properties:
                                     group:
                                       default: ""
@@ -8053,10 +8145,19 @@ spec:
                                       - Send
                                       type: string
                                   type: object
+                                url:
+                                  description: |-
+                                    `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                    When the scheme is `https`, backend TLS is enabled automatically.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  pattern: ^https?://[^?#]+$
+                                  type: string
                               type: object
                               x-kubernetes-validations:
-                              - message: backendRef is required
-                                rule: has(self.backendRef)
+                              - message: exactly one of backendRef or url is required
+                                rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                  == 1'
                           required:
                           - policy
                           type: object
@@ -8140,13 +8241,21 @@ spec:
                             - Send
                             type: string
                         type: object
+                      url:
+                        description: |-
+                          `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^?#]+$
+                        type: string
                     type: object
                     x-kubernetes-validations:
-                    - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.processingOptions)].filter(x,x==true).size()
-                        == 0 : true'
-                    - message: 'backendRef: Required value'
-                      rule: 'has(self.conditional) ? true : has(self.backendRef)'
+                    - message: exactly one of backendRef or url must be set unless
+                        conditional is set
+                      rule: 'has(self.conditional) ? (!has(self.backendRef) && !has(self.url))
+                        : [has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                        == 1'
                   headerModifiers:
                     description: headerModifiers defines the policy to modify request
                       and response headers.
@@ -8605,12 +8714,8 @@ spec:
                                     address.
                                   properties:
                                     backendRef:
-                                      description: |-
-                                        `backendRef` references the remote JWKS server to reach.
-                                        Supported types are `Service` and static `Backend`. An
-                                        `AgentgatewayPolicy` containing backend TLS config can then be attached
-                                        to the `Service` or `Backend` in order to set TLS options for a
-                                        connection to the remote `jwks` source.
+                                      description: '`backendRef` references a Kubernetes
+                                        backend to reach.'
                                       properties:
                                         group:
                                           default: ""
@@ -8688,16 +8793,35 @@ spec:
                                       - message: cacheDuration must be at least 5m.
                                         rule: duration(self) >= duration('5m')
                                     jwksPath:
+                                      allOf:
+                                      - maxLength: 1024
+                                        minLength: 1
+                                      - maxLength: 2000
+                                        minLength: 1
                                       description: |-
                                         Path to the IdP `jwks` endpoint, relative to the root, commonly
                                         `".well-known/jwks.json"`.
-                                      maxLength: 2000
-                                      minLength: 1
                                       type: string
-                                  required:
-                                  - backendRef
-                                  - jwksPath
+                                    url:
+                                      description: |-
+                                        `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                        When the scheme is `https`, backend TLS is enabled automatically.
+                                      maxLength: 1024
+                                      minLength: 1
+                                      pattern: ^https?://[^?#]+$
+                                      type: string
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of backendRef or url must
+                                      be set
+                                    rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                      == 1'
+                                  - message: jwksPath is required when backendRef
+                                      is set
+                                    rule: 'has(self.backendRef) ? has(self.jwksPath)
+                                      : true'
+                                  - message: jwksPath may not be set when url is set
+                                    rule: 'has(self.url) ? !has(self.jwksPath) : true'
                               type: object
                               x-kubernetes-validations:
                               - message: exactly one of the fields in [remote inline]
@@ -8767,9 +8891,8 @@ spec:
                                     policy using an external service.
                                   properties:
                                     backendRef:
-                                      description: |-
-                                        `backendRef` references the rate limit server to reach.
-                                        Supported types: `Service` and `Backend`.
+                                      description: '`backendRef` references a Kubernetes
+                                        backend to reach.'
                                       properties:
                                         group:
                                           default: ""
@@ -8921,8 +9044,15 @@ spec:
                                       - FailClosed
                                       - FailOpen
                                       type: string
+                                    url:
+                                      description: |-
+                                        `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                                        When the scheme is `https`, backend TLS is enabled automatically.
+                                      maxLength: 1024
+                                      minLength: 1
+                                      pattern: ^https?://[^?#]+$
+                                      type: string
                                   required:
-                                  - backendRef
                                   - descriptors
                                   - domain
                                   type: object
@@ -8998,9 +9128,8 @@ spec:
                           using an external service.
                         properties:
                           backendRef:
-                            description: |-
-                              `backendRef` references the rate limit server to reach.
-                              Supported types: `Service` and `Backend`.
+                            description: '`backendRef` references a Kubernetes backend
+                              to reach.'
                             properties:
                               group:
                                 default: ""
@@ -9152,8 +9281,15 @@ spec:
                             - FailClosed
                             - FailOpen
                             type: string
+                          url:
+                            description: |-
+                              `url` is an absolute HTTP(S) URL or origin for this policy backend.
+                              When the scheme is `https`, backend TLS is enabled automatically.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^https?://[^?#]+$
+                            type: string
                         required:
-                        - backendRef
                         - descriptors
                         - domain
                         type: object

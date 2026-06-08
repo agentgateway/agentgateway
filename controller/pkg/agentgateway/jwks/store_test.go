@@ -52,7 +52,7 @@ func TestSharedJwksRequestsRetargetOwnerAcrossRequestKeys(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -81,7 +81,7 @@ func TestSharedJwksRequestsRemoveLastOwnerDeletesRequest(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -141,7 +141,7 @@ func TestStoreDropsOldFetchStateWhenPolicyRetargets(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -232,7 +232,7 @@ func TestStoreClearsCacheWhenLastPolicyDeleted(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -288,7 +288,7 @@ func TestStoreClearsCacheWhenAllSharedPoliciesDeleted(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -352,7 +352,7 @@ func TestStoreClearsCacheWhenPolicyDeletedAfterWarmStart(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -413,7 +413,7 @@ func TestStoreClearsOrphanCacheAtStartup(t *testing.T) {
 		AgentgatewayPolicies: policies,
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
-			return resolvedJwksRequest(owner, owner.Remote.JwksPath), nil
+			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
 		}),
 		KrtOpts: krtOpts,
 	})
@@ -487,7 +487,7 @@ func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.Agentga
 					Providers: []agentgateway.JWTProvider{{
 						JWKS: agentgateway.JWKS{
 							Remote: &agentgateway.RemoteJWKS{
-								JwksPath:      uri,
+								JwksPath:      longStringPtr(uri),
 								CacheDuration: &metav1.Duration{Duration: ttl},
 							},
 						},
@@ -496,6 +496,18 @@ func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.Agentga
 			},
 		},
 	}
+}
+
+func longStringPtr(s string) *agentgateway.LongString {
+	v := agentgateway.LongString(s)
+	return &v
+}
+
+func jwksPath(s *agentgateway.LongString) string {
+	if s == nil {
+		return ""
+	}
+	return string(*s)
 }
 
 func testBackend(name, uri string, ttl time.Duration) *agentgateway.AgentgatewayBackend {
@@ -510,7 +522,7 @@ func testBackend(name, uri string, ttl time.Duration) *agentgateway.Agentgateway
 				MCP: &agentgateway.BackendMCP{
 					Authentication: &agentgateway.MCPAuthentication{
 						JWKS: agentgateway.RemoteJWKS{
-							JwksPath:      uri,
+							JwksPath:      longStringPtr(uri),
 							CacheDuration: &metav1.Duration{Duration: ttl},
 						},
 					},

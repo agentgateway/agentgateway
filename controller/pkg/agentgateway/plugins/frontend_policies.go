@@ -92,9 +92,9 @@ func translateFrontendPolicyToAgw(
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
 	var errs []error
-	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
+	provider, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, tracing.PolicyBackendEndpoint, policy.Namespace)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
+		errs = append(errs, fmt.Errorf("failed to translate tracing backend: %v", err))
 	}
 
 	var addAttributes []*api.FrontendPolicySpec_TracingAttribute
@@ -144,6 +144,9 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 	var path *string
 	if tracing.Path != nil {
 		path = new(*tracing.Path)
+	} else if parsedURL != nil && parsedURL.EscapedPath() != "" {
+		v := parsedURL.EscapedPath()
+		path = &v
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -164,6 +167,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tracing_{Tracing: &api.FrontendPolicySpec_Tracing{
 					ProviderBackend: provider,
+					InlinePolicies:  inlinePolicies,
 					Attributes:      addAttributes,
 					Remove:          rmAttributes,
 					Resources:       addResources,
@@ -210,9 +214,9 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
-		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
+		provider, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, otlp.PolicyBackendEndpoint, policy.Namespace)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
+			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend: %v", err))
 		}
 
 		var protocol api.FrontendPolicySpec_Logging_OtlpAccessLog_Protocol
@@ -228,10 +232,14 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		var path *string
 		if otlp.Path != nil {
 			path = new(*otlp.Path)
+		} else if parsedURL != nil && parsedURL.EscapedPath() != "" {
+			v := parsedURL.EscapedPath()
+			path = &v
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
 			ProviderBackend: provider,
+			InlinePolicies:  inlinePolicies,
 			Protocol:        protocol,
 			Path:            path,
 		}

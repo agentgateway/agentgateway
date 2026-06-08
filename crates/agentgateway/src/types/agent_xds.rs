@@ -1532,6 +1532,7 @@ fn backend_policy_from_proto(
 		}),
 		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
+			policies: backend_policies_from_proto(&bt.inline_policies, diagnostics)?,
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
 			let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
@@ -1879,6 +1880,7 @@ fn traffic_policy_from_proto(
 				)
 				.collect::<Result<Vec<_>, _>>()?;
 			let target = resolve_simple_reference(rrl.target.as_ref());
+			let policies = backend_policies_from_proto(&rrl.inline_policies, diagnostics)?;
 			let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
 				Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
 					http::remoteratelimit::FailureMode::FailOpen
@@ -1890,8 +1892,7 @@ fn traffic_policy_from_proto(
 				http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
 					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					policies,
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
 				},
@@ -1906,6 +1907,7 @@ fn traffic_policy_from_proto(
 		},
 		Some(tps::Kind::ExtProc(ep)) => {
 			let target = resolve_simple_reference(ep.target.as_ref());
+			let policies = backend_policies_from_proto(&ep.inline_policies, diagnostics)?;
 			let failure_mode = match tps::ext_proc::FailureMode::try_from(ep.failure_mode) {
 				Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 				_ => http::ext_proc::FailureMode::FailClosed,
@@ -1947,8 +1949,7 @@ fn traffic_policy_from_proto(
 			}
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
 				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
+				policies,
 				failure_mode,
 				request_attributes: to_cel_attrs(
 					diagnostics,
@@ -2179,6 +2180,16 @@ fn traffic_policy_from_proto(
 	})
 }
 
+fn backend_policies_from_proto(
+	policies: &[proto::agent::BackendPolicySpec],
+	diagnostics: &mut Diagnostics,
+) -> Result<Vec<BackendTrafficPolicy>, ProtoError> {
+	policies
+		.iter()
+		.map(|policy| backend_policy_from_proto(policy, diagnostics))
+		.collect()
+}
+
 fn external_auth_from_proto(
 	ea: &proto::agent::traffic_policy_spec::ExternalAuth,
 	diagnostics: &mut Diagnostics,
@@ -2302,10 +2313,11 @@ fn external_auth_from_proto(
 		.as_ref()
 		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
+	let policies = backend_policies_from_proto(&ea.inline_policies, diagnostics)?;
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
 		target: Arc::new(target),
-		policies: Vec::new(),
+		policies,
 		failure_mode,
 		include_request_headers: ea
 			.include_request_headers
@@ -2588,7 +2600,7 @@ fn frontend_policy_from_proto(
 		},
 		Some(fps::Kind::Tracing(t)) => {
 			// Convert protobuf to TracingConfig
-			let tracing_config = tracing_config_from_proto(t, diagnostics);
+			let tracing_config = tracing_config_from_proto(t, diagnostics)?;
 
 			// Prepare LoggingFields with the CEL attributes from TracingConfig
 			let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
@@ -2631,8 +2643,9 @@ fn frontend_policy_from_proto(
 fn tracing_config_from_proto(
 	t: &proto::agent::frontend_policy_spec::Tracing,
 	diagnostics: &mut Diagnostics,
-) -> types::agent::TracingConfig {
+) -> Result<types::agent::TracingConfig, ProtoError> {
 	let provider_backend = resolve_simple_reference(t.provider_backend.as_ref());
+	let policies = backend_policies_from_proto(&t.inline_policies, diagnostics)?;
 
 	let attributes: OrderedStringMap<Arc<cel::Expression>> = t
 		.attributes
@@ -2685,10 +2698,9 @@ fn tracing_config_from_proto(
 			_ => types::agent::TracingProtocol::Http,
 		};
 
-	types::agent::TracingConfig {
+	Ok(types::agent::TracingConfig {
 		provider_backend,
-		// Not supported inline from xDS
-		policies: Vec::new(),
+		policies,
 		attributes,
 		resources,
 		remove: t.remove.clone(),
@@ -2696,7 +2708,7 @@ fn tracing_config_from_proto(
 		client_sampling,
 		path,
 		protocol,
-	}
+	})
 }
 
 impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
@@ -2984,6 +2996,12 @@ fn resolve_simple_reference(
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			SimpleBackendReference::Backend(name.into())
 		},
+		Some(proto::agent::backend_reference::Kind::Inline(inline)) => {
+			SimpleBackendReference::InlineBackend(Target::Hostname(
+				strng::new(&inline.hostname),
+				inline.port as u16,
+			))
+		},
 	}
 }
 
@@ -3116,6 +3134,9 @@ fn resolve_reference(target: Option<&proto::agent::BackendReference>) -> Backend
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			BackendReference::Backend(name.into())
 		},
+		Some(proto::agent::backend_reference::Kind::Inline(inline)) => BackendReference::InlineBackend(
+			Target::Hostname(strng::new(&inline.hostname), inline.port as u16),
+		),
 	}
 }
 

@@ -156,6 +156,19 @@ type BackendSimple struct {
 	Auth *BackendAuth `json:"auth,omitempty"`
 }
 
+// PolicyBackendEndpoint identifies a backend used by policy features.
+type PolicyBackendEndpoint struct {
+	// `backendRef` references a Kubernetes backend to reach.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// `url` is an absolute HTTP(S) URL or origin for this policy backend.
+	// When the scheme is `https`, backend TLS is enabled automatically.
+	// +kubebuilder:validation:Pattern=`^https?://[^?#]+$`
+	// +optional
+	URL *LongString `json:"url,omitempty"`
+}
+
 type Health struct {
 	// UnhealthyCondition is a CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -1030,13 +1043,16 @@ type JWKS struct {
 	Inline *string `json:"inline,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:XValidation:rule="has(self.backendRef) ? has(self.jwksPath) : true",message="jwksPath is required when backendRef is set"
+// +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.jwksPath) : true",message="jwksPath may not be set when url is set"
 type RemoteJWKS struct {
 	// Path to the IdP `jwks` endpoint, relative to the root, commonly
 	// `".well-known/jwks.json"`.
-	// +required
+	// +optional
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=2000
-	JwksPath string `json:"jwksPath"`
+	JwksPath *LongString `json:"jwksPath,omitempty"`
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
@@ -1047,8 +1063,7 @@ type RemoteJWKS struct {
 	// `AgentgatewayPolicy` containing backend TLS config can then be attached
 	// to the `Service` or `Backend` in order to set TLS options for a
 	// connection to the remote `jwks` source.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	PolicyBackendEndpoint `json:",inline"`
 }
 
 // +k8s:enum
@@ -1532,8 +1547,9 @@ const (
 type BackendTunnel struct {
 	// `backendRef` references the proxy server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 }
 
 type BackendHTTP struct {
@@ -1807,8 +1823,8 @@ type ProcessingOptions struct {
 type ExtProc struct {
 	// `backendRef` references the External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +optional // This is actually required, but making it required breaks Conditional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 	// processingOptions configures how request and response phases are sent to ext_proc.
 	// +optional
 	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
@@ -1820,11 +1836,11 @@ type ExtProcConditional struct {
 	Condition shared.CELExpression `json:"condition,omitempty"`
 	// `policy` definition.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url is required"
 	Policy ExtProc `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 type ExtProcOrConditional struct {
 	// +optional
 	ExtProc `json:",inline"`
@@ -1871,12 +1887,12 @@ type ExtAuthConditional struct {
 	Condition shared.CELExpression `json:"condition,omitempty"`
 	// `policy` definition.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url is required"
 	// +kubebuilder:validation:XValidation:rule="[has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 	Policy ExtAuth `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 type ExtAuthOrConditional struct {
 	// +optional
@@ -1919,8 +1935,8 @@ type ExtAuth struct {
 	// `backendRef` references the External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
-	// +optional // This is actually required, but making it required breaks Conditional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// FailureMode controls behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.
@@ -2127,8 +2143,8 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 type GlobalRateLimit struct {
 	// `backendRef` references the rate limit server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// `failureMode` controls behavior when the remote rate limit service is
 	// unavailable or returns an error. `FailOpen` allows the request to continue.
@@ -2311,8 +2327,8 @@ type AccessLog struct {
 type OtlpAccessLog struct {
 	// `backendRef` references the OTLP server to send access logs to.
 	// Supported types: `Service` and `AgentgatewayBackend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
@@ -2389,8 +2405,8 @@ const (
 type Tracing struct {
 	// `backendRef` references the OTLP server to reach.
 	// Supported types: `Service` and `AgentgatewayBackend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 	// `protocol` specifies the OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
 	// +optional

@@ -65,6 +65,14 @@ impl HTTP {
 pub struct Tunnel {
 	/// Reference to the proxy address
 	pub proxy: Arc<SimpleBackendReference>,
+	/// Policies to connect to the proxy backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<super::agent::BackendTrafficPolicy>,
 }
 
 #[apply(schema!)]

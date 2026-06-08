@@ -1415,7 +1415,7 @@ pub async fn build_transport(
 	};
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
-		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
+		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();

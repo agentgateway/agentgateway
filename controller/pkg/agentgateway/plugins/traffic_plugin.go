@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -1073,19 +1075,17 @@ func buildExtAuthSpec(
 ) (*api.TrafficPolicySpec_ExternalAuth, error) {
 	var errs []error
 	var be *api.BackendReference
-	if extAuth.BackendRef == nil {
-		errs = append(errs, fmt.Errorf("failed to build extAuth: backendRef is required"))
-	} else {
-		var err error
-		be, err = buildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
-		}
+	inlinePolicies := []*api.BackendPolicySpec(nil)
+	var err error
+	be, inlinePolicies, _, err = buildPolicyBackendEndpoint(ctx, extAuth.PolicyBackendEndpoint, policy.Namespace)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
 	}
 
 	spec := &api.TrafficPolicySpec_ExternalAuth{
-		Target:      be,
-		FailureMode: extAuthFailureMode(extAuth.FailureMode),
+		Target:         be,
+		InlinePolicies: inlinePolicies,
+		FailureMode:    extAuthFailureMode(extAuth.FailureMode),
 	}
 	if g := extAuth.GRPC; g != nil {
 		metadata := castCELMap(g.RequestMetadata, func(key string, expr shared.CELExpression) {
@@ -1161,18 +1161,16 @@ func processExtProcTraffic(
 ) (*api.Policy_Traffic, error) {
 	var backendErr error
 	var be *api.BackendReference
-	if extProc.BackendRef == nil {
-		backendErr = fmt.Errorf("failed to build extProc: backendRef is required")
-	} else {
-		var err error
-		be, err = buildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
-		if err != nil {
-			backendErr = fmt.Errorf("failed to build extProc: %v", err)
-		}
+	inlinePolicies := []*api.BackendPolicySpec(nil)
+	var err error
+	be, inlinePolicies, _, err = buildPolicyBackendEndpoint(ctx, extProc.PolicyBackendEndpoint, policy.Namespace)
+	if err != nil {
+		backendErr = fmt.Errorf("failed to build extProc: %v", err)
 	}
 
 	spec := &api.TrafficPolicySpec_ExtProc{
-		Target: be,
+		Target:         be,
+		InlinePolicies: inlinePolicies,
 		// always use FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
 		FailureMode: api.TrafficPolicySpec_ExtProc_FAIL_CLOSED,
 	}
@@ -1499,7 +1497,7 @@ func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPha
 
 func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLimit, policy types.NamespacedName) (*api.Policy_Traffic, error) {
 	var errs []error
-	be, err := buildBackendRef(ctx, grl.BackendRef, policy.Namespace)
+	be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, grl.PolicyBackendEndpoint, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to build global rate limit: %v", err))
 	}
@@ -1517,10 +1515,11 @@ func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLi
 	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_RemoteRateLimit_{
 			RemoteRateLimit: &api.TrafficPolicySpec_RemoteRateLimit{
-				Domain:      grl.Domain,
-				Target:      be,
-				Descriptors: descriptors,
-				FailureMode: remoteRateLimitFailureMode(grl.FailureMode),
+				Domain:         grl.Domain,
+				Target:         be,
+				InlinePolicies: inlinePolicies,
+				Descriptors:    descriptors,
+				FailureMode:    remoteRateLimitFailureMode(grl.FailureMode),
 			},
 		},
 	}}, errors.Join(errs...)
@@ -1601,6 +1600,61 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Kind:  string(kind),
 	}
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
+}
+
+func buildPolicyBackendEndpoint(ctx PolicyCtx, endpoint agentgateway.PolicyBackendEndpoint, defaultNS string) (*api.BackendReference, []*api.BackendPolicySpec, *url.URL, error) {
+	if endpoint.BackendRef != nil {
+		ref, err := buildBackendRef(ctx, *endpoint.BackendRef, defaultNS)
+		return ref, nil, nil, err
+	}
+	if endpoint.URL == nil {
+		return nil, nil, nil, fmt.Errorf("backendRef or url is required")
+	}
+	parsed, err := url.Parse(string(*endpoint.URL))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, nil, nil, fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
+	}
+	if parsed.Hostname() == "" {
+		return nil, nil, nil, fmt.Errorf("url must include a host")
+	}
+	port := parsed.Port()
+	if port == "" {
+		if parsed.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+	p, err := strconv.ParseUint(port, 10, 32)
+	if err != nil || p == 0 || p > 65535 {
+		return nil, nil, nil, fmt.Errorf("invalid URL port %q", port)
+	}
+	ref := &api.BackendReference{
+		Kind: &api.BackendReference_Inline_{
+			Inline: &api.BackendReference_Inline{
+				Hostname: parsed.Hostname(),
+				Port:     uint32(p),
+			},
+		},
+	}
+	var policies []*api.BackendPolicySpec
+	if parsed.Scheme == "https" {
+		hostname := parsed.Hostname()
+		policies = append(policies, &api.BackendPolicySpec{
+			Kind: &api.BackendPolicySpec_BackendTls{
+				BackendTls: &api.BackendPolicySpec_BackendTLS{
+					Hostname: &hostname,
+				},
+			},
+		})
+	}
+	if ip := net.ParseIP(parsed.Hostname()); ip != nil && parsed.Scheme == "https" {
+		policies[0].GetBackendTls().Hostname = nil
+	}
+	return ref, policies, parsed, nil
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
@@ -1926,24 +1980,26 @@ func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []uti
 			}
 		}
 		for p := range PolicyOrConditionalSeq(s.Traffic.RateLimit) {
-			if p.Global != nil {
-				app(p.Global.BackendRef)
+			if p.Global != nil && p.Global.BackendRef != nil {
+				app(*p.Global.BackendRef)
 			}
 		}
 		if s.Traffic.JWTAuthentication != nil {
 			for _, p := range s.Traffic.JWTAuthentication.Providers {
 				if p.JWKS.Remote != nil {
-					app(p.JWKS.Remote.BackendRef)
+					if p.JWKS.Remote.BackendRef != nil {
+						app(*p.JWKS.Remote.BackendRef)
+					}
 				}
 			}
 		}
 	}
 	if s.Frontend != nil {
-		if s.Frontend.Tracing != nil {
-			app(s.Frontend.Tracing.BackendRef)
+		if s.Frontend.Tracing != nil && s.Frontend.Tracing.BackendRef != nil {
+			app(*s.Frontend.Tracing.BackendRef)
 		}
-		if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil {
-			app(s.Frontend.AccessLog.Otlp.BackendRef)
+		if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil && s.Frontend.AccessLog.Otlp.BackendRef != nil {
+			app(*s.Frontend.AccessLog.Otlp.BackendRef)
 		}
 	}
 	if s.Backend != nil {
@@ -1954,8 +2010,8 @@ func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []uti
 
 func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(ref gwv1.BackendObjectReference)) {
 	appTunnel := func(backend *agentgateway.BackendSimple) {
-		if backend != nil && backend.Tunnel != nil {
-			app(backend.Tunnel.BackendRef)
+		if backend != nil && backend.Tunnel != nil && backend.Tunnel.BackendRef != nil {
+			app(*backend.Tunnel.BackendRef)
 		}
 	}
 	appTunnel(&s.BackendSimple)
@@ -1963,7 +2019,9 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 		app(*s.ExtAuth.BackendRef)
 	}
 	if s.MCP != nil && s.MCP.Authentication != nil {
-		app(s.MCP.Authentication.JWKS.BackendRef)
+		if s.MCP.Authentication.JWKS.BackendRef != nil {
+			app(*s.MCP.Authentication.JWKS.BackendRef)
+		}
 	}
 	if s.AI != nil && s.AI.PromptGuard != nil {
 		for _, p := range s.AI.PromptGuard.Request {

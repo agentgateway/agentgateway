@@ -232,7 +232,7 @@ spec:
       keepalive:
         retries: 0
 ---
-_err: 'backendRef: Required'
+_err: 'exactly one of backendRef or url'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -474,7 +474,7 @@ spec:
               name: extproc
               kind: Service
 ---
-_err: 'backendRef is required'
+_err: 'exactly one of backendRef or url is required'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -949,3 +949,17 @@ spec:
         name: api-key-secret
         group: agentgateway.dev
         kind: ""
+---
+_err: 'url must not include a path for backend tunnel'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tunnel-url-with-path
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route
+  backend:
+    tunnel:
+      url: https://proxy.example.com/path

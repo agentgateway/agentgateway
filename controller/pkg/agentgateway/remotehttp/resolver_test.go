@@ -287,10 +287,12 @@ func TestResolve(t *testing.T) {
 							BackendSimple: agentgateway.BackendSimple{
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
-									BackendRef: gwv1.BackendObjectReference{
-										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-										Name:  gwv1.ObjectName("corporate-proxy"),
+									PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+										BackendRef: &gwv1.BackendObjectReference{
+											Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+											Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+											Name:  gwv1.ObjectName("corporate-proxy"),
+										},
 									},
 								},
 							},
@@ -324,10 +326,12 @@ func TestResolve(t *testing.T) {
 							BackendSimple: agentgateway.BackendSimple{
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
-									BackendRef: gwv1.BackendObjectReference{
-										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-										Name:  gwv1.ObjectName("tls-proxy"),
+									PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+										BackendRef: &gwv1.BackendObjectReference{
+											Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+											Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+											Name:  gwv1.ObjectName("tls-proxy"),
+										},
 									},
 								},
 							},
@@ -408,7 +412,7 @@ func TestResolve(t *testing.T) {
 			resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{
 				ParentName:       "gw-policy",
 				DefaultNamespace: "default",
-				BackendRef:       tt.backendRef,
+				BackendRef:       &tt.backendRef,
 				Path:             "/",
 				DefaultPort:      tt.defaultPort,
 			})

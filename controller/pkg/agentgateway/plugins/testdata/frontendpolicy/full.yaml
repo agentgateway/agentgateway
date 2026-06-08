@@ -213,7 +213,7 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: 'failed to translate tracing backend ref: unable to find the Service
+        message: 'failed to translate tracing backend: unable to find the Service
           some-other-ns/my-otel'
         reason: PartiallyValid
         status: "True"
