@@ -440,6 +440,17 @@ agctl-linux-amd64: ## Build agctl for linux/amd64
 agctl-linux-arm64: ## Build agctl for linux/arm64
 	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-arm64 ./cmd/agctl
 
+.PHONY: agctl-darwin-arm64
+agctl-darwin-arm64: ## Build agctl for darwin/arm64
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=darwin go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-darwin-arm64 ./cmd/agctl
+
+.PHONY: agctl-windows-amd64
+agctl-windows-amd64: ## Build agctl for windows/amd64
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-windows-amd64.exe ./cmd/agctl
+
+.PHONY: agctl-release
+agctl-release: agctl-linux-amd64 agctl-linux-arm64 agctl-darwin-arm64 agctl-windows-amd64 ## Build agctl for all release targets
+
 $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/agentgateway/Dockerfile.agentgateway
 	cp $< $@
 
