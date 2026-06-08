@@ -1818,6 +1818,9 @@ pub struct FilterOrPolicy {
 	csrf: Option<http::csrf::Csrf>,
 
 	// TrafficPolicy
+	/// Buffer request and response bodies before forwarding.
+	#[serde(default)]
+	buffer: Option<http::buffer::Buffer>,
 	/// Timeout requests that exceed the configured duration.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
@@ -3040,6 +3043,7 @@ pub(crate) async fn split_policies(
 		csrf,
 		ext_authz,
 		ext_proc,
+		buffer,
 		timeout,
 		retry,
 	} = pol;
@@ -3168,6 +3172,9 @@ pub(crate) async fn split_policies(
 	}
 
 	// Traffic policies
+	if let Some(p) = buffer {
+		route_policies.push(TrafficPolicy::Buffer(RequestPolicy::single(p)));
+	}
 	if let Some(p) = timeout {
 		route_policies.push(TrafficPolicy::Timeout(p));
 	}

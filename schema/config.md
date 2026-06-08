@@ -1942,6 +1942,11 @@
 |`binds[].listeners[].routes[].policies.transformations.response.metadata`|object||
 |`binds[].listeners[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|[]string||
+|`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`binds[].listeners[].routes[].policies.buffer.request`|object||
+|`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer||
+|`binds[].listeners[].routes[].policies.buffer.response`|object||
+|`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer||
 |`binds[].listeners[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string||
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string||
@@ -8230,6 +8235,11 @@
 |`policies[].policy.transformations.response.metadata`|object||
 |`policies[].policy.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`policies[].policy.csrf.additionalOrigins`|[]string||
+|`policies[].policy.buffer`|object|Buffer request and response bodies before forwarding.|
+|`policies[].policy.buffer.request`|object||
+|`policies[].policy.buffer.request.maxBytes`|integer||
+|`policies[].policy.buffer.response`|object||
+|`policies[].policy.buffer.response.maxBytes`|integer||
 |`policies[].policy.timeout`|object|Timeout requests that exceed the configured duration.|
 |`policies[].policy.timeout.requestTimeout`|string||
 |`policies[].policy.timeout.backendRequestTimeout`|string||
@@ -13586,6 +13596,11 @@
 |`routeGroups[].routes[].policies.transformations.response.metadata`|object||
 |`routeGroups[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`routeGroups[].routes[].policies.csrf.additionalOrigins`|[]string||
+|`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`routeGroups[].routes[].policies.buffer.request`|object||
+|`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer||
+|`routeGroups[].routes[].policies.buffer.response`|object||
+|`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer||
 |`routeGroups[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string||
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string||
@@ -20736,6 +20751,11 @@
 |`mcp.policies.transformations.response.metadata`|object||
 |`mcp.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`mcp.policies.csrf.additionalOrigins`|[]string||
+|`mcp.policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`mcp.policies.buffer.request`|object||
+|`mcp.policies.buffer.request.maxBytes`|integer||
+|`mcp.policies.buffer.response`|object||
+|`mcp.policies.buffer.response.maxBytes`|integer||
 |`mcp.policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`mcp.policies.timeout.requestTimeout`|string||
 |`mcp.policies.timeout.backendRequestTimeout`|string||

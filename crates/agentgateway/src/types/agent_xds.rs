@@ -2177,22 +2177,15 @@ fn traffic_policy_from_proto(
 			})
 		},
 		Some(tps::Kind::Buffer(buffer)) => {
-			let to_body = |b: Option<proto::agent::BufferBody>| BufferBody {
-				max_bytes: match b {
-					Some(bb) => bb
-						.max_bytes
-						.map(|v| v as usize)
-						.unwrap_or_else(crate::defaults::max_buffer_size),
-					None => 0,
-				},
-			};
-			TrafficPolicy::Buffer(RequestPolicy::single(
-				http::buffer::Buffer::try_from(http::buffer::BufferSerde {
-					request: to_body(buffer.request),
-					response: to_body(buffer.response),
+			let to_body = |b: Option<proto::agent::BufferBody>| {
+				b.map(|bb| BufferBody {
+					max_bytes: bb.max_bytes.map(|v| v as usize),
 				})
-				.map_err(|e| ProtoError::Generic(e.to_string()))?,
-			))
+			};
+			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
+				request: to_body(buffer.request),
+				response: to_body(buffer.response),
+			}))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})

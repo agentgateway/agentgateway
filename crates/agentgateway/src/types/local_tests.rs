@@ -540,6 +540,11 @@ binds:
             - entries:
               - key: user
                 value: '"fallback"'
+        buffer:
+          request:
+            maxBytes: 10
+          response:
+            maxBytes: 20
       backends:
       - host: 127.0.0.1:8000
 "#;
@@ -585,6 +590,17 @@ binds:
 		assert_eq!(len, 2, "expected two {policy} entries");
 		assert!(fallback_is_none, "expected {policy} fallback condition");
 	}
+
+	let buffer = route
+		.inline_policies
+		.iter()
+		.find_map(|p| match p {
+			TrafficPolicy::Buffer(p) => Some(p.iter().next().expect("buffer policy entry").pol.as_ref()),
+			_ => None,
+		})
+		.expect("expected buffer policy");
+	assert_eq!(buffer.request.as_ref().unwrap().max_bytes, Some(10));
+	assert_eq!(buffer.response.as_ref().unwrap().max_bytes, Some(20));
 }
 
 #[tokio::test]

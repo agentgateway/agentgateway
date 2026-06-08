@@ -43,29 +43,34 @@ async fn read_response_body_bytes(resp: &mut Response) -> Bytes {
 
 fn enabled_request(max_bytes: usize) -> Buffer {
 	Buffer {
-		request: BufferBody { max_bytes },
-		response: BufferBody { max_bytes: 0 },
+		request: Some(BufferBody {
+			max_bytes: Some(max_bytes),
+		}),
+		response: None,
 	}
 }
 
 fn enabled_response(max_bytes: usize) -> Buffer {
 	Buffer {
-		request: BufferBody { max_bytes: 0 },
-		response: BufferBody { max_bytes },
+		request: None,
+		response: Some(BufferBody {
+			max_bytes: Some(max_bytes),
+		}),
 	}
 }
 
-// --- Serde / config ---------------------------------------------------------
+fn disabled_request() -> Buffer {
+	Buffer {
+		request: None,
+		response: None,
+	}
+}
 
-#[test]
-fn try_from_serde_copies_both_fields() {
-	let buffer = Buffer::try_from(BufferSerde {
-		request: BufferBody { max_bytes: 64 },
-		response: BufferBody { max_bytes: 128 },
-	})
-	.expect("valid buffer policy");
-	assert_eq!(buffer.request.max_bytes, 64);
-	assert_eq!(buffer.response.max_bytes, 128);
+fn disabled_response() -> Buffer {
+	Buffer {
+		request: None,
+		response: None,
+	}
 }
 
 #[test]
@@ -73,15 +78,22 @@ fn deserialize_reads_camel_case_fields() {
 	let buffer: Buffer =
 		serde_json::from_str(r#"{"request":{"maxBytes":10},"response":{"maxBytes":20}}"#)
 			.expect("valid json");
-	assert_eq!(buffer.request.max_bytes, 10);
-	assert_eq!(buffer.response.max_bytes, 20);
+	assert_eq!(buffer.request.unwrap().max_bytes, Some(10));
+	assert_eq!(buffer.response.unwrap().max_bytes, Some(20));
 }
 
 #[test]
-fn deserialize_defaults_missing_fields_to_zero() {
+fn deserialize_defaults_missing_fields_to_none() {
 	let buffer: Buffer = serde_json::from_str("{}").expect("valid json");
-	assert_eq!(buffer.request.max_bytes, 0);
-	assert_eq!(buffer.response.max_bytes, 0);
+	assert!(buffer.request.is_none());
+	assert!(buffer.response.is_none());
+}
+
+#[test]
+fn deserialize_defaults_missing_max_bytes_to_none() {
+	let buffer: Buffer = serde_json::from_str(r#"{"request":{},"response":{}}"#).expect("valid json");
+	assert_eq!(buffer.request.unwrap().max_bytes, None);
+	assert_eq!(buffer.response.unwrap().max_bytes, None);
 }
 
 #[test]
@@ -94,8 +106,8 @@ fn deserialize_rejects_unknown_fields() {
 #[test]
 fn serialize_emits_camel_case() {
 	let buffer = Buffer {
-		request: BufferBody { max_bytes: 7 },
-		response: BufferBody { max_bytes: 9 },
+		request: Some(BufferBody { max_bytes: Some(7) }),
+		response: Some(BufferBody { max_bytes: Some(9) }),
 	};
 	let json = serde_json::to_string(&buffer).expect("serializable");
 	assert!(json.contains("\"maxBytes\":7"), "got: {json}");
@@ -105,20 +117,30 @@ fn serialize_emits_camel_case() {
 #[test]
 fn roundtrip_preserves_values() {
 	let original = Buffer {
-		request: BufferBody { max_bytes: 100 },
-		response: BufferBody { max_bytes: 200 },
+		request: Some(BufferBody {
+			max_bytes: Some(100),
+		}),
+		response: Some(BufferBody {
+			max_bytes: Some(200),
+		}),
 	};
 	let json = serde_json::to_string(&original).expect("serializable");
 	let parsed: Buffer = serde_json::from_str(&json).expect("deserializable");
-	assert_eq!(original.request.max_bytes, parsed.request.max_bytes);
-	assert_eq!(original.response.max_bytes, parsed.response.max_bytes);
+	assert_eq!(
+		original.request.unwrap().max_bytes,
+		parsed.request.unwrap().max_bytes
+	);
+	assert_eq!(
+		original.response.unwrap().max_bytes,
+		parsed.response.unwrap().max_bytes
+	);
 }
 
 // --- apply_to_request -------------------------------------------------------
 
 #[tokio::test]
 async fn apply_to_request_is_noop_when_disabled() {
-	let policy = enabled_request(0);
+	let policy = disabled_request();
 	let mut req = request_with_body(crate::http::Body::from("payload"));
 
 	policy
@@ -201,9 +223,8 @@ async fn apply_to_request_skips_upgrade_requests() {
 
 #[tokio::test]
 async fn apply_to_request_fails_when_body_exceeds_limit() {
-	let policy = enabled_request(64);
+	let policy = enabled_request(4);
 	let mut req = request_with_body(crate::http::Body::from("a body that is way too large"));
-	req.extensions_mut().insert(BufferLimit(4));
 
 	let err = policy
 		.apply_to_request(&mut req)
@@ -219,11 +240,52 @@ async fn apply_to_request_fails_when_body_exceeds_limit() {
 }
 
 #[tokio::test]
+async fn apply_to_request_uses_explicit_max_bytes_over_extension_limit() {
+	let policy = enabled_request(64);
+	let mut req = request_with_body(crate::http::Body::from("payload"));
+	req.extensions_mut().insert(BufferLimit(4));
+
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("explicit maxBytes should allow payload");
+
+	assert_eq!(
+		read_request_body_bytes(&mut req).await,
+		Bytes::from_static(b"payload")
+	);
+}
+
+#[tokio::test]
+async fn apply_to_request_falls_back_to_extension_limit_when_max_bytes_missing() {
+	let policy = Buffer {
+		request: Some(BufferBody { max_bytes: None }),
+		response: None,
+	};
+	let mut req = request_with_body(crate::http::Body::from("payload"));
+	req.extensions_mut().insert(BufferLimit(4));
+
+	let err = policy
+		.apply_to_request(&mut req)
+		.await
+		.expect_err("fallback limit should reject payload");
+
+	match err {
+		ProxyResponse::DirectResponse(resp) => {
+			assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
+		},
+		other => panic!("expected 413 DirectResponse, got {other:?}"),
+	}
+}
+
+#[tokio::test]
 async fn apply_to_request_ignores_response_max_bytes() {
 	// response.max_bytes != 0 must not turn request buffering on.
 	let policy = Buffer {
-		request: BufferBody { max_bytes: 0 },
-		response: BufferBody { max_bytes: 1024 },
+		request: None,
+		response: Some(BufferBody {
+			max_bytes: Some(1024),
+		}),
 	};
 	let mut req = request_with_body(streaming_body(&[b"hello"]));
 
@@ -242,7 +304,7 @@ async fn apply_to_request_ignores_response_max_bytes() {
 
 #[tokio::test]
 async fn apply_to_response_is_noop_when_disabled() {
-	let policy = enabled_response(0);
+	let policy = disabled_response();
 	let mut resp = response_with_body(crate::http::Body::from("payload"));
 
 	policy
@@ -306,9 +368,8 @@ async fn apply_to_response_skips_switching_protocols() {
 
 #[tokio::test]
 async fn apply_to_response_fails_when_body_exceeds_limit() {
-	let policy = enabled_response(64);
+	let policy = enabled_response(4);
 	let mut resp = response_with_body(crate::http::Body::from("a body that is way too large"));
-	resp.extensions_mut().insert(BufferLimit(4));
 
 	let err = policy
 		.apply_to_response(&mut resp)
@@ -324,10 +385,51 @@ async fn apply_to_response_fails_when_body_exceeds_limit() {
 }
 
 #[tokio::test]
+async fn apply_to_response_uses_explicit_max_bytes_over_extension_limit() {
+	let policy = enabled_response(64);
+	let mut resp = response_with_body(crate::http::Body::from("payload"));
+	resp.extensions_mut().insert(BufferLimit(4));
+
+	policy
+		.apply_to_response(&mut resp)
+		.await
+		.expect("explicit maxBytes should allow payload");
+
+	assert_eq!(
+		read_response_body_bytes(&mut resp).await,
+		Bytes::from_static(b"payload")
+	);
+}
+
+#[tokio::test]
+async fn apply_to_response_falls_back_to_extension_limit_when_max_bytes_missing() {
+	let policy = Buffer {
+		request: None,
+		response: Some(BufferBody { max_bytes: None }),
+	};
+	let mut resp = response_with_body(crate::http::Body::from("payload"));
+	resp.extensions_mut().insert(BufferLimit(4));
+
+	let err = policy
+		.apply_to_response(&mut resp)
+		.await
+		.expect_err("fallback limit should reject payload");
+
+	match err {
+		ProxyResponse::DirectResponse(resp) => {
+			assert_eq!(resp.status(), ::http::StatusCode::BAD_GATEWAY);
+		},
+		other => panic!("expected 502 DirectResponse, got {other:?}"),
+	}
+}
+
+#[tokio::test]
 async fn apply_to_response_ignores_request_max_bytes() {
 	let policy = Buffer {
-		request: BufferBody { max_bytes: 1024 },
-		response: BufferBody { max_bytes: 0 },
+		request: Some(BufferBody {
+			max_bytes: Some(1024),
+		}),
+		response: None,
 	};
 	let mut resp = response_with_body(streaming_body(&[b"hello"]));
 
@@ -365,7 +467,7 @@ async fn request_policy_trait_drains_body() {
 
 #[tokio::test]
 async fn request_policy_trait_is_noop_when_disabled() {
-	let policy = enabled_request(0);
+	let policy = disabled_request();
 	let mut req = request_with_body(crate::http::Body::from("payload"));
 
 	let resp = crate::test_helpers::test_policy(&policy, &mut req)
@@ -381,11 +483,10 @@ async fn request_policy_trait_is_noop_when_disabled() {
 
 #[tokio::test]
 async fn request_policy_trait_propagates_oversize_error() {
-	let policy = enabled_request(64);
+	let policy = enabled_request(4);
 	let mut req = request_with_body(crate::http::Body::from(
 		"way too large for the configured limit",
 	));
-	req.extensions_mut().insert(BufferLimit(4));
 
 	let err = crate::test_helpers::test_policy(&policy, &mut req)
 		.await

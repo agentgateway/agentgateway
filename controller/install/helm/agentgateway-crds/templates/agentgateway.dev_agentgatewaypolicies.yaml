@@ -6787,8 +6787,11 @@ spec:
                       rule: '[has(self.users),has(self.secretRef)].filter(x,x==true).size()
                         == 1'
                   buffer:
-                    description: '`buffer` defines the policy for buffer requests
-                      and responses.'
+                    description: |-
+                      `buffer` defines the policy for buffer requests and responses bodies. Buffered bodies will be accumulated in memory
+                      by the proxy until completion before being forwarded. This changes the proxies default behavior, which streams bodies.
+
+                      Warning: large bodies can lead to excessive memory usage in the proxy. Utilize with care, or with strict limits.
                     properties:
                       request:
                         description: '`request` configures buffering of the request
@@ -6800,7 +6803,7 @@ spec:
                             - type: string
                             description: |-
                               `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
-                              if unset, defaults to 2Mi
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
                             maxLength: 32
                             minLength: 1
                             pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
@@ -6821,7 +6824,7 @@ spec:
                             - type: string
                             description: |-
                               `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
-                              if unset, defaults to 2Mi
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
                             maxLength: 32
                             minLength: 1
                             pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
@@ -9932,9 +9935,8 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication
-                    and buffer
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    extProc, jwtAuthentication, basicAuthentication and apiKeyAuthentication
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.buffer),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:
@@ -9986,14 +9988,6 @@ spec:
               rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase)
                 && self.traffic.phase == ''PreRouting'' ? self.targetSelectors.all(t,
                 t.kind in [''Gateway'', ''ListenerSet'']) : true'
-            - message: buffer policy can only be attached to httproutes and grpcroutes
-              rule: 'has(self.targetRefs) && has(self.traffic) && has(self.traffic.buffer)
-                ? self.targetRefs.all(t, t.kind in [''HTTPRoute'', ''GRPCRoute''])
-                : true'
-            - message: buffer policy can only be attached to httproutes and grpcroutes
-              rule: 'has(self.targetSelectors) && has(self.traffic) && has(self.traffic.buffer)
-                ? self.targetSelectors.all(t, t.kind in [''HTTPRoute'', ''GRPCRoute''])
-                : true'
             - message: exactly one of the fields in [targetRefs targetSelectors] must
                 be set
               rule: '[has(self.targetRefs),has(self.targetSelectors)].filter(x,x==true).size()

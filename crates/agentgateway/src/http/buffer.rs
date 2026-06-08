@@ -1,5 +1,3 @@
-use serde::de::Error;
-
 use crate::*;
 
 #[cfg(test)]
@@ -8,55 +6,17 @@ mod buffer_tests;
 
 #[apply(schema!)]
 #[derive(Default)]
-#[cfg_attr(feature = "schema", schemars(with = "BufferSerde"))]
 pub struct BufferBody {
-	pub max_bytes: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct Buffer {
-	pub request: BufferBody,
-	pub response: BufferBody,
-}
-
-impl<'de> serde::Deserialize<'de> for Buffer {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		Buffer::try_from(BufferSerde::deserialize(deserializer)?).map_err(D::Error::custom)
-	}
-}
-
-impl serde::Serialize for Buffer {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		BufferSerde {
-			request: self.request.clone(),
-			response: self.response.clone(),
-		}
-		.serialize(serializer)
-	}
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_bytes: Option<usize>,
 }
 
 #[apply(schema!)]
-pub struct BufferSerde {
-	#[serde(default)]
-	pub request: BufferBody,
-	#[serde(default)]
-	pub response: BufferBody,
-}
-
-impl TryFrom<BufferSerde> for Buffer {
-	type Error = anyhow::Error;
-	fn try_from(value: BufferSerde) -> Result<Self, Self::Error> {
-		Ok(Buffer {
-			request: value.request,
-			response: value.response,
-		})
-	}
+pub struct Buffer {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub request: Option<BufferBody>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub response: Option<BufferBody>,
 }
 
 impl Buffer {
@@ -67,16 +27,18 @@ impl Buffer {
 		&self,
 		req: &mut crate::http::Request,
 	) -> Result<(), crate::proxy::ProxyResponse> {
-		if self.request.max_bytes == 0 {
+		let Some(request) = self.request.as_ref() else {
 			trace!("request buffering disabled");
 			return Ok(());
-		}
+		};
 		if req.headers().contains_key(::http::header::UPGRADE) {
 			debug!("skipping request buffer for upgrade request");
 			return Ok(());
 		}
 
-		let limit = crate::http::buffer_limit(req);
+		let limit = request
+			.max_bytes
+			.unwrap_or_else(|| crate::http::buffer_limit(req));
 		let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
 		let bytes = match crate::http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,
@@ -102,16 +64,18 @@ impl Buffer {
 		&self,
 		resp: &mut crate::http::Response,
 	) -> Result<(), crate::proxy::ProxyResponse> {
-		if self.response.max_bytes == 0 {
+		let Some(response) = self.response.as_ref() else {
 			trace!("response buffering disabled");
 			return Ok(());
-		}
+		};
 		if resp.status() == ::http::StatusCode::SWITCHING_PROTOCOLS {
 			debug!("skipping response buffer for protocol-switching response");
 			return Ok(());
 		}
 
-		let limit = crate::http::response_buffer_limit(resp);
+		let limit = response
+			.max_bytes
+			.unwrap_or_else(|| crate::http::response_buffer_limit(resp));
 		let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
 		let bytes = match crate::http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,

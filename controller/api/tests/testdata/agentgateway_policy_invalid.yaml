@@ -134,20 +134,6 @@ spec:
   traffic:
     buffer: {}
 ---
-_err: 'buffer policy can only be attached to httproutes and grpcroutes'
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayPolicy
-metadata:
-  name: buffer-on-gateway
-spec:
-  targetRefs:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: dummy
-  traffic:
-    buffer: 
-      request: {}
----
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

@@ -65,8 +65,6 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 // +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
-// +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.buffer) ? self.targetRefs.all(t, t.kind in ['HTTPRoute', 'GRPCRoute']) : true",message="buffer policy can only be attached to httproutes and grpcroutes"
-// +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.buffer) ? self.targetSelectors.all(t, t.kind in ['HTTPRoute', 'GRPCRoute']) : true",message="buffer policy can only be attached to httproutes and grpcroutes"
 type AgentgatewayPolicySpec struct {
 	// `targetRefs` specifies the target resources by reference to attach the
 	// policy to.
@@ -760,7 +758,7 @@ const (
 	PolicyPhasePostRouting PolicyPhase = "PostRouting"
 )
 
-// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication;buffer,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication, apiKeyAuthentication and buffer"
+// +kubebuilder:validation:IfThenOnlyFields:if="has(self.phase) && self.phase == 'PreRouting'",fields=phase;transformation;extProc;extAuth;jwtAuthentication;basicAuthentication;apiKeyAuthentication,message="phase PreRouting only supports extAuth, transformation, extProc, jwtAuthentication, basicAuthentication and apiKeyAuthentication"
 type Traffic struct {
 	// The phase to apply the traffic policy to. If the phase is `PreRouting`,
 	// the `targetRef` must be a `Gateway` or a `Listener`. `PreRouting` is
@@ -864,7 +862,11 @@ type Traffic struct {
 	// +optional
 	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
 
-	// `buffer` defines the policy for buffer requests and responses.
+	// `buffer` defines the policy for buffer requests and responses bodies. Buffered bodies will be accumulated in memory
+	// by the proxy until completion before being forwarded. This changes the proxies default behavior, which streams bodies.
+	//
+	// Warning: large bodies can lead to excessive memory usage in the proxy. Utilize with care, or with strict limits.
+	//
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
 }
@@ -1265,11 +1267,11 @@ type APIKeyAuthentication struct {
 type BufferBody struct {
 	// `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
 	// +optional
-	// if unset, defaults to 2Mi
+	// if unset, defaults to the global proxy setting, which defaults to 2Mi.
 	MaxBytes *ByteSize `json:"maxBytes,omitempty"`
 }
 
-// +kubebuilder:validation:AtLeastOneOf=request;response
+// +kubebuilder:validation:AtLeastOneFieldSet
 type Buffer struct {
 	// `request` configures buffering of the request body.
 	// +optional

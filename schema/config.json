@@ -1366,6 +1366,18 @@
           ],
           "default": null
         },
+        "buffer": {
+          "description": "Buffer request and response bodies before forwarding.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Buffer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "timeout": {
           "description": "Timeout requests that exceed the configured duration.",
           "anyOf": [
@@ -5121,6 +5133,46 @@
             "type": "string"
           },
           "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Buffer": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "BufferBody": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
         }
       },
       "additionalProperties": false
