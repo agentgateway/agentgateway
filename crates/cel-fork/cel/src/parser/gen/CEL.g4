@@ -58,7 +58,8 @@ member
     ;
 
 primary
-    : leadingDot='.'? id=IDENTIFIER                                # Ident
+    : op='match' subject=expr? '{' arms=matchArmList? ','? '}'      # Match
+    | leadingDot='.'? id=IDENTIFIER                                 # Ident
     | leadingDot='.'? id=IDENTIFIER (op='(' args=exprList? ')')     # GlobalCall
     | '(' e=expr ')'                                                # Nested
     | op='[' elems=listInit? ','? ']'                               # CreateList
@@ -70,6 +71,14 @@ primary
 
 exprList
     : e+=expr (',' e+=expr)*
+    ;
+
+matchArmList
+    : arms+=matchArm (',' arms+=matchArm)*
+    ;
+
+matchArm
+    : pattern=expr op='=>' result=expr
     ;
 
 listInit
@@ -120,6 +129,7 @@ GREATER_EQUALS : '>=';
 GREATER : '>';
 LOGICAL_AND : '&&';
 LOGICAL_OR : '||';
+ARROW : '=>';
 
 LBRACKET : '[';
 RPRACKET : ']';
