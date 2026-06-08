@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
@@ -1193,6 +1193,16 @@ pub struct LLMContext {
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub first_token: Option<Instant>,
+	/// Time from request start until the first response token is received.
+	#[dynamic(rename = "timeToFirstToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_to_first_token: Option<CelDuration>,
+	/// Average time from first response token to response completion per output token.
+	#[dynamic(rename = "timePerOutputToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_per_output_token: Option<CelDuration>,
 	/// The number of tokens in the request, when using the token counting endpoint
 	/// These are not counted as 'input tokens' since they do not consume input tokens.
 	#[dynamic(rename = "countTokens")]
@@ -1219,6 +1229,8 @@ impl From<llm::LLMInfo> for LLMContext {
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			reasoning_tokens: resp.reasoning_tokens,
 			input_image_tokens: resp.input_image_tokens,
 			input_text_tokens: resp.input_text_tokens,
@@ -1239,6 +1251,30 @@ impl From<llm::LLMInfo> for LLMContext {
 		base
 	}
 }
+
+impl LLMContext {
+	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
+		let Some(first_token) = self.first_token else {
+			return;
+		};
+		self.time_to_first_token =
+			chrono::Duration::from_std(first_token.duration_since(request_start))
+				.ok()
+				.map(Into::into);
+		if let Some(output_tokens) = self
+			.output_tokens
+			.filter(|output_tokens| *output_tokens > 0)
+		{
+			let first_to_last = response_end.duration_since(first_token);
+			let time_per_output_token =
+				Duration::from_secs_f64(first_to_last.as_secs_f64() / output_tokens as f64);
+			self.time_per_output_token = chrono::Duration::from_std(time_per_output_token)
+				.ok()
+				.map(Into::into);
+		}
+	}
+}
+
 impl From<llm::LLMRequest> for LLMContext {
 	fn from(info: LLMRequest) -> Self {
 		let LLMRequest {
@@ -1260,6 +1296,8 @@ impl From<llm::LLMRequest> for LLMContext {
 			prompt,
 
 			first_token: None,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
@@ -1909,6 +1947,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			total_tokens: Some(150),
 			service_tier: Some("default".into()),
 			first_token: None,
+			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
+			time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 			count_tokens: Some(10),
 
 			prompt: None,

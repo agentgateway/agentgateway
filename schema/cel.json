@@ -377,6 +377,20 @@
             "null"
           ]
         },
+        "timeToFirstToken": {
+          "description": "Time from request start until the first response token is received.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timePerOutputToken": {
+          "description": "Average time from first response token to response completion per output token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "countTokens": {
           "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
           "type": [

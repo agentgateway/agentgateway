@@ -527,7 +527,6 @@ impl DropOnLog {
 	fn add_llm_metrics(
 		log: &RequestLog,
 		route_identifier: &RouteIdentifier,
-		end_time: Timestamp,
 		duration: Duration,
 		llm_response: Option<&LLMContext>,
 		custom_metric_fields: &CustomField,
@@ -586,25 +585,25 @@ impl DropOnLog {
 				.gen_ai_request_duration
 				.get_or_create(&gen_ai_labels)
 				.observe(duration.as_secs_f64());
-			if let Some(ft) = llm_response.first_token {
-				let ttft = ft.duration_since(log.start.as_instant());
-				// Duration from start of request to first token
-				// This is the start of when WE got the request, but it should probably be when we SENT the upstream.
+			if let Some(ttft) = llm_response
+				.time_to_first_token
+				.and_then(|duration| duration.0.to_std().ok())
+			{
 				log
 					.metrics
 					.gen_ai_time_to_first_token
 					.get_or_create(&gen_ai_labels)
 					.observe(ttft.as_secs_f64());
-
-				if let Some(ot) = llm_response.output_tokens {
-					let first_to_last = end_time.as_instant().duration_since(ft);
-					let throughput = first_to_last.as_secs_f64() / (ot as f64);
-					log
-						.metrics
-						.gen_ai_time_per_output_token
-						.get_or_create(&gen_ai_labels)
-						.observe(throughput);
-				}
+			}
+			if let Some(time_per_output_token) = llm_response
+				.time_per_output_token
+				.and_then(|duration| duration.0.to_std().ok())
+			{
+				log
+					.metrics
+					.gen_ai_time_per_output_token
+					.get_or_create(&gen_ai_labels)
+					.observe(time_per_output_token.as_secs_f64());
 			}
 		}
 	}
@@ -891,7 +890,10 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let llm_response = log.llm_response.take().map(Into::into);
+			let mut llm_response: Option<LLMContext> = log.llm_response.take().map(Into::into);
+			if let Some(llm_response) = llm_response.as_mut() {
+				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
+			}
 
 			let mcp = log.mcp_status.take();
 			let request_handle = log.request_handle.take();
@@ -982,7 +984,6 @@ impl Drop for DropOnLog {
 			Self::add_llm_metrics(
 				&log,
 				&route_identifier,
-				end_time,
 				duration,
 				llm_response.as_ref(),
 				&custom_metric_fields,

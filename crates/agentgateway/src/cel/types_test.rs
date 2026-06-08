@@ -65,6 +65,8 @@ fn build_test_request() -> crate::http::Request {
 		total_tokens: Some(150),
 		service_tier: None,
 		first_token: None,
+		time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
+		time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 		count_tokens: None,
 		reasoning_tokens: None,
 		cache_creation_input_tokens: None,
