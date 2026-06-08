@@ -2036,6 +2036,12 @@ fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMa
 	bail!("model name wildcard must be either at the beginning or the end: '{model_name}'")
 }
 
+fn add_llm_cors_policy(inline_policies: &mut Vec<TrafficPolicy>, cors: &Option<http::cors::Cors>) {
+	if let Some(cors) = cors.clone() {
+		inline_policies.push(TrafficPolicy::CORS(RequestPolicy::single(cors)));
+	}
+}
+
 #[allow(deprecated)]
 async fn convert_llm_config(
 	client: client::Client,
@@ -2061,7 +2067,7 @@ async fn convert_llm_config(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = Vec::new();
-	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
+	let (llm_cors, listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
@@ -2073,7 +2079,6 @@ async fn convert_llm_config(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
-				cors,
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
@@ -2082,18 +2087,20 @@ async fn convert_llm_config(
 			None,
 		)
 		.await?;
+		let gateway_policies: FilterOrPolicy = gateway.into();
 		let gateway_policies = split_policies(
 			client.clone(),
-			gateway.into(),
+			gateway_policies,
 			config.as_policy_context("listener/llm"),
 		)
 		.await?;
 		(
+			cors,
 			gateway_policies.route_policies,
 			route_policies.route_policies,
 		)
 	} else {
-		(vec![], vec![])
+		(None, vec![], vec![])
 	};
 
 	// Create transformation policy to set x-gateway-model-name header from request body
@@ -2145,6 +2152,21 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	})
 	.to_string();
 
+	let mut model_list_inline_policies = vec![
+		TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
+			set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+			add: vec![],
+			remove: vec![],
+		})),
+		TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
+			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+			body_expression: None,
+			headers: Vec::new(),
+			status: ::http::StatusCode::OK,
+		})),
+	];
+	add_llm_cors_policy(&mut model_list_inline_policies, &llm_cors);
+
 	let model_list_route = Route {
 		key: strng::new("llm:admin:model-list"),
 		service_key: None,
@@ -2170,19 +2192,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			},
 		],
 		backends: vec![],
-		inline_policies: vec![
-			TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
-				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
-				add: vec![],
-				remove: vec![],
-			})),
-			TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
-				body: Bytes::copy_from_slice(model_list_body.as_bytes()),
-				body_expression: None,
-				headers: Vec::new(),
-				status: ::http::StatusCode::OK,
-			})),
-		],
+		inline_policies: model_list_inline_policies,
 	};
 	routes.push(model_list_route);
 
@@ -2404,6 +2414,12 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
+		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+			routes: llm_routes.into_iter().collect(),
+			..Default::default()
+		}))];
+		add_llm_cors_policy(&mut model_route_inline_policies, &llm_cors);
+
 		let model_route = Route {
 			key: route_key.clone(),
 			service_key: None,
@@ -2420,13 +2436,63 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
 				inline_policies: vec![],
 			}],
-			inline_policies: vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-				routes: llm_routes.into_iter().collect(),
-				..Default::default()
-			}))],
+			inline_policies: model_route_inline_policies,
 		};
 		routes.push(model_route);
 	}
+
+	let mut fallback_inline_policies = vec![
+		TrafficPolicy::ResponseHeaderModifier(Arc::new(crate::http::filters::HeaderModifier {
+			set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
+			add: vec![],
+			remove: vec![],
+		})),
+		TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
+			body: Bytes::new(),
+			body_expression: Some(Arc::new(cel::Expression::new_strict(
+				r#"
+"x-gateway-model-name" in request.headers ?
+	{
+		"error": {
+			"message": "Model " + request.headers["x-gateway-model-name"] + " not found",
+			"type": "invalid_request_error",
+			"code": "model_not_found"
+		}
+	} :
+	{
+		"error": {
+			"message": "No model set",
+			"type": "invalid_request_error",
+			"code": "model_not_found"
+		}
+	}
+"#,
+			)?)),
+			headers: Vec::new(),
+			status: ::http::StatusCode::NOT_FOUND,
+		})),
+	];
+	add_llm_cors_policy(&mut fallback_inline_policies, &llm_cors);
+
+	routes.push(Route {
+		key: strng::new("llm:model:fallback"),
+		service_key: None,
+		name: RouteName {
+			name: strng::new("model:fallback"),
+			namespace: strng::new("internal"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: vec![RouteMatch {
+			path: PathMatch::PathPrefix(strng::new("/")),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		}],
+		backends: vec![],
+		inline_policies: fallback_inline_policies,
+	});
 
 	// Create listener
 	let listener_key: ListenerKey = strng::new("llm");
