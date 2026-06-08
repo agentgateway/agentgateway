@@ -734,7 +734,6 @@ func ReferenceAllowed(
 ) *ParentError {
 	if parent.ServiceKey != nil {
 		// Parent resolver already verified this referenced Service exists.
-		// Just verify the Service has the port, if specified.
 		if parentRef.Port != 0 && !slices.Contains(parent.ServicePorts, parentRef.Port) {
 			return &ParentError{
 				Reason:  ParentErrorNotAccepted,

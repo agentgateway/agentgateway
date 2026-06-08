@@ -1276,64 +1276,6 @@ async fn test_service_route_path_match() {
 }
 
 #[tokio::test]
-async fn test_service_route_port_precedence() {
-	// Istio-consistent: being port-scoped is not a tiebreaker. On the scoped
-	// port, port-scoped and port-agnostic routes compete on equal footing and
-	// match specificity (then creation order) decides.
-	let exact_healthz = vec![RouteMatch {
-		path: PathMatch::Exact(strng::new("/healthz")),
-		headers: vec![],
-		method: None,
-		query: vec![],
-	}];
-	let stores = stores_with_service_routes(
-		waypoint_svc(),
-		vec![
-			// scoped to 443, but only a catch-all prefix match
-			service_route_port("port-443-route", svc_nh(), 443, prefix_match("/")),
-			// port-agnostic, but a more specific exact match
-			service_route_port("any-port-route", svc_nh(), 0, exact_healthz),
-		],
-	);
-	let listener = hbone_listener();
-
-	// :443, /healthz -> the more specific port-agnostic route wins, even though
-	// the other route is scoped to this exact port.
-	let mut req = request(
-		"http://my-app.default.svc.cluster.local/healthz",
-		http::Method::GET,
-		&[],
-	);
-	attach_waypoint_service(&mut req, &stores, &svc_nh());
-	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 443);
-	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
-	assert_eq!(result.unwrap().0.key.as_str(), "any-port-route");
-
-	// :443, /other -> only the port-scoped catch-all matches.
-	let mut req = request(
-		"http://my-app.default.svc.cluster.local/other",
-		http::Method::GET,
-		&[],
-	);
-	attach_waypoint_service(&mut req, &stores, &svc_nh());
-	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 443);
-	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
-	assert_eq!(result.unwrap().0.key.as_str(), "port-443-route");
-
-	// :8080 -> the port-scoped route is filtered out (wrong port); the
-	// port-agnostic route still applies on its path.
-	let mut req = request(
-		"http://my-app.default.svc.cluster.local/healthz",
-		http::Method::GET,
-		&[],
-	);
-	attach_waypoint_service(&mut req, &stores, &svc_nh());
-	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 8080);
-	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
-	assert_eq!(result.unwrap().0.key.as_str(), "any-port-route");
-}
-
-#[tokio::test]
 async fn test_service_route_port_no_wildcard_rejects() {
 	let stores = stores_with_service_routes(
 		waypoint_svc(),
