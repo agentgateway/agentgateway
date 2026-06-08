@@ -210,13 +210,16 @@ export default function PoliciesPage() {
                 const service = p.target?.backend?.service;
                 const backend = p.target?.backend?.backend;
                 const gateway = p.target?.gateway;
+                const route = p.target?.route;
                 const target = service
                   ? { kind: "Service", label: `${service.namespace}/${service.hostname}` }
                   : backend
                     ? { kind: "Backend", label: `${backend.namespace}/${backend.name}` }
                     : gateway
                       ? { kind: "Gateway", label: `${gateway.namespace}/${gateway.name}` }
-                      : { kind: "Unknown", label: "Unknown target" };
+                      : route
+                        ? { kind: "Route", label: `${route.namespace}/${route.name}` }
+                        : { kind: "Unknown", label: "Unknown target" };
                 // Synthetic policies (e.g. frontend/tracing) have a null name; fall back to the key.
                 const policyLabel = p.name
                   ? `${p.name.kind} ${p.name.namespace}/${p.name.name}`
