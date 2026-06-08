@@ -661,7 +661,14 @@ jobs:
         sha256sum outputs/agentgateway-linux-arm64 > outputs/agentgateway-linux-arm64.sha256
         mv release-binary-windows/agentgateway.exe outputs/agentgateway-windows-amd64.exe
         sha256sum outputs/agentgateway-windows-amd64.exe > outputs/agentgateway-windows-amd64.exe.sha256
-        for agctl in release-binary-agctl/agctl-*; do
+        shopt -s nullglob
+        agctl_bins=(release-binary-agctl/agctl-*)
+        shopt -u nullglob
+        if [ ${#agctl_bins[@]} -eq 0 ]; then
+          echo "No agctl binaries found in release-binary-agctl/" >&2
+          exit 1
+        fi
+        for agctl in "${agctl_bins[@]}"; do
           name="$(basename "$agctl")"
           mv "$agctl" "outputs/${name}"
           sha256sum "outputs/${name}" > "outputs/${name}.sha256"
