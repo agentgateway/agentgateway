@@ -607,6 +607,9 @@ pub struct Route {
 	/// Service this route targets (set when parentRef is a Service).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
+	/// Port of the targeted service this route is scoped to. Zero matches any port.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub service_port: u16,
 	#[serde(flatten)]
 	// User facing name of the route
 	pub name: RouteName,
@@ -888,6 +891,9 @@ pub struct TCPRoute {
 	/// Service this route targets (set when parentRef is a Service).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
+	/// Port of the targeted service this route is scoped to. Zero matches any port.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub service_port: u16,
 	// User facing name of the route
 	#[serde(flatten)]
 	pub name: RouteName,
@@ -1879,6 +1885,16 @@ impl TCPRouteSet {
 			.and_then(|rl| self.all.get(rl))
 	}
 
+	/// All routes for a hostname, in precedence order (oldest/alphabetical key first).
+	pub fn get_hostname_routes(&self, hnm: &HostnameMatchRef) -> impl Iterator<Item = &TCPRoute> {
+		self
+			.inner
+			.get(hnm)
+			.into_iter()
+			.flatten()
+			.filter_map(|rl| self.all.get(rl))
+	}
+
 	pub fn insert(&mut self, r: TCPRoute) {
 		if self.all.contains_key(&r.key) {
 			self.remove(&r.key);
@@ -2691,6 +2707,7 @@ mod tests {
 		Route {
 			key: strng::new(key),
 			service_key: None,
+			service_port: 0,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			matches,
@@ -2703,6 +2720,7 @@ mod tests {
 		TCPRoute {
 			key: strng::new(key),
 			service_key: None,
+			service_port: 0,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			backends: vec![],

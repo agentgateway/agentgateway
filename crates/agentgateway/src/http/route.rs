@@ -139,6 +139,7 @@ pub fn select_best_route(
 			// the request is rejected (per GAMMA spec).
 			let svc = wps.as_ref();
 			let svc_nh = svc.namespaced_hostname();
+			let dst_port = dst.port();
 			let svc_routes = {
 				let binds = stores.read_binds();
 				binds.get_service_routes(&svc_nh)
@@ -147,8 +148,12 @@ pub fn select_best_route(
 				Some(svc_routes) => {
 					let mut result = None;
 					for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
+						// Match port-agnostic routes (service_port == 0) and those scoped
+						// to this port. Precedence stays the normal GAMMA order; being
+						// port-scoped is not a tiebreaker (consistent with Istio).
 						result = svc_routes
 							.get_hostname(&hnm)
+							.filter(|(route, _)| route.service_port == 0 || route.service_port == dst_port)
 							.find(|(_, m)| matches_request(m, request))
 							.map(|(route, matcher)| (route, matcher.path.clone()));
 						if result.is_some() {
@@ -171,6 +176,7 @@ pub fn select_best_route(
 			let default_route = Route {
 				key: strng::literal!("_waypoint-default"),
 				service_key: Some(svc.namespaced_hostname()),
+				service_port: 0,
 				name: RouteName {
 					name: strng::literal!("_waypoint-default"),
 					namespace: svc.namespace.clone(),
@@ -184,7 +190,7 @@ pub fn select_best_route(
 					weight: 1,
 					target: BackendReference::Service {
 						name: svc.namespaced_hostname(),
-						port: dst.port(), // TODO: get from req
+						port: dst_port,
 					}
 					.into(),
 					inline_policies: Vec::new(),

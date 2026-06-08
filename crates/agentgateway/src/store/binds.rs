@@ -1930,6 +1930,7 @@ mod tests {
 		let route = Route {
 			key: strng::literal!("route"),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::literal!("route"),
 				namespace: strng::literal!("ns"),
@@ -1996,6 +1997,7 @@ mod tests {
 				namespace: svc.namespace.to_string(),
 				hostname: svc.hostname.to_string(),
 			}),
+			service_port: 0,
 			route_group_key: Some(rgk.to_string()),
 			name: Some(XdsRouteName {
 				kind: "HTTPRoute".to_string(),

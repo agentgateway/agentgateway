@@ -3630,6 +3630,74 @@ async fn waypoint_http_basic() {
 }
 
 #[tokio::test]
+async fn waypoint_http_port_selects_distinct_backend() {
+	// Two service routes on the same (service, path "/") differ only by their referenced
+	// service_port. A request to :443 must reach the :443 backend, :80 the :80 backend.
+	async fn id_mock(id: &'static str) -> MockServer {
+		let mock = MockServer::start().await;
+		Mock::given(wiremock::matchers::path_regex("/.*"))
+			.respond_with(ResponseTemplate::new(200).insert_header("x-backend", id))
+			.mount(&mock)
+			.await;
+		mock
+	}
+	let b80 = id_mock("p80").await;
+	let b443 = id_mock("p443").await;
+
+	let svc_nh = crate::types::discovery::NamespacedHostname {
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+	};
+	let route = |key: &'static str, port: u16| Route {
+		key: strng::new(key),
+		service_key: Some(svc_nh.clone()),
+		service_port: port,
+		name: crate::types::agent::RouteName {
+			name: strng::new(key),
+			namespace: strng::literal!("default"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: vec![],
+		backends: vec![crate::types::agent::RouteBackendReference {
+			weight: 1,
+			target: crate::types::agent::BackendReference::Service {
+				name: svc_nh.clone(),
+				port,
+			}
+			.into(),
+			inline_policies: vec![],
+		}],
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service_with_ports(&[(80, *b80.address()), (443, *b443.address())])
+		.with_service_route(route("r80", 80))
+		.with_service_route(route("r443", 443));
+
+	// Destination :443 -> the 443-scoped route -> the :443 backend.
+	let io = t.serve_waypoint_http_port(BIND_KEY, 443);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-backend"), "p443");
+
+	// Destination :80 -> the 80-scoped route -> the :80 backend.
+	let io = t.serve_waypoint_http_port(BIND_KEY, 80);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-backend"), "p80");
+}
+
+#[tokio::test]
 async fn waypoint_http_fallback() {
 	let mock = simple_mock().await;
 	let t = setup_proxy_test("{}")

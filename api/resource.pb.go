@@ -2678,6 +2678,8 @@ type Route struct {
 	ListenerKey string `protobuf:"bytes,2,opt,name=listener_key,json=listenerKey,proto3" json:"listener_key,omitempty"`
 	// Service this route targets (set when parentRef is a Service).
 	ServiceKey *workloadapi.NamespacedHostname `protobuf:"bytes,9,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	// Port of the targeted service this route is scoped to. Zero matches any port.
+	ServicePort uint32 `protobuf:"varint,11,opt,name=service_port,json=servicePort,proto3" json:"service_port,omitempty"`
 	// Key for the route group this route is a part of.
 	RouteGroupKey *string `protobuf:"bytes,10,opt,name=route_group_key,json=routeGroupKey,proto3,oneof" json:"route_group_key,omitempty"`
 	// User facing name for this resource
@@ -2739,6 +2741,13 @@ func (x *Route) GetServiceKey() *workloadapi.NamespacedHostname {
 		return x.ServiceKey
 	}
 	return nil
+}
+
+func (x *Route) GetServicePort() uint32 {
+	if x != nil {
+		return x.ServicePort
+	}
+	return 0
 }
 
 func (x *Route) GetRouteGroupKey() string {
@@ -2851,6 +2860,8 @@ type TCPRoute struct {
 	ListenerKey string `protobuf:"bytes,2,opt,name=listener_key,json=listenerKey,proto3" json:"listener_key,omitempty"`
 	// Service this route targets (set when parentRef is a Service).
 	ServiceKey *workloadapi.NamespacedHostname `protobuf:"bytes,9,opt,name=service_key,json=serviceKey,proto3" json:"service_key,omitempty"`
+	// Port of the targeted service this route is scoped to. Zero matches any port.
+	ServicePort uint32 `protobuf:"varint,11,opt,name=service_port,json=servicePort,proto3" json:"service_port,omitempty"`
 	// User facing name for this resource
 	Name          *RouteName      `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Hostnames     []string        `protobuf:"bytes,5,rep,name=hostnames,proto3" json:"hostnames,omitempty"`
@@ -2908,6 +2919,13 @@ func (x *TCPRoute) GetServiceKey() *workloadapi.NamespacedHostname {
 		return x.ServiceKey
 	}
 	return nil
+}
+
+func (x *TCPRoute) GetServicePort() uint32 {
+	if x != nil {
+		return x.ServicePort
+	}
+	return 0
 }
 
 func (x *TCPRoute) GetName() *RouteName {
@@ -13497,12 +13515,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x04name\x18\x03 \x01(\v2'.agentgateway.dev.resource.ListenerNameR\x04name\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12?\n" +
 	"\bprotocol\x18\x05 \x01(\x0e2#.agentgateway.dev.resource.ProtocolR\bprotocol\x126\n" +
-	"\x03tls\x18\x06 \x01(\v2$.agentgateway.dev.resource.TLSConfigR\x03tls\"\xf9\x03\n" +
+	"\x03tls\x18\x06 \x01(\v2$.agentgateway.dev.resource.TLSConfigR\x03tls\"\x9c\x04\n" +
 	"\x05Route\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
 	"\flistener_key\x18\x02 \x01(\tR\vlistenerKey\x12C\n" +
 	"\vservice_key\x18\t \x01(\v2\".istio.workload.NamespacedHostnameR\n" +
-	"serviceKey\x12+\n" +
+	"serviceKey\x12!\n" +
+	"\fservice_port\x18\v \x01(\rR\vservicePort\x12+\n" +
 	"\x0froute_group_key\x18\n" +
 	" \x01(\tH\x00R\rrouteGroupKey\x88\x01\x01\x128\n" +
 	"\x04name\x18\x03 \x01(\v2$.agentgateway.dev.resource.RouteNameR\x04name\x12\x1c\n" +
@@ -13515,12 +13534,13 @@ const file_resource_proto_rawDesc = "" +
 	"RouteGroup\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\"\xa1\x02\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\xc4\x02\n" +
 	"\bTCPRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
 	"\flistener_key\x18\x02 \x01(\tR\vlistenerKey\x12C\n" +
 	"\vservice_key\x18\t \x01(\v2\".istio.workload.NamespacedHostnameR\n" +
-	"serviceKey\x128\n" +
+	"serviceKey\x12!\n" +
+	"\fservice_port\x18\v \x01(\rR\vservicePort\x128\n" +
 	"\x04name\x18\x03 \x01(\v2$.agentgateway.dev.resource.RouteNameR\x04name\x12\x1c\n" +
 	"\thostnames\x18\x05 \x03(\tR\thostnames\x12C\n" +
 	"\bbackends\x18\x06 \x03(\v2'.agentgateway.dev.resource.RouteBackendR\bbackends\"_\n" +

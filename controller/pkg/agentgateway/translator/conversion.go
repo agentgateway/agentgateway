@@ -733,7 +733,14 @@ func ReferenceAllowed(
 	localNamespace string,
 ) *ParentError {
 	if parent.ServiceKey != nil {
-		// Parent resolver already verified this reference exists.
+		// Parent resolver already verified this referenced Service exists.
+		// Just verify the Service has the port, if specified.
+		if parentRef.Port != 0 && !slices.Contains(parent.ServicePorts, parentRef.Port) {
+			return &ParentError{
+				Reason:  ParentErrorNotAccepted,
+				Message: fmt.Sprintf("port %v not found", parentRef.Port),
+			}
+		}
 	} else if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		// check that the referenced svc exists
 		key := parentRef.Namespace + "/" + parentRef.Name
@@ -874,6 +881,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 				ParentGateway:     pr.ParentGateway,
 				ListenerKey:       pr.ListenerKey,
 				ServiceKey:        pr.ServiceKey,
+				Port:              pk.Port,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -923,6 +931,8 @@ type RouteParentReference struct {
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
 	ServiceKey *types.NamespacedName
+	// Port is the parentRef port, scoping the route to one port. Zero means any port.
+	Port gwv1.PortNumber
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid

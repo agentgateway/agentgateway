@@ -3482,6 +3482,7 @@ mod route_chain_tests {
 		Route {
 			key: strng::new(name),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::new(name),
 				namespace: strng::EMPTY,
@@ -3508,6 +3509,7 @@ mod route_chain_tests {
 		Route {
 			key: strng::new(name),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::new(name),
 				namespace: strng::EMPTY,

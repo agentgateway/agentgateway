@@ -227,6 +227,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 	Route {
 		key: "route".into(),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -253,6 +254,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 	TCPRoute {
 		key: "route".into(),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -482,9 +484,29 @@ impl TestBind {
 
 	/// Insert a service + workload via sync_local so endpoint linking is exercised.
 	pub fn with_waypoint_service(self, backend_addr: SocketAddr) -> Self {
+		self.with_waypoint_service_with_ports(&[(80, backend_addr)])
+	}
+
+	/// Insert a service-keyed route.
+	pub fn with_service_route(self, r: Route) -> Self {
+		let sk = r
+			.service_key
+			.clone()
+			.expect("service route must have a service_key");
+		self.pi.stores.binds.write().insert_service_route(r, sk);
+		self
+	}
+
+	pub fn with_waypoint_service_with_ports(self, ports: &[(u16, SocketAddr)]) -> Self {
 		use crate::store::LocalWorkload;
 		use crate::types::discovery::gatewayaddress::Destination;
 		use crate::types::discovery::{GatewayAddress, NetworkAddress, Service, Workload};
+		let port_map: std::collections::HashMap<u16, u16> =
+			ports.iter().map(|(sp, a)| (*sp, a.port())).collect();
+		let workload_ip = ports
+			.first()
+			.map(|(_, a)| a.ip())
+			.unwrap_or_else(|| "127.0.0.1".parse().unwrap());
 		let svc = Service {
 			name: strng::literal!("my-svc"),
 			namespace: strng::literal!("default"),
@@ -493,7 +515,7 @@ impl TestBind {
 				network: strng::EMPTY,
 				address: "127.0.0.1".parse().unwrap(),
 			}],
-			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
+			ports: port_map.clone(),
 			waypoint: Some(GatewayAddress {
 				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
 					namespace: strng::literal!("default"),
@@ -508,12 +530,12 @@ impl TestBind {
 				uid: strng::literal!("test-wl-uid"),
 				name: strng::literal!("test-wl"),
 				namespace: strng::literal!("default"),
-				workload_ips: vec![backend_addr.ip()],
+				workload_ips: vec![workload_ip],
 				..Default::default()
 			},
 			services: std::collections::HashMap::from([(
 				"default/my-svc.default.svc.cluster.local".to_string(),
-				std::collections::HashMap::from([(80, backend_addr.port())]),
+				port_map,
 			)]),
 		};
 		self
@@ -980,13 +1002,30 @@ impl TestBind {
 		Self::memory_client(self.serve_waypoint(bind_name, false))
 	}
 
+	pub fn serve_waypoint_http_port(
+		&self,
+		bind_name: BindKey,
+		dst_port: u16,
+	) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint_with_dst(bind_name, true, dst_port))
+	}
+
 	fn serve_waypoint(&self, bind_name: BindKey, is_http: bool) -> DuplexStream {
+		self.serve_waypoint_with_dst(bind_name, is_http, 80)
+	}
+
+	fn serve_waypoint_with_dst(
+		&self,
+		bind_name: BindKey,
+		is_http: bool,
+		dst_port: u16,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
-				local_addr: "127.0.0.1:80".parse().unwrap(),
+				local_addr: SocketAddr::new("127.0.0.1".parse().unwrap(), dst_port),
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},

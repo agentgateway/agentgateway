@@ -94,6 +94,8 @@ message Route {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // Key for the route group this route is a part of.
   optional string route_group_key = 10;
 
@@ -119,6 +121,8 @@ message TCPRoute {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // User facing name for this resource
   RouteName name = 3;
 
