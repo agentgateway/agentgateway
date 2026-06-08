@@ -195,9 +195,11 @@ async fn apply_request_policies(
 		.apply_without_response("csrf", c, l, req, rp.headers())
 		.await?;
 
-	// Insert route response header filter. This a response-only policy so we only insert it, no need
-	// to run it.
-	rp.route_response_header = pol.response_header_modifier.clone();
+	// Select route response header filter now so request conditions are evaluated once, but run it
+	// on the response path.
+	rp.route_response_header = pol
+		.response_header_modifier
+		.select_response("response header modifier", req);
 	pol
 		.request_header_modifier
 		.apply_without_response("request header modifier", c, l, req, rp.headers())
@@ -205,9 +207,15 @@ async fn apply_request_policies(
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
-	if pol.hostname_rewrite.unwrap_or(HostRedirectOverride::Auto) == HostRedirectOverride::Auto {
+	let hostname_rewrite = pol.hostname_rewrite.select("hostname rewrite", req);
+	if hostname_rewrite
+		.as_deref()
+		.copied()
+		.unwrap_or(HostRedirectOverride::Auto)
+		== HostRedirectOverride::Auto
+	{
 		req.extensions_mut().insert(AutoHostname {
-			explicit: pol.hostname_rewrite == Some(HostRedirectOverride::Auto),
+			explicit: hostname_rewrite.is_some(),
 			target: None,
 		});
 	}
@@ -757,12 +765,17 @@ impl HTTPProxy {
 			.route_policies(&route_path, &route_inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		log.retry_backoff = route_policies.retry.as_ref().and_then(|r| r.backoff);
+		let route_retry = route_policies.retry.select("retry", &req);
+		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
 		// a middleware-style approach where if the request side never runs, neither does the response side.
-		response_policies.timeout = route_policies.timeout.clone();
+		response_policies.timeout = route_policies
+			.timeout
+			.select("timeout", &req)
+			.as_deref()
+			.cloned();
 
 		apply_request_policies(
 			&route_policies,
@@ -812,10 +825,12 @@ impl HTTPProxy {
 				.snapshot_on_err(log, &mut req);
 		}
 
+		let route_request_mirrors = route_policies.request_mirror.select("request mirror", &req);
+		let route_llm = route_policies.llm.select("llm", &req);
 		let (head, body) = req.into_parts();
-		for mirror in route_policies
-			.request_mirror
+		for mirror in route_request_mirrors
 			.iter()
+			.flat_map(|mirrors| mirrors.iter())
 			.chain(backend_policies.request_mirror.iter())
 		{
 			if !rand::rng().random_bool(mirror.percentage) {
@@ -838,13 +853,13 @@ impl HTTPProxy {
 		}
 
 		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
-		let retries = route_policies.retry.clone();
+		let retries = route_retry;
 
 		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
 		// request-policy flow. Conditional rate-limit expressions are evaluated only once there;
 		// the LLM path must not re-run conditions against the provider-specific rewritten request.
 		let mut llm_request_policies = std::mem::take(&mut response_policies.llm_request_policies);
-		llm_request_policies.llm = route_policies.llm.clone();
+		llm_request_policies.llm = route_llm;
 		let llm_request_policies = Arc::new(llm_request_policies);
 
 		// attempts is the total number of attempts, not the retries

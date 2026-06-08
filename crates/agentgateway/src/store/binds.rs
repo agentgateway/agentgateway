@@ -21,12 +21,12 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy, ResponsePolicy};
+use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy};
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
-	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey, RouteName, RouteSet,
-	TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
+	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey,
+	RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
 use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
@@ -312,19 +312,16 @@ pub struct RoutePolicies {
 	pub csrf: RequestPolicy<http::csrf::Csrf>,
 	pub direct_response: RequestPolicy<filters::DirectResponse>,
 
-	pub llm: Option<Arc<llm::Policy>>,
-
-	// These both are not typical "policies" that are just applied; do not wrap in RequestPolicy
-	pub timeout: Option<timeout::Policy>,
-	pub retry: Option<retry::Policy>,
+	pub llm: RequestPolicy<llm::Policy>,
+	pub timeout: RequestPolicy<timeout::Policy>,
+	pub retry: RequestPolicy<retry::Policy>,
 
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
-	pub response_header_modifier: ResponsePolicy<filters::HeaderModifier>,
+	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub request_redirect: RequestPolicy<filters::RequestRedirect>,
 	pub url_rewrite: RequestPolicy<filters::UrlRewrite>,
-	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub request_mirror: Vec<filters::RequestMirror>,
+	pub hostname_rewrite: RequestPolicy<agent::HostRedirectOverride>,
+	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
 }
 
@@ -720,17 +717,7 @@ impl Store {
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 
 		let mut route_rules = Vec::new();
-		for (idx, route) in path.routes.iter().enumerate().rev() {
-			route_rules.extend(inline.get(idx).copied().unwrap_or_default().iter());
-			route_rules.extend(
-				self
-					.policies_by_target
-					.get(&route.as_route_rule_target_ref())
-					.into_iter()
-					.flatten()
-					.filter_map(|n| self.policies_by_key.get(n))
-					.filter_map(|p| p.policy.as_traffic_route_phase()),
-			);
+		for (idx, route) in path.routes.iter().enumerate() {
 			route_rules.extend(
 				self
 					.policies_by_target
@@ -738,94 +725,149 @@ impl Store {
 					.into_iter()
 					.flatten()
 					.filter_map(|n| self.policies_by_key.get(n))
-					.filter_map(|p| p.policy.as_traffic_route_phase()),
+					.filter_map(|p| {
+						p.policy
+							.as_traffic_route_phase()
+							.map(|inner| (p.inheritance, inner))
+					}),
+			);
+			route_rules.extend(
+				self
+					.policies_by_target
+					.get(&route.as_route_rule_target_ref())
+					.into_iter()
+					.flatten()
+					.filter_map(|n| self.policies_by_key.get(n))
+					.filter_map(|p| {
+						p.policy
+							.as_traffic_route_phase()
+							.map(|inner| (p.inheritance, inner))
+					}),
+			);
+			route_rules.extend(
+				inline
+					.get(idx)
+					.copied()
+					.unwrap_or_default()
+					.iter()
+					.map(|p| (PolicyInheritance::Default, p)),
 			);
 		}
 
-		let shared_rules = service
+		let shared_rules = gateway
 			.iter()
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
+			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_route_phase());
+			.filter_map(|p| {
+				p.policy
+					.as_traffic_route_phase()
+					.map(|inner| (p.inheritance, inner))
+			});
 
-		let rules = route_rules.into_iter().chain(shared_rules);
+		let rules = shared_rules.chain(route_rules);
 
 		let mut authz = Vec::new();
+		let mut authz_locked = false;
 		let mut pol = RoutePolicies::default();
-		for rule in rules {
+		for (inheritance, rule) in rules {
+			let lock_inheritance = inheritance == PolicyInheritance::Override;
 			match rule {
 				TrafficPolicy::LocalRateLimit(p) => {
-					pol.local_rate_limit.set_if_unset(p);
+					pol
+						.local_rate_limit
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.set_if_unset(p);
+					pol.ext_authz.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.set_if_unset(p);
+					pol.ext_proc.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.set_if_unset(p);
+					pol
+						.remote_rate_limit
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.set_if_unset(p);
+					pol.jwt.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.set_if_unset(p);
+					pol.oidc.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.set_if_unset(p);
+					pol.basic_auth.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.set_if_unset(p);
+					pol.api_key.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.set_if_unset(p);
+					pol
+						.transformation
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Authorization(p) => {
-					// Authorization policies merge, unlike others
-					authz.push(p.clone().0);
+					if !authz_locked {
+						authz.push(p.clone().0);
+						authz_locked = lock_inheritance;
+					}
 				},
 				TrafficPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
+					pol
+						.llm
+						.merge_with_inheritance(&RequestPolicy::single_arc(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::Csrf(p) => {
-					pol.csrf.set_if_unset(p);
+					pol.csrf.merge_with_inheritance(p, lock_inheritance);
 				},
 
 				TrafficPolicy::Timeout(p) => {
-					pol.timeout.get_or_insert_with(|| p.clone());
+					pol
+						.timeout
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::Retry(p) => {
-					pol.retry.get_or_insert_with(|| p.clone());
+					pol
+						.retry
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.set_if_unset(p);
+					pol
+						.request_header_modifier
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ResponseHeaderModifier(p) => {
-					pol.response_header_modifier.set_if_unset(p);
+					pol
+						.response_header_modifier
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.set_if_unset(p);
+					pol
+						.request_redirect
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.set_if_unset(p);
+					pol.url_rewrite.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::HostRewrite(p) => {
-					pol.hostname_rewrite.get_or_insert(*p);
+					pol
+						.hostname_rewrite
+						.merge_with_inheritance(&RequestPolicy::single(*p), lock_inheritance);
 				},
 				TrafficPolicy::RequestMirror(p) => {
-					if pol.request_mirror.is_empty() {
-						pol.request_mirror = p.clone();
-					}
+					pol
+						.request_mirror
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.set_if_unset(p);
+					pol
+						.direct_response
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::CORS(p) => {
-					pol.cors.set_if_unset(p);
+					pol.cors.merge_with_inheritance(p, lock_inheritance);
 				},
 			}
 		}
@@ -980,7 +1022,7 @@ impl Store {
 			}
 		}
 
-		// Route chain (child→parent) > SubBackend > Backend/Service > Gateway
+		// Route chain (child->parent) > SubBackend > Backend/Service > Gateway
 		let rules = route_based_keys
 			.into_iter()
 			.chain(sub_backend_rules.iter().copied().flatten())
@@ -1854,22 +1896,47 @@ mod tests {
 		}
 	}
 
+	fn request_for_policy_selection() -> crate::http::Request {
+		::http::Request::builder()
+			.uri("http://example.com/")
+			.body(crate::http::Body::empty())
+			.expect("request should build")
+	}
+
 	fn insert_route_timeout_policy(
 		store: &mut Store,
 		key: &str,
 		route_target: RouteName,
 		request_timeout_secs: u64,
 	) -> timeout::Policy {
-		let policy_key: PolicyKey = strng::new(key);
 		let pol = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(request_timeout_secs)),
 			backend_request_timeout: None,
 		};
+		insert_traffic_policy(
+			store,
+			key,
+			PolicyTarget::Route(route_target),
+			Default::default(),
+			TrafficPolicy::Timeout(pol.clone()),
+		);
+		pol
+	}
+
+	fn insert_traffic_policy(
+		store: &mut Store,
+		key: &str,
+		target: PolicyTarget,
+		inheritance: PolicyInheritance,
+		policy: TrafficPolicy,
+	) {
+		let policy_key: PolicyKey = strng::new(key);
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::Route(route_target.clone()),
-			policy: TrafficPolicy::Timeout(pol.clone()).into(),
+			target: target.clone(),
+			inheritance,
+			policy: policy.into(),
 		};
 
 		store
@@ -1877,11 +1944,9 @@ mod tests {
 			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::Route(route_target))
+			.entry(target)
 			.or_default()
 			.insert(policy_key);
-
-		pol
 	}
 
 	fn create_access_log_policy(remove_item: &str) -> FrontendPolicy {
@@ -2017,6 +2082,7 @@ mod tests {
 					key: svc_policy_key.clone(),
 					name: None,
 					target: svc_policy_target.clone(),
+					inheritance: Default::default(),
 					policy: TrafficPolicy::Timeout(svc_timeout.clone()).into(),
 				}),
 			);
@@ -2053,7 +2119,11 @@ mod tests {
 			&[],
 		);
 		assert_eq!(
-			pols.timeout,
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
 			Some(svc_timeout),
 			"Service-targeted policy on svc-a must apply when traffic reaches the delegated child",
 		);
@@ -2064,6 +2134,26 @@ mod tests {
 		listener: &ListenerName,
 		policy_name: &str,
 		for_listener: bool,
+		policy: FrontendPolicy,
+		port: Option<u16>,
+	) {
+		insert_policy_at_level_with_inheritance(
+			store,
+			listener,
+			policy_name,
+			for_listener,
+			Default::default(),
+			policy,
+			port,
+		);
+	}
+
+	fn insert_policy_at_level_with_inheritance(
+		store: &mut Store,
+		listener: &ListenerName,
+		policy_name: &str,
+		for_listener: bool,
+		inheritance: PolicyInheritance,
 		policy: FrontendPolicy,
 		port: Option<u16>,
 	) {
@@ -2083,6 +2173,7 @@ mod tests {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
+			inheritance,
 			policy: agent::PolicyType::Frontend(policy),
 		};
 
@@ -2177,7 +2268,14 @@ mod tests {
 			},
 			&[],
 		);
-		assert_eq!(http_pols.timeout, Some(http_timeout));
+		assert_eq!(
+			http_pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(http_timeout)
+		);
 
 		let grpc_pols = store.route_policies(
 			&RoutePath {
@@ -2187,7 +2285,14 @@ mod tests {
 			},
 			&[],
 		);
-		assert_eq!(grpc_pols.timeout, Some(grpc_timeout));
+		assert_eq!(
+			grpc_pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(grpc_timeout)
+		);
 	}
 
 	#[test]
@@ -2211,7 +2316,84 @@ mod tests {
 		);
 
 		assert_ne!(parent_timeout, child_timeout);
-		assert_eq!(pols.timeout, Some(child_timeout));
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(child_timeout)
+		);
+	}
+
+	#[test]
+	fn route_policy_override_stops_more_specific_policy_type_inheritance() {
+		let mut store = Store::default();
+		let listener = listener();
+		let route = route("route", "ns", Some("HTTPRoute"));
+		let gateway_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"gateway-timeout",
+			PolicyTarget::Gateway(agent::ListenerTarget {
+				gateway_name: listener.gateway_name.clone(),
+				gateway_namespace: listener.gateway_namespace.clone(),
+				listener_name: None,
+				port: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(gateway_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listener-override",
+			PolicyTarget::Gateway(agent::ListenerTarget {
+				gateway_name: listener.gateway_name.clone(),
+				gateway_namespace: listener.gateway_namespace.clone(),
+				listener_name: Some(listener.listener_name.clone()),
+				port: None,
+			}),
+			PolicyInheritance::Override,
+			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::None),
+		);
+		let route_timeout = insert_route_timeout_policy(&mut store, "route-timeout", route.clone(), 3);
+		insert_traffic_policy(
+			&mut store,
+			"route-host-rewrite",
+			PolicyTarget::Route(route.clone()),
+			PolicyInheritance::Default,
+			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::Auto),
+		);
+
+		let pols = store.route_policies(
+			&RoutePath {
+				listener: &listener,
+				service: None,
+				routes: vec![&route],
+			},
+			&[],
+		);
+
+		assert_ne!(gateway_timeout, route_timeout);
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(route_timeout)
+		);
+		assert_eq!(
+			pols
+				.hostname_rewrite
+				.select("hostname rewrite", &request_for_policy_selection())
+				.as_deref()
+				.copied(),
+			Some(agent::HostRedirectOverride::None)
+		);
 	}
 
 	/// Tests that frontend policies at listener level take precedence over gateway level policies
@@ -2418,6 +2600,7 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: None,
 			}),
+			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
@@ -2438,6 +2621,7 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: Some(strng::new("target")),
 			}),
+			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
@@ -2640,6 +2824,7 @@ mod tests {
 				namespace: strng::new("default"),
 				section: None,
 			}),
+			inheritance: Default::default(),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
 		};
 		store
@@ -2691,6 +2876,7 @@ mod tests {
 				namespace: strng::new("default"),
 				section: Some(strng::new("listener-a")),
 			}),
+			inheritance: Default::default(),
 			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
 		};
 		store

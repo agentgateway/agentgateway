@@ -99,13 +99,13 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup, credentialResolver)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, input.Grants, resolver, jwksLookup, credentialResolver)
 					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
 					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
 					return krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
-						return BackendReferencesFromPolicy(ctx, policy, input.References)
+						return BackendReferencesFromPolicy(ctx, policy, input.References, agw, input.Grants)
 					}, agw.KrtOpts.ToOptions("references/AgentgatewayPolicyAttachments")...)
 				},
 			},
@@ -117,6 +117,7 @@ type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
 	References  ReferenceIndex
+	Grants      ReferenceGrantChecker
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
 
@@ -147,6 +148,7 @@ func TranslateAgentgatewayPolicy(
 	policy *agentgateway.AgentgatewayPolicy,
 	agw *AgwCollections,
 	references ReferenceIndex,
+	grants ReferenceGrantChecker,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
 	credentialResolver kubeutils.CredentialResolver,
@@ -154,7 +156,7 @@ func TranslateAgentgatewayPolicy(
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup, CredentialResolver: credentialResolver}
+	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Grants: grants, Resolver: resolver, JWKSLookup: jwksLookup, CredentialResolver: credentialResolver}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -407,6 +409,7 @@ func translateTrafficPolicyToAgw(
 	// Generate a base policy name from the TrafficPolicy reference
 	basePolicyName := getTrafficPolicyName(policy.Namespace, policy.Name)
 	policyName := config.NamespacedName(policy)
+	inheritance := translatePolicyInheritance(policy.Spec.Strategy)
 
 	appendPolicy := func(kind string) func(*api.Policy, error) {
 		return func(p *api.Policy, err error) {
@@ -416,6 +419,7 @@ func translateTrafficPolicyToAgw(
 				errs = append(errs, err)
 			}
 			if p != nil {
+				p.Inheritance = inheritance
 				agwPolicies = append(agwPolicies, p)
 			}
 		}
@@ -427,6 +431,11 @@ func translateTrafficPolicyToAgw(
 				name := fmt.Sprintf("%s %s", kind, policyName)
 				logger.Error("error processing policy", "policy", name, "error", err)
 				errs = append(errs, err)
+			}
+			for _, p := range policies {
+				if p != nil {
+					p.Inheritance = inheritance
+				}
 			}
 			agwPolicies = append(agwPolicies, policies...)
 		}
@@ -530,6 +539,16 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {
+	if strategy == nil || strategy.Inheritance == nil {
+		return api.Policy_DEFAULT
+	}
+	if *strategy.Inheritance == agentgateway.PolicyInheritanceOverride {
+		return api.Policy_OVERRIDE
+	}
+	return api.Policy_DEFAULT
 }
 
 func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
@@ -1600,7 +1619,29 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Group: string(group),
 		Kind:  string(kind),
 	}
+	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
+		return nil, err
+	}
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
+}
+
+func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
+	if ref.Namespace != nil &&
+		string(*ref.Namespace) != defaultNS &&
+		ctx.Collections.Settings.BackendRefGrantMode.RequirePolicyBackendGrant() {
+		if !ctx.Grants.BackendAllowed(
+			ctx.Krt,
+			wellknown.AgentgatewayPolicyGVK,
+			ref.Name,
+			*ref.Namespace,
+			defaultNS,
+			gk,
+			ctx.Collections.Settings.BackendRefGrantMode,
+		) {
+			return fmt.Errorf("backendRef %v/%v not accessible to an AgentgatewayPolicy in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, defaultNS)
+		}
+	}
+	return nil
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
@@ -1821,7 +1862,13 @@ func DefaultString[T ~string](s *T, def string) string {
 
 // BackendReferencesFromPolicy only emits attachments for existing, unsectioned targets
 // to prevent phantom chains and section-scoped over-attachment.
-func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, references ReferenceIndex) []*PolicyAttachment {
+func BackendReferencesFromPolicy(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	references ReferenceIndex,
+	agw *AgwCollections,
+	grants ReferenceGrantChecker,
+) []*PolicyAttachment {
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
@@ -1863,7 +1910,7 @@ func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		return nil
 	}
 
-	backends := referencedBackendsFromPolicy(policy)
+	backends := referencedBackendsFromPolicy(ctx, policy, agw, grants)
 	if len(backends) == 0 {
 		return nil
 	}
@@ -1904,13 +1951,27 @@ func PolicyOrConditionalSeq[T any, P interface {
 	}
 }
 
-func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []utils.TypedNamespacedName {
+func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, grants ReferenceGrantChecker) []utils.TypedNamespacedName {
 	var backends []utils.TypedNamespacedName
-	app := func(ref gwv1.BackendObjectReference) {
+	for _, ref := range referencedBackendRefsFromPolicy(policy) {
+		kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
+		group := ptr.OrDefault(ref.Group, "")
+		gk := schema.GroupKind{Group: string(group), Kind: string(kind)}
+		if err := checkBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants}, ref, policy.Namespace, gk); err != nil {
+			continue
+		}
 		backends = append(backends, utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
 			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
 		})
+	}
+	return backends
+}
+
+func referencedBackendRefsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []gwv1.BackendObjectReference {
+	var backends []gwv1.BackendObjectReference
+	app := func(ref gwv1.BackendObjectReference) {
+		backends = append(backends, ref)
 	}
 
 	s := policy.Spec

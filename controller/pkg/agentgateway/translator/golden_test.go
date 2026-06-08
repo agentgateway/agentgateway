@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
@@ -20,6 +21,21 @@ import (
 func TestReferences(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/references", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		sq, ri := testutils.Syncer(t, ctx, "")
+		r := ri.Outputs.Resources.List()
+		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
+			x := ir.GetAgwResourceName(resource.Resource)
+			return strings.HasPrefix(x, "policy/") || strings.HasPrefix(x, "backend/")
+		})
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+	})
+}
+
+func TestPolicyReferenceGrants(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/references-policy-refgrants", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeRouteAndPolicy
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)

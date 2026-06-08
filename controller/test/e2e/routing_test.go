@@ -12,6 +12,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
+	"github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
 func TestAgentgatewayRouting(tt *testing.T) {
@@ -23,6 +24,11 @@ func TestAgentgatewayRouting(tt *testing.T) {
 	t.Run("TCPRoute", func(t base.Test) {
 		testAgentgatewayTCPRoute(t)
 	})
+}
+
+func TestTrafficPolicyInheritanceOverride(tt *testing.T) {
+	t := New(tt)
+	testTrafficPolicyInheritanceOverride(t)
 }
 
 func testAgentgatewayHTTPRoute(t base.Test) {
@@ -46,6 +52,17 @@ func testAgentgatewayTCPRoute(t base.Test) {
 		base.Expect(http.StatusOK),
 		curl.WithPort(gateway.PortForRemote(9090)),
 	)
+}
+
+func testTrafficPolicyInheritanceOverride(t base.Test) {
+	t.Apply(manifest("routing", "inheritance-override.yaml"))
+
+	t.Send("inheritance.example.com/status/200", &matchers.HttpResponse{
+		StatusCode: http.StatusOK,
+		Headers: map[string]any{
+			"x-policy-inheritance": "gateway",
+		},
+	})
 }
 
 func sharedGateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway {

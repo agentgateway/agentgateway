@@ -2007,7 +2007,7 @@ fn traffic_policy_from_proto(
 			}))
 		},
 		Some(tps::Kind::ResponseHeaderModifier(rhm)) => {
-			TrafficPolicy::ResponseHeaderModifier(Arc::new(http::filters::HeaderModifier {
+			TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -2788,8 +2788,16 @@ pub(crate) fn targeted_policy_from_proto(
 		key: strng::new(&p.key),
 		name: p.name.as_ref().map(Into::into),
 		target,
+		inheritance: policy_inheritance_from_proto(p.inheritance),
 		policy,
 	})
+}
+
+fn policy_inheritance_from_proto(inheritance: i32) -> PolicyInheritance {
+	match proto::agent::policy::Inheritance::try_from(inheritance) {
+		Ok(proto::agent::policy::Inheritance::Override) => PolicyInheritance::Override,
+		_ => PolicyInheritance::Default,
+	}
 }
 
 fn conditional_policy_from_proto(
@@ -2884,6 +2892,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::Transformation(_) => build!(Transformation),
 		TrafficPolicy::Csrf(_) => build!(Csrf),
 		TrafficPolicy::RequestHeaderModifier(_) => build!(RequestHeaderModifier),
+		TrafficPolicy::ResponseHeaderModifier(_) => build!(ResponseHeaderModifier),
 		TrafficPolicy::RequestRedirect(_) => build!(RequestRedirect),
 		TrafficPolicy::UrlRewrite(_) => build!(UrlRewrite),
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
@@ -3201,6 +3210,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3240,6 +3250,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3281,6 +3292,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![conditional_traffic_policy(
@@ -3333,6 +3345,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3361,6 +3374,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![

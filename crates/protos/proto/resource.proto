@@ -139,11 +139,19 @@ message ConditionalPolicy {
   }
 }
 message Policy {
+  enum Inheritance {
+    DEFAULT = 0;
+    OVERRIDE = 1;
+  }
+
   // Unique key for this policy
   string key = 1;
   // User facing name for this resource
   TypedResourceName name = 2;
   PolicyTarget target = 3;
+  // Controls whether more-specific child policy levels can be included when
+  // computing the effective policy.
+  Inheritance inheritance = 8;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;

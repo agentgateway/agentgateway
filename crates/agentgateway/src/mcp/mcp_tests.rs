@@ -251,6 +251,8 @@ async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
 	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, Some(true));
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, Some(true));
 	assert_eq!(caps.resources.as_ref().unwrap().subscribe, Some(true));
 }
 
@@ -1193,6 +1195,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		key: "frontend/accessLog".into(),
 		name: None,
 		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		inheritance: Default::default(),
 		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
 	});
 	assert!(

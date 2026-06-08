@@ -823,6 +823,7 @@ impl TestBind {
 					rule_name: None,
 					kind: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
@@ -850,6 +851,7 @@ impl TestBind {
 					listener_name: None,
 					port: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Gateway).into(),
 			});
 		}
@@ -876,6 +878,7 @@ impl TestBind {
 					namespace: strng::literal!("default"),
 					port: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
@@ -915,6 +918,7 @@ impl TestBind {
 					namespace: Default::default(),
 					section: None,
 				}),
+				inheritance: Default::default(),
 				policy: v.into(),
 			});
 		}

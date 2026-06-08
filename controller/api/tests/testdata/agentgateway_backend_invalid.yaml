@@ -260,22 +260,6 @@ spec:
       host: llm.example.com
       port: 443
 ---
-_err: custom provider backendRef must be namespace-local
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayBackend
-metadata:
-  name: custom-provider-cross-namespace-backendref
-spec:
-  ai:
-    provider:
-      custom:
-        backendRef:
-          name: llm-service
-          namespace: other
-          port: 8080
-        formats:
-        - type: Completions
----
 _err: custom provider backendRef may target only Service or InferencePool
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

@@ -1355,11 +1355,13 @@ pub mod from_messages {
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
+		include_completion_in_log: bool,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
+		let mut completion = include_completion_in_log.then(String::new);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1480,6 +1482,9 @@ pub mod from_messages {
 
 						let anthropic_delta = match d {
 							bedrock::ContentBlockDelta::Text(text) => {
+								if let Some(c) = completion.as_mut() {
+									c.push_str(&text);
+								}
 								messages::ContentBlockDelta::TextDelta { text }
 							},
 							bedrock::ContentBlockDelta::ReasoningContent(rc) => match rc {
@@ -1539,6 +1544,9 @@ pub mod from_messages {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							if let Some(c) = completion.take() {
+								r.response.completion = Some(vec![c]);
+							}
 						});
 					}
 
@@ -2554,8 +2562,50 @@ pub mod from_anthropic_token_count {
 
 mod helpers {
 	use std::collections::HashMap;
+	use std::sync::LazyLock;
 
 	use crate::llm::AIError;
+
+	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
+	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+		"computer-use-2025-01-24",
+		"token-efficient-tools-2025-02-19",
+		"interleaved-thinking-2025-05-14",
+		"output-128k-2025-02-19",
+		"dev-full-thinking-2025-05-14",
+		"context-1m-2025-08-07",
+		"context-management-2025-06-27",
+		"effort-2025-11-24",
+		"tool-search-tool-2025-10-19",
+		"tool-examples-2025-10-29",
+	];
+	const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS";
+	const DEFAULT_SENTINEL: &str = "default";
+
+	static ALLOWED_BETA_HEADERS: LazyLock<Vec<String>> = LazyLock::new(|| {
+		let default_allowed_beta_headers = || {
+			DEFAULT_ALLOWED_BETA_HEADERS
+				.iter()
+				.map(|feature| feature.to_string())
+				.collect::<Vec<_>>()
+		};
+		let Ok(env) = std::env::var(ALLOWED_BETA_HEADERS_ENV) else {
+			return default_allowed_beta_headers();
+		};
+
+		env
+			.split(',')
+			.map(str::trim)
+			.filter(|feature| !feature.is_empty())
+			.flat_map(|feature| {
+				if feature == DEFAULT_SENTINEL {
+					default_allowed_beta_headers()
+				} else {
+					vec![feature.to_string()]
+				}
+			})
+			.collect()
+	});
 	use crate::llm::types::bedrock;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
@@ -2667,6 +2717,13 @@ mod helpers {
 	pub fn extract_beta_headers(
 		headers: &crate::http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
+	}
+
+	pub fn extract_beta_headers_with_allowed(
+		headers: &crate::http::HeaderMap,
+		allowed_beta_headers: &[String],
+	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		let mut beta_features = Vec::new();
 
 		// Collect all anthropic-beta header values
@@ -2678,7 +2735,10 @@ mod helpers {
 			// Handle comma-separated values within a single header
 			for feature in header_str.split(',') {
 				let trimmed = feature.trim();
-				if !trimmed.is_empty() {
+				if allowed_beta_headers
+					.iter()
+					.any(|feature| feature == trimmed)
+				{
 					// Add each beta feature as a string value in the array
 					beta_features.push(serde_json::Value::String(trimmed.to_string()));
 				}

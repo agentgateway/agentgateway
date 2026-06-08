@@ -8,6 +8,8 @@ spec:
   - kind: Gateway
     name: test
     group: gateway.networking.k8s.io
+  strategy:
+    inheritance: Override
   traffic:
     timeouts:
       request: 30s
@@ -19,6 +21,7 @@ output:
     Namespace: default
   resource:
     policy:
+      inheritance: OVERRIDE
       key: traffic/default/agw:timeout:default/test
       name:
         kind: AgentgatewayPolicy

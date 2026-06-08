@@ -5,6 +5,9 @@ frontendPolicies:
 
 llm:
   policies:
+    cors:
+      allowOrigins:
+        - http://localhost:15000
     localRateLimit:
     - type: tokens
       fillInterval: 1s

@@ -280,18 +280,54 @@ type LLMProvider struct {
 	PathPrefix LongString `json:"pathPrefix,omitempty"`
 }
 
+// LocalBackendObjectReference references a namespace-local backend resource.
+//
+// This mirrors Gateway API BackendObjectReference but intentionally omits the
+// namespace field so locality is enforced by the schema instead of CEL.
+// +kubebuilder:validation:XValidation:rule="(size(self.group) == 0 && self.kind == 'Service') ? has(self.port) : true",message="Must have port for Service reference"
+type LocalBackendObjectReference struct {
+	// Group is the group of the referent. For example, "gateway.networking.k8s.io".
+	// When unspecified or empty string, core API group is inferred.
+	// +kubebuilder:default=""
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	// +optional
+	Group *string `json:"group,omitempty"`
+
+	// Kind is the Kubernetes resource kind of the referent. For example "Service".
+	// Defaults to "Service" when not specified.
+	// +kubebuilder:default=Service
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$`
+	// +optional
+	Kind *string `json:"kind,omitempty"`
+
+	// Name is the name of the referent.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Name string `json:"name"`
+
+	// Port specifies the destination port number to use for this resource.
+	// Port is required when the referent is a Kubernetes Service.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port *int32 `json:"port,omitempty"`
+}
+
 // CustomProvider configures a provider with explicit API format support and an explicit target.
 // It is intended for local, self-hosted, or OpenAI-compatible providers whose
 // supported request/response formats are not fully described by the managed
 // provider types.
-// +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || !has(self.backendRef.namespace)",message="custom provider backendRef must be namespace-local"
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || (((!has(self.backendRef.group) || self.backendRef.group == \"\") && (!has(self.backendRef.kind) || self.backendRef.kind == 'Service')) || (has(self.backendRef.group) && self.backendRef.group == 'inference.networking.k8s.io' && has(self.backendRef.kind) && self.backendRef.kind == 'InferencePool'))",message="custom provider backendRef may target only Service or InferencePool"
 type CustomProvider struct {
 	// BackendRef references the Kubernetes backend that serves this provider.
 	// backendRef may target only a namespace-local Service or InferencePool.
 	// If unset, host and port must be set on the parent provider.
 	// +optional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	BackendRef *LocalBackendObjectReference `json:"backendRef,omitempty"`
 
 	// Optional: Override the model name, such as `gpt-oss`.
 	// If unset, the model name is taken from the request.

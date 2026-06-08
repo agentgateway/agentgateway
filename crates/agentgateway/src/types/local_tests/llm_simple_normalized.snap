@@ -24,6 +24,11 @@ listener_routes:
           - directResponse:
               body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
               status: 200
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
         key: "llm:admin:model-list"
         matches:
           - path:
@@ -49,6 +54,11 @@ listener_routes:
                 /v1/responses/compact: detect
                 ":rawPredict": messages
                 ":streamRawPredict": messages
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
         key: "llm:model:000000:claude-3-haiku"
         matches:
           - headers:
@@ -79,6 +89,11 @@ listener_routes:
                 /v1/responses/compact: detect
                 ":rawPredict": messages
                 ":streamRawPredict": messages
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
         key: "llm:model:000001:gemini-0.5-pro"
         matches:
           - headers:
@@ -106,6 +121,11 @@ listener_routes:
                 /v1/responses/compact: detect
                 ":rawPredict": messages
                 ":streamRawPredict": messages
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
         key: "llm:model:000002:gpt-7-max"
         matches:
           - headers:
@@ -133,6 +153,11 @@ listener_routes:
                 /v1/responses/compact: detect
                 ":rawPredict": messages
                 ":streamRawPredict": messages
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
         key: "llm:model:000003:gpt-3.5-turbo"
         matches:
           - headers:
@@ -142,6 +167,24 @@ listener_routes:
             path:
               pathPrefix: /
         name: "model:gpt-3.5-turbo"
+        namespace: internal
+      - inlinePolicies:
+          - responseHeaderModifier:
+              set:
+                Content-Type: application/json
+          - directResponse:
+              bodyExpression: "\n\"x-gateway-model-name\" in request.headers ?\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"Model \" + request.headers[\"x-gateway-model-name\"] + \" not found\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t} :\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"No model set\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t}\n"
+              status: 404
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
+        key: "llm:model:fallback"
+        matches:
+          - path:
+              pathPrefix: /
+        name: "model:fallback"
         namespace: internal
 listener_tcp_routes:
   - - llm

@@ -6291,6 +6291,36 @@ spec:
                     networkAuthorization proxyProtocol tcp tls tracing] must be set
                   rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
+              strategy:
+                description: |-
+                  strategy defines how this policy participates in policy merging and conflict resolution.
+
+                  Strategy settings apply to the policy object as a whole. Individual strategy fields may
+                  only be valid for specific policy kinds; for example, inheritance is only valid when this
+                  policy contains traffic settings.
+                properties:
+                  inheritance:
+                    description: |-
+                      inheritance controls whether less-specific traffic policies prevent more-specific traffic policies
+                      from contributing to the effective policy.
+
+                      This field is only valid on traffic policies. Frontend and backend policy merging does not use
+                      inheritance.
+
+                      When unset or set to `Default`, traffic policy fields are merged by specificity, with more-specific
+                      attachment points such as routes and route rules able to override fields from less-specific
+                      attachment points such as gateways and listeners.
+                      In other words, this policy provides `Default`s that can be overridden. For example, you may provide a `Default`
+                      timeout policy for the entire Gateway that is overridden by specific routes.
+
+                      When set to `Override`, this policy blocks traffic policies at more-specific attachment points from
+                      being included in the effective policy. This is useful when a gateway-level policy must remain
+                      authoritative for all routes below it.
+                    enum:
+                    - Default
+                    - Override
+                    type: string
+                type: object
               targetRefs:
                 description: |-
                   `targetRefs` specifies the target resources by reference to attach the
@@ -9857,6 +9887,9 @@ spec:
             x-kubernetes-validations:
             - message: At least one of traffic, frontend, or backend must be provided.
               rule: has(self.traffic) || has(self.frontend) || has(self.backend)
+            - message: strategy.inheritance may only be set on traffic policies
+              rule: '!has(self.strategy) || !has(self.strategy.inheritance) || (has(self.traffic)
+                && !has(self.frontend) && !has(self.backend))'
             - message: backend.mcp may not be used with a Service target
               rule: '!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)

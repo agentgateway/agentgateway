@@ -361,13 +361,6 @@ Retag and load the image to match the default image tag in the values file for a
 make run HELM_ADDITIONAL_VALUES=test/e2e/tests/manifests/agent-gateway-integration.yaml; CONFORMANCE_GATEWAY_CLASS=agentgateway make conformance
 ```
 
-Set up a kind cluster and install agentgateway with the kubernetes Gateway APIs:
-```shell
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.3.0/standard-install.yaml
-helm upgrade -i --create-namespace --namespace agentgateway-system --version v2.3.0-main agentgateway-crds oci://cr.agentgateway.dev/agentgateway/charts/agentgateway-crds
-helm upgrade -i --namespace agentgateway-system --version v2.3.0-main agentgateway oci://cr.agentgateway/agentgateway/charts/agentgateway
-```
-
 #### HTTPRoute
 
 Apply the httpbin test app:
