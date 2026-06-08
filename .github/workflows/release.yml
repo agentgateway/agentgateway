@@ -217,7 +217,7 @@ jobs:
           - platform: linux/arm64
             os: blacksmith-4vcpu-ubuntu-2404-arm
             # arm64 musl fails with jemalloc: https://github.com/tikv/jemallocator/issues/146
-            cargo_features: agentgateway/ui,agentgateway-app/mimalloc
+            cargo_features: agentgateway/ui,agentgateway-app/mimalloc,agentgateway-app/tls-aws-lc
             cargo_no_default_features: true
     env:
       VERSION: ${{ needs.setup.outputs.version }}
@@ -549,7 +549,7 @@ jobs:
           - os: blacksmith-4vcpu-ubuntu-2404-arm
             target: aarch64-unknown-linux-musl
             # arm64 musl fails with jemalloc: https://github.com/tikv/jemallocator/issues/146
-            extra_cargo_args: "--no-default-features --features agentgateway-app/mimalloc"
+            extra_cargo_args: "--no-default-features --features agentgateway-app/mimalloc,agentgateway-app/tls-aws-lc"
             name: linux-arm
           - os: macos-26
             target: aarch64-apple-darwin

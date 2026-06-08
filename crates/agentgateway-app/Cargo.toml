@@ -13,9 +13,14 @@ bench = false
 [features]
 # Jemalloc has been found to have the highest throughput and best ability to return memory to the system
 # This comes at the small cost of a few mb memory overhead relative to others (most notable in an empty setup).
-default = ["jemalloc", "mimalloc"]
+default = ["jemalloc", "mimalloc", "tls-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "agentgateway/jemalloc"]
 mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
+# TLS crypto provider passthroughs. A provider must be selected; `tls-aws-lc` is the default.
+# Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add one
+# of these, otherwise the agentgateway TLS code will fail to compile.
+tls-aws-lc = ["agentgateway/tls-aws-lc"]
+tls-openssl = ["agentgateway/tls-openssl"]
 schema = ["agentgateway/schema"]
 
 [dependencies]
