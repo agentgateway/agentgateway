@@ -1,24 +1,18 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: guardrails-failopen
+  name: tunnel-url
   namespace: default
 spec:
   targetRefs:
-    - kind: Gateway
+    - kind: HTTPRoute
       name: test
       group: gateway.networking.k8s.io
   backend:
-    mcp:
-      guardrails:
-        processors:
-        - remote:
-            url: https://guardrails.example.com:4317
-            failureMode: FailOpen
-          methods:
-            tools/call: "Off"
-            tools/list: Response
-            prompts/list: Request
+    tunnel:
+      url: https://proxy.example.com:3128
+
+
 ---
 # Output
 output:
@@ -28,35 +22,29 @@ output:
   resource:
     policy:
       backend:
-        mcpGuardrails:
-          processors:
-          - methods:
-              prompts/list: REQUEST
-              tools/call: "OFF"
-              tools/list: RESPONSE
-            remote:
-              failureMode: ALLOW
-              inlinePolicies:
-              - backendTls:
-                  hostname: guardrails.example.com
-              target:
-                inline:
-                  hostname: guardrails.example.com
-                  port: 4317
-      key: backend/default/guardrails-failopen:mcp-guardrails:default/test
+        backendTunnel:
+          inlinePolicies:
+          - backendTls:
+              hostname: proxy.example.com
+          proxy:
+            inline:
+              hostname: proxy.example.com
+              port: 3128
+      key: default/tunnel-url:backend-tunnel:default/test
       name:
         kind: AgentgatewayPolicy
-        name: guardrails-failopen
+        name: tunnel-url
         namespace: default
       target:
-        gateway:
+        route:
+          kind: HTTPRoute
           name: test
           namespace: default
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:
-    name: guardrails-failopen
+    name: tunnel-url
     namespace: default
   spec: null
   status:

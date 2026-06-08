@@ -391,7 +391,7 @@ spec:
       keepalive:
         retries: 0
 ---
-_err: 'backendRef: Required'
+_err: 'exactly one of backendRef or url'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -650,7 +650,7 @@ spec:
               name: extproc
               kind: Service
 ---
-_err: 'backendRef is required'
+_err: 'exactly one of backendRef or url is required'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -862,6 +862,17 @@ spec:
       protocol: GRPC
       path: /v1/traces
 ---
+_err: 'url path is only valid with protocol HTTP'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-tracing-url-path-with-grpc
+spec:
+  frontend:
+    tracing:
+      url: https://otel.example.com:4317/v1/traces
+      protocol: GRPC
+---
 _err: 'spec.traffic.hostRewrite.mode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -1016,7 +1027,7 @@ spec:
           methods:
             tools/call: Full
 ---
-_err: 'backendRef: Required'
+_err: 'exactly one of backendRef or url must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -1348,3 +1359,161 @@ spec:
     timeouts:
       request: 30s
 ---
+_err: 'url must not include a path for backend tunnel'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tunnel-url-with-path
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route
+  backend:
+    tunnel:
+      url: https://proxy.example.com/path
+---
+_err: 'exactly one of backendRef or url must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-extauth-missing-endpoint
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route
+  backend:
+    extAuth:
+      grpc: {}
+---
+_err: 'url must not include a path'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-url-with-path
+spec:
+  traffic:
+    extAuth:
+      url: https://auth.example.com/path
+      grpc: {}
+---
+_err: 'url must not include a path'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extproc-url-with-path
+spec:
+  traffic:
+    extProc:
+      url: https://processor.example.com/path
+---
+_err: 'url must not include a path'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-global-rate-limit-url-with-path
+spec:
+  traffic:
+    rateLimit:
+      global:
+        url: https://ratelimit.example.com/path
+        domain: example
+        descriptors:
+        - entries:
+          - name: generic_key
+            expression: '"default"'
+---
+_err: 'url must not include a path'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mcp-guardrails-url-with-path
+spec:
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            url: https://guardrails.example.com/path
+          methods:
+            tools/call: Full
+---
+_err: 'exactly one of backendRef or url must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tracing-backend-ref-and-url
+spec:
+  frontend:
+    tracing:
+      backendRef:
+        name: otel
+        port: 4317
+      url: https://otel.example.com:4317
+---
+_err: 'jwksPath is required when backendRef is set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: remote-jwks-backend-ref-without-path
+spec:
+  traffic:
+    jwtAuthentication:
+      providers:
+      - issuer: https://issuer.example.com
+        jwks:
+          remote:
+            backendRef:
+              name: issuer
+              port: 443
+---
+_err: 'jwksPath may not be set when url is set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: remote-jwks-url-with-path-field
+spec:
+  traffic:
+    jwtAuthentication:
+      providers:
+      - issuer: https://issuer.example.com
+        jwks:
+          remote:
+            url: https://issuer.example.com/.well-known/jwks.json
+            jwksPath: /.well-known/jwks.json
+---
+_err: 'path may not be set when url is set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-url-with-path-field
+spec:
+  backend:
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+        path: /token
+---
+_err: 'url path is only valid with protocol HTTP'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: access-log-url-path-with-grpc
+spec:
+  frontend:
+    accessLog:
+      otlp:
+        url: https://otel.example.com:4317/v1/logs
+        protocol: GRPC
+---
+_err: 'url in body should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: policy-url-without-host
+spec:
+  frontend:
+    tracing:
+      url: https:///v1/traces
+      protocol: HTTP

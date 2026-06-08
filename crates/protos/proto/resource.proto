@@ -780,6 +780,8 @@ message FrontendPolicySpec {
     BackendReference provider_backend = 1;
     repeated TracingAttribute attributes = 2;
     repeated TracingAttribute resources = 3;
+    // Inline backend policies (e.g. TLS, auth) for the tracing backend.
+    repeated BackendPolicySpec inline_policies = 10;
 
     // remove is a list of attribute keys to remove from emitted spans.
     // This is applied before `attributes` are evaluated/added, so it can drop defaults
@@ -906,6 +908,8 @@ message TrafficPolicySpec {
       string value = 2; // CEL expr
     }
     FailureMode failure_mode = 4;
+    // Inline backend policies (e.g. TLS, auth) for the remote rate limit backend.
+    repeated BackendPolicySpec inline_policies = 5;
   }
   message LocalRateLimit {
     enum Type {
@@ -955,6 +959,8 @@ message TrafficPolicySpec {
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
     Cache cache = 8;
+    // Inline backend policies (e.g. TLS, auth) for the external authorization backend.
+    repeated BackendPolicySpec inline_policies = 9;
     reserved "timeout";
   }
   message RBAC {
@@ -1123,6 +1129,8 @@ message TrafficPolicySpec {
     }
     map<string, NamespacedMetadataContext> metadata_context = 5;
     ProcessingOptions processing_options = 6;
+    // Inline backend policies (e.g. TLS, auth) for the external processor backend.
+    repeated BackendPolicySpec inline_policies = 7;
   }
   enum PolicyPhase {
     ROUTE = 0;
@@ -1478,6 +1486,8 @@ message BackendPolicySpec {
   }
   message BackendTunnel {
     BackendReference proxy = 1;
+    // Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
+    repeated BackendPolicySpec inline_policies = 2;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;
@@ -1566,6 +1576,8 @@ message BackendPolicySpec {
       // Header names never forwarded to the policy server, even if they appear
       // in `allowed_request_headers`. Case-insensitive.
       repeated string disallowed_request_headers = 5;
+      // Inline backend policies (e.g. TLS, auth) for the policy server.
+      repeated BackendPolicySpec inline_policies = 6;
     }
 
     // Processor is a single policy processor. Today only `remote` is defined.
@@ -1772,10 +1784,15 @@ message BackendReference {
     string namespace = 1;
     string hostname = 2;
   }
+  message Inline {
+    string hostname = 1;
+    uint32 port = 2;
+  }
   oneof kind {
     Service service = 1;
     // A Backend object. The format is "<backend key>"
     string backend = 2;
+    Inline inline = 4;
   }
   // Port, used only with 'service' type
   uint32 port = 3;
@@ -1873,6 +1890,8 @@ message OAuthTokenExchange {
   BackendReference token_endpoint = 1;
   // Token endpoint path on the backend that must start with "/" (defaults to "/")
   optional string token_endpoint_path = 7;
+  // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+  repeated BackendPolicySpec inline_policies = 15;
 
   // ----- Grant and incoming tokens -----
   // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
@@ -1934,6 +1953,8 @@ message CrossAppAccessAuth {
     optional string token_endpoint_path = 2;
     // Client authentication used when calling this token endpoint.
     OAuthClientAuth client_auth = 3;
+    // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+    repeated BackendPolicySpec inline_policies = 4;
   }
 
   message SubjectToken {

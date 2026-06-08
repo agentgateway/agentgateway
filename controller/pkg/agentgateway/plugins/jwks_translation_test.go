@@ -22,6 +22,11 @@ func (s stubJWKSLookup) InlineForOwner(krt.HandlerContext, jwks.RemoteJwksOwner)
 	return s.inline, s.err
 }
 
+func longStringPtr(s string) *agentgateway.LongString {
+	v := agentgateway.LongString(s)
+	return &v
+}
+
 func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProviderAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	jwtAuth := &agentgateway.JWTAuthentication{
@@ -31,9 +36,11 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 			Audiences: []string{"aud-a"},
 			JWKS: agentgateway.JWKS{
 				Remote: &agentgateway.RemoteJWKS{
-					JwksPath: "/keys",
-					BackendRef: gwv1.BackendObjectReference{
-						Name: "jwks-backend",
+					JwksPath: longStringPtr("/keys"),
+					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+						BackendRef: &gwv1.BackendObjectReference{
+							Name: "jwks-backend",
+						},
 					},
 				},
 			},
@@ -76,9 +83,11 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAn
 		Audiences: []string{"aud-a"},
 		Mode:      agentgateway.JWTAuthenticationModePermissive,
 		JWKS: agentgateway.RemoteJWKS{
-			JwksPath: "/keys",
-			BackendRef: gwv1.BackendObjectReference{
-				Name: "jwks-backend",
+			JwksPath: longStringPtr("/keys"),
+			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+				BackendRef: &gwv1.BackendObjectReference{
+					Name: "jwks-backend",
+				},
 			},
 		},
 	}

@@ -1194,3 +1194,111 @@ spec:
     connect:
       mode: Tunnel
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-url-backends
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+      - issuer: https://issuer.example.com
+        jwks:
+          remote:
+            url: https://issuer.example.com/.well-known/jwks.json
+      - issuer: https://issuer-ref.example.com
+        jwks:
+          remote:
+            backendRef:
+              name: issuer
+              port: 443
+            jwksPath: /.well-known/jwks.json
+    extAuth:
+      url: https://auth.example.com:9443
+      grpc: {}
+    extProc:
+      conditional:
+      - condition: 'request.path.startsWith("/processed")'
+        policy:
+          url: https://processor.example.com:9443
+    rateLimit:
+      global:
+        url: https://ratelimit.example.com:8081
+        domain: example
+        descriptors:
+        - entries:
+          - name: client
+            expression: 'request.headers["x-client"]'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-url-telemetry
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  frontend:
+    tracing:
+      url: https://otel.example.com:4318/v1/traces
+      protocol: HTTP
+    accessLog:
+      otlp:
+        url: https://otel.example.com:4318/v1/logs
+        protocol: HTTP
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-url-integrations
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tunnel:
+      url: https://proxy.example.com:3128
+    extAuth:
+      url: https://backend-auth.example.com:9443
+      grpc: {}
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            url: https://guardrails.example.com:9443
+          methods:
+            tools/call: Full
+    auth:
+      oauthTokenExchange:
+        url: https://oauth.example.com/token
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-cross-app-access-url
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    auth:
+      crossAppAccess:
+        identityProvider:
+          url: https://idp.example.com/token
+          clientAuth:
+            clientId: gateway
+            method: ClientSecretPost
+        resourceAuthorizationServer:
+          url: https://resource.example.com/token
+          clientAuth:
+            clientId: gateway
+            method: ClientSecretPost
+        audience: https://resource.example.com
+---
