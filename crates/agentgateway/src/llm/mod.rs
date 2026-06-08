@@ -1535,7 +1535,14 @@ impl AIProvider {
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_messages::translate_stream(b, buffer, logger, &model, &msg, include_completion_in_log)
+					conversion::bedrock::from_messages::translate_stream(
+						b,
+						buffer,
+						logger,
+						&model,
+						&msg,
+						include_completion_in_log,
+					)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
