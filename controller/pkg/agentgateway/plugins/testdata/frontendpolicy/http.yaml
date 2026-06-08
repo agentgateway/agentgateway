@@ -22,6 +22,7 @@ spec:
     group: gateway.networking.k8s.io
   frontend:
     http:
+      http1HeaderCase: Preserve
       http2FrameSize: 16384
       http2MaxHeaderSize: 16Ki
       maxBufferSize: 2Ki
@@ -35,6 +36,7 @@ output:
     policy:
       frontend:
         http:
+          http1HeaderCase: PRESERVE
           http2FrameSize: 16384
           http2MaxHeaderSize: 16384
           maxBufferSize: 2048

@@ -352,7 +352,7 @@ const (
 type BackendTLS struct {
 	// `mtlsCertificateRef` enables mutual TLS to the backend, using the
 	// specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-	// `Secret`.
+	// credential source, defaulting to a Kubernetes `Secret`.
 	//
 	// An optional `ca.cert` field, if present, will be used to verify the
 	// server certificate. If `caCertificateRefs` is also specified, the
@@ -363,7 +363,7 @@ type BackendTLS struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []corev1.LocalObjectReference `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []shared.LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
 	// `caCertificateRefs` defines the CA certificate `ConfigMap` to use to
 	// verify the server certificate.
 	// If unset, the system's trusted certificates are used.
@@ -443,6 +443,12 @@ type Frontend struct {
 	// +optional
 	ProxyProtocol *FrontendProxyProtocol `json:"proxyProtocol,omitempty"`
 
+	// connect defines settings for downstream HTTP CONNECT handling.
+	//
+	// If unset, CONNECT requests are rejected with Method Not Allowed.
+	// +optional
+	Connect *FrontendConnect `json:"connect,omitempty"`
+
 	// `accessLog` contains access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
@@ -477,6 +483,14 @@ const (
 	ProxyProtocolModeOptional ProxyProtocolMode = "Optional"
 )
 
+// +k8s:enum
+type HTTPHeaderCase string
+
+const (
+	HTTPHeaderCaseLowercase HTTPHeaderCase = "Lowercase"
+	HTTPHeaderCasePreserve  HTTPHeaderCase = "Preserve"
+)
+
 type FrontendProxyProtocol struct {
 	// version controls which PROXY protocol version is accepted.
 	//
@@ -491,6 +505,26 @@ type FrontendProxyProtocol struct {
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Deny;Route;Tunnel
+type FrontendConnectMode string
+
+const (
+	// Deny rejects downstream CONNECT requests.
+	FrontendConnectModeDeny FrontendConnectMode = "Deny"
+	// Route treats CONNECT as an HTTP request and routes it through the HTTP
+	// matching chain before establishing a raw tunnel to the selected backend.
+	FrontendConnectModeRoute FrontendConnectMode = "Route"
+	// Tunnel terminates CONNECT and sends the upgraded stream through the
+	// addressed gateway bind as a new downstream connection.
+	FrontendConnectModeTunnel FrontendConnectMode = "Tunnel"
+)
+
+type FrontendConnect struct {
+	// mode controls whether downstream CONNECT requests are accepted.
+	// +required
+	Mode FrontendConnectMode `json:"mode"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -516,6 +550,14 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
 	HTTP1IdleTimeout *metav1.Duration `json:"http1IdleTimeout,omitempty"`
+	// `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+	// HTTP/2 requests are always lower case.
+	//
+	// Modifying the headers from other policies may result in the original case being lost.
+	//
+	// +optional
+	HTTP1HeaderCase *HTTPHeaderCase `json:"http1HeaderCase,omitempty"`
 
 	// `http2WindowSize` indicates the initial window size for stream-level flow
 	// control for received data.
@@ -866,8 +908,7 @@ const (
 	JWTAuthenticationModePermissive JWTAuthenticationMode = "Permissive"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
-type AuthorizationLocation struct {
+type AuthorizationLocationFields struct {
 	// +optional
 	Header *AuthorizationHeaderLocation `json:"header,omitempty"`
 	// +optional
@@ -876,9 +917,14 @@ type AuthorizationLocation struct {
 	Cookie *AuthorizationCookieLocation `json:"cookie,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie
+type AuthorizationLocation struct {
+	AuthorizationLocationFields `json:",inline"`
+}
+
 // +kubebuilder:validation:ExactlyOneOf=header;queryParameter;cookie;expression
 type AuthorizationExtractionLocation struct {
-	AuthorizationLocation `json:",inline"`
+	AuthorizationLocationFields `json:",inline"`
 
 	// expression extracts the credential from the request using a CEL expression.
 	// +optional
@@ -1048,9 +1094,10 @@ type BasicAuthentication struct {
 	// +optional
 	Users []string `json:"users,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing the `.htaccess`
-	// file. The `Secret` must have a key named `.htaccess`, and should contain
-	// the complete `.htaccess` file.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing the `.htaccess` file. When using the default Secret
+	// resolver, the `Secret` must have a key named `.htaccess`, and should
+	// contain the complete `.htaccess` file.
 	//
 	// Note: passwords should be the hash of the password, not the raw password. Use the `htpasswd` or similar commands
 	// to generate a hash. MD5, bcrypt, crypt, and SHA-1 are supported.
@@ -1066,7 +1113,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// `location` controls where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
@@ -1096,10 +1143,11 @@ type APIKeyAuthentication struct {
 	// +optional
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing a set of API keys.
-	// If there are many keys, `secretSelector` can be used instead.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing a set of API keys. If there are many Secret-backed
+	// keys, `secretSelector` can be used instead.
 	//
-	// Each entry in the `Secret` represents one API key. The key is an
+	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
 	// * A JSON object with two fields, `key` and `metadata`. `key` contains
@@ -1124,13 +1172,14 @@ type APIKeyAuthentication struct {
 	//	    }
 	//	  client2: "k-456"
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// `secretSelector` selects multiple `Secret` resources containing API
-	// keys. If the same key is defined in multiple secrets, the behavior is
-	// undefined.
+	// `secretSelector` selects multiple Kubernetes `Secret` resources
+	// containing API keys. It is Secret-only; use `secretRef` for other
+	// credential kinds. If the same key is defined in multiple secrets, the
+	// behavior is undefined.
 	//
-	// Each entry in the `Secret` represents one API key. The key is an
+	// Each entry in the `Secret` data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
 	// * A JSON object with two fields, `key` and `metadata`. `key` contains
@@ -1187,10 +1236,12 @@ type BackendAuth struct {
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
 
-	// `secretRef` references a Kubernetes `Secret` storing the key to use as
-	// the authorization value. This must be stored in the `Authorization` key.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, storing the key to use as the authorization value. When using
+	// the default Secret resolver, this must be stored in the `Authorization`
+	// key.
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// `passthrough` passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
@@ -1241,12 +1292,13 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
-	// `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-	// Google credential JSON in the `credentials.json` key. When omitted,
-	// ambient credentials are used.
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing ADC-compatible Google credential JSON. When using
+	// the default Secret resolver, this must be stored in the `credentials.json`
+	// key. When omitted, ambient credentials are used.
 	//
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 	// `audience` allows explicitly configuring the `aud` of the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.
@@ -1256,12 +1308,21 @@ type GcpAuth struct {
 }
 
 // AwsAuth specifies the authentication method to use for the backend.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
-	// `secretRef` references a Kubernetes `Secret` containing the AWS
-	// credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing the AWS credentials. When using the default Secret
+	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
-	// +required
-	SecretRef corev1.LocalObjectReference `json:"secretRef"`
+	// +optional
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+
+	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+	// Ambient AWS credentials are used as the source credentials for STS.
+	//
+	// +optional
+	AssumeRole *AwsAssumeRole `json:"assumeRole,omitempty"`
 
 	// `serviceName` is the AWS SigV4 signing service name (for example,
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
@@ -1271,13 +1332,24 @@ type AwsAuth struct {
 	ServiceName *ShortString `json:"serviceName,omitempty"`
 }
 
+// AwsAssumeRole configures AWS STS AssumeRole for backend authentication.
+type AwsAssumeRole struct {
+	// `roleArn` is the AWS IAM role ARN to assume.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
+	// +required
+	RoleArn string `json:"roleArn"`
+}
+
 type AzureAuth struct {
-	// `secretRef` references a Kubernetes `Secret` containing the Azure
-	// credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// `Secret`, containing the Azure credentials. When using the default Secret
+	// resolver, the `Secret` must have keys `clientID`, `tenantID`, and
 	// `clientSecret`.
 	//
 	// +optional
-	SecretRef corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// Details for managed identity authentication
 	//

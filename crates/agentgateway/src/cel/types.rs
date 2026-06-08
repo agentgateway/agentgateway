@@ -9,7 +9,7 @@ use agent_core::strng::Strng;
 use bytes::Bytes;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue, StringValue};
+use cel::objects::{BytesValue, ListValue, MapValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
@@ -292,6 +292,19 @@ impl ExecutorResolver<'_> {
 impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
 		self.executor.field(variable)
+	}
+	fn variables(&self) -> Option<Value<'a>> {
+		match self.executor.materialize() {
+			Value::Map(map) => {
+				let variables = map
+					.iter()
+					.filter(|(_, value)| !matches!(value, Value::Null))
+					.map(|(key, value)| (key, value.clone()))
+					.collect();
+				Some(Value::Map(MapValue::Borrow(variables)))
+			},
+			_ => None,
+		}
 	}
 	// A bit annoying, but a nice speed up for us
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
@@ -588,6 +601,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 	ResponseSnapshot {
 		code: resp.status(),
+		grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
@@ -677,6 +691,7 @@ pub struct RequestRef<'a> {
 #[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
 	pub code: http::StatusCode,
+	pub grpc_status: Option<u8>,
 	pub headers: http::HeaderMap,
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
@@ -687,6 +702,11 @@ pub struct ResponseSnapshot {
 pub struct ResponseRef<'a> {
 	/// The HTTP status code of the response.
 	pub code: u16,
+
+	/// The gRPC status code of the response, when present.
+	#[serde(rename = "grpcStatus", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "grpcStatus")]
+	pub grpc_status: Option<u8>,
 
 	/// The headers of the response.
 	pub headers: Headers<'a>,
@@ -699,6 +719,7 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 	fn from(value: &'a ResponseSnapshot) -> Self {
 		Self {
 			code: value.code.as_u16(),
+			grpc_status: value.grpc_status,
 			headers: Headers::new(&value.headers),
 			body: BodyExtensionOrDirect::Direct {
 				buffered: value.body.as_ref(),
@@ -771,6 +792,14 @@ pub struct ResponseRefSerde {
 	#[serde(default)]
 	pub code: u16,
 
+	/// The gRPC status code of the response, when present.
+	#[serde(
+		default,
+		rename = "grpcStatus",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub grpc_status: Option<u8>,
+
 	/// The headers of the response.
 	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
@@ -827,6 +856,7 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 	fn from(resp: &'a crate::http::Response) -> Self {
 		Self {
 			code: resp.status().as_u16(),
+			grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 			headers: Headers::new(resp.headers()),
 			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
@@ -1112,6 +1142,7 @@ impl From<llm::LLMRequest> for LLMContext {
 		let LLMRequest {
 			input_tokens,
 			input_format: _, // Expose this?
+			native_format: _,
 			request_model,
 			provider,
 			streaming,
@@ -1583,15 +1614,8 @@ pub struct ExecutorSerde {
 	pub extproc: Option<ExtProcDynamicMetadata>,
 
 	/// `metadata` contains values set by transformation metadata expressions.
-	#[serde(
-		default,
-		skip_serializing_if = "is_transformation_metadata_none_or_empty"
-	)]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
-}
-
-fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
-	metadata.as_ref().is_none_or(|m| m.0.is_empty())
 }
 
 impl ExecutorSerde {
@@ -1654,6 +1678,7 @@ impl ExecutorSerde {
 		if let Some(resp) = &self.response {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
+				grpc_status: resp.grpc_status,
 				headers: Headers::new(&resp.headers),
 				body: BodyExtensionOrDirect::Direct {
 					buffered: resp.body.as_ref(),
@@ -1707,6 +1732,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
+			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
 		}),
@@ -1726,6 +1752,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+				certificate: Default::default(),
 			}),
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),

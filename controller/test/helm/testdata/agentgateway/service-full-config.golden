@@ -10,7 +10,7 @@ metadata:
     agentgateway: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/instance: test-release
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
 ---
 # Source: agentgateway/templates/role.yaml
@@ -232,7 +232,7 @@ metadata:
     agentgateway: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/instance: test-release
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
     custom-label: custom-value
     environment: test
@@ -293,7 +293,7 @@ metadata:
     agentgateway: agentgateway
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/instance: test-release
-    app.kubernetes.io/version: "0.0.1"
+    app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 1
@@ -323,7 +323,7 @@ spec:
             capabilities:
               drop:
               - ALL
-          image: "cr.agentgateway.dev/controller:v0.0.1"
+          image: "cr.agentgateway.dev/controller:v0.0.0-dev"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9978

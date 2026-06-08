@@ -295,6 +295,8 @@ pub struct LocalConfig {
 pub struct LocalLLMConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	tls: Option<LocalTLSServerConfig>,
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
@@ -493,6 +495,12 @@ pub struct LocalLLMModels {
 	params: LocalLLMParams,
 	/// provider of the LLM we are connecting too
 	provider: LocalModelAIProvider,
+	/// passthrough controls how requests are handled.
+	/// By default, requests will be parsed and translated as needed.
+	/// With passthrough, they will be unmodified and optionally inspected (with `detect`).
+	/// In this mode, requests must be sent in the native format of the provider.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	passthrough: Option<LocalLLMPassthrough>,
 
 	// Policies
 	/// defaults allows setting default values for the request. If these are not present in the request body, they will be set.
@@ -530,6 +538,23 @@ pub struct LocalLLMModels {
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	matches: Vec<LLMRouteMatch>,
+}
+
+#[apply(schema_de!)]
+pub enum LocalLLMPassthrough {
+	/// Pass through the request while extracting LLM telemetry and rate-limit inputs when possible.
+	Detect,
+	/// Pass through the request without interpreting it as LLM traffic.
+	Opaque,
+}
+
+impl LocalLLMPassthrough {
+	fn route_type(&self) -> crate::llm::RouteType {
+		match self {
+			LocalLLMPassthrough::Detect => crate::llm::RouteType::Detect,
+			LocalLLMPassthrough::Opaque => crate::llm::RouteType::Passthrough,
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -906,6 +931,7 @@ impl LocalAIBackend {
 					NamedAIProvider {
 						name: p.name,
 						provider: p.provider,
+						provider_backend: None,
 						host_override: p.host_override,
 						path_override: p.path_override,
 						path_prefix: p.path_prefix,
@@ -1387,6 +1413,9 @@ struct LocalLLMPolicy {
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
+	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
+	#[serde(default)]
+	cors: Option<http::cors::Cors>,
 	/// Rate limit incoming requests. State is kept local.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
@@ -1685,6 +1714,9 @@ struct LocalFrontendPolicies {
 	/// version matching and whether PROXY headers are required or optional.
 	#[serde(default, rename = "proxyProtocol", alias = "proxy")]
 	pub proxy_protocol: Option<frontend::Proxy>,
+	/// Enable or disable downstream HTTP CONNECT handling.
+	#[serde(default)]
+	pub connect: Option<frontend::Connect>,
 	/// Settings for request access logs.
 	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
@@ -2019,10 +2051,12 @@ async fn convert_llm_config(
 	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
+		tls,
 		models,
 		policies,
 	} = llm_config;
 	let port = port.unwrap_or(DEFAULT_LLM_PORT);
+	let tls = tls.map(TryInto::try_into).transpose()?;
 
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -2031,6 +2065,7 @@ async fn convert_llm_config(
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
+			cors,
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
@@ -2038,6 +2073,7 @@ async fn convert_llm_config(
 			client.clone(),
 			FilterOrPolicy {
 				authorization,
+				cors,
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
@@ -2070,8 +2106,10 @@ async fn convert_llm_config(
 					strng::new(
 						r#"
 request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
-request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
-json(request.body).model
+	request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+	(request.path.endsWith("/invoke-with-response-stream") || request.path.endsWith("/invoke") ?
+	request.path.regexReplace("^.*/model/(.+?)/invoke.*", "${1}") :
+	json(request.body).model)
 "#,
 					),
 				)],
@@ -2157,6 +2195,48 @@ json(request.body).model
 		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
 		let p = model_config.params.clone();
 		let model = p.model;
+		let llm_routes = if let Some(passthrough) = model_config.passthrough.as_ref() {
+			vec![(strng::new("*"), passthrough.route_type())]
+		} else {
+			vec![
+				(
+					strng::new("/v1/chat/completions"),
+					crate::llm::RouteType::Completions,
+				),
+				(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
+				// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
+				(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
+				(
+					strng::new(":streamRawPredict"),
+					crate::llm::RouteType::Messages,
+				),
+				(
+					strng::new("/v1/responses"),
+					crate::llm::RouteType::Responses,
+				),
+				(
+					strng::new("/v1/images/generations"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/images/edits"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/images/variations"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/responses/compact"),
+					crate::llm::RouteType::Detect,
+				),
+				(
+					strng::new("/v1/embeddings"),
+					crate::llm::RouteType::Embeddings,
+				),
+				(strng::new("*"), crate::llm::RouteType::Passthrough),
+			]
+		};
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
@@ -2164,6 +2244,24 @@ json(request.body).model
 			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
 			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
 			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
+			LocalModelAIProvider::Custom(custom_provider) => {
+				if custom_provider.formats.is_empty() {
+					bail!(
+						"custom provider for model {} must specify at least one format",
+						model_config.name
+					);
+				}
+				if p.host_override.is_none() {
+					bail!(
+						"custom provider for model {} requires params.baseUrl",
+						model_config.name
+					);
+				}
+				AIProvider::Custom(crate::llm::custom::Provider {
+					model: model.or_else(|| custom_provider.model.clone()),
+					..custom_provider.clone()
+				})
+			},
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
 
@@ -2175,6 +2273,8 @@ json(request.body).model
 				region: p.aws_region.context("bedrock requires aws_region")?,
 				guardrail_identifier: None,
 				guardrail_version: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
 			}),
 			LocalModelAIProvider::Azure => AIProvider::Azure(crate::llm::azure::Provider {
 				model,
@@ -2204,6 +2304,7 @@ json(request.body).model
 		let named_provider = NamedAIProvider {
 			name: model_name.clone(),
 			provider,
+			provider_backend: None,
 			host_override: p.host_override,
 			path_override: p.path_override,
 			path_prefix: p.path_prefix,
@@ -2320,46 +2421,7 @@ json(request.body).model
 				inline_policies: vec![],
 			}],
 			inline_policies: vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-				routes: [
-					(
-						strng::new("/v1/chat/completions"),
-						crate::llm::RouteType::Completions,
-					),
-					(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
-					// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
-					(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-					(
-						strng::new(":streamRawPredict"),
-						crate::llm::RouteType::Messages,
-					),
-					(
-						strng::new("/v1/responses"),
-						crate::llm::RouteType::Responses,
-					),
-					(
-						strng::new("/v1/images/generations"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/images/edits"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/images/variations"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/responses/compact"),
-						crate::llm::RouteType::Detect,
-					),
-					(
-						strng::new("/v1/embeddings"),
-						crate::llm::RouteType::Embeddings,
-					),
-					(strng::new("*"), crate::llm::RouteType::Passthrough),
-				]
-				.into_iter()
-				.collect(),
+				routes: llm_routes.into_iter().collect(),
 				..Default::default()
 			}))],
 		};
@@ -2374,11 +2436,15 @@ json(request.body).model
 		listener_name: strng::new("llm"),
 		listener_set: None,
 	};
+	let tls_enabled = tls.is_some();
 	let listener = Listener {
 		key: listener_key.clone(),
 		name: listener_name.clone(),
 		hostname: strng::new("*"),
-		protocol: ListenerProtocol::HTTP,
+		protocol: match tls {
+			Some(tls) => ListenerProtocol::HTTPS(tls),
+			None => ListenerProtocol::HTTP,
+		},
 	};
 
 	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
@@ -2434,7 +2500,11 @@ json(request.body).model
 	let bind = Bind {
 		key: strng::format!("bind/{}", port),
 		address: sockaddr,
-		protocol: BindProtocol::http,
+		protocol: if tls_enabled {
+			BindProtocol::tls
+		} else {
+			BindProtocol::http
+		},
 		listeners: listener_set,
 		tunnel_protocol: TunnelProtocol::Direct,
 	};
@@ -2811,6 +2881,7 @@ async fn split_frontend_policies(
 		tcp,
 		network_authorization,
 		proxy_protocol,
+		connect,
 		access_log,
 		tracing,
 	} = pol;
@@ -2831,6 +2902,9 @@ async fn split_frontend_policies(
 	}
 	if let Some(p) = proxy_protocol {
 		add(FrontendPolicy::Proxy(p), "proxy");
+	}
+	if let Some(p) = connect {
+		add(FrontendPolicy::Connect(p), "connect");
 	}
 	if let Some(mut p) = access_log {
 		p.init_access_log_policy();

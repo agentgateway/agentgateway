@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/app/.yarn/cache yarn install
 
 RUN --mount=type=cache,target=/app/.yarn/cache BASE_PATH=/ui/ yarn build
 
-FROM docker.io/library/rust:1.95.0-trixie AS musl-builder
+FROM docker.io/library/rust:1.96.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -33,7 +33,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.95.0-trixie AS base-builder
+FROM docker.io/library/rust:1.96.0-trixie AS base-builder
 
 ARG TARGETARCH
 
@@ -73,6 +73,11 @@ RUN --mount=type=cache,target=/app/target \
     <<EOF
 export VERSION="${VERSION}"
 export GIT_REVISION="${GIT_REVISION}"
+# Build jemalloc for 64KB pages on arm64 so the image runs on hosts with any page
+# size <= 64KB (4KB/16KB/64KB).
+if [ "${TARGETARCH}" = "arm64" ]; then
+  export JEMALLOC_SYS_WITH_LG_PAGE=16
+fi
 if [ "${CARGO_NO_DEFAULT_FEATURES}" = "true" ]; then
   cargo build --no-default-features --features "${CARGO_FEATURES}" --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
 else
@@ -80,7 +85,7 @@ else
 fi
 mkdir /out
 mv /app/target/$(cat /build/target)/${PROFILE}/agentgateway /out
-/out/agentgateway --version
+/out/agentgateway --version || exit 1
 # Fail if version is not set
 if /out/agentgateway --version | grep -q '"unknown"'; then
   exit 1

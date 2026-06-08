@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use agent_core::strng;
 use itertools::Itertools;
@@ -234,6 +235,45 @@ async fn stream_to_multiplex_resources() {
 }
 
 #[tokio::test]
+async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let caps = &client.peer_info().unwrap().capabilities;
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
+	assert_eq!(caps.resources.as_ref().unwrap().subscribe, Some(true));
+}
+
+#[tokio::test]
+async fn stateless_multiplex_does_not_advertise_resource_subscribe() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let caps = &client.peer_info().unwrap().capabilities;
+	assert_ne!(caps.resources.as_ref().unwrap().subscribe, Some(true));
+}
+
+#[tokio::test]
 async fn stateless_multiplex_tool_call_initializes_only_target() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
@@ -269,40 +309,55 @@ async fn stateless_multiplex_tool_call_initializes_only_target() {
 	assert_eq!(b_init_after, b_init_before);
 }
 
-#[tokio::test]
-async fn stateless_multiplex_get_prompt_initializes_only_target() {
-	let mock_a = mock_streamable_http_server(true).await;
-	let mock_b = mock_streamable_http_server(true).await;
-	let t = setup_proxy_test("{}")
-		.unwrap()
-		.with_multiplex_mcp_backend(
-			"mcp",
-			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
-			false,
-		)
-		.with_bind(simple_bind())
-		.with_route(basic_named_route(strng::new("/mcp")));
-	let io = t.serve_real_listener(strng::new("bind")).await;
-	let client = mcp_streamable_client(io).await;
-	let a_init_before = mock_a.init_count().await;
-	let b_init_before = mock_b.init_count().await;
-
-	let _ = client
-		.get_prompt(
-			rmcp::model::GetPromptRequestParams::new("a_example_prompt").with_arguments(
-				serde_json::json!({"message": "hello"})
-					.as_object()
-					.cloned()
-					.unwrap(),
-			),
-		)
-		.await
+#[test]
+fn stateless_multiplex_get_prompt_initializes_only_target() {
+	// This test stacks the rmcp client, proxy, stateless initialize wrapper,
+	// upstream streamable HTTP client, and rmcp mock server initialize path in
+	// one integration flow. On small CI test stacks (reproduced with
+	// RUST_MIN_STACK=1048576) that combined async polling stack overflows before
+	// the initialize response completes. Use an explicit worker stack here so the
+	// test continues to exercise the real path instead of depending on libtest's
+	// default thread stack.
+	let runtime = tokio::runtime::Builder::new_multi_thread()
+		.enable_all()
+		.thread_stack_size(4 * 1024 * 1024)
+		.build()
 		.unwrap();
+	runtime.block_on(async {
+		let mock_a = mock_streamable_http_server(true).await;
+		let mock_b = mock_streamable_http_server(true).await;
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_multiplex_mcp_backend(
+				"mcp",
+				vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+				false,
+			)
+			.with_bind(simple_bind())
+			.with_route(basic_named_route(strng::new("/mcp")));
+		let io = t.serve_real_listener(strng::new("bind")).await;
+		let client = mcp_streamable_client(io).await;
+		let a_init_before = mock_a.init_count().await;
+		let b_init_before = mock_b.init_count().await;
 
-	let a_init_after = mock_a.init_count().await;
-	let b_init_after = mock_b.init_count().await;
-	assert_eq!(a_init_after, a_init_before + 1);
-	assert_eq!(b_init_after, b_init_before);
+		let _ = client
+			.get_prompt(
+				rmcp::model::GetPromptRequestParams::new("a_example_prompt").with_arguments(
+					serde_json::json!({"message": "hello"})
+						.as_object()
+						.cloned()
+						.unwrap(),
+				),
+			)
+			.await
+			.unwrap();
+
+		let a_init_after = mock_a.init_count().await;
+		let b_init_after = mock_b.init_count().await;
+		assert_eq!(a_init_after, a_init_before + 1);
+		assert_eq!(b_init_after, b_init_before);
+	});
+	runtime.shutdown_timeout(std::time::Duration::from_secs(1));
 }
 
 #[tokio::test]
@@ -730,6 +785,93 @@ async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
 		))
 		.await
 		.unwrap();
+}
+
+#[tokio::test]
+async fn multiplex_resource_subscribe_and_unsubscribe_route_to_target() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new(
+			"a+memo://insights",
+		))
+		.await
+		.unwrap();
+	client
+		.unsubscribe(rmcp::model::UnsubscribeRequestParams::new(
+			"a+memo://insights",
+		))
+		.await
+		.unwrap();
+
+	assert!(
+		client
+			.subscribe(rmcp::model::SubscribeRequestParams::new("memo://insights"))
+			.await
+			.is_err(),
+		"expected unprefixed multiplex resource subscribe to fail"
+	);
+}
+
+#[tokio::test]
+async fn multiplex_resource_updated_notification_is_prefixed() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let (client, updated_uri, notify) = mcp_streamable_client_capture_resource_updates(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new(
+			"a+memo://insights",
+		))
+		.await
+		.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(5), notify.notified())
+		.await
+		.unwrap();
+
+	assert_eq!(
+		updated_uri.lock().await.as_deref(),
+		Some("a+memo://insights")
+	);
+}
+
+#[tokio::test]
+async fn single_resource_updated_notification_is_not_prefixed() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let (client, updated_uri, notify) = mcp_streamable_client_capture_resource_updates(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new("memo://insights"))
+		.await
+		.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(5), notify.notified())
+		.await
+		.unwrap();
+
+	assert_eq!(updated_uri.lock().await.as_deref(), Some("memo://insights"));
 }
 
 /// Test that a deny policy targeting a specific tool filters only that tool from list_tools,
@@ -1318,13 +1460,54 @@ pub async fn mcp_streamable_client(
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
 
-	client_info
-		.serve(transport)
+	Box::pin(client_info.serve(transport))
 		.await
 		.inspect_err(|e| {
 			tracing::error!("client error: {:?}", e);
 		})
 		.unwrap()
+}
+
+#[derive(Clone)]
+struct ResourceUpdateClient {
+	updated_uri: Arc<tokio::sync::Mutex<Option<String>>>,
+	notify: Arc<tokio::sync::Notify>,
+}
+
+impl rmcp::ClientHandler for ResourceUpdateClient {
+	async fn on_resource_updated(
+		&self,
+		params: rmcp::model::ResourceUpdatedNotificationParam,
+		_: rmcp::service::NotificationContext<RoleClient>,
+	) {
+		*self.updated_uri.lock().await = Some(params.uri);
+		self.notify.notify_one();
+	}
+}
+
+async fn mcp_streamable_client_capture_resource_updates(
+	s: SocketAddr,
+) -> (
+	RunningService<RoleClient, ResourceUpdateClient>,
+	Arc<tokio::sync::Mutex<Option<String>>>,
+	Arc<tokio::sync::Notify>,
+) {
+	use rmcp::ServiceExt;
+	use rmcp::transport::StreamableHttpClientTransport;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+	let updated_uri = Arc::new(tokio::sync::Mutex::new(None));
+	let notify = Arc::new(tokio::sync::Notify::new());
+	let client = ResourceUpdateClient {
+		updated_uri: updated_uri.clone(),
+		notify: notify.clone(),
+	};
+
+	(
+		Box::pin(client.serve(transport)).await.unwrap(),
+		updated_uri,
+		notify,
+	)
 }
 
 type LegacyService = legacy_rmcp::service::RunningService<
@@ -1351,7 +1534,7 @@ pub async fn mcp_sse_client(s: SocketAddr) -> LegacyService {
 		},
 	};
 
-	client_info.serve(transport).await.unwrap()
+	Box::pin(client_info.serve(transport)).await.unwrap()
 }
 
 struct MockServer {
@@ -1392,7 +1575,9 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	let addr = tcp_listener.local_addr().unwrap();
 	tokio::spawn(async move {
 		let _ = axum::serve(tcp_listener, router)
-			.with_graceful_shutdown(async { rx.await.unwrap() })
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
 			.await;
 		info!("server stopped");
 	});
@@ -1673,10 +1858,19 @@ mod mockserver {
 		async fn subscribe(
 			&self,
 			SubscribeRequestParams { uri, .. }: SubscribeRequestParams,
-			_: RequestContext<RoleServer>,
+			ctx: RequestContext<RoleServer>,
 		) -> Result<(), McpError> {
 			match uri.as_str() {
-				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
+				"str:////Users/to/some/path/" | "memo://insights" => {
+					let peer = ctx.peer;
+					let notify_uri = uri.clone();
+					tokio::spawn(async move {
+						let _ = peer
+							.notify_resource_updated(ResourceUpdatedNotificationParam::new(notify_uri))
+							.await;
+					});
+					Ok(())
+				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
 					Some(json!({
@@ -2790,7 +2984,7 @@ async fn try_mcp_streamable_client(
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
 
-	client_info.serve(transport).await
+	Box::pin(client_info.serve(transport)).await
 }
 
 #[tokio::test]

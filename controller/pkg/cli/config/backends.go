@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
@@ -26,7 +27,8 @@ type backendService struct {
 }
 
 type backendEndpoint struct {
-	Active map[string]backendEndpointState `json:"active"`
+	Active   map[string]backendEndpointState `json:"active"`
+	Rejected map[string]backendEndpointState `json:"rejected"`
 }
 
 type backendEndpointState struct {
@@ -43,6 +45,7 @@ type backendEndpointInfo struct {
 	RequestLatencySnake *float64 `json:"request_latency"`
 	TotalRequests       *int64   `json:"totalRequests"`
 	TotalRequestsSnake  *int64   `json:"total_requests"`
+	EvictedUntil        *string  `json:"evictedUntil"`
 }
 
 type topLevelBackend struct {
@@ -68,6 +71,8 @@ type backendRow struct {
 	Requests  int64   `json:"requests" yaml:"requests"`
 	LatencyMS float64 `json:"latencyMs" yaml:"latencyMs"`
 }
+
+const backendHealthEvicted = "evicted"
 
 func backendsCommand(common *commonFlags) flag.Command {
 	var showAll bool
@@ -113,38 +118,13 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 	rows := make([]backendRow, 0)
 	for _, service := range dump.Services {
 		for _, endpoints := range service.Endpoints {
-			endpointNames := make([]string, 0, len(endpoints.Active))
-			for endpointName := range endpoints.Active {
-				endpointNames = append(endpointNames, endpointName)
-			}
-			sort.Strings(endpointNames)
-
-			for _, endpointName := range endpointNames {
-				state := endpoints.Active[endpointName]
-				row := buildBackendRow("Service", service.Name, service.Namespace, endpointName, state)
-				if !showAll && row.Requests == 0 {
-					continue
-				}
-				rows = append(rows, row)
-			}
+			rows = append(rows, backendRowsForEndpointSet("Service", service.Name, service.Namespace, endpoints, showAll)...)
 		}
 	}
 	for _, backend := range dump.Backends {
 		for _, variant := range backend.Backend {
 			for _, provider := range variant.providers() {
-				endpointNames := make([]string, 0, len(provider.Active))
-				for endpointName := range provider.Active {
-					endpointNames = append(endpointNames, endpointName)
-				}
-				sort.Strings(endpointNames)
-
-				for _, endpointName := range endpointNames {
-					row := buildBackendRow("Backend", variant.Name, variant.Namespace, endpointName, provider.Active[endpointName])
-					if !showAll && row.Requests == 0 {
-						continue
-					}
-					rows = append(rows, row)
-				}
+				rows = append(rows, backendRowsForEndpointSet("Backend", variant.Name, variant.Namespace, provider, showAll)...)
 			}
 		}
 	}
@@ -163,6 +143,54 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 	})
 
 	return rows, nil
+}
+
+func backendRowsForEndpointSet(backendType, name, namespace string, endpoints backendEndpoint, showAll bool) []backendRow {
+	rows := make([]backendRow, 0, len(endpoints.Active)+len(endpoints.Rejected))
+	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Active, false, showAll)...)
+	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Rejected, true, showAll)...)
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rows[i].Endpoint < rows[j].Endpoint
+	})
+	return rows
+}
+
+func backendRowsForEndpointStates(
+	backendType, name, namespace string,
+	states map[string]backendEndpointState,
+	rejected bool,
+	showAll bool,
+) []backendRow {
+	endpointNames := make([]string, 0, len(states))
+	for endpointName := range states {
+		endpointNames = append(endpointNames, endpointName)
+	}
+	sort.Strings(endpointNames)
+
+	rows := make([]backendRow, 0, len(endpointNames))
+	for _, endpointName := range endpointNames {
+		state := states[endpointName]
+		row := buildBackendRow(backendType, name, namespace, endpointName, state)
+		if rejected {
+			row.Health = formatEvictedHealth(state.Info)
+		}
+		if !showAll && row.Requests == 0 {
+			continue
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func formatEvictedHealth(info backendEndpointInfo) string {
+	if info.EvictedUntil == nil {
+		return backendHealthEvicted
+	}
+	duration, err := time.ParseDuration(*info.EvictedUntil)
+	if err != nil {
+		return backendHealthEvicted
+	}
+	return fmt.Sprintf("Evict (%.1fs)", duration.Seconds())
 }
 
 func (v topLevelBackendVariant) providers() []backendEndpoint {

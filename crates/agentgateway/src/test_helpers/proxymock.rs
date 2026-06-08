@@ -26,7 +26,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::AIProvider;
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -40,6 +40,7 @@ use crate::types::agent::{
 	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, Target, TargetedPolicy,
 };
+use crate::types::loadbalancer::EndpointSet;
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
@@ -177,6 +178,47 @@ pub fn llm_named_provider(
 	}
 }
 
+pub fn custom_llm_backend(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	supported_formats: Vec<crate::llm::custom::ProviderFormat>,
+) -> BackendWithPolicies {
+	custom_llm_backend_with_formats(
+		name,
+		provider_backend,
+		supported_formats
+			.into_iter()
+			.map(|format| crate::llm::custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+pub fn custom_llm_backend_with_formats(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	formats: Vec<crate::llm::custom::ProviderFormatConfig>,
+) -> BackendWithPolicies {
+	let provider = NamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(crate::llm::custom::Provider {
+			model: None,
+			formats,
+		}),
+		provider_backend: Some(provider_backend),
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	let providers = EndpointSet::new(vec![vec![(provider.name.clone(), provider)]]);
+	Backend::AI(
+		ResourceName::new(name.into(), "".into()),
+		AIBackend { providers },
+	)
+	.into()
+}
+
 pub fn basic_route(target: SocketAddr) -> Route {
 	basic_named_route(strng::format!("/{}", target.to_string()))
 }
@@ -312,6 +354,10 @@ pub async fn simple_mock() -> MockServer {
 }
 
 // Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
+// Note: wiremock generates test certs via rcgen (which uses aws_lc_rs internally).
+// The OpenSSL KeyProvider cannot parse the DER keys that aws_lc_rs produces,
+// so this function is only available with the tls-aws-lc feature.
+#[cfg(feature = "tls-aws-lc")]
 pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
 	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
 	let certs = wiremock::tls_certs::MockTlsCertificates::random();

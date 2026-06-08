@@ -438,8 +438,22 @@ spec:
                     description: The address of the Istio CA. If unset, defaults to
                       `https://istiod.istio-system.svc:15012`.
                     type: string
+                  clusterId:
+                    description: The ID of the cluster this gateway runs in. If unset,
+                      defaults to `Kubernetes`.
+                    type: string
+                  enabled:
+                    description: Enabled explicitly turns Istio integration on or
+                      off for this gateway.
+                    type: boolean
+                  network:
+                    description: The Istio network this gateway runs in. If unset,
+                      defaults to the empty network.
+                    type: string
                   trustDomain:
-                    description: The Istio trust domain. If not set, defaults to `cluster.local`.
+                    description: |-
+                      The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+                      trust domain for the control plane's istio revision.
                     type: string
                 type: object
               logging:

@@ -1,0 +1,16 @@
+ai:
+  providerGroups:
+  - providers:
+    - custom:
+        formats:
+        - format: COMPLETIONS
+      name: backend
+      providerBackend:
+        port: 8080
+        service:
+          hostname: llm-service.test-ns.svc.cluster.local
+          namespace: test-ns
+key: test-ns/custom-service-backend
+name:
+  name: custom-service-backend
+  namespace: test-ns

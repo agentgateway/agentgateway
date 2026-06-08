@@ -13,13 +13,11 @@ async fn test_hbone() -> anyhow::Result<()> {
 	// Start the mock CA server that provides test certificates
 	let ca_addr = start_mock_ca_server().await?;
 
-	// Start the HBONE server in ReadWrite (echo) mode on the standard HBONE port 15008
+	// Start the HBONE server in ReadWrite (echo) mode on an OS-assigned port
 	// It will prefix all echoed data with "waypoint:" to prove the connection went through it
-	// Note: The HBONE client in agentgateway hardcodes port 15008 for HBONE connections
-	let _hbone_port = start_hbone_server(15008, "test-server", WAYPOINT_PREFIX.to_vec(), None).await;
+	let hbone_port = start_hbone_server(0, "test-server", WAYPOINT_PREFIX.to_vec(), None).await;
 
 	// Configure agentgateway with CA and a workload that uses HBONE protocol
-	// The workload's protocol: HBONE tells AGW to connect via HBONE to port 15008
 	let gw_config = format!(
 		r#"config:
   namespace: default
@@ -34,6 +32,7 @@ workloads:
     trustDomain: "cluster.local"
     workloadIps: ["127.0.0.1"]
     protocol: HBONE
+    hboneMtlsPort: {hbone_port}
     services:
       default/test-service.default.svc.cluster.local:
         "8080": 8080

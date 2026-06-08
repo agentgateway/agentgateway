@@ -170,6 +170,37 @@ func TestProxyQueue(t *testing.T) {
 		})
 	})
 
+	t.Run("merge does not mutate shared dequeued request", func(t *testing.T) {
+		t.Parallel()
+		p := NewPushQueue()
+		defer p.ShutDown()
+
+		shared := &PushRequest{
+			ConfigsUpdated: map[TypeUrl]sets.String{
+				"type1": sets.New("foo"),
+			},
+		}
+		p.Enqueue(proxies[0], shared)
+		p.Enqueue(proxies[1], shared)
+
+		_, dequeued, _ := p.Dequeue()
+		p.Enqueue(proxies[1], &PushRequest{
+			ConfigsUpdated: map[TypeUrl]sets.String{
+				"type1": sets.New("bar"),
+			},
+		})
+
+		assert.Equal(t, dequeued.ConfigsUpdated, map[TypeUrl]sets.String{
+			"type1": sets.New("foo"),
+		})
+
+		p.MarkDone(proxies[0])
+		_, merged, _ := p.Dequeue()
+		assert.Equal(t, merged.ConfigsUpdated, map[TypeUrl]sets.String{
+			"type1": sets.New("bar", "foo"),
+		})
+	})
+
 	t.Run("two removes, one should block one should return", func(t *testing.T) {
 		t.Parallel()
 		p := NewPushQueue()

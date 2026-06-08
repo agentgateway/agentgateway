@@ -223,6 +223,26 @@ discoveryNamespaceSelectors: []
 #        namespace: kgateway-system
 gatewayClassParametersRefs: {}
 
+# -- Control-plane-wide Istio mesh defaults.
+istio:
+  # -- Enable Istio integration by default on all built-in-class gateways.
+  #    When false (default), gateways opt in via AgentgatewayParameters spec.istio;
+  #    when true, individual gateways can opt out via spec.istio.enabled=false.
+  autoEnabled: false
+  # -- Namespace where the Istio control plane the controller integrates with is installed.
+  #    Defaults to "istio-system".
+  namespace: ""
+  # -- Revision of the Istio control plane the controller integrates with.
+  #   If unset, the default revision is used.
+  revision: ""
+  # -- Istio cluster ID (the istiod multiCluster clusterName) for mesh-integrated gateways.
+  clusterId: ""
+  # -- Istio network for mesh-integrated gateways.
+  network: ""
+  # -- Istio CA address override;
+  #    Defaults to "https://istiod.istio-system.svc:15012"
+  caAddress: ""
+
 # -- Configure Prometheus and Grafana monitoring resources.
 monitoring:
   # -- Create monitoring resources (ServiceMonitors and Grafana dashboard ConfigMap).

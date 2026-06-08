@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use secrecy::SecretString;
 
+use crate::llm::AIProvider;
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
 	Backend, BackendTrafficPolicy, HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget,
-	PolicyType, ResourceName, RouteBackendTarget, TrafficPolicy,
+	PolicyType, ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
@@ -212,6 +213,56 @@ async fn test_llm_config() {
 #[tokio::test]
 async fn test_llm_simple_config() {
 	test_config_parsing("llm_simple").await;
+}
+
+#[tokio::test]
+async fn test_llm_custom_provider_config() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: local-custom
+    provider:
+      custom:
+        formats:
+        - type: completions
+        - type: messages
+          path: /api/messages
+    params:
+      model: upstream-custom
+      baseUrl: http://custom.example.com:8080
+"#,
+	)
+	.await
+	.expect("custom LLM provider should normalize");
+
+	let ai = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::AI(_, ai) => Some(ai),
+			_ => None,
+		})
+		.expect("expected generated AI backend");
+	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	let AIProvider::Custom(custom_provider) = &provider.provider else {
+		panic!("expected custom provider");
+	};
+	assert_eq!(custom_provider.model.as_deref(), Some("upstream-custom"));
+	assert!(custom_provider.formats.iter().any(|format| format.format
+		== crate::llm::custom::ProviderFormat::Messages
+		&& format.path.as_deref() == Some("/api/messages")));
+	match provider
+		.host_override
+		.as_ref()
+		.expect("expected host override")
+	{
+		Target::Hostname(host, port) => {
+			assert_eq!(host.as_str(), "custom.example.com");
+			assert_eq!(*port, 8080);
+		},
+		other => panic!("expected hostname target, got {other:?}"),
+	}
 }
 
 #[tokio::test]

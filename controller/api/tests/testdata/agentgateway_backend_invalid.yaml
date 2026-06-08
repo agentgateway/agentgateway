@@ -139,3 +139,155 @@ spec:
         port: 8080
         policies:
           tls: {}
+---
+_err: Required value
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-missing-formats
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+---
+_err: should have at least 1 items
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-empty-formats
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats: []
+---
+_err: Unsupported value
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-unsupported-format
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Detect
+---
+_err: path, pathPrefix, and custom format paths are mutually exclusive
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-path-and-format-path
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Messages
+          path: /api/messages
+      path: /v1/messages
+---
+_err: path, pathPrefix, and custom format paths are mutually exclusive
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-pathprefix-and-format-path
+spec:
+  ai:
+    provider:
+      custom:
+        formats:
+        - type: Messages
+          path: /api/messages
+      host: llm.example.com
+      port: 443
+      pathPrefix: /custom
+---
+_err: path must start with /
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-format-path-missing-slash
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Messages
+          path: api/messages
+---
+_err: custom providers must specify exactly one of backendRef or host and port
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-missing-target
+spec:
+  ai:
+    provider:
+      custom:
+        formats:
+        - type: Completions
+---
+_err: custom providers must specify exactly one of backendRef or host and port
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-backendref-and-host-port
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Completions
+      host: llm.example.com
+      port: 443
+---
+_err: custom provider backendRef must be namespace-local
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-cross-namespace-backendref
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          namespace: other
+          port: 8080
+        formats:
+        - type: Completions
+---
+_err: custom provider backendRef may target only Service or InferencePool
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-unsupported-backendref-kind
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: other-backend
+        formats:
+        - type: Completions

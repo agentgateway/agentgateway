@@ -31,7 +31,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let proxy_task = ready.register_task("agentgateway");
 
 	let readiness_server = crate::management::readiness_server::Server::new(
-		config.readiness_addr,
+		config.readiness_addr.clone(),
 		drain_rx.clone(),
 		ready.clone(),
 	)
@@ -80,9 +80,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	);
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
-	let state_mgr =
-		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
-			.await?;
+	let state_mgr = state_manager::StateManager::new(
+		config.clone(),
+		control_client.clone(),
+		Arc::new(xds_metrics),
+		xds_tx,
+	)
+	.await?;
 	let stores = state_mgr.stores();
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
@@ -142,10 +146,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	admin_server.spawn();
 
 	// Create and start the metrics server.
-	let metrics_server =
-		crate::management::metrics_server::Server::new(config.stats_addr, drain_rx.clone(), registry)
-			.await
-			.context("stats server starts")?;
+	let metrics_server = crate::management::metrics_server::Server::new(
+		config.stats_addr.clone(),
+		drain_rx.clone(),
+		registry,
+	)
+	.await
+	.context("stats server starts")?;
 	// Run the metrics sever in the current tokio worker pool.
 	metrics_server.spawn();
 	Ok(Bound {
@@ -166,6 +173,10 @@ pub struct Bound {
 impl Bound {
 	pub fn readiness(&self) -> readiness::Ready {
 		self.ready.clone()
+	}
+
+	pub fn bind_addresses(&self) -> Vec<std::net::SocketAddr> {
+		self.stores.binds.read().bind_addresses()
 	}
 
 	pub async fn wait_termination(self) -> anyhow::Result<()> {

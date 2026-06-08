@@ -37,8 +37,8 @@ func TestImageTagVPrefix(t *testing.T) {
 	}{
 		{
 			name:        "default AppVersion without v prefix gets v added",
-			setValues:   nil, // Uses Chart.AppVersion which is "0.0.1"
-			expectedTag: "v0.0.1",
+			setValues:   nil, // Uses Chart.AppVersion which is "0.0.0-dev"
+			expectedTag: "v0.0.0-dev",
 		},
 		{
 			name:        "explicit tag with v prefix is not doubled",
@@ -54,13 +54,13 @@ func TestImageTagVPrefix(t *testing.T) {
 			name:           "controller-specific tag with v prefix is not doubled",
 			setValues:      []string{"controller.image.tag=v3.0.0"},
 			expectedTag:    "v3.0.0",
-			expectedEnvTag: "v0.0.1", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
+			expectedEnvTag: "v0.0.0-dev", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
 		},
 		{
 			name:           "controller-specific tag without v prefix gets v added",
 			setValues:      []string{"controller.image.tag=3.0.0"},
 			expectedTag:    "v3.0.0",
-			expectedEnvTag: "v0.0.1", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
+			expectedEnvTag: "v0.0.0-dev", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
 		},
 		{
 			name:        "latest tag is not modified",

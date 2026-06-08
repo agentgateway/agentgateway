@@ -36,6 +36,7 @@ use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
+use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::ext_proc::{
 	BodySendMode as XdsBodySendMode, HeaderTrailerSendMode as XdsHeaderTrailerSendMode,
@@ -531,6 +532,38 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 	}
 }
 
+fn convert_provider_format(
+	proto_format: i32,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderFormat, ProtoError> {
+	use proto::agent::ai_backend::ProviderFormat as ProtoFormat;
+
+	match ProtoFormat::try_from(proto_format) {
+		Ok(ProtoFormat::Unspecified) => Err(ProtoError::Generic(format!(
+			"AI backend custom provider at index {provider_idx} has unspecified format"
+		))),
+		Ok(ProtoFormat::Completions) => Ok(llm::custom::ProviderFormat::Completions),
+		Ok(ProtoFormat::Messages) => Ok(llm::custom::ProviderFormat::Messages),
+		Ok(ProtoFormat::Responses) => Ok(llm::custom::ProviderFormat::Responses),
+		Ok(ProtoFormat::Embeddings) => Ok(llm::custom::ProviderFormat::Embeddings),
+		Ok(ProtoFormat::AnthropicTokenCount) => Ok(llm::custom::ProviderFormat::AnthropicTokenCount),
+		Ok(ProtoFormat::Realtime) => Ok(llm::custom::ProviderFormat::Realtime),
+		Err(_) => Err(ProtoError::Generic(format!(
+			"AI backend custom provider at index {provider_idx} has unknown supported format value {proto_format}"
+		))),
+	}
+}
+
+fn convert_provider_format_config(
+	proto_format: &proto::agent::ai_backend::ProviderFormatConfig,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderFormatConfig, ProtoError> {
+	Ok(llm::custom::ProviderFormatConfig {
+		format: convert_provider_format(proto_format.format, provider_idx)?,
+		path: proto_format.path.as_ref().map(strng::new),
+	})
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -804,19 +837,34 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
+			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
+				role_arn: assume_role.role_arn,
+			});
 			let aws_auth = match a.kind {
-				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
-					access_key_id: config.access_key_id.into(),
-					secret_access_key: config.secret_access_key.into(),
-					region: if config.region.is_empty() {
-						None
-					} else {
-						Some(config.region.clone())
-					},
-					session_token: config.session_token.map(|token| token.into()),
-					service_name,
+				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
+					if assume_role.is_some() {
+						return Err(ProtoError::Generic(
+							"explicit AWS credentials cannot be combined with assumeRole".to_string(),
+						));
+					}
+					AwsAuth::ExplicitConfig {
+						access_key_id: config.access_key_id.into(),
+						secret_access_key: config.secret_access_key.into(),
+						region: if config.region.is_empty() {
+							None
+						} else {
+							Some(config.region.clone())
+						},
+						session_token: config.session_token.map(|token| token.into()),
+						service_name,
+					}
 				},
-				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit { service_name },
+				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
+					service_name,
+					assume_role,
+					source_credentials_cache: Default::default(),
+					assume_role_cache: Default::default(),
+				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Aws(aws_auth)
@@ -936,6 +984,7 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::HboneGateway => TunnelProtocol::HboneGateway,
 				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
+				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
 			},
 		})
 	}
@@ -1126,6 +1175,8 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								source_credentials_cache: Default::default(),
+								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1149,6 +1200,22 @@ pub(crate) fn backend_with_policies_from_proto(
 								"AI backend provider at index {provider_idx} uses deprecated azureOpenAI format; use azure instead"
 							)));
 						},
+						Some(provider::Provider::Custom(custom)) => {
+							if custom.formats.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"AI backend custom provider at index {provider_idx} must specify at least one format"
+								)));
+							}
+							let formats = custom
+								.formats
+								.iter()
+								.map(|format| convert_provider_format_config(format, provider_idx))
+								.collect::<Result<Vec<_>, _>>()?;
+							AIProvider::Custom(llm::custom::Provider {
+								model: custom.model.as_deref().map(strng::new),
+								formats,
+							})
+						},
 						None => {
 							return Err(ProtoError::Generic(format!(
 								"AI backend provider at index {provider_idx} is required"
@@ -1161,15 +1228,29 @@ pub(crate) fn backend_with_policies_from_proto(
 					} else {
 						strng::new(&provider_config.name)
 					};
+					let provider_backend = provider_config
+						.provider_backend
+						.as_ref()
+						.map(|backend| resolve_simple_reference(Some(backend)));
+					let host_override = provider_config
+						.r#host_override
+						.as_ref()
+						.map(|o| Target::from((o.host.as_str(), o.port as u16)));
+					if matches!(provider, AIProvider::Custom(_))
+						&& provider_backend.is_none()
+						&& host_override.is_none()
+					{
+						return Err(ProtoError::Generic(format!(
+							"AI backend custom provider at index {provider_idx} requires providerBackend or hostOverride"
+						)));
+					}
 
 					let np = NamedAIProvider {
 						name: provider_name.clone(),
 						provider,
 						tokenize: false,
-						host_override: provider_config
-							.r#host_override
-							.as_ref()
-							.map(|o| Target::from((o.host.as_str(), o.port as u16))),
+						provider_backend,
+						host_override,
 						path_override: provider_config.path_override.as_ref().map(strng::new),
 						path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
 						inline_policies: pols,
@@ -2340,6 +2421,12 @@ fn frontend_policy_from_proto(
 				.http1_idle_timeout
 				.map(convert_duration)
 				.unwrap_or_else(crate::defaults::http1_idle_timeout),
+			http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
+				match header_case {
+					HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
+					HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
+				}
+			})?,
 			http2_window_size: h.http2_window_size,
 			http2_connection_window_size: h.http2_connection_window_size,
 			http2_frame_size: h.http2_frame_size,
@@ -2425,6 +2512,19 @@ fn frontend_policy_from_proto(
 					_ => frontend::ProxyMode::Strict,
 				};
 			FrontendPolicy::Proxy(frontend::Proxy { version, mode })
+		},
+		Some(fps::Kind::Connect(c)) => {
+			let mode =
+				match crate::types::proto::agent::frontend_policy_spec::connect::Mode::try_from(c.mode) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Route) => {
+						frontend::ConnectMode::Route
+					},
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Tunnel) => {
+						frontend::ConnectMode::Tunnel
+					},
+					_ => frontend::ConnectMode::Deny,
+				};
+			FrontendPolicy::Connect(frontend::Connect { mode })
 		},
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
@@ -3699,6 +3799,7 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "".to_string(),
@@ -3742,6 +3843,7 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
 							region: "us-central1".to_string(),
@@ -3764,6 +3866,86 @@ mod tests {
 			panic!("Expected AIProvider::Vertex");
 		};
 		assert_eq!(vertex.region.as_deref(), Some("us-central1"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_custom_provider_state_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::provider::Provider;
+		use proto::agent::ai_backend::{Custom, ProviderFormat, ProviderFormatConfig};
+		use proto::agent::backend_reference;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/custom-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "custom-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "custom".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						provider_backend: Some(proto::agent::BackendReference {
+							port: 8000,
+							kind: Some(backend_reference::Kind::Service(
+								backend_reference::Service {
+									namespace: "test-ns".to_string(),
+									hostname: "llm-pool.test-ns.inference.cluster.local".to_string(),
+								},
+							)),
+						}),
+						provider: Some(Provider::Custom(Custom {
+							formats: vec![
+								ProviderFormatConfig {
+									format: ProviderFormat::Completions as i32,
+									path: None,
+								},
+								ProviderFormatConfig {
+									format: ProviderFormat::Messages as i32,
+									path: Some("/api/messages".to_string()),
+								},
+							],
+							model: None,
+						})),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Custom(custom) = &provider.provider else {
+			panic!("Expected AIProvider::Custom");
+		};
+		assert_eq!(custom.formats.len(), 2);
+		assert!(
+			custom
+				.formats
+				.iter()
+				.any(|format| format.format == llm::custom::ProviderFormat::Completions)
+		);
+		assert!(custom.formats.iter().any(|format| format.format
+			== llm::custom::ProviderFormat::Messages
+			&& format.path.as_deref() == Some("/api/messages")));
+		let Some(SimpleBackendReference::Service { name, port }) = provider.provider_backend.as_ref()
+		else {
+			panic!("Expected custom provider backend reference to resolve to a Service");
+		};
+		assert_eq!(name.namespace.as_str(), "test-ns");
+		assert_eq!(
+			name.hostname.as_str(),
+			"llm-pool.test-ns.inference.cluster.local"
+		);
+		assert_eq!(*port, 8000);
 		Ok(())
 	}
 

@@ -418,6 +418,9 @@ fn rewrite_path(
 		None => Ok(orig.path_and_query().ok_or(Error::InvalidURI).cloned()?),
 		Some(PathRedirect::Full(r)) => {
 			let mut new_path = r.to_string();
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			// Preserve query parameters from the original URI
 			if let Some(q) = orig.query() {
 				new_path.push('?');
@@ -431,9 +434,11 @@ fn rewrite_path(
 					"prefix redirect requires prefix match".to_string(),
 				));
 			};
+			let match_pfx = match_pfx.trim_end_matches('/');
+			let Some(rest) = strip_segment_prefix(orig.path(), match_pfx) else {
+				return Err(Error::InvalidURI);
+			};
 			let mut new_path = r.to_string();
-			// path prefix ignores trailing / so trim those out
-			let (_, rest) = orig.path().split_at(match_pfx.trim_end_matches("/").len());
 			if !new_path.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
 				new_path.push('/');
 			}
@@ -441,12 +446,24 @@ fn rewrite_path(
 				new_path.pop();
 			}
 			new_path.push_str(rest);
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			if let Some(q) = orig.query() {
 				new_path.push('?');
 				new_path.push_str(q);
 			}
 			Ok(new_path.try_into()?)
 		},
+	}
+}
+
+fn strip_segment_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	let rest = path.strip_prefix(prefix)?;
+	if prefix.is_empty() || rest.is_empty() || rest.starts_with('/') {
+		Some(rest)
+	} else {
+		None
 	}
 }
 

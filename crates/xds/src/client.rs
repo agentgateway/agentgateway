@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{fmt, mem};
@@ -409,7 +410,11 @@ impl Config {
 		}
 	}
 
-	pub fn build(self, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> AdsClient {
+	pub fn build(
+		self,
+		metrics: Arc<Metrics>,
+		block_ready: tokio::sync::watch::Sender<()>,
+	) -> AdsClient {
 		AdsClient::new(self, metrics, block_ready)
 	}
 }
@@ -427,7 +432,7 @@ pub struct AdsClient {
 
 	state: State,
 
-	pub(crate) metrics: Metrics,
+	pub(crate) metrics: Arc<Metrics>,
 	block_ready: Option<tokio::sync::watch::Sender<()>>,
 
 	connection_id: u32,
@@ -453,7 +458,11 @@ const INITIAL_BACKOFF: Duration = Duration::from_millis(10);
 const MAX_BACKOFF: Duration = Duration::from_secs(15);
 
 impl AdsClient {
-	fn new(config: Config, metrics: Metrics, block_ready: tokio::sync::watch::Sender<()>) -> Self {
+	fn new(
+		config: Config,
+		metrics: Arc<Metrics>,
+		block_ready: tokio::sync::watch::Sender<()>,
+	) -> Self {
 		let state = State {
 			known_resources: Default::default(),
 		};

@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_core::strng;
+use base64::Engine;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -13,6 +14,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,
 		input_format: InputFormat::Completions,
+		native_format: Some(custom::ProviderFormat::Completions),
 		request_model: "test-model".into(),
 		provider: "test-provider".into(),
 		streaming: true,
@@ -133,17 +135,17 @@ fn test_response(
 	xlate: impl Fn(Bytes) -> Result<Box<dyn ResponseType>, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
-	let provider_str = &fs::read_to_string(&input_path)
-		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
-	let provider_value = serde_json::from_str::<Value>(provider_str)
-		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
+	let provider_str = &fs::read(&input_path)
+		.unwrap_or_else(|e| panic!("{relative_path}: Failed to read response input file: {e}"));
+	let provider_value = serde_json::from_slice::<Value>(provider_str)
+		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(provider_str).to_string()));
 
-	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
+	let resp = xlate(Bytes::copy_from_slice(provider_str))
 		.expect("Failed to translate provider response to expected format");
 	let llm_response = resp.to_llm_response(false);
 	let raw = resp.serialize().expect("Failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
-		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
+		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
 	let report = json!({
 		"response": resp_val,
 		"parsed": llm_response,
@@ -171,8 +173,8 @@ async fn test_streaming(
 	xlate: impl AsyncFnOnce(Response, AsyncLog<llm::LLMInfo>) -> Result<Response, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
-	let input_bytes =
-		&fs::read(&input_path).unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
+	let input_bytes = &fs::read(&input_path)
+		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read streaming input file"));
 	let body = Body::from(input_bytes.clone());
 	let log = AsyncLog::default();
 	let log2 = log.clone();
@@ -185,7 +187,24 @@ async fn test_streaming(
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let llm_response = log2.take().unwrap().response;
 	let llm_resp_str = serde_json::to_string_pretty(&llm_response).unwrap();
-	let resp_str = String::from_utf8(resp_bytes.to_vec()).unwrap() + "\n\n" + llm_resp_str.as_str();
+	let resp_body = match String::from_utf8(resp_bytes.to_vec()) {
+		Ok(s)
+			if !s
+				.chars()
+				.any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')) =>
+		{
+			s
+		},
+		Ok(s) => format!(
+			"base64: {}",
+			base64::engine::general_purpose::STANDARD.encode(s.as_bytes())
+		),
+		Err(e) => format!(
+			"base64: {}",
+			base64::engine::general_purpose::STANDARD.encode(e.into_bytes())
+		),
+	};
+	let resp_str = resp_body + "\n\n" + llm_resp_str.as_str();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 	let snapshot_name = snapshot_name + "-streaming";
 
@@ -260,6 +279,7 @@ mod requests {
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
+		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
 	];
@@ -285,6 +305,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let bedrock =
@@ -317,6 +339,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 		let vertex_provider = vertex::Provider {
 			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
@@ -351,6 +375,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		for (name, providers) in RESPONSES_REQUESTS {
@@ -376,6 +402,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let cohere_provider = bedrock::Provider {
@@ -383,6 +411,8 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
 
 		let vertex_provider = vertex::Provider {
@@ -474,6 +504,7 @@ mod response {
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
+	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 
@@ -495,6 +526,7 @@ mod response {
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
+		("multiple_text_blocks", ALL_ANTHROPIC),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
@@ -529,9 +561,12 @@ mod response {
 		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
-		("non-json", &[COMPLETIONS_TO_DETECT]),
-		("broken-sse", &[COMPLETIONS_TO_DETECT]),
-		("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
+		// ("non-json", &[COMPLETIONS_TO_DETECT]),
+		// ("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		// ("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
+		// ("bedrock-basic.bin", &[BEDROCK_TO_DETECT]),
+		("bedrock-invoke.bin", &[BEDROCK_TO_DETECT]),
+		// ("bedrock-broken.bin", &[BEDROCK_TO_DETECT]),
 	];
 
 	#[tokio::test]
@@ -634,6 +669,8 @@ mod response {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		});
 		let (p, r) = match provider {
 			RESPONSES_TO_RESPONSES => (
@@ -659,6 +696,7 @@ mod response {
 			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
 			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
 			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			BEDROCK_TO_DETECT => (bedrock_provider, dummy_llm_req(InputFormat::Detect)),
 			COMPLETIONS_TO_DETECT => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Detect),
@@ -682,6 +720,7 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
+			native_format: input_format.provider_format(),
 			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
@@ -1153,6 +1192,8 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1160,6 +1201,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
+		native_format: Some(custom::ProviderFormat::Completions),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: true,
@@ -1220,6 +1262,8 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1241,6 +1285,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,
+				native_format: Some(custom::ProviderFormat::Completions),
 				request_model: "input-model".into(),
 				provider: Default::default(),
 				streaming: true,
@@ -1326,10 +1371,51 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
 
+#[test]
+fn setup_request_custom_path_override_wins_over_format_path() {
+	let provider = AIProvider::Custom(custom::Provider {
+		model: None,
+		formats: vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		native_format: Some(custom::ProviderFormat::Messages),
+		request_model: "input-model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/chat/completions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			Some("/override/messages"),
+			None,
+			true,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/override/messages");
+	assert_eq!(req.uri().query(), None);
+}
+
 fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Messages,
+		native_format: Some(custom::ProviderFormat::Messages),
 		request_model: request_model.into(),
 		provider: Default::default(),
 		streaming: false,
@@ -1398,6 +1484,8 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",

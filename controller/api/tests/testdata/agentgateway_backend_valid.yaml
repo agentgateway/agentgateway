@@ -165,3 +165,47 @@ spec:
         backendRef:
           name: mcp-service
         port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-service-backendref
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+          port: 8080
+        formats:
+        - type: Completions
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-inferencepool-backendref
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          group: inference.networking.k8s.io
+          kind: InferencePool
+          name: llama-pool
+        formats:
+        - type: Completions
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-direct-host-port
+spec:
+  ai:
+    provider:
+      custom:
+        model: llama3
+        formats:
+        - type: Messages
+          path: /api/chat
+      host: llm.example.com
+      port: 443

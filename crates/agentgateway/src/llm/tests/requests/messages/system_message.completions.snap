@@ -1,0 +1,42 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/messages/system_message.json
+info:
+  model: claude-opus-4-8
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "<system-reminder>\nAs you answer, be concise."
+        - type: text
+          text: hola
+          cache_control:
+            type: ephemeral
+    - role: system
+      content: The following skills are available for use.
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<system-reminder>\nAs you answer, be concise."
+        },
+        {
+          "type": "text",
+          "text": "hola"
+        }
+      ]
+    },
+    {
+      "role": "system",
+      "content": "The following skills are available for use."
+    }
+  ],
+  "model": "claude-opus-4-8",
+  "max_completion_tokens": 1024,
+  "stream": false
+}

@@ -195,7 +195,7 @@ func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (
 // agwPluginFactory is a factory function that returns the agent gateway plugins
 // It is based on agwPluginFactory(cfg)(ctx, cfg.AgwCollections) in start.go
 func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) plugins.AgwPlugin {
-	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup)
+	agwPlugins := controller.Plugins(agwCollections, resolver, jwksLookup, plugins.DefaultCredentialResolverFactory(agwCollections))
 	mergedPlugins := plugins.MergePlugins(agwPlugins...)
 	return mergedPlugins
 }
@@ -206,8 +206,11 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
 		Collections: collections,
+		References:  plugins.BuildReferenceIndex(nil, nil, plugins.DefaultReferenceTypes(collections)),
 		Resolver:    resolver,
 		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
+
+		CredentialResolver: plugins.DefaultCredentialResolverFactory(collections),
 	}
 }
 
@@ -238,7 +241,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		ControllerName:       wellknown.DefaultAgwControllerName,
 		SystemNamespace:      "agentgateway-system",
 		IstioNamespace:       "istio-system",
-		ClusterID:            "Kubernetes",
+		IstioClusterId:       "Kubernetes",
 	}
 	col.SetupIndexes()
 	return col

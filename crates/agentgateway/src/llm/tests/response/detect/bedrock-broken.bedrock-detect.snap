@@ -1,0 +1,9 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/detect/bedrock-broken.bin
+info: "\u0000\u0000\u0000�\u0000\u0000\u0000Rぃ3\u000b:event-type\u0007\u0000\fmessageStart\r:content-type\u0007\u0000\u0010application/json\r:message-tylmnopqrstuvwxyzABCDEFGHIJKLMN\",\"usage\":{\"inputTokens\":15,\"outputTokens\":142,\"totalTokens\":157}}�\u000bs�"
+---
+{
+  "response": "\u0000\u0000\u0000�\u0000\u0000\u0000Rぃ3\u000b:event-type\u0007\u0000\fmessageStart\r:content-type\u0007\u0000\u0010application/json\r:message-tylmnopqrstuvwxyzABCDEFGHIJKLMN\",\"usage\":{\"inputTokens\":15,\"outputTokens\":142,\"totalTokens\":157}}�\u000bs�",
+  "parsed": {}
+}
