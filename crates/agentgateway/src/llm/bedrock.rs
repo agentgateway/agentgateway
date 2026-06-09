@@ -35,22 +35,11 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	/// Returns the model ID to use for family/feature detection when the runtime
-	/// model may be an opaque inference profile.
-	pub fn model_id_for_feature_detection<'a>(
-		&'a self,
-		request_model: Option<&'a str>,
-	) -> Option<&'a str> {
-		match self.model.as_deref() {
-			Some(model) if is_inference_profile_model_id(model) => request_model.or(Some(model)),
-			Some(model) => Some(model),
-			None => request_model,
-		}
-	}
-
 	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
 		let model = self
-			.model_id_for_feature_detection(request_model)
+			.model
+			.as_deref()
+			.or(request_model)
 			.unwrap_or_default()
 			.to_ascii_lowercase();
 		model.contains("anthropic.claude")
@@ -76,46 +65,5 @@ impl Provider {
 
 	pub fn get_host(&self) -> Strng {
 		strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
-	}
-}
-
-pub fn is_inference_profile_model_id(model_id: &str) -> bool {
-	let model_id = model_id.to_ascii_lowercase();
-	model_id.contains(":application-inference-profile/")
-		|| model_id.contains(":inference-profile/")
-		|| model_id.starts_with("application-inference-profile/")
-		|| model_id.starts_with("inference-profile/")
-}
-
-#[cfg(test)]
-mod tests {
-	use agent_core::strng;
-
-	use super::*;
-
-	fn provider(model: &str) -> Provider {
-		Provider {
-			model: Some(strng::new(model)),
-			region: strng::new("us-east-1"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		}
-	}
-
-	#[test]
-	fn anthropic_detection_uses_request_model_for_inference_profiles() {
-		let provider =
-			provider("arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile");
-
-		assert!(provider.is_anthropic_model(Some("anthropic.claude-3-5-sonnet-20241022-v2:0")));
-	}
-
-	#[test]
-	fn anthropic_detection_keeps_explicit_model_override_for_plain_models() {
-		let provider = provider("amazon.titan-text-express-v1");
-
-		assert!(!provider.is_anthropic_model(Some("anthropic.claude-3-5-sonnet-20241022-v2:0")));
 	}
 }

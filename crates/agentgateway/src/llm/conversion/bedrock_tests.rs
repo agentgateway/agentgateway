@@ -1308,35 +1308,6 @@ fn test_embeddings_cohere_with_passthrough_fields() {
 }
 
 #[test]
-fn test_embeddings_cohere_with_inference_profile_uses_request_model_family() {
-	let provider = Provider {
-		model: Some(strng::new(
-			"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/cohere-profile",
-		)),
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
-	};
-
-	let req = types::embeddings::Request {
-		model: Some("cohere.embed-english-v3".to_string()),
-		input: json!(["hello", "world"]),
-		user: None,
-		encoding_format: None,
-		dimensions: None,
-		rest: json!({"input_type": "search_document"}),
-	};
-
-	let translated = from_embeddings::translate(&req, &provider).unwrap();
-	let bedrock_req: bedrock::CohereEmbeddingRequest = serde_json::from_slice(&translated).unwrap();
-
-	assert_eq!(bedrock_req.texts, vec!["hello", "world"]);
-	assert_eq!(bedrock_req.input_type, "search_document");
-}
-
-#[test]
 fn test_embeddings_rejects_invalid_input() {
 	let provider = Provider {
 		model: Some(strng::new("cohere.embed-english-v3")),
