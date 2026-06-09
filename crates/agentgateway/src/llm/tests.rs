@@ -24,7 +24,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
-fn bedrock_override_model_preserves_explicit_request_model() {
+fn bedrock_inference_profile_override_preserves_explicit_request_model() {
 	let provider = AIProvider::Bedrock(bedrock::Provider {
 		model: Some(strng::new(
 			"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
@@ -40,6 +40,23 @@ fn bedrock_override_model_preserves_explicit_request_model() {
 	assert_eq!(
 		provider.request_model_override(false).as_deref(),
 		Some("arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile")
+	);
+}
+
+#[test]
+fn bedrock_plain_override_model_still_replaces_explicit_request_model() {
+	let provider = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new("amazon.titan-text-express-v1")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	});
+
+	assert_eq!(
+		provider.request_model_override(true).as_deref(),
+		Some("amazon.titan-text-express-v1")
 	);
 }
 

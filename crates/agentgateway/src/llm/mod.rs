@@ -331,9 +331,17 @@ impl AIProvider {
 	}
 	fn request_model_override(&self, has_request_model: bool) -> Option<Strng> {
 		match self {
-			// Bedrock model overrides may be opaque application inference profiles used only
-			// for the runtime path. Preserve an explicit request model for family checks.
-			AIProvider::Bedrock(_) if has_request_model => None,
+			// Bedrock inference profiles are runtime routing IDs, not model-family IDs.
+			// Preserve an explicit request model so feature checks still see the family.
+			AIProvider::Bedrock(p)
+				if has_request_model
+					&& p
+						.model
+						.as_deref()
+						.is_some_and(bedrock::is_inference_profile_model_id) =>
+			{
+				None
+			},
 			_ => self.override_model(),
 		}
 	}

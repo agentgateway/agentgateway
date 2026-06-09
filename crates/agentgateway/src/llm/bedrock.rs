@@ -35,7 +35,12 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	pub fn feature_model_id<'a>(&'a self, request_model: Option<&'a str>) -> Option<&'a str> {
+	/// Returns the model ID to use for family/feature detection when the runtime
+	/// model may be an opaque inference profile.
+	pub fn model_id_for_feature_detection<'a>(
+		&'a self,
+		request_model: Option<&'a str>,
+	) -> Option<&'a str> {
 		match self.model.as_deref() {
 			Some(model) if is_inference_profile_model_id(model) => request_model.or(Some(model)),
 			Some(model) => Some(model),
@@ -45,7 +50,7 @@ impl Provider {
 
 	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
 		let model = self
-			.feature_model_id(request_model)
+			.model_id_for_feature_detection(request_model)
 			.unwrap_or_default()
 			.to_ascii_lowercase();
 		model.contains("anthropic.claude")

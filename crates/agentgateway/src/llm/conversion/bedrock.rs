@@ -30,7 +30,7 @@ pub mod from_embeddings {
 			.map_err(AIError::RequestMarshal)?;
 
 		let model = provider
-			.feature_model_id(Some(&typed.model))
+			.model_id_for_feature_detection(Some(&typed.model))
 			.unwrap_or(&typed.model);
 
 		// Bedrock has two embedding model families with incompatible APIs:
