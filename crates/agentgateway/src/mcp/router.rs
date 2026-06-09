@@ -43,7 +43,7 @@ impl App {
 			return None;
 		}
 
-		if backend_policies.mcp_authentication.is_some() {
+		if backend_policies.mcp_authentication.is_some() && !backend.oauth_passthrough {
 			return None;
 		}
 		if !req.uri().path().contains("/.well-known/") {

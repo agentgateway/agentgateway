@@ -2098,6 +2098,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].mcp.oauthPassthrough`|boolean|When true, `.well-known/` OAuth discovery requests are forwarded to the backend<br>MCP server instead of being handled by the gateway. Use this when the target MCP<br>server has its own OAuth flow.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -8394,6 +8395,7 @@
 |`backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].mcp.oauthPassthrough`|boolean|When true, `.well-known/` OAuth discovery requests are forwarded to the backend<br>MCP server instead of being handled by the gateway. Use this when the target MCP<br>server has its own OAuth flow.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string||
 |`backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -13768,6 +13770,7 @@
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].mcp.oauthPassthrough`|boolean|When true, `.well-known/` OAuth discovery requests are forwarded to the backend<br>MCP server instead of being handled by the gateway. Use this when the target MCP<br>server has its own OAuth flow.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string||
 |`routeGroups[].routes[].backends[].ai.provider`|object|Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -18937,6 +18940,7 @@
 |`mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.oauthPassthrough`|boolean|When true, `.well-known/` OAuth discovery requests are forwarded to the backend<br>MCP server instead of being handled by the gateway. Use this when the target MCP<br>server has its own OAuth flow.|
 |`mcp.policies`|object||
 |`mcp.policies.requestHeaderModifier`|object|Headers to be modified in the request.|
 |`mcp.policies.requestHeaderModifier.add`|object||

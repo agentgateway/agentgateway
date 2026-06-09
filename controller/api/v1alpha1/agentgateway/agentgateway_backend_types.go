@@ -545,6 +545,13 @@ type MCPBackend struct {
 	// entire session if any target fails.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// `oauthPassthrough` when true, forwards `.well-known/` OAuth discovery
+	// requests to the backend MCP server instead of handling them at the gateway.
+	// Use this when the target MCP server has its own OAuth flow.
+	// Defaults to false.
+	// +optional
+	OauthPassthrough bool `json:"oauthPassthrough,omitempty"`
 }
 
 const (

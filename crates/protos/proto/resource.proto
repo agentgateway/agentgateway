@@ -1537,6 +1537,11 @@ message MCPBackend {
     FAIL_OPEN = 1;
   }
   FailureMode failure_mode = 5;
+
+  // When true, .well-known/ OAuth discovery requests are forwarded to the backend
+  // MCP server instead of being handled by the gateway. This enables hosting MCP servers
+  // that have their own OAuth flow behind the gateway while preserving observability.
+  bool oauth_passthrough = 6;
 }
 
 message MCPTarget {

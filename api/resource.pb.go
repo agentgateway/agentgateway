@@ -7340,10 +7340,14 @@ type MCPBackend struct {
 	// to mix stateful and stateless targets in the same backend.
 	StatefulMode MCPBackend_StatefulMode `protobuf:"varint,3,opt,name=stateful_mode,json=statefulMode,proto3,enum=agentgateway.dev.resource.MCPBackend_StatefulMode" json:"stateful_mode,omitempty"`
 	// Whether to always prefix the tool name using the target name
-	PrefixMode    MCPBackend_PrefixMode  `protobuf:"varint,4,opt,name=prefix_mode,json=prefixMode,proto3,enum=agentgateway.dev.resource.MCPBackend_PrefixMode" json:"prefix_mode,omitempty"`
-	FailureMode   MCPBackend_FailureMode `protobuf:"varint,5,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.MCPBackend_FailureMode" json:"failure_mode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PrefixMode  MCPBackend_PrefixMode  `protobuf:"varint,4,opt,name=prefix_mode,json=prefixMode,proto3,enum=agentgateway.dev.resource.MCPBackend_PrefixMode" json:"prefix_mode,omitempty"`
+	FailureMode MCPBackend_FailureMode `protobuf:"varint,5,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.MCPBackend_FailureMode" json:"failure_mode,omitempty"`
+	// When true, .well-known/ OAuth discovery requests are forwarded to the backend
+	// MCP server instead of being handled by the gateway. This enables hosting MCP servers
+	// that have their own OAuth flow behind the gateway while preserving observability.
+	OauthPassthrough bool `protobuf:"varint,6,opt,name=oauth_passthrough,json=oauthPassthrough,proto3" json:"oauth_passthrough,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MCPBackend) Reset() {
@@ -7402,6 +7406,13 @@ func (x *MCPBackend) GetFailureMode() MCPBackend_FailureMode {
 		return x.FailureMode
 	}
 	return MCPBackend_FAIL_CLOSED
+}
+
+func (x *MCPBackend) GetOauthPassthrough() bool {
+	if x != nil {
+		return x.OauthPassthrough
+	}
+	return false
 }
 
 type MCPTarget struct {
@@ -14769,14 +14780,15 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"EMBEDDINGS\x10\x04\x12\x19\n" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x05\x12\f\n" +
-	"\bREALTIME\x10\x06\"\xd5\x03\n" +
+	"\bREALTIME\x10\x06\"\x82\x04\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +
 	"\rstateful_mode\x18\x03 \x01(\x0e22.agentgateway.dev.resource.MCPBackend.StatefulModeR\fstatefulMode\x12Q\n" +
 	"\vprefix_mode\x18\x04 \x01(\x0e20.agentgateway.dev.resource.MCPBackend.PrefixModeR\n" +
 	"prefixMode\x12T\n" +
-	"\ffailure_mode\x18\x05 \x01(\x0e21.agentgateway.dev.resource.MCPBackend.FailureModeR\vfailureMode\"+\n" +
+	"\ffailure_mode\x18\x05 \x01(\x0e21.agentgateway.dev.resource.MCPBackend.FailureModeR\vfailureMode\x12+\n" +
+	"\x11oauth_passthrough\x18\x06 \x01(\bR\x10oauthPassthrough\"+\n" +
 	"\fStatefulMode\x12\f\n" +
 	"\bSTATEFUL\x10\x00\x12\r\n" +
 	"\tSTATELESS\x10\x01\")\n" +
