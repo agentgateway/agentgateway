@@ -462,7 +462,7 @@ type GeminiConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-// VertexAIConfig settings for the [Vertex AI](https://docs.cloud.google.com/vertex-ai/docs) LLM provider.
+// VertexAIConfig settings for the [Vertex AI](https://docs.cloud.google.com/gemini-enterprise-agent-platform) LLM provider.
 type VertexAIConfig struct {
 	// Optional: Override the model name, such as `gpt-4o-mini`.
 	// If unset, the model name is taken from the request.
