@@ -155,7 +155,9 @@ impl Provider {
 }
 
 fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
-	body.remove("output_config");
+	// output_format is the deprecated predecessor of output_config.format; strip it.
+	// output_config is intentionally preserved: Vertex supports it for structured outputs
+	// (format.json_schema) and for adaptive thinking depth control (effort).
 	body.remove("output_format");
 	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
 	for value in body.values_mut() {
@@ -243,16 +245,26 @@ mod tests {
 	}
 
 	#[test]
-	fn test_remove_top_level_output_fields() {
+	fn test_output_format_removed_output_config_preserved() {
 		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
 			"model": "claude-sonnet-4-5-20251001",
-			"output_config": {"format": "json"},
+			"output_config": {
+				"format": {
+					"type": "json_schema",
+					"schema": {
+						"type": "object",
+						"properties": {"answer": {"type": "integer"}},
+						"required": ["answer"],
+						"additionalProperties": false
+					}
+				}
+			},
 			"output_format": "markdown",
 			"messages": [{"role": "user", "content": "hello"}]
 		}))
 		.unwrap();
 		remove_unsupported_vertex_fields(&mut body);
-		assert!(!body.contains_key("output_config"));
+		assert!(body.contains_key("output_config"));
 		assert!(!body.contains_key("output_format"));
 		assert!(body.contains_key("model"));
 		assert!(body.contains_key("messages"));
@@ -377,8 +389,8 @@ mod tests {
 		.unwrap();
 		remove_unsupported_vertex_fields(&mut body);
 
-		// Top-level fields removed
-		assert!(!body.contains_key("output_config"));
+		// output_format removed; output_config preserved for structured outputs.
+		assert!(body.contains_key("output_config"));
 		assert!(!body.contains_key("output_format"));
 		// Preserved fields
 		assert_eq!(body["max_tokens"], 1024);
