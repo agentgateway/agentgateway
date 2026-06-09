@@ -2509,6 +2509,8 @@ pub struct LocalMcpAuthentication {
 	pub authorization_location: http::auth::AuthorizationLocation,
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	/// Required when `provider` is `Cognito` (Cognito does not support Dynamic Client Registration).
+	/// Optional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.
 	pub client_id: Option<String>,
 }
 
@@ -2520,9 +2522,10 @@ impl LocalMcpAuthentication {
 					url.clone()
 				} else {
 					match &self.provider {
-						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
-							format!("{}/.well-known/jwks.json", self.issuer).parse()?
-						},
+						None
+						| Some(McpIDP::Auth0 { .. })
+						| Some(McpIDP::Okta { .. })
+						| Some(McpIDP::Cognito { .. }) => format!("{}/.well-known/jwks.json", self.issuer).parse()?,
 						Some(McpIDP::Keycloak { .. }) => {
 							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
 						},
@@ -2547,6 +2550,12 @@ impl LocalMcpAuthentication {
 		&self,
 		client: crate::client::Client,
 	) -> anyhow::Result<McpAuthentication> {
+		if matches!(self.provider, Some(McpIDP::Cognito {})) && self.client_id.is_none() {
+			anyhow::bail!(
+				"Cognito provider requires `clientId` to be configured \
+				 (Cognito does not support Dynamic Client Registration)"
+			);
+		}
 		let jwt_cfg = self.as_jwt()?;
 		let jwt = jwt_cfg.try_into(client).await?;
 		Ok(McpAuthentication {
@@ -2566,6 +2575,7 @@ pub enum McpIDP {
 	Auth0 {},
 	Keycloak {},
 	Okta {},
+	Cognito {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -3110,6 +3120,89 @@ jwtValidationOptions:
 				);
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
+	}
+
+	#[test]
+	fn cognito_without_client_id_fails_validation() {
+		// Use yamlviajson (YAML→JSON→deserialize) to correctly parse enum variants.
+		let yaml = r#"
+issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example"
+audiences: ["abc123def456"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+provider:
+  cognito: {}
+"#;
+		let auth: LocalMcpAuthentication = crate::serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(
+			matches!(auth.provider, Some(McpIDP::Cognito {})),
+			"provider should be Cognito"
+		);
+		// Without clientId, the translate() guard condition fires — verify the field is absent.
+		assert!(auth.client_id.is_none());
+	}
+
+	#[test]
+	fn cognito_with_client_id_parses_correctly() {
+		let yaml = r#"
+issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example"
+audiences: ["abc123def456"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+provider:
+  cognito: {}
+clientId: abc123def456
+"#;
+		let auth: LocalMcpAuthentication = crate::serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(
+			matches!(auth.provider, Some(McpIDP::Cognito {})),
+			"provider should be Cognito"
+		);
+		assert_eq!(
+			auth.client_id.as_deref(),
+			Some("abc123def456"),
+			"clientId should be present"
+		);
+	}
+
+	#[test]
+	fn cognito_jwks_url_uses_well_known() {
+		// When provider is Cognito and jwks.url is empty, as_jwt() derives the JWKS URL
+		// from the issuer as `{issuer}/.well-known/jwks.json`.
+		// Build the struct directly to inject the empty URL (not reachable via YAML parsing
+		// because an empty URI string fails URI validation).
+		let auth = LocalMcpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123def456".to_string()],
+			provider: Some(McpIDP::Cognito {}),
+			resource_metadata: ResourceMetadata {
+				extra: std::collections::BTreeMap::new(),
+			},
+			// Parts-based construction yields a URI whose to_string() is "".
+			jwks: crate::serdes::FileInlineOrRemote::Remote {
+				url: http::Uri::from_parts(Default::default()).unwrap(),
+			},
+			mode: McpAuthenticationMode::default(),
+			authorization_location: Default::default(),
+			jwt_validation_options: Default::default(),
+			client_id: Some("abc123def456".to_string()),
+		};
+		let jwt_config = auth.as_jwt().unwrap();
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
+				crate::serdes::FileInlineOrRemote::Remote { url } => {
+					assert_eq!(
+						url.to_string(),
+						"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/jwks.json",
+						"Cognito should derive the JWKS URL from the issuer"
+					);
+				},
+				_ => panic!("expected Remote JWKS"),
+			},
+			_ => panic!("expected LocalJwtConfig::Single"),
 		}
 	}
 

@@ -4796,8 +4796,9 @@ spec:
                             type: array
                           clientId:
                             description: |-
-                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
-                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                              `clientId` is the OAuth app client ID.
+                              Required when provider is Cognito, which does not support Dynamic Client Registration.
+                              Optional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.
                             type: string
                           issuer:
                             description: |-
@@ -4918,6 +4919,7 @@ spec:
                               to use for authentication.'
                             enum:
                             - Auth0
+                            - Cognito
                             - Keycloak
                             - Okta
                             type: string
@@ -8569,14 +8571,16 @@ spec:
                         properties:
                           clientId:
                             description: |-
-                              `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
-                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                              `clientId` is the OAuth app client ID.
+                              Required when provider is Cognito, which does not support Dynamic Client Registration.
+                              Optional for Auth0, Keycloak, and Okta to short-circuit DCR with a pre-registered client.
                             type: string
                           provider:
                             description: '`provider` specifies the identity provider
                               to use for MCP authentication flows.'
                             enum:
                             - Auth0
+                            - Cognito
                             - Keycloak
                             - Okta
                             type: string
