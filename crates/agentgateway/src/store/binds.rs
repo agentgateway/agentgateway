@@ -209,7 +209,9 @@ impl FrontendPolices {
 	}
 }
 
-#[derive(Default, Debug, Clone)]
+#[serde_with::skip_serializing_none]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
@@ -326,7 +328,8 @@ pub struct RoutePolicies {
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayPolicies {
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
@@ -883,7 +886,7 @@ impl Store {
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();
-			t.selected_policies(s)
+			t.selected_policies("route", s)
 		});
 
 		pol
@@ -937,6 +940,10 @@ impl Store {
 				},
 			}
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("gateway", s)
+		});
 
 		pol
 	}
@@ -950,6 +957,7 @@ impl Store {
 		inline_policies: Option<&[BackendTrafficPolicy]>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"subBackend",
 			None,
 			Some(sub_backend),
 			if let Some(s) = &inline_policies {
@@ -968,6 +976,7 @@ impl Store {
 		inline_policies: &[BackendTrafficPolicy],
 	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"inlineBackend",
 			None,
 			None,
 			std::slice::from_ref(&inline_policies),
@@ -982,7 +991,15 @@ impl Store {
 		inline_policies: &[&[BackendTrafficPolicy]],
 		path: Option<RoutePath>,
 	) -> BackendPolicies {
+		let phase = match backend {
+			BackendTargetRef::Backend {
+				section: Some(_), ..
+			}
+			| BackendTargetRef::Service { port: Some(_), .. } => "subBackend",
+			_ => "backend",
+		};
 		self.internal_backend_policies(
+			phase,
 			Some(backend.strip_section()),
 			Some(backend.clone()),
 			inline_policies,
@@ -994,6 +1011,7 @@ impl Store {
 	#[allow(clippy::too_many_arguments)]
 	fn internal_backend_policies(
 		&self,
+		phase: &str,
 		// backend with section stripped, always
 		backend: Option<BackendTargetRef>,
 		// backend with section retained.
@@ -1114,6 +1132,10 @@ impl Store {
 		if !mcp_authz.is_empty() {
 			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies(phase, s)
+		});
 		pol
 	}
 

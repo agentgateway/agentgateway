@@ -299,6 +299,7 @@ pub enum MessageType {
 		evaluatedRoutes: Vec<RouteKey>,
 	},
 	PolicySelection {
+		phase: String,
 		effectivePolicy: Value,
 	},
 	// The final result of a policy evaluation.
@@ -627,8 +628,9 @@ impl DebugTracer {
 			requestState: data,
 		})
 	}
-	pub fn selected_policies(&self, effective_policy: Value) {
+	pub fn selected_policies(&self, phase: &str, effective_policy: Value) {
 		self.send(MessageType::PolicySelection {
+			phase: phase.to_string(),
 			effectivePolicy: effective_policy,
 		})
 	}
