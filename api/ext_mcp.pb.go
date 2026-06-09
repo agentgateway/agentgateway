@@ -86,7 +86,7 @@ type McpRequest struct {
 	McpRequest *structpb.Struct `protobuf:"bytes,4,opt,name=mcp_request,json=mcpRequest,proto3" json:"mcp_request,omitempty"`
 	// Incoming HTTP request headers carrying this MCP call, after gateway-side
 	// allow/deny filtering. Multi-value headers appear as repeated entries with
-	// the same key. Non-UTF8 header values are dropped. Empty for stdio upstreams.
+	// the same key. Empty for stdio upstreams.
 	Headers       []*McpHeader `protobuf:"bytes,5,rep,name=headers,proto3" json:"headers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -501,9 +501,10 @@ func (x *HeaderMutation) GetRemove() []string {
 }
 
 type McpHeader struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// Raw value bytes: HTTP header values are not guaranteed to be UTF-8.
+	Value         []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -545,11 +546,11 @@ func (x *McpHeader) GetKey() string {
 	return ""
 }
 
-func (x *McpHeader) GetValue() string {
+func (x *McpHeader) GetValue() []byte {
 	if x != nil {
 		return x.Value
 	}
-	return ""
+	return nil
 }
 
 type Pass struct {
@@ -684,7 +685,7 @@ const file_ext_mcp_proto_rawDesc = "" +
 	"\x06remove\x18\x02 \x03(\tR\x06remove\"3\n" +
 	"\tMcpHeader\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\x06\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"\x06\n" +
 	"\x04Pass\"\xfa\x01\n" +
 	"\x12AuthorizationError\x12E\n" +
 	"\x04code\x18\x01 \x01(\x0e21.agentgateway.dev.ext_mcp.AuthorizationError.CodeR\x04code\x12\x16\n" +

@@ -69,7 +69,7 @@ pub fn mutated_response(body: Struct) -> Result<McpResponseResult, Status> {
 /// Pass with a side effect: optional header mutation + metadata, applied to
 /// the upstream request that carries this MCP call.
 pub fn pass_request_with(
-	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<Vec<u8>>)>,
 	remove_headers: impl IntoIterator<Item = impl Into<String>>,
 	metadata: Option<Struct>,
 ) -> Result<McpRequestResult, Status> {
@@ -81,7 +81,7 @@ pub fn pass_request_with(
 }
 
 fn build_header_mutation(
-	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+	set_headers: impl IntoIterator<Item = (impl Into<String>, impl Into<Vec<u8>>)>,
 	remove_headers: impl IntoIterator<Item = impl Into<String>>,
 ) -> HeaderMutation {
 	HeaderMutation {

@@ -25,7 +25,7 @@ message McpRequest {
   google.protobuf.Struct mcp_request = 4;
   // Incoming HTTP request headers carrying this MCP call, after gateway-side
   // allow/deny filtering. Multi-value headers appear as repeated entries with
-  // the same key. Non-UTF8 header values are dropped. Empty for stdio upstreams.
+  // the same key. Empty for stdio upstreams.
   repeated McpHeader headers = 5;
 }
 
@@ -72,7 +72,8 @@ message HeaderMutation {
 
 message McpHeader {
   string key = 1;
-  string value = 2;
+  // Raw value bytes: HTTP header values are not guaranteed to be UTF-8.
+  bytes value = 2;
 }
 
 message Pass {}

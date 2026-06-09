@@ -260,7 +260,7 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 
 // Snapshot the incoming request headers for the policy server, applying the
 // configured allow/deny filter. Like ext_authz, pseudo-headers are forwarded
-// too. Non-UTF8 values are dropped (the wire type is a UTF8 string).
+// too. Values are raw bytes: header values are not guaranteed to be UTF-8.
 fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wire::McpHeader> {
 	let mut out = Vec::new();
 	// Pseudo-headers are single-valued.
@@ -268,18 +268,16 @@ fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wir
 		if filter.allows(&pseudo) {
 			out.push(wire::McpHeader {
 				key: pseudo.to_string(),
-				value,
+				value: value.into_bytes(),
 			});
 		}
 	}
 	// Real headers: one entry per value to preserve multi-value semantics.
 	for (name, value) in req.headers() {
-		if filter.allows(&crate::http::HeaderOrPseudo::Header(name.clone()))
-			&& let Ok(v) = value.to_str()
-		{
+		if filter.allows(&crate::http::HeaderOrPseudo::Header(name.clone())) {
 			out.push(wire::McpHeader {
 				key: name.as_str().to_string(),
-				value: v.to_string(),
+				value: value.as_bytes().to_vec(),
 			});
 		}
 	}
@@ -432,6 +430,10 @@ mod tests {
 		headers.append("x-multi", "b".parse().unwrap());
 		headers.insert("x-drop", "1".parse().unwrap());
 		headers.insert("host", "example.com".parse().unwrap());
+		headers.insert(
+			"x-binary",
+			::http::HeaderValue::from_bytes(b"\xff\xfe").unwrap(),
+		);
 
 		// Empty allow = send everything (incl. pseudo-headers) except disallowed.
 		let filter = HeaderFilter {
@@ -443,16 +445,22 @@ mod tests {
 		let multi: Vec<_> = out
 			.iter()
 			.filter(|h| h.key == "x-multi")
-			.map(|h| h.value.as_str())
+			.map(|h| h.value.as_slice())
 			.collect();
-		assert_eq!(multi, vec!["a", "b"]);
+		assert_eq!(multi, vec![b"a".as_slice(), b"b".as_slice()]);
 		// Pseudo-headers are forwarded by default.
 		assert!(
 			out
 				.iter()
-				.any(|h| h.key == ":authority" && h.value == "example.com")
+				.any(|h| h.key == ":authority" && h.value == b"example.com")
 		);
 		assert!(out.iter().any(|h| h.key == ":method"));
+		// Non-UTF8 values are forwarded verbatim.
+		assert!(
+			out
+				.iter()
+				.any(|h| h.key == "x-binary" && h.value == b"\xff\xfe")
+		);
 
 		// Non-empty allow = send only listed (minus disallowed); pseudos are
 		// opt-in via the same list.
