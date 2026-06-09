@@ -613,7 +613,7 @@ impl Relay {
 		let method = method.as_str();
 
 		// service_name for the single fanout-wide extMcp hook: every backend name joined,
-		// matching the merged result the driver sees (just the one name when there is a
+		// matching the merged result the processor sees (just the one name when there is a
 		// single backend).
 		// TODO: better aggregate service_name than concatenating every backend name.
 		let service_name = self.ext_mcp.as_ref().map(|_| {

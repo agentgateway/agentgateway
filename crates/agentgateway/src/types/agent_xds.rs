@@ -606,14 +606,14 @@ fn convert_ext_mcp(
 		})
 	}
 
-	let mut drivers = Vec::with_capacity(em.processors.len());
+	let mut processors = Vec::with_capacity(em.processors.len());
 	for processor in &em.processors {
 		let kind = match processor.kind.as_ref() {
 			Some(ProtoProcessorKind::Remote(r)) => {
-				crate::mcp::extmcp::DriverKind::Remote(convert_remote(r, diagnostics)?)
+				crate::mcp::extmcp::ProcessorKind::Remote(convert_remote(r, diagnostics)?)
 			},
 			None => {
-				diagnostics.add_warning("extMcp processor has no driver set; ignoring");
+				diagnostics.add_warning("extMcp processor has no kind set; ignoring");
 				continue;
 			},
 		};
@@ -621,10 +621,10 @@ fn convert_ext_mcp(
 		if methods.is_empty() {
 			diagnostics.add_warning("extMcp processor configured with no methods; it will never run");
 		}
-		drivers.push(crate::mcp::extmcp::Driver { methods, kind });
+		processors.push(crate::mcp::extmcp::Processor { methods, kind });
 	}
 
-	let ext = crate::mcp::extmcp::ExtMcp { drivers };
+	let ext = crate::mcp::extmcp::ExtMcp { processors };
 	for w in ext.load_warnings() {
 		diagnostics.add_warning(w);
 	}

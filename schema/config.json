@@ -1858,24 +1858,25 @@
     "ExtMcp": {
       "type": "object",
       "properties": {
-        "drivers": {
+        "processors": {
+          "description": "Ordered list of policy processors applied to matched methods; the first\nto reject a request short-circuits the chain. Processors may run on the\nrequest or response side, or both; see `Processor.methods`.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Driver"
+            "$ref": "#/$defs/Processor"
           },
           "minItems": 1
         }
       },
       "additionalProperties": false,
       "required": [
-        "drivers"
+        "processors"
       ]
     },
-    "Driver": {
+    "Processor": {
       "type": "object",
       "properties": {
         "methods": {
-          "description": "Allowlist: only methods listed here run through this driver, at the\nconfigured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),\nor suffix (`*/list`) wildcards, or `*` for all methods. Methods matching\nno key bypass this driver; see [`phase::resolve`] for match precedence.",
+          "description": "Allowlist: only methods listed here run through this processor, at the\nconfigured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),\nor suffix (`*/list`) wildcards, or `*` for all methods. Methods matching\nno key bypass this processor; see [`phase::resolve`] for match precedence.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Phase"
@@ -1891,12 +1892,12 @@
               "$ref": "#/$defs/SimpleLocalBackend"
             },
             "failureMode": {
-              "description": "Behavior when the driver is unavailable or returns an error.",
+              "description": "Behavior when the processor is unavailable or returns an error.",
               "$ref": "#/$defs/FailureMode",
               "default": "failClosed"
             },
             "metadata": {
-              "description": "CEL expressions evaluated per request and sent to the driver as metadata.",
+              "description": "CEL expressions evaluated per request and sent to the processor as metadata.",
               "type": "object",
               "additionalProperties": {
                 "$ref": "#/$defs/Expression"

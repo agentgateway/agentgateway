@@ -160,22 +160,22 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers`|[]object||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service`|object||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service.name`|object||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.service.port`|integer||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`binds[].listeners[].routes[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].policies.authorization`|object|Authorization policies for HTTP access.|
 |`binds[].listeners[].routes[].policies.authorization.rules`|[]string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|object|Authentication for MCP clients.|
@@ -2106,22 +2106,22 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -2417,22 +2417,22 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers`|[]object||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -3561,22 +3561,22 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -4675,22 +4675,22 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers`|[]object||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -6533,22 +6533,22 @@
 |`policies[].policy.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`policies[].policy.mcpAuthorization.rules`|[]string||
 |`policies[].policy.extMcp`|object|External MCP policy processors.|
-|`policies[].policy.extMcp.drivers`|[]object||
-|`policies[].policy.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`policies[].policy.extMcp.drivers[].target.service`|object||
-|`policies[].policy.extMcp.drivers[].target.service.name`|object||
-|`policies[].policy.extMcp.drivers[].target.service.name.namespace`|string||
-|`policies[].policy.extMcp.drivers[].target.service.name.hostname`|string||
-|`policies[].policy.extMcp.drivers[].target.service.port`|integer||
-|`policies[].policy.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`policies[].policy.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`policies[].policy.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`policies[].policy.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`policies[].policy.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`policies[].policy.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`policies[].policy.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`policies[].policy.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`policies[].policy.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`policies[].policy.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extMcp.processors[].target.service`|object||
+|`policies[].policy.extMcp.processors[].target.service.name`|object||
+|`policies[].policy.extMcp.processors[].target.service.name.namespace`|string||
+|`policies[].policy.extMcp.processors[].target.service.name.hostname`|string||
+|`policies[].policy.extMcp.processors[].target.service.port`|integer||
+|`policies[].policy.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`policies[].policy.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`policies[].policy.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`policies[].policy.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`policies[].policy.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`policies[].policy.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`policies[].policy.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`policies[].policy.authorization`|object|Authorization policies for HTTP access.|
 |`policies[].policy.authorization.rules`|[]string||
 |`policies[].policy.mcpAuthentication`|object|Authentication for MCP clients.|
@@ -8474,22 +8474,22 @@
 |`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.service.port`|integer||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`backends[].mcp.targets[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`backends[].mcp.targets[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -8785,22 +8785,22 @@
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`backends[].ai.policies.extMcp.drivers`|[]object||
-|`backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].ai.policies.extMcp.drivers[].target.service`|object||
-|`backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
-|`backends[].ai.policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`backends[].ai.policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`backends[].ai.policies.extMcp.drivers[].target.service.port`|integer||
-|`backends[].ai.policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`backends[].ai.policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].ai.policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`backends[].ai.policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`backends[].ai.policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`backends[].ai.policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`backends[].ai.policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`backends[].ai.policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.extMcp.processors[].target.service`|object||
+|`backends[].ai.policies.extMcp.processors[].target.service.name`|object||
+|`backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
+|`backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
+|`backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
+|`backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`backends[].ai.policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`backends[].ai.policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`backends[].ai.policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].ai.policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -9929,22 +9929,22 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.port`|integer||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`backends[].ai.groups[].providers[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -11042,22 +11042,22 @@
 |`backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.extMcp`|object|External MCP policy processors.|
-|`backends[].policies.extMcp.drivers`|[]object||
-|`backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].policies.extMcp.drivers[].target.service`|object||
-|`backends[].policies.extMcp.drivers[].target.service.name`|object||
-|`backends[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`backends[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`backends[].policies.extMcp.drivers[].target.service.port`|integer||
-|`backends[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`backends[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`backends[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`backends[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`backends[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`backends[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`backends[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.extMcp.processors[].target.service`|object||
+|`backends[].policies.extMcp.processors[].target.service.name`|object||
+|`backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`backends[].policies.extMcp.processors[].target.service.port`|integer||
+|`backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`backends[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`backends[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`backends[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -11974,22 +11974,22 @@
 |`routeGroups[].routes[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].policies.extMcp.drivers`|[]object||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.service`|object||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.service.name`|object||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.service.port`|integer||
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`routeGroups[].routes[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`routeGroups[].routes[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extMcp.processors[].target.service`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].target.service.port`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`routeGroups[].routes[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`routeGroups[].routes[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].policies.authorization`|object|Authorization policies for HTTP access.|
 |`routeGroups[].routes[].policies.authorization.rules`|[]string||
 |`routeGroups[].routes[].policies.mcpAuthentication`|object|Authentication for MCP clients.|
@@ -13920,22 +13920,22 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers`|[]object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -14231,22 +14231,22 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers`|[]object||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service`|object||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -15375,22 +15375,22 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers`|[]object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -16489,22 +16489,22 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers`|[]object||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service`|object||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].backends[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to the selected backend.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting.endpointPicker`|object|Exactly one of service, host, or backend may be set.|
@@ -19133,22 +19133,22 @@
 |`mcp.targets[].policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
-|`mcp.targets[].policies.extMcp.drivers`|[]object||
-|`mcp.targets[].policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.targets[].policies.extMcp.drivers[].target.service`|object||
-|`mcp.targets[].policies.extMcp.drivers[].target.service.name`|object||
-|`mcp.targets[].policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`mcp.targets[].policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`mcp.targets[].policies.extMcp.drivers[].target.service.port`|integer||
-|`mcp.targets[].policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`mcp.targets[].policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`mcp.targets[].policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`mcp.targets[].policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`mcp.targets[].policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`mcp.targets[].policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`mcp.targets[].policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`mcp.targets[].policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.targets[].policies.extMcp.processors[].target.service`|object||
+|`mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
+|`mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
+|`mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
+|`mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
+|`mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`mcp.targets[].policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`mcp.targets[].policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -19210,22 +19210,22 @@
 |`mcp.policies.mcpAuthorization`|object|Authorization policies for MCP access.|
 |`mcp.policies.mcpAuthorization.rules`|[]string||
 |`mcp.policies.extMcp`|object|External MCP policy processors.|
-|`mcp.policies.extMcp.drivers`|[]object||
-|`mcp.policies.extMcp.drivers[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.policies.extMcp.drivers[].target.service`|object||
-|`mcp.policies.extMcp.drivers[].target.service.name`|object||
-|`mcp.policies.extMcp.drivers[].target.service.name.namespace`|string||
-|`mcp.policies.extMcp.drivers[].target.service.name.hostname`|string||
-|`mcp.policies.extMcp.drivers[].target.service.port`|integer||
-|`mcp.policies.extMcp.drivers[].target.host`|string|Hostname or IP address|
-|`mcp.policies.extMcp.drivers[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.extMcp.drivers[].failureMode`|enum|Behavior when the driver is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`mcp.policies.extMcp.drivers[].metadata`|object|CEL expressions evaluated per request and sent to the driver as metadata.|
-|`mcp.policies.extMcp.drivers[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`mcp.policies.extMcp.drivers[].requestHeaders.allowed`|[]string||
-|`mcp.policies.extMcp.drivers[].requestHeaders.disallowed`|[]string||
-|`mcp.policies.extMcp.drivers[].kind`|enum|Possible values: `remote`.|
-|`mcp.policies.extMcp.drivers[].methods`|object|Allowlist: only methods listed here run through this driver, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this driver; see [`phase::resolve`] for match precedence.|
+|`mcp.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
+|`mcp.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extMcp.processors[].target.service`|object||
+|`mcp.policies.extMcp.processors[].target.service.name`|object||
+|`mcp.policies.extMcp.processors[].target.service.name.namespace`|string||
+|`mcp.policies.extMcp.processors[].target.service.name.hostname`|string||
+|`mcp.policies.extMcp.processors[].target.service.port`|integer||
+|`mcp.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
+|`mcp.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
+|`mcp.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
+|`mcp.policies.extMcp.processors[].requestHeaders.allowed`|[]string||
+|`mcp.policies.extMcp.processors[].requestHeaders.disallowed`|[]string||
+|`mcp.policies.extMcp.processors[].kind`|enum|Possible values: `remote`.|
+|`mcp.policies.extMcp.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.policies.authorization`|object|Authorization policies for HTTP access.|
 |`mcp.policies.authorization.rules`|[]string||
 |`mcp.policies.mcpAuthentication`|object|Authentication for MCP clients.|

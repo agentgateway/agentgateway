@@ -2991,9 +2991,9 @@ mod extmcp_test_support {
 			request_headers: Default::default(),
 		};
 		BackendTrafficPolicy::ExtMcp(Arc::new(extmcp::ExtMcp {
-			drivers: vec![extmcp::Driver {
+			processors: vec![extmcp::Processor {
 				methods,
-				kind: extmcp::DriverKind::Remote(remote),
+				kind: extmcp::ProcessorKind::Remote(remote),
 			}],
 		}))
 	}
@@ -3436,7 +3436,7 @@ async fn mcp_extmcp_filtered_list_via_response_mutation() {
 }
 
 // Fanout (multi-backend) runs the response hook ONCE on the merged, muxed result
-// rather than once per upstream: the driver sees a single checkResponse carrying
+// rather than once per upstream: the processor sees a single checkResponse carrying
 // the prefixed (`a_echo`, `b_echo`) tools and an aggregate service_name.
 #[tokio::test]
 async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
@@ -3519,13 +3519,13 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 		.lock()
 		.unwrap()
 		.clone()
-		.expect("driver saw tools/list");
+		.expect("processor saw tools/list");
 	// Aggregate identity = all backend names concatenated.
 	assert_eq!(service_name, "a_b");
-	// The driver saw the merged, muxed list (prefixed names from both backends).
+	// The processor saw the merged, muxed list (prefixed names from both backends).
 	assert!(
 		seen.iter().any(|n| n == "a_echo") && seen.iter().any(|n| n == "b_echo"),
-		"driver should see muxed names from both backends, got: {seen:?}"
+		"processor should see muxed names from both backends, got: {seen:?}"
 	);
 
 	// The mutation on the merged result is what reaches the client.
@@ -3883,7 +3883,7 @@ async fn mcp_extmcp_request_headers_visible_to_policy_server() {
 	);
 }
 
-// extMcp driver metadata is readable as `extmcp.*` in an upstream-leg transformation.
+// extMcp processor metadata is readable as `extmcp.*` in an upstream-leg transformation.
 #[tokio::test]
 async fn mcp_extmcp_request_metadata_usable_in_backend_transformation() {
 	use crate::http::transformation_cel::{

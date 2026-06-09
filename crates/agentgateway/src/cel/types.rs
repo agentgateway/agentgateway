@@ -1621,7 +1621,7 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub extproc: Option<ExtProcDynamicMetadata>,
 
-	/// `extMcp` contains dynamic metadata returned by extMcp policy drivers.
+	/// `extMcp` contains dynamic metadata returned by extMcp policy processors.
 	#[serde(default, skip_serializing_if = "Option::is_none", rename = "extMcp")]
 	pub extmcp: Option<ExtMcpDynamicMetadata>,
 

@@ -239,7 +239,7 @@ type McpRequestResult struct {
 	HeaderMutation *HeaderMutation `protobuf:"bytes,4,opt,name=header_mutation,json=headerMutation,proto3" json:"header_mutation,omitempty"`
 	// Arbitrary key/value bag stashed in request extensions and exposed to CEL as
 	// `extMcp.<key>`. Subsequent backend filters (e.g. `transformation`) can read
-	// from it. Honored on Pass and Mutated; merged with later drivers' metadata.
+	// from it. Honored on Pass and Mutated; merged with later processors' metadata.
 	Metadata      *structpb.Struct `protobuf:"bytes,5,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

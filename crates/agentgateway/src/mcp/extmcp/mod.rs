@@ -1,7 +1,7 @@
 //! External MCP policy hooks (extMcp).
 //!
 //! Single-target methods (`tools/call`, ...) fire server-facing in the upstream's
-//! native namespace — drivers see unmuxed names (`echo`, not `serverA_echo`) and the
+//! native namespace — processors see unmuxed names (`echo`, not `serverA_echo`) and the
 //! backend name as `service_name`. Fanout methods (`*/list`, ...) run the hook once
 //! for the whole client call (request hook before fanout, response hook on the merged
 //! result). Names and `service_name` there match the client-facing view, which tracks
@@ -19,10 +19,10 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
-/// Per-request bag of values that `extMcp` request-phase drivers attach via
+/// Per-request bag of values that `extMcp` request-phase processors attach via
 /// `McpRequestResult.metadata`. Merged into the request extensions and exposed
-/// to CEL as `extmcp.<key>` for backend request filters (e.g. `transformation`).
-/// Multiple drivers merge into the same map; later writes win on key collisions.
+/// to CEL as `extMcp.<key>` for backend request filters (e.g. `transformation`).
+/// Multiple processors merge into the same map; later writes win on key collisions.
 #[apply(schema!)]
 #[derive(Default, ::cel::DynamicType)]
 pub struct ExtMcpDynamicMetadata(serde_json::Map<String, serde_json::Value>);
@@ -53,42 +53,43 @@ pub mod wire {
 #[apply(schema!)]
 #[derive(Default)]
 pub struct ExtMcp {
-	// Processed in order; first `Reject` short-circuits. Drivers may run on the request
-	// or response side, or both; see `Driver.methods`.
+	/// Ordered list of policy processors applied to matched methods; the first
+	/// to reject a request short-circuits the chain. Processors may run on the
+	/// request or response side, or both; see `Processor.methods`.
 	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
-	pub drivers: Vec<Driver>,
+	pub processors: Vec<Processor>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct Driver {
-	/// Allowlist: only methods listed here run through this driver, at the
+pub struct Processor {
+	/// Allowlist: only methods listed here run through this processor, at the
 	/// configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
 	/// or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching
-	/// no key bypass this driver; see [`phase::resolve`] for match precedence.
+	/// no key bypass this processor; see [`phase::resolve`] for match precedence.
 	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 	pub methods: HashMap<String, Phase>,
 	#[serde(flatten)]
-	pub kind: DriverKind,
+	pub kind: ProcessorKind,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub enum DriverKind {
+pub enum ProcessorKind {
 	Remote(Remote),
 }
 
 impl ExtMcp {
-	/// Whether any driver runs the request side for `method`.
+	/// Whether any processor runs the request side for `method`.
 	pub fn runs_request(&self, method: &str) -> bool {
-		self.drivers.iter().any(|d| d.runs_request(method))
+		self.processors.iter().any(|d| d.runs_request(method))
 	}
 
-	/// Whether any driver runs the response side for `method`.
+	/// Whether any processor runs the response side for `method`.
 	pub fn runs_response(&self, method: &str) -> bool {
-		self.drivers.iter().any(|d| d.runs_response(method))
+		self.processors.iter().any(|d| d.runs_response(method))
 	}
 
 	/// Config warnings to surface at load time (xds diagnostics or logs).
@@ -102,7 +103,7 @@ impl ExtMcp {
 			}
 		}
 		let mut bad_patterns: Vec<_> = self
-			.drivers
+			.processors
 			.iter()
 			.flat_map(|d| d.methods.keys())
 			.filter(|p| !phase::pattern_is_matchable(p))
@@ -123,10 +124,10 @@ impl ExtMcp {
 pub struct Remote {
 	/// Reference to the external MCP policy service backend.
 	pub target: Arc<SimpleBackendReference>,
-	/// Behavior when the driver is unavailable or returns an error.
+	/// Behavior when the processor is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
-	/// CEL expressions evaluated per request and sent to the driver as metadata.
+	/// CEL expressions evaluated per request and sent to the processor as metadata.
 	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 	pub metadata: HashMap<String, Arc<cel::Expression>>,
 	/// Which incoming request headers are forwarded to the policy server.
@@ -160,7 +161,7 @@ impl HeaderFilter {
 	}
 }
 
-// Behavior when a driver errors or returns an unhandleable response.
+// Behavior when a processor errors or returns an unhandleable response.
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum FailureMode {
@@ -177,7 +178,7 @@ pub struct CallRequestCtx<'a> {
 	pub params: Option<&'a mut Value>,
 }
 
-impl Driver {
+impl Processor {
 	fn runs_request(&self, method: &str) -> bool {
 		phase::resolve(method, &self.methods).runs_request()
 	}
@@ -193,7 +194,7 @@ impl Driver {
 		client: &PolicyClient,
 	) -> Outcome {
 		match &self.kind {
-			DriverKind::Remote(remote) => {
+			ProcessorKind::Remote(remote) => {
 				client::check_request(
 					remote,
 					ctx.method,
@@ -216,15 +217,15 @@ impl Driver {
 		client: &PolicyClient,
 	) -> Outcome {
 		match &self.kind {
-			DriverKind::Remote(remote) => {
+			ProcessorKind::Remote(remote) => {
 				client::check_response(remote, method, backend, body, req_ctx, client).await
 			},
 		}
 	}
 }
 
-/// Drivers fire in order; first `Reject` short-circuits leaving `ctx` in whatever
-/// partially-mutated state earlier drivers produced. When `ctx.params` is `None`
+/// Processors fire in order; first `Reject` short-circuits leaving `ctx` in whatever
+/// partially-mutated state earlier processors produced. When `ctx.params` is `None`
 /// (e.g. `*/list`) mutations are discarded — list filtering belongs in the response phase.
 pub async fn run_call_request(
 	ext: &ExtMcp,
@@ -233,11 +234,11 @@ pub async fn run_call_request(
 	client: &PolicyClient,
 ) -> Outcome {
 	let mut composed = Outcome::Pass;
-	for driver in &ext.drivers {
-		if !driver.runs_request(ctx.method) {
+	for processor in &ext.processors {
+		if !processor.runs_request(ctx.method) {
 			continue;
 		}
-		match driver.call_request(ctx, req_ctx, client).await {
+		match processor.call_request(ctx, req_ctx, client).await {
 			Outcome::Pass => {},
 			Outcome::Mutated => composed = Outcome::Mutated,
 			Outcome::Reject(e) => return Outcome::Reject(e),
@@ -246,7 +247,7 @@ pub async fn run_call_request(
 	composed
 }
 
-/// Drivers fire in order; first `Reject` short-circuits.
+/// Processors fire in order; first `Reject` short-circuits.
 pub async fn run_response(
 	ext: &ExtMcp,
 	method: &str,
@@ -256,11 +257,11 @@ pub async fn run_response(
 	client: &PolicyClient,
 ) -> Outcome {
 	let mut composed = Outcome::Pass;
-	for driver in &ext.drivers {
-		if !driver.runs_response(method) {
+	for processor in &ext.processors {
+		if !processor.runs_response(method) {
 			continue;
 		}
-		match driver
+		match processor
 			.response(method, backend, body, req_ctx, client)
 			.await
 		{
@@ -279,7 +280,7 @@ mod tests {
 	#[test]
 	fn deser_local_config() {
 		let cfg = r#"
-drivers:
+processors:
   - kind: remote
     methods: { "tools/call": request, "*/list": response }
     target: { host: 127.0.0.1:9999 }
@@ -292,12 +293,12 @@ drivers:
     target: { backend: my-backend }
 "#;
 		let ext: ExtMcp = serde_yaml::from_str(cfg).expect("deser ExtMcp");
-		assert_eq!(ext.drivers.len(), 2);
+		assert_eq!(ext.processors.len(), 2);
 
-		let d0 = &ext.drivers[0];
+		let d0 = &ext.processors[0];
 		assert_eq!(d0.methods.get("tools/call"), Some(&Phase::Request));
 		assert_eq!(d0.methods.get("*/list"), Some(&Phase::Response));
-		let DriverKind::Remote(r0) = &d0.kind;
+		let ProcessorKind::Remote(r0) = &d0.kind;
 		assert!(matches!(
 			r0.target.as_ref(),
 			SimpleBackendReference::InlineBackend(_)
@@ -310,7 +311,7 @@ drivers:
 				.contains(&crate::http::HeaderOrPseudo::Authority)
 		);
 
-		let DriverKind::Remote(r1) = &ext.drivers[1].kind;
+		let ProcessorKind::Remote(r1) = &ext.processors[1].kind;
 		assert!(matches!(
 			r1.target.as_ref(),
 			SimpleBackendReference::Backend(_)
@@ -320,9 +321,9 @@ drivers:
 
 	fn ext_with_methods(pairs: &[(&str, Phase)]) -> ExtMcp {
 		ExtMcp {
-			drivers: vec![Driver {
+			processors: vec![Processor {
 				methods: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
-				kind: DriverKind::Remote(Remote {
+				kind: ProcessorKind::Remote(Remote {
 					target: Arc::new(SimpleBackendReference::Backend("b".into())),
 					failure_mode: FailureMode::default(),
 					metadata: HashMap::new(),

@@ -737,7 +737,7 @@
       "additionalProperties": true
     },
     "extMcp": {
-      "description": "`extMcp` contains dynamic metadata returned by extMcp policy drivers.",
+      "description": "`extMcp` contains dynamic metadata returned by extMcp policy processors.",
       "type": [
         "object",
         "null"
