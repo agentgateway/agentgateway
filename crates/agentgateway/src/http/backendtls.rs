@@ -1,15 +1,19 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use agent_core::strng;
+use agent_core::strng::Strng;
 use once_cell::sync::Lazy;
 use rustls::ClientConfig;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
+use tracing::trace;
 
-use crate::transport;
+use crate::serdes::schema_ser;
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
+use crate::{apply, transport};
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
 	Lazy::new(|| LocalBackendTLS::default().try_into().unwrap());
@@ -75,6 +79,7 @@ impl PerAlpnConfig {
 pub struct BackendTLS {
 	pub hostname_override: Option<ServerName<'static>>,
 	pub config: PerAlpnConfig,
+	pub metadata: BackendTLSInfo,
 }
 
 impl BackendTLS {
@@ -117,9 +122,55 @@ impl serde::Serialize for BackendTLS {
 	where
 		S: Serializer,
 	{
-		// TODO: store raw pem so we can send it back
-		serializer.serialize_none()
+		serde::Serialize::serialize(&self.metadata, serializer)
 	}
+}
+
+#[apply(schema_ser!)]
+#[derive(Default)]
+pub struct BackendTLSInfo {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cert: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub root: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub hostname: Option<String>,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub insecure: bool,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub insecure_host: bool,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub system_roots: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub alpn: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub subject_alt_names: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
+}
+
+impl BackendTLSInfo {
+	pub fn from_resolved(tls: &ResolvedBackendTLS) -> Self {
+		Self {
+			cert: tls.cert.as_ref().map(pem_to_string),
+			root: tls.root.as_ref().map(pem_to_string),
+			hostname: tls.hostname.clone(),
+			insecure: tls.insecure,
+			insecure_host: tls.insecure_host,
+			system_roots: tls.root.is_none(),
+			alpn: tls.alpn.clone(),
+			subject_alt_names: tls.subject_alt_names.clone(),
+			key_exchange_groups: tls.key_exchange_groups.clone(),
+		}
+	}
+}
+
+fn pem_to_string(pem: impl AsRef<[u8]>) -> Strng {
+	strng::new(String::from_utf8_lossy(pem.as_ref()))
+}
+
+fn is_false(value: &bool) -> bool {
+	!*value
 }
 static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 	Lazy::new(rustls_native_certs::load_native_certs);
@@ -162,10 +213,12 @@ pub struct ResolvedBackendTLS {
 
 impl ResolvedBackendTLS {
 	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
+		let metadata = BackendTLSInfo::from_resolved(&self);
 		let mut roots = rustls::RootCertStore::empty();
 		if let Some(root) = self.root {
 			let certs = CertificateDer::pem_slice_iter(&root).collect::<Result<Vec<_>, _>>()?;
-			roots.add_parsable_certificates(certs);
+			let (valid, invalid) = roots.add_parsable_certificates(certs);
+			trace!(valid, invalid, "added root certificates")
 		} else {
 			// TODO: we probably should do this once globally!
 			for cert in &crate::http::backendtls::SYSTEM_ROOT.certs {
@@ -219,6 +272,7 @@ impl ResolvedBackendTLS {
 		Ok(BackendTLS {
 			hostname_override: self.hostname.map(|s| s.try_into()).transpose()?,
 			config: PerAlpnConfig::new(Arc::new(cc), allow_custom_alpn),
+			metadata,
 		})
 	}
 }

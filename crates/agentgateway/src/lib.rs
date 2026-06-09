@@ -159,11 +159,11 @@ pub struct RawConfig {
 	cluster_id: Option<String>,
 	network: Option<String>,
 
-	/// Admin UI address in the format "ip:port"
+	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
-	/// Stats/metrics server address in the format "ip:port"
+	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	stats_addr: Option<String>,
-	/// Readiness probe server address in the format "ip:port"
+	/// Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	readiness_addr: Option<String>,
 
 	/// Configuration for stateful session management
@@ -643,21 +643,28 @@ impl ProxyInputs {
 	}
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-// Address is a wrapper around either a normal SocketAddr or "bind to localhost on IPv4 and IPv6"
+#[derive(Debug, Clone, serde::Serialize)]
+// Address is a management listener address. It may bind TCP, bind localhost on
+// both IPv4 and IPv6, bind a Unix domain socket, or disable the listener.
 pub enum Address {
+	// Do not bind this listener.
+	Off,
 	// Bind to localhost (dual stack) on a specific port
 	// (ipv6_enabled, port)
 	Localhost(bool, u16),
 	// Bind to an explicit IP/port
 	SocketAddr(SocketAddr),
+	// Bind to a Unix domain socket.
+	UnixSocket(PathBuf),
 }
 
 impl Display for Address {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
+			Address::Off => write!(f, "off"),
 			Address::Localhost(_, port) => write!(f, "localhost:{port}"),
 			Address::SocketAddr(s) => write!(f, "{s}"),
+			Address::UnixSocket(path) => write!(f, "unix:{}", path.display()),
 		}
 	}
 }
@@ -668,6 +675,7 @@ impl IntoIterator for Address {
 
 	fn into_iter(self) -> Self::IntoIter {
 		match self {
+			Address::Off | Address::UnixSocket(_) => vec![].into_iter(),
 			Address::Localhost(ipv6_enabled, port) => {
 				if ipv6_enabled {
 					vec![
@@ -686,7 +694,14 @@ impl IntoIterator for Address {
 
 impl Address {
 	fn new(ipv6_enabled: bool, s: &str) -> anyhow::Result<Self> {
-		if s.starts_with("localhost:") {
+		if s == "off" {
+			Ok(Address::Off)
+		} else if let Some(path) = s.strip_prefix("unix:") {
+			if path.trim().is_empty() {
+				anyhow::bail!("unix socket path must not be empty")
+			}
+			Ok(Address::UnixSocket(PathBuf::from(path)))
+		} else if s.starts_with("localhost:") {
 			let (_host, ports) = s.split_once(':').expect("already checked it has a :");
 			let port: u16 = ports.parse()?;
 			Ok(Address::Localhost(ipv6_enabled, port))
@@ -697,6 +712,7 @@ impl Address {
 
 	pub fn port(&self) -> u16 {
 		match self {
+			Address::Off | Address::UnixSocket(_) => 0,
 			Address::Localhost(_, port) => *port,
 			Address::SocketAddr(s) => s.port(),
 		}

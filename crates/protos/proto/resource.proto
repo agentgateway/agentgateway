@@ -38,6 +38,7 @@ message Bind {
     PROXY = 1;
     HBONE_WAYPOINT = 2;
     HBONE_GATEWAY = 3;
+    CONNECT = 4;
   }
   string key = 1;
   uint32 port = 2;
@@ -138,11 +139,19 @@ message ConditionalPolicy {
   }
 }
 message Policy {
+  enum Inheritance {
+    DEFAULT = 0;
+    OVERRIDE = 1;
+  }
+
   // Unique key for this policy
   string key = 1;
   // User facing name for this resource
   TypedResourceName name = 2;
   PolicyTarget target = 3;
+  // Controls whether more-specific child policy levels can be included when
+  // computing the effective policy.
+  Inheritance inheritance = 8;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
@@ -328,6 +337,8 @@ message Aws {
   // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
   // If unset, typed AWS backends may provide this automatically.
   string service_name = 3;
+  // Optional STS role to assume before signing requests.
+  AwsAssumeRole assume_role = 4;
 }
 
 // Azure-specific backend authentication.
@@ -353,6 +364,12 @@ message AwsExplicitConfig {
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
 message AwsImplicit {}
+
+// AWS STS AssumeRole configuration.
+message AwsAssumeRole {
+  // Role ARN to assume before signing backend requests.
+  string role_arn = 1;
+}
 
 // Explicit Azure credentials configuration
 message AzureExplicitConfig {
@@ -445,6 +462,23 @@ message CORS {
 message DirectResponse {
   uint32 status = 1;
   bytes body = 2;
+  string body_expression = 3;
+  repeated ExpressionHeader headers = 4;
+}
+
+message BufferBody {
+  optional uint32 max_bytes = 1;
+}
+
+message Buffer {
+  optional BufferBody request = 1;
+  optional BufferBody response = 2;
+}
+
+
+message ExpressionHeader {
+  string name = 1;
+  string expression = 2;
 }
 
 message HeaderModifier {
@@ -545,6 +579,11 @@ message KeepaliveConfig {
 
 message FrontendPolicySpec {
   message HTTP {
+    enum HTTPHeaderCase {
+      LOWERCASE = 0;
+      PRESERVE = 1;
+    }
+
     optional uint32 max_buffer_size = 1;
     optional uint32 http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
@@ -555,6 +594,8 @@ message FrontendPolicySpec {
     google.protobuf.Duration http2_keepalive_timeout = 8;
     google.protobuf.Duration max_connection_duration = 9;
     optional uint32 http2_max_header_size = 10;
+    // Controls HTTP/1 request header casing when encoding responses.
+    HTTPHeaderCase http1_header_case = 11;
   }
   message TLS {
     // TLS handshake timeout
@@ -688,6 +729,16 @@ message FrontendPolicySpec {
     Mode mode = 2;
   }
 
+  message Connect {
+    enum Mode {
+      DENY = 0;
+      ROUTE = 1;
+      TUNNEL = 2;
+    }
+
+    Mode mode = 1;
+  }
+
   // Custom Prometheus metric label configuration policy.
   // CEL expressions are evaluated per-request and added as labels to all metrics.
   message Metrics {
@@ -710,6 +761,7 @@ message FrontendPolicySpec {
     NetworkAuthorization network_authorization = 6;
     ProxyProtocol proxy_protocol = 7;
     Metrics metrics = 8;
+    Connect connect = 9;
   }
 }
 
@@ -997,6 +1049,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    Buffer buffer = 22;
   }
 }
 
@@ -1404,12 +1457,30 @@ message AIBackend {
     OPEN_AI = 0;
     FOUNDRY = 1;
   }
+  enum ProviderFormat {
+    PROVIDER_FORMAT_UNSPECIFIED = 0;
+    COMPLETIONS = 1;
+    MESSAGES = 2;
+    RESPONSES = 3;
+    EMBEDDINGS = 4;
+    ANTHROPIC_TOKEN_COUNT = 5;
+    REALTIME = 6;
+  }
+  message ProviderFormatConfig {
+    ProviderFormat format = 1;
+    optional string path = 2;
+  }
+  message Custom {
+    repeated ProviderFormatConfig formats = 1;
+    optional string model = 2;
+  }
 
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
     optional string path_prefix = 12;
+    BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;
@@ -1418,6 +1489,7 @@ message AIBackend {
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
+      Custom custom = 15;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

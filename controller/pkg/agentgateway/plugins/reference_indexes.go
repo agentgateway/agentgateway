@@ -72,6 +72,7 @@ func (e *BackendReferenceError) Error() string {
 func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 	return ReferenceTypes{
 		KnownFromReferences: sets.New(
+			wellknown.AgentgatewayPolicyGVK.GroupKind(),
 			wellknown.GatewayGVK.GroupKind(),
 			wellknown.HTTPRouteGVK.GroupKind(),
 			wellknown.GRPCRouteGVK.GroupKind(),

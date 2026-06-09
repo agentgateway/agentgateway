@@ -70,6 +70,13 @@ type traceEvent struct {
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
 	Details         string            `json:"details,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	RouteType       string            `json:"routeType,omitempty"`
+	InputFormat     string            `json:"inputFormat,omitempty"`
+	NativeFormat    *string           `json:"nativeFormat,omitempty"`
+	RequestModel    string            `json:"requestModel,omitempty"`
+	Streaming       *bool             `json:"streaming,omitempty"`
+	StreamFormat    string            `json:"streamFormat,omitempty"`
 }
 
 type traceAuthzRule struct {
@@ -154,7 +161,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 	}
 	defer closeAdmin()
 
-	traceResp, err := openTraceStream(cmd.Context(), adminAddress)
+	traceResp, err := openTraceStream(cmd.Context(), adminAddress, flags.expression)
 	if err != nil {
 		return err
 	}
@@ -232,8 +239,22 @@ func traceAdminAddress(target *traceTarget, adminPort int) (string, func(), erro
 	return adminForwarder.Address(), adminForwarder.Close, nil
 }
 
-func openTraceStream(ctx context.Context, adminAddress string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://%s/debug/trace", adminAddress), nil)
+func traceStreamURL(adminAddress, expression string) string {
+	u := url.URL{
+		Scheme: "http",
+		Host:   adminAddress,
+		Path:   "/debug/trace",
+	}
+	if expression != "" {
+		q := u.Query()
+		q.Set("expression", expression)
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
+}
+
+func openTraceStream(ctx context.Context, adminAddress, expression string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, traceStreamURL(adminAddress, expression), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct trace request: %w", err)
 	}
@@ -622,6 +643,12 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "llmRouteResolved":
+		return "LLM Route"
+	case "llmRequestDetected":
+		return "LLM Request"
+	case "llmStreamingTranslation":
+		return "LLM Stream"
 	default:
 		return eventType
 	}
@@ -672,6 +699,45 @@ func summarizeEvent(event traceEvent) string {
 		return "request finished"
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "llmRouteResolved":
+		return strings.TrimSpace(fmt.Sprintf(
+			"%s %s",
+			event.Provider,
+			event.RouteType,
+		))
+	case "llmRequestDetected":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.RequestModel != "" {
+			parts = append(parts, "model="+event.RequestModel)
+		}
+		if event.Streaming != nil && *event.Streaming {
+			parts = append(parts, "streaming")
+		}
+		return truncate(strings.Join(parts, " "), 120)
+	case "llmStreamingTranslation":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.StreamFormat != "" {
+			parts = append(parts, "stream="+event.StreamFormat)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	default:
 		return truncate(compactJSON(event), 120)
 	}
@@ -1236,8 +1302,6 @@ func (m *traceModel) addRow(row traceRow) {
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
 		fmt.Sprintf("%d", rowIndex+1),
-		//formatMicros(row.Envelope.EventEnd),
-		//formatDuration(row.Envelope.EventStart, row.Envelope.EventEnd),
 		displayEventType(row.Envelope.Message.Type),
 		row.Summary,
 	} {

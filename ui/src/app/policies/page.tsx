@@ -207,24 +207,32 @@ export default function PoliciesPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {appliedPolicies.map((p: AppliedPolicy) => {
-                const isService = !!p.target?.backend?.service;
-                const isBackend = !!p.target?.backend?.backend;
-                const targetLabel = isService
-                  ? `${p.target!.backend!.service!.namespace}/${p.target!.backend!.service!.hostname}`
-                  : isBackend
-                    ? `${p.target!.backend!.backend!.namespace}/${p.target!.backend!.backend!.name}`
-                    : "Unknown target";
+                const service = p.target?.backend?.service;
+                const backend = p.target?.backend?.backend;
+                const gateway = p.target?.gateway;
+                const route = p.target?.route;
+                const target = service
+                  ? { kind: "Service", label: `${service.namespace}/${service.hostname}` }
+                  : backend
+                    ? { kind: "Backend", label: `${backend.namespace}/${backend.name}` }
+                    : gateway
+                      ? { kind: "Gateway", label: `${gateway.namespace}/${gateway.name}` }
+                      : route
+                        ? { kind: "Route", label: `${route.namespace}/${route.name}` }
+                        : { kind: "Unknown", label: "Unknown target" };
+                // Synthetic policies (e.g. frontend/tracing) have a null name; fall back to the key.
+                const policyLabel = p.name
+                  ? `${p.name.kind} ${p.name.namespace}/${p.name.name}`
+                  : p.key;
                 return (
                   <Card key={p.key}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
-                        <div className="font-medium">
-                          {p.name.kind} {p.name.namespace}/{p.name.name}
-                        </div>
-                        <Badge variant="outline">{isService ? "Service" : "Backend"}</Badge>
+                        <div className="font-medium">{policyLabel}</div>
+                        <Badge variant="outline">{target.kind}</Badge>
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        Target: {targetLabel}
+                        Target: {target.label}
                       </div>
                     </CardHeader>
                     <CardContent>

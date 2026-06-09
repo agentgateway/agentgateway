@@ -41,7 +41,20 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 								}
 							}
 						},
-						"rejected": {"ignored": true}
+						"rejected": {
+							"//Pod/default/echo-evicted": {
+								"endpoint": {
+									"workloadUid": "//Pod/default/echo-evicted",
+									"status": "Unhealthy"
+								},
+								"info": {
+									"health": 0.0,
+									"request_latency": 0.5,
+									"total_requests": 3,
+									"evictedUntil": "3.34s"
+								}
+							}
+						}
 					}
 				]
 			}
@@ -52,8 +65,8 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("got %d rows, want 2", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("got %d rows, want 3", len(rows))
 	}
 	if rows[0].Endpoint != "echo-a" {
 		t.Fatalf("rows not sorted by endpoint: %#v", rows)
@@ -72,6 +85,12 @@ func TestParseBackendRowsIgnoresUnneededFields(t *testing.T) {
 	}
 	if got, want := formatLatencyMS(rows[1]), "302.91ms"; got != want {
 		t.Fatalf("latency = %q, want %q", got, want)
+	}
+	if rows[2].Endpoint != "echo-evicted" || rows[2].Health != "Evict (3.3s)" {
+		t.Fatalf("unexpected rejected endpoint row: %#v", rows[2])
+	}
+	if got, want := rows[2].Requests, int64(3); got != want {
+		t.Fatalf("requests = %d, want %d", got, want)
 	}
 }
 

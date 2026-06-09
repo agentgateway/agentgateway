@@ -20,6 +20,8 @@ spec:
   istio:
     caAddress: https://foo:443
     trustDomain: not.cluster.local
+    clusterId: cluster-1
+    network: network-1
 ---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1

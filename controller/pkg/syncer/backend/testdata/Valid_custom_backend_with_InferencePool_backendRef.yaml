@@ -1,0 +1,17 @@
+ai:
+  providerGroups:
+  - providers:
+    - custom:
+        formats:
+        - format: MESSAGES
+          path: /api/messages
+      name: backend
+      providerBackend:
+        port: 8000
+        service:
+          hostname: llm-pool.test-ns.inference.cluster.local
+          namespace: test-ns
+key: test-ns/custom-inferencepool-backend
+name:
+  name: custom-inferencepool-backend
+  namespace: test-ns

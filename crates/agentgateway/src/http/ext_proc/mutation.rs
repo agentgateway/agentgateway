@@ -253,6 +253,10 @@ pub(super) async fn handle_response_for_response_mutation(
 			trace!("got response trailers back");
 			return Ok((res, true));
 		},
+		Some(Response::ImmediateResponse(_)) => {
+			warn!("received ImmediateResponse during response-body continuation; treating as terminal");
+			return Ok((true, true));
+		},
 		msg => {
 			warn!("ignoring {msg:?}");
 			return Ok((res, false));

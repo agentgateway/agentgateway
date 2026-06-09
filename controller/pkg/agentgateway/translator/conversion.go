@@ -633,12 +633,12 @@ func buildAgwDestination(
 	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK.GroupKind())
 	// check if the reference is allowed
 	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
-		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
+		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref, ctx.BackendRefGrantMode) {
 			return rb, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionResolvedRefs,
 				Status:  metav1.ConditionFalse,
 				Reason:  gwv1.RouteReasonRefNotPermitted,
-				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", to.Name, *toNs, k.Kind, ns),
+				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", *toNs, to.Name, k.Kind, ns),
 			}
 		}
 	}

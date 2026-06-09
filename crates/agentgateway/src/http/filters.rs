@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use ::http::header::InvalidHeaderName;
 use ::http::response;
 use ::http::uri::InvalidUri;
 
+use crate::cel::Expression;
 use crate::http::uri::Scheme;
 use crate::http::{
 	HeaderMap, HeaderName, HeaderValue, PolicyResponse, Request, Response, StatusCode, Uri,
@@ -265,25 +268,62 @@ impl crate::store::RequestPolicyTrait for UrlRewrite {
 
 #[apply(schema!)]
 pub struct DirectResponse {
+	#[serde(default, skip_serializing_if = "is_default")]
 	#[serde(serialize_with = "serdes::serde_base64::serialize")]
 	pub body: Bytes,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub body_expression: Option<Arc<Expression>>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(as = "serde_with::Map<serde_with::DisplayFromStr, _>")]
+	pub headers: Vec<(HeaderName, Arc<Expression>)>,
 	#[serde(with = "http_serde::status_code")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
 	pub status: StatusCode,
 }
 
 impl DirectResponse {
-	pub fn apply(&self) -> Result<Response, Error> {
+	pub fn apply(&self, req: &Request) -> Result<Response, Error> {
 		pol_result!(
 			DIRECT_RESPONSE_TRACE_KIND,
 			Severity::Info,
 			Apply,
 			"applied direct response"
 		);
-		response::Builder::new()
+		let body = if let Some(expr) = &self.body_expression {
+			if !self.body.is_empty() {
+				return Err(Error::InvalidFilterConfiguration(
+					"body and bodyExpression may not both be set".to_string(),
+				));
+			}
+			let exec = crate::cel::Executor::new_request(req);
+			let value = exec
+				.eval(expr.as_ref())
+				.map_err(|e| Error::InvalidFilterConfiguration(e.to_string()))?;
+			crate::cel::value_as_byte_or_json(value)
+				.map_err(|e| Error::InvalidFilterConfiguration(e.to_string()))?
+		} else {
+			self.body.clone()
+		};
+		let mut response = response::Builder::new()
 			.status(self.status)
-			.body(http::Body::from(self.body.clone()))
-			.map_err(Into::into)
+			.body(http::Body::from(body))
+			.map_err(Error::from)?;
+		if !self.headers.is_empty() {
+			let exec = crate::cel::Executor::new_request(req);
+			for (name, expr) in &self.headers {
+				let Some(value) = exec.eval(expr).ok().and_then(|value| {
+					let value = value.always_materialize_owned();
+					value
+						.as_bytes_pre_materialized()
+						.ok()
+						.and_then(|bytes| HeaderValue::from_bytes(bytes).ok())
+				}) else {
+					continue;
+				};
+				response.headers_mut().insert(name, value);
+			}
+		}
+		Ok(response)
 	}
 }
 
@@ -292,12 +332,21 @@ impl crate::store::RequestPolicyTrait for DirectResponse {
 		&self,
 		_client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
-		_req: &mut Request,
+		req: &mut Request,
 	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
 		Ok(
 			PolicyResponse::default()
-				.with_response(self.apply().map_err(crate::proxy::ProxyError::from)?),
+				.with_response(self.apply(req).map_err(crate::proxy::ProxyError::from)?),
 		)
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		self
+			.body_expression
+			.as_ref()
+			.map(|expr| expr.as_ref())
+			.into_iter()
+			.chain(self.headers.iter().map(|(_, expr)| expr.as_ref()))
 	}
 }
 
@@ -369,6 +418,9 @@ fn rewrite_path(
 		None => Ok(orig.path_and_query().ok_or(Error::InvalidURI).cloned()?),
 		Some(PathRedirect::Full(r)) => {
 			let mut new_path = r.to_string();
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			// Preserve query parameters from the original URI
 			if let Some(q) = orig.query() {
 				new_path.push('?');
@@ -382,9 +434,11 @@ fn rewrite_path(
 					"prefix redirect requires prefix match".to_string(),
 				));
 			};
+			let match_pfx = match_pfx.trim_end_matches('/');
+			let Some(rest) = strip_segment_prefix(orig.path(), match_pfx) else {
+				return Err(Error::InvalidURI);
+			};
 			let mut new_path = r.to_string();
-			// path prefix ignores trailing / so trim those out
-			let (_, rest) = orig.path().split_at(match_pfx.trim_end_matches("/").len());
 			if !new_path.ends_with('/') && !rest.is_empty() && !rest.starts_with('/') {
 				new_path.push('/');
 			}
@@ -392,12 +446,24 @@ fn rewrite_path(
 				new_path.pop();
 			}
 			new_path.push_str(rest);
+			if new_path.is_empty() {
+				new_path.push('/');
+			}
 			if let Some(q) = orig.query() {
 				new_path.push('?');
 				new_path.push_str(q);
 			}
 			Ok(new_path.try_into()?)
 		},
+	}
+}
+
+fn strip_segment_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	let rest = path.strip_prefix(prefix)?;
+	if prefix.is_empty() || rest.is_empty() || rest.starts_with('/') {
+		Some(rest)
+	} else {
+		None
 	}
 }
 

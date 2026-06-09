@@ -625,6 +625,19 @@ pub mod from_messages {
 		}
 	}
 
+	fn system_message_text(content: Vec<messages::ContentBlock>) -> Option<String> {
+		let text = content
+			.into_iter()
+			.filter_map(|block| match block {
+				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => Some(text),
+				_ => None,
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+
+		(!text.is_empty()).then_some(text)
+	}
+
 	#[allow(deprecated)]
 	fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
@@ -670,7 +683,7 @@ pub mod from_messages {
 					json_schema: completions::ResponseFormatJsonSchema {
 						description: None,
 						name: "structured_output".to_string(),
-						schema: Some(schema.clone()),
+						schema: schema.clone(),
 						strict: None,
 					},
 				},
@@ -815,6 +828,18 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
+								reasoning_content: None,
+								reasoning_signature: None,
+							},
+						));
+					}
+				},
+				messages::Role::System => {
+					if let Some(text) = system_message_text(msg.content) {
+						msgs.push(completions::RequestMessage::System(
+							completions::RequestSystemMessage {
+								content: completions::RequestSystemMessageContent::Text(text),
+								name: None,
 							},
 						));
 					}
@@ -986,6 +1011,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.cached_tokens);
+								r.response.cache_creation_input_tokens = u.cache_creation_input_tokens;
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()

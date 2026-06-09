@@ -99,6 +99,16 @@
           "maximum": 65535,
           "default": 0
         },
+        "grpcStatus": {
+          "description": "The gRPC status code of the response, when present.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
         "headers": {
           "description": "The headers of the response.",
           "type": "object",
@@ -109,6 +119,37 @@
         },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "proxy": {
+      "description": "`proxy` contains proxy timing information for the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "requestProcessingDuration": {
+          "description": "Time spent processing the request before sending the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstreamDuration": {
+          "description": "Time spent waiting for the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseProcessingDuration": {
+          "description": "Time spent processing the primary outbound response before sending the downstream response.",
           "type": [
             "string",
             "null"
@@ -154,6 +195,12 @@
         "object",
         "null"
       ],
+      "properties": {
+        "rawToken": {
+          "description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
+          "type": "string"
+        }
+      },
       "additionalProperties": true
     },
     "apiKey": {
@@ -164,6 +211,7 @@
       ],
       "properties": {
         "key": {
+          "description": "The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.",
           "type": "string"
         }
       },
@@ -530,6 +578,14 @@
         },
         "subjectCn": {
           "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "certificate": {
+          "description": "PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
           "type": [
             "string",
             "null"

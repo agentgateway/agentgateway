@@ -8,6 +8,7 @@ use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -119,7 +120,12 @@ impl BedrockGuardrails {
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
 		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
-			AwsAuth::Implicit { service_name: None },
+			AwsAuth::Implicit {
+				service_name: None,
+				assume_role: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
+			},
 		)));
 		pols
 	}
@@ -221,6 +227,7 @@ async fn send_guardrail_request(
 	);
 
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 

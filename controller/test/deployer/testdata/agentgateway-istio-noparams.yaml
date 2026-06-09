@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+---
+# Revisioned Istio mesh config. The control plane is configured (via Settings) for revision "1-30",
+# so the MeshConfig singleton resolves the ConfigMap name "istio-1-30" and reads its trust domain.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-1-30
+  namespace: istio-system
+data:
+  mesh: |
+    trustDomain: custom.example.com
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

@@ -225,7 +225,7 @@ impl TCPProxy {
 		let backend_call = match &selected_backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
 				inputs,
-				backend_policies,
+				backend_policies.into(),
 				log,
 				httpproxy::ServiceCallOverride::default(),
 				svc,
@@ -233,30 +233,24 @@ impl TCPProxy {
 				sni.as_deref(),
 				hbone_source,
 			)?,
-			SimpleBackend::Opaque(_, target) => BackendCall {
-				target: target.clone(),
-				http_version_override: None,
-				transport_override: None,
-				network_gateway: None,
-				waypoint: None,
-				backend_policies,
-			},
+			SimpleBackend::Opaque(_, target) => BackendCall::new(target.clone(), backend_policies),
 			SimpleBackend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit { service_name: None },
+						http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							source_credentials_cache: Default::default(),
+							assume_role_cache: Default::default(),
+						},
 					)),
 					..Default::default()
 				};
-				BackendCall {
-					target: Target::Hostname(config.get_host().into(), 443),
-					http_version_override: None,
-					transport_override: None,
-					network_gateway: None,
-					waypoint: None,
-					backend_policies: default_policies.merge(backend_policies),
-				}
+				BackendCall::new(
+					Target::Hostname(config.get_host().into(), 443),
+					default_policies.merge(backend_policies),
+				)
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
@@ -920,7 +914,11 @@ mod tests {
 			matches!(
 				&result.backend_policies.backend_auth,
 				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit { service_name: None }
+					crate::http::auth::AwsAuth::Implicit {
+						service_name: None,
+						assume_role: None,
+						..
+					}
 				))
 			),
 			"should default to AWS implicit auth"
@@ -957,7 +955,10 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+					service_name: None,
+					..
+				}))
 			),
 			"user-provided auth should override default implicit auth"
 		);

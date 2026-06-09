@@ -80,6 +80,14 @@ func TestRunRawFromTraceFile(t *testing.T) {
 	}
 }
 
+func TestTraceStreamURLEncodesExpression(t *testing.T) {
+	got := traceStreamURL("127.0.0.1:15000", `request.path == "/healthz"`)
+	want := "http://127.0.0.1:15000/debug/trace?expression=request.path+%3D%3D+%22%2Fhealthz%22"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestNormalizeTraceRequestStateBodiesKeepsInvalidBase64(t *testing.T) {
 	value := map[string]any{
 		"response": map[string]any{

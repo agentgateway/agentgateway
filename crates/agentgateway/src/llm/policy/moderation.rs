@@ -6,6 +6,7 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 pub async fn send_request(
@@ -46,6 +47,7 @@ pub async fn send_request(
 		(),
 	);
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =

@@ -51,6 +51,27 @@ pub struct GuardrailLabels {
 }
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct MinimalHTTPLabels {
+	pub backend: DefaultedUnknown<RichStrng>,
+
+	#[prometheus(flatten)]
+	pub route: RouteIdentifier,
+
+	#[prometheus(flatten)]
+	pub custom: CustomField,
+}
+
+impl From<HTTPLabels> for MinimalHTTPLabels {
+	fn from(value: HTTPLabels) -> Self {
+		Self {
+			backend: value.backend,
+			route: value.route,
+			custom: value.custom,
+		}
+	}
+}
+
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct HTTPLabels {
 	pub backend: DefaultedUnknown<RichStrng>,
 	pub protocol: DefaultedUnknown<EncodeDebug<crate::cel::BackendProtocol>>,
@@ -116,6 +137,43 @@ pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
 }
 
+#[derive(
+	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
+)]
+pub enum OutboundCallKind {
+	/// The primary backend call
+	#[default]
+	Primary,
+	/// A callout as part of a policy execution
+	Policy,
+	/// A mirrored call
+	Mirror,
+}
+
+#[derive(
+	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
+)]
+pub enum OutboundCallSubtype {
+	// Primary
+	#[default]
+	Http,
+	Llm,
+	Mcp,
+
+	// Policy
+	ExtAuthz,
+	ExtProc,
+	Guardrail,
+	RateLimit,
+	Oidc,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct OutboundCallLabels {
+	pub kind: OutboundCallKind,
+	pub subtype: OutboundCallSubtype,
+}
+
 type Counter = Family<HTTPLabels, counter::Counter>;
 type Histogram<T> = Family<T, prometheus_client::metrics::histogram::Histogram>;
 type TCPCounter = Family<TCPLabels, counter::Counter>;
@@ -129,6 +187,8 @@ pub struct BuildLabel {
 pub struct Metrics {
 	pub requests: Counter,
 	pub request_duration: Histogram<HTTPLabels>,
+	pub request_processing_duration: Histogram<MinimalHTTPLabels>,
+	pub response_processing_duration: Histogram<MinimalHTTPLabels>,
 	pub response_bytes: Family<HTTPLabels, counter::Counter>,
 
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
@@ -145,6 +205,7 @@ pub struct Metrics {
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
+	pub upstream_call_duration: Histogram<OutboundCallLabels>,
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
@@ -322,6 +383,30 @@ impl Metrics {
 				);
 				m
 			},
+			request_processing_duration: {
+				let m = Family::<MinimalHTTPLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(PROCESSING_DURATION_BUCKETS)
+				});
+				registry.register_with_unit(
+					"request_processing",
+					"Duration from receiving an HTTP request to sending the primary outbound call (seconds)",
+					Unit::Seconds,
+					m.clone(),
+				);
+				m
+			},
+			response_processing_duration: {
+				let m = Family::<MinimalHTTPLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(PROCESSING_DURATION_BUCKETS)
+				});
+				registry.register_with_unit(
+					"response_processing",
+					"Duration from receiving the primary outbound response to sending the HTTP response (seconds)",
+					Unit::Seconds,
+					m.clone(),
+				);
+				m
+			},
 			tcp_downstream_rx_bytes: {
 				let m = Family::<TCPLabels, _>::default();
 				registry.register_with_unit(
@@ -349,6 +434,18 @@ impl Metrics {
 				registry.register_with_unit(
 					"upstream_connect_duration",
 					"Duration to establish upstream connection (seconds)",
+					Unit::Seconds,
+					m.clone(),
+				);
+				m
+			},
+			upstream_call_duration: {
+				let m = Family::<OutboundCallLabels, _>::new_with_constructor(move || {
+					PromHistogram::new(HTTP_REQUEST_DURATION_BUCKET)
+				});
+				registry.register_with_unit(
+					"upstream_call_duration",
+					"Duration of outbound calls made by agentgateway (seconds)",
 					Unit::Seconds,
 					m.clone(),
 				);
@@ -413,6 +510,21 @@ const CONNECT_DURATION_BUCKET: [f64; 10] = [
 const HTTP_REQUEST_DURATION_BUCKET: [f64; 14] = [
 	0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 80.0,
 ];
+// Internal processing time
+// Covers 50us to 250ms with growth.
+const PROCESSING_DURATION_BUCKETS: [f64; 10] = [
+	0.00005, // 50us
+	0.0001,  // 100us
+	0.00025, // 250us
+	0.0005,  // 500us
+	0.001,   // 1ms
+	0.0025,  // 2.5ms
+	0.005,   // 5ms
+	0.01,    // 10ms
+	0.05,    // 50ms
+	0.25,    // 250ms
+];
+
 // https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/#metric-gen_aiservertime_per_output_token
 // NOTE: the spec has SHOULD, but is not smart enough to handle the faster LLMs.
 // We have added 0.001 (1000 TPS)

@@ -17,7 +17,7 @@ use tower::Service;
 
 use crate::client::{ApplicationTransport, Transport};
 use crate::http::HeaderValue;
-use crate::http::backendtls::{BackendTLS, PerAlpnConfig, SYSTEM_TRUST};
+use crate::http::backendtls::{BackendTLS, BackendTLSInfo, PerAlpnConfig, SYSTEM_TRUST};
 use crate::types::agent::Target;
 use crate::*;
 
@@ -32,15 +32,21 @@ pub enum RootCert {
 
 impl RootCert {
 	pub async fn to_client_config(&self) -> anyhow::Result<BackendTLS> {
+		let mut metadata = BackendTLSInfo {
+			alpn: Some(vec!["h2".to_string()]),
+			..Default::default()
+		};
 		let roots = match self {
 			RootCert::File(f) => {
 				let certfile = tokio::fs::read(f).await?;
+				metadata.root = Some(String::from_utf8_lossy(&certfile).into());
 				let certs = CertificateDer::pem_slice_iter(&certfile).collect::<Result<Vec<_>, _>>()?;
 				let mut roots = rustls::RootCertStore::empty();
 				roots.add_parsable_certificates(certs);
 				roots
 			},
 			RootCert::Static(b) => {
+				metadata.root = Some(String::from_utf8_lossy(b).into());
 				let certs = CertificateDer::pem_slice_iter(b).collect::<Result<Vec<_>, _>>()?;
 				let mut roots = rustls::RootCertStore::empty();
 				roots.add_parsable_certificates(certs);
@@ -57,6 +63,7 @@ impl RootCert {
 		Ok(BackendTLS {
 			hostname_override: None,
 			config: PerAlpnConfig::new(Arc::new(ccb), false),
+			metadata,
 		})
 	}
 }

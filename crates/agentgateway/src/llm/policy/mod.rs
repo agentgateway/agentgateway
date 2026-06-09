@@ -373,9 +373,7 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 	) -> anyhow::Result<Option<Response>> {
-		let client = PolicyClient {
-			inputs: backend_info.inputs.clone(),
-		};
+		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
 			.prompt_guard
 			.as_ref()

@@ -35,6 +35,7 @@ func main() {
 	start("test-a2a-server", startA2AServer)
 	start("llm", startLLMServer)
 	start("app", startEchoAppServer)
+	start("raw-headers", startRawHeadersServer)
 
 	<-ctx.Done()
 	log.Printf("received shutdown signal")

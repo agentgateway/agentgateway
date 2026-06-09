@@ -199,6 +199,26 @@ fn test_path_matching() {
 			path: "/api/v1/users/123",
 			expected_route: Some("prefix-path"),
 		},
+		TestCase {
+			name: "prefix path exact segment match without trailing slash",
+			path: "/api",
+			expected_route: Some("prefix-path"),
+		},
+		TestCase {
+			name: "prefix path does not match partial segment",
+			path: "/apiary",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "prefix path does not match encoded slash as segment boundary",
+			path: "/api%2Fv1",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "prefix path matches raw double slash segment",
+			path: "/api//v1",
+			expected_route: Some("prefix-path"),
+		},
 		// Test regex path matching
 		TestCase {
 			name: "regex path match",

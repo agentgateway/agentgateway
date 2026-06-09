@@ -77,7 +77,9 @@ func translateAuthorizationExtractionLocation(loc *agentgateway.AuthorizationExt
 	if loc == nil {
 		return nil
 	}
-	if translated := translateAuthorizationLocation(&loc.AuthorizationLocation); translated != nil {
+	if translated := translateAuthorizationLocation(&agentgateway.AuthorizationLocation{
+		AuthorizationLocationFields: loc.AuthorizationLocationFields,
+	}); translated != nil {
 		return translated
 	}
 	if loc.Expression != nil {
@@ -313,18 +315,18 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		mtls := tls.MtlsCertificateRef[0]
 		nn := types.NamespacedName{
 			Namespace: policy.Namespace,
-			Name:      mtls.Name,
+			Name:      string(mtls.Name),
 		}
-		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterObjectName(nn)))
-		if scrt == nil {
-			errs = append(errs, fmt.Errorf("secret %s not found", nn))
+		data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
+		if err != nil {
+			errs = append(errs, err)
 		} else {
-			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, scrt.Data); err != nil {
+			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
 			}
-			p.Cert = scrt.Data[corev1.TLSCertKey]
-			p.Key = scrt.Data[corev1.TLSPrivateKeyKey]
-			if ca, f := scrt.Data[corev1.ServiceAccountRootCAKey]; f {
+			p.Cert = data[corev1.TLSCertKey]
+			p.Key = data[corev1.TLSPrivateKeyKey]
+			if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
 				p.Root = ca
 			}
 		}
@@ -751,7 +753,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		}
 	} else if auth.SecretRef != nil {
 		// Resolve secret and extract Authorization value
-		secret, err := kubeutils.GetSecret(ctx.Collections.Secrets, ctx.Krt, auth.SecretRef.Name, policy.Namespace)
+		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
@@ -762,7 +764,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				},
 			}
 		} else {
-			if authKey, ok := kubeutils.GetSecretAuth(secret); ok {
+			if authKey, ok := kubeutils.GetSecretDataAuth(data); ok {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -783,19 +785,19 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			}
 		}
 	} else if auth.AWS != nil {
-		awsAuth, err := buildAwsAuthPolicy(ctx.Krt, auth.AWS, ctx.Collections.Secrets, policy.Namespace)
+		awsAuth, err := buildAwsAuthPolicy(ctx, auth.AWS, policy.Namespace)
 		translatedAuth = awsAuth
 		if err != nil {
 			errs = append(errs, err)
 		}
 	} else if auth.Azure != nil {
-		azureAuth, err := buildAzureAuthPolicy(ctx.Krt, auth.Azure, ctx.Collections.Secrets, policy.Namespace)
+		azureAuth, err := buildAzureAuthPolicy(ctx, auth.Azure, policy.Namespace)
 		translatedAuth = azureAuth
 		if err != nil {
 			errs = append(errs, err)
 		}
 	} else if auth.GCP != nil {
-		gcpAuth, err := buildGcpAuthPolicy(ctx.Krt, auth.GCP, ctx.Collections.Secrets, policy.Namespace)
+		gcpAuth, err := buildGcpAuthPolicy(ctx, auth.GCP, policy.Namespace)
 		translatedAuth = gcpAuth
 		if err != nil {
 			errs = append(errs, err)
@@ -855,12 +857,8 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 	}
 }
 
-func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, secrets krt.Collection[*corev1.Secret], namespace string) (*api.BackendAuthPolicy, error) {
+func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
-	if auth.SecretRef.Name == "" {
-		logger.Warn("not using any auth for AWS - it's most likely not what you want")
-		return nil, nil
-	}
 
 	var accessKeyId, secretAccessKey string
 	var sessionToken *string
@@ -868,55 +866,69 @@ func buildAwsAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AwsAuth, s
 	if auth.ServiceName != nil {
 		serviceName = string(*auth.ServiceName)
 	}
-
-	// Get secret using the SecretIndex
-	secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
-	if err != nil {
-		errs = append(errs, err)
-	} else {
-		// Extract access key
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.AccessKey); !exists {
-			errs = append(errs, errors.New("accessKey is missing or not a valid string"))
-		} else {
-			accessKeyId = value
+	var assumeRole *api.AwsAssumeRole
+	if auth.AssumeRole != nil {
+		assumeRole = &api.AwsAssumeRole{
+			RoleArn: auth.AssumeRole.RoleArn,
 		}
+	}
 
-		// Extract secret key
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.SecretKey); !exists {
-			errs = append(errs, errors.New("secretKey is missing or not a valid string"))
-		} else {
-			secretAccessKey = value
+	awsAuth := &api.Aws{
+		Kind: &api.Aws_Implicit{
+			Implicit: &api.AwsImplicit{},
+		},
+		ServiceName: serviceName,
+		AssumeRole:  assumeRole,
+	}
+	if auth.SecretRef != nil && auth.SecretRef.Name != "" {
+		if auth.AssumeRole != nil {
+			errs = append(errs, errors.New("secretRef and assumeRole are mutually exclusive"))
 		}
+		// Get secret using the SecretIndex
+		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			// Extract access key
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.AccessKey); !exists {
+				errs = append(errs, errors.New("accessKey is missing or not a valid string"))
+			} else {
+				accessKeyId = value
+			}
 
-		// Extract session token (optional)
-		if secret != nil {
-			if value, exists := kubeutils.GetSecretValue(secret, wellknown.SessionToken); exists {
+			// Extract secret key
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SecretKey); !exists {
+				errs = append(errs, errors.New("secretKey is missing or not a valid string"))
+			} else {
+				secretAccessKey = value
+			}
+
+			// Extract session token (optional)
+			if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SessionToken); exists {
 				sessionToken = new(value)
 			}
+		}
+		awsAuth.Kind = &api.Aws_ExplicitConfig{
+			ExplicitConfig: &api.AwsExplicitConfig{
+				AccessKeyId:     accessKeyId,
+				SecretAccessKey: secretAccessKey,
+				SessionToken:    sessionToken,
+				Region:          "",
+			},
 		}
 	}
 
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Aws{
-			Aws: &api.Aws{
-				Kind: &api.Aws_ExplicitConfig{
-					ExplicitConfig: &api.AwsExplicitConfig{
-						AccessKeyId:     accessKeyId,
-						SecretAccessKey: secretAccessKey,
-						SessionToken:    sessionToken,
-						Region:          "",
-					},
-				},
-				ServiceName: serviceName,
-			},
+			Aws: awsAuth,
 		},
 	}, errors.Join(errs...)
 }
 
-func buildAzureAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AzureAuth, secrets krt.Collection[*corev1.Secret], namespace string) (*api.BackendAuthPolicy, error) {
+func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
-	if auth.SecretRef.Name != "" {
-		return buildAzureClientSecret(secrets, krtctx, auth, namespace, errs)
+	if auth.SecretRef != nil {
+		return buildAzureClientSecret(ctx, auth, namespace, errs)
 	}
 
 	if auth.ManagedIdentity != nil {
@@ -958,28 +970,28 @@ func buildAzureAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.AzureAut
 	return nil, errors.Join(errs...)
 }
 
-func buildAzureClientSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.HandlerContext, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
+func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
 	var clientID, tenantID, clientSecret string
-	secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
+	data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
 	if err != nil {
 		errs = append(errs, err)
 	} else {
 		// Extract client ID
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientID); !exists {
+		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.ClientID); !exists {
 			errs = append(errs, errors.New("clientID is missing or not a valid string"))
 		} else {
 			clientID = value
 		}
 
 		// Extract tenant ID
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.TenantID); !exists {
+		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.TenantID); !exists {
 			errs = append(errs, errors.New("tenantID is missing or not a valid string"))
 		} else {
 			tenantID = value
 		}
 
 		// Extract client secret
-		if value, exists := kubeutils.GetSecretValue(secret, wellknown.ClientSecret); !exists {
+		if value, exists := kubeutils.GetSecretDataValue(data, wellknown.ClientSecret); !exists {
 			errs = append(errs, errors.New("clientSecret is missing or not a valid string"))
 		} else {
 			clientSecret = value
@@ -1005,7 +1017,7 @@ func buildAzureClientSecret(secrets krt.Collection[*corev1.Secret], krtctx krt.H
 	}, errors.Join(errs...)
 }
 
-func buildGcpAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.GcpAuth, secrets krt.Collection[*corev1.Secret], namespace string) (*api.BackendAuthPolicy, error) {
+func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
 	var credential *string
 	if auth.SecretRef != nil {
@@ -1013,10 +1025,10 @@ func buildGcpAuthPolicy(krtctx krt.HandlerContext, auth *agentgateway.GcpAuth, s
 		// missing or malformed. An explicit empty credential fails in the proxy
 		// instead of falling back to ambient GCP credentials.
 		credential = new("")
-		secret, err := kubeutils.GetSecret(secrets, krtctx, auth.SecretRef.Name, namespace)
+		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
 		if err != nil {
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretValue(secret, wellknown.GCPCredentialsJSON); !exists {
+		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.GCPCredentialsJSON); !exists {
 			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.GCPCredentialsJSON))
 		} else {
 			credential = &value
