@@ -1666,22 +1666,10 @@ func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaul
 			gk,
 			ctx.Collections.Settings.BackendRefGrantMode,
 		) {
-			return fmt.Errorf("backendRef %v/%v not accessible to %s %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, articleForKind(sourceGVK.Kind), sourceGVK.Kind, defaultNS)
+			return fmt.Errorf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, sourceGVK.Kind, defaultNS)
 		}
 	}
 	return nil
-}
-
-func articleForKind(kind string) string {
-	if kind == "" {
-		return "a"
-	}
-	switch strings.ToLower(kind[:1]) {
-	case "a", "e", "i", "o", "u":
-		return "an"
-	default:
-		return "a"
-	}
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {

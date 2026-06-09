@@ -442,6 +442,8 @@ func TestResolve(t *testing.T) {
 func TestResolveWithAdditionalBackendResolver(t *testing.T) {
 	ctx := testutils.BuildMockPolicyContext(t, nil)
 	backendGK := schema.GroupKind{Group: "example.io", Kind: "ExampleBackend"}
+	group := new(gwv1.Group(backendGK.Group))
+	kind := new(gwv1.Kind(backendGK.Kind))
 	resolver := remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps: ctx.Collections.ConfigMaps,
 		Services:   ctx.Collections.Services,
@@ -462,8 +464,8 @@ func TestResolveWithAdditionalBackendResolver(t *testing.T) {
 		ParentName:       "policy",
 		DefaultNamespace: "default",
 		BackendRef: gwv1.BackendObjectReference{
-			Group: ptr.Of(gwv1.Group(backendGK.Group)),
-			Kind:  ptr.Of(gwv1.Kind(backendGK.Kind)),
+			Group: group,
+			Kind:  kind,
 			Name:  "custom",
 		},
 		Path: "/oauth2/v3/certs",

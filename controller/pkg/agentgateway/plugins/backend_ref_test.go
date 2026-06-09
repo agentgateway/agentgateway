@@ -41,6 +41,8 @@ func TestBuildBackendRefUsesPolicySourceGVKForReferenceGrant(t *testing.T) {
 		Kind:    "CustomPolicy",
 	}
 	grants := &recordingGrantChecker{}
+	namespace := new(gwv1.Namespace)
+	*namespace = "backend-ns"
 
 	_, err := BuildBackendRef(PolicyCtx{
 		Krt: krt.TestingDummyContext{},
@@ -53,7 +55,7 @@ func TestBuildBackendRefUsesPolicySourceGVKForReferenceGrant(t *testing.T) {
 		SourceGVK: source,
 	}, gwv1.BackendObjectReference{
 		Name:      "backend",
-		Namespace: ptrTo(gwv1.Namespace("backend-ns")),
+		Namespace: namespace,
 	}, "policy-ns")
 
 	if err == nil {
@@ -65,8 +67,4 @@ func TestBuildBackendRefUsesPolicySourceGVKForReferenceGrant(t *testing.T) {
 	if !strings.Contains(err.Error(), "CustomPolicy") {
 		t.Fatalf("error %q does not include source kind", err)
 	}
-}
-
-func ptrTo[T any](v T) *T {
-	return &v
 }
