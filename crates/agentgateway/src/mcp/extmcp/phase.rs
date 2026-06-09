@@ -47,6 +47,19 @@ pub fn resolve(method: &str, methods: &HashMap<String, Phase>) -> Phase {
 		.unwrap_or_default()
 }
 
+/// Whether a methods key is a pattern `resolve` can ever match: a non-empty
+/// exact name, `*`, or a single leading or trailing `*`.
+pub fn pattern_is_matchable(pat: &str) -> bool {
+	if pat.is_empty() {
+		return false;
+	}
+	match pat.matches('*').count() {
+		0 => true,
+		1 => pat.starts_with('*') || pat.ends_with('*'),
+		_ => false,
+	}
+}
+
 // Higher rank = more specific. None if the pattern doesn't match.
 fn match_kind(pattern: &str, method: &str) -> Option<u8> {
 	if pattern == "*" {

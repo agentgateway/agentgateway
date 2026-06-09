@@ -101,6 +101,19 @@ impl ExtMcp {
 				));
 			}
 		}
+		let mut bad_patterns: Vec<_> = self
+			.drivers
+			.iter()
+			.flat_map(|d| d.methods.keys())
+			.filter(|p| !phase::pattern_is_matchable(p))
+			.map(|p| {
+				format!(
+					"extMcp: methods key {p:?} can never match; use an exact method, 'prefix/*', '*/suffix', or '*'"
+				)
+			})
+			.collect();
+		bad_patterns.sort();
+		out.append(&mut bad_patterns);
 		out
 	}
 }
@@ -333,5 +346,19 @@ drivers:
 				.load_warnings()
 				.is_empty()
 		);
+	}
+
+	#[test]
+	fn warns_on_unmatchable_method_patterns() {
+		let warnings = ext_with_methods(&[
+			("a*b", Phase::Response),
+			("**", Phase::Response),
+			("", Phase::Response),
+			("tools/*", Phase::Response),
+			("*/list", Phase::Response),
+		])
+		.load_warnings();
+		assert_eq!(warnings.len(), 3, "{warnings:?}");
+		assert!(warnings.iter().all(|w| w.contains("can never match")));
 	}
 }
