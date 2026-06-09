@@ -9,6 +9,7 @@ use super::{Error, Provider, TokenEndpointAuth};
 use crate::http::Body;
 use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct TokenResponse {
@@ -85,6 +86,7 @@ pub(crate) async fn exchange_code_with_timeout(
 		.map_err(|e| Error::Config(format!("failed to build token exchange request: {e}")))?;
 	req.extensions_mut().insert(BackendRequestTimeout(timeout));
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
 		.simple_call(req)
 		.await
 		.map_err(anyhow::Error::from)

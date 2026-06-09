@@ -2,24 +2,27 @@ package agentgatewaybackend_test
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 func TestBuildMCP(t *testing.T) {
@@ -46,7 +49,7 @@ func TestBuildMCP(t *testing.T) {
 									Host:     shortStringPtr("mcp-server.example.com"),
 									Port:     8080,
 									Path:     new("override-sse"),
-									Protocol: ptr.Of(agentgateway.MCPProtocolSSE),
+									Protocol: new(agentgateway.MCPProtocolSSE),
 								},
 							},
 						},
@@ -441,6 +444,80 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid custom backend with host target",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "custom-host-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Custom: &agentgateway.CustomProvider{
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatCompletions},
+									{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},
+								},
+							},
+							Host: "llm.example.com",
+							Port: 443,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid custom backend with Service backendRef",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "custom-service-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Custom: &agentgateway.CustomProvider{
+								BackendRef: &agentgateway.LocalBackendObjectReference{
+									Name: "llm-service",
+									Port: new(int32(8080)),
+								},
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatCompletions},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockService("test-ns", "llm-service", 8080)},
+		},
+		{
+			name: "Valid custom backend with InferencePool backendRef",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "custom-inferencepool-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Custom: &agentgateway.CustomProvider{
+								BackendRef: &agentgateway.LocalBackendObjectReference{
+									Group: new(wellknown.InferencePoolGVK.Group),
+									Kind:  new(wellknown.InferencePoolGVK.Kind),
+									Name:  "llm-pool",
+								},
+								Formats: []agentgateway.ProviderFormatConfig{
+									{Type: agentgateway.ProviderFormatMessages, Path: "/api/messages"},
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{createMockInferencePool("test-ns", "llm-pool", 8000)},
+		},
+		{
 			name: "Valid Bedrock backend with custom region and guardrail",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{
@@ -486,7 +563,7 @@ func TestBuildAIBackend(t *testing.T) {
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Policies: &agentgateway.BackendFull{
 						BackendSimple: agentgateway.BackendSimple{
-							Auth: &agentgateway.BackendAuth{SecretRef: &corev1.LocalObjectReference{
+							Auth: &agentgateway.BackendAuth{SecretRef: &shared.LocalSecretObjectRef{
 								Name: "openai-secret",
 							}},
 						},
@@ -703,6 +780,62 @@ func TestBuildAIBackend(t *testing.T) {
 	}
 }
 
+func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T) {
+	backend := &agentgateway.AgentgatewayBackend{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "custom-backend",
+			Namespace: "test-ns",
+		},
+		Spec: agentgateway.AgentgatewayBackendSpec{
+			AI: &agentgateway.AIBackend{
+				LLM: &agentgateway.LLMProvider{
+					Custom: &agentgateway.CustomProvider{
+						BackendRef: &agentgateway.LocalBackendObjectReference{
+							Name: "llm-service",
+							Port: new(int32(8080)),
+						},
+						Formats: []agentgateway.ProviderFormatConfig{
+							{Type: agentgateway.ProviderFormatCompletions},
+						},
+					},
+				},
+				PriorityGroups: []agentgateway.PriorityGroup{
+					{
+						Providers: []agentgateway.NamedLLMProvider{
+							{
+								Name: "pool-provider",
+								LLMProvider: agentgateway.LLMProvider{
+									Custom: &agentgateway.CustomProvider{
+										BackendRef: &agentgateway.LocalBackendObjectReference{
+											Group: new(wellknown.InferencePoolGVK.Group),
+											Kind:  new(wellknown.InferencePoolGVK.Kind),
+											Name:  "llm-pool",
+										},
+										Formats: []agentgateway.ProviderFormatConfig{
+											{Type: agentgateway.ProviderFormatMessages},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var got []string
+	for _, ref := range agentgatewaybackend.BuildAgwBackendReferences(backend) {
+		got = append(got, ref.ResourceName())
+	}
+	sort.Strings(got)
+
+	assert.Equal(t, got, []string{
+		"AgentgatewayBackend/test-ns/custom-backend/AgentgatewayBackend/test-ns/custom-backend/InferencePool/test-ns/llm-pool",
+		"AgentgatewayBackend/test-ns/custom-backend/AgentgatewayBackend/test-ns/custom-backend/Service/test-ns/llm-service",
+	})
+}
+
 func shortStringPtr(s string) *agentgateway.ShortString {
 	v := agentgateway.ShortString(s)
 	return &v
@@ -726,6 +859,44 @@ func createMockSecret(namespace, name string, data map[string]string) *corev1.Se
 	}
 
 	return mockSecret
+}
+
+func createMockService(namespace, serviceName string, port int32) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name: "llm",
+					Port: port,
+				},
+			},
+		},
+	}
+}
+
+func createMockInferencePool(namespace, poolName string, port int32) *inf.InferencePool {
+	return &inf.InferencePool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      poolName,
+			Namespace: namespace,
+		},
+		Spec: inf.InferencePoolSpec{
+			Selector: inf.LabelSelector{
+				MatchLabels: map[inf.LabelKey]inf.LabelValue{"app": "llm"},
+			},
+			TargetPorts: []inf.Port{
+				{Number: inf.PortNumber(port)},
+			},
+			EndpointPickerRef: inf.EndpointPickerRef{
+				Name: "epp",
+				Port: &inf.Port{Number: 9002},
+			},
+		},
+	}
 }
 
 func TestBuildStaticIr(t *testing.T) {

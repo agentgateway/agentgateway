@@ -11,13 +11,12 @@ use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
 use bytes::Bytes;
+use futures_util::StreamExt;
 use hyper::Request;
 use hyper::body::Incoming;
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use tokio::runtime::Handle;
 use tokio::time;
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
 
@@ -101,7 +100,7 @@ impl Service {
 	) -> anyhow::Result<Self> {
 		Server::<State>::bind(
 			"admin",
-			config.admin_addr,
+			config.admin_addr.clone(),
 			drain_rx,
 			State {
 				config,
@@ -116,7 +115,7 @@ impl Service {
 		.map(|s| Service { s })
 	}
 
-	pub fn address(&self) -> SocketAddr {
+	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 
@@ -144,7 +143,7 @@ impl Service {
 					.await,
 				),
 				"/debug/tasks" => handle_tokio_tasks(req, &state.dataplane_handle).await,
-				"/debug/trace" => Ok(handle_debug_trace().await),
+				"/debug/trace" => Ok(handle_debug_trace(req).await),
 				"/config_dump" => {
 					handle_config_dump(
 						&state.config_dump_handlers,
@@ -274,24 +273,61 @@ async fn handle_server_shutdown(
 	}
 }
 
-pub async fn handle_debug_trace() -> Response {
-	let rx = crate::proxy::dtrace::track();
-	let sse_stream = ReceiverStream::new(rx).map(|msg| {
-		let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
-			serde_json::json!({
-				"type": "serialization_error",
-				"error": e.to_string(),
-			})
-			.to_string()
-		});
-		Ok::<Bytes, Infallible>(Bytes::from(format!("data: {payload}\n\n")))
+pub async fn handle_debug_trace(req: Request<Incoming>) -> Response {
+	let expression = req.uri().query().and_then(|query| {
+		url::form_urlencoded::parse(query.as_bytes())
+			.find(|(key, _)| key == "expression")
+			.map(|(_, value)| value.into_owned())
 	});
+	let expression = match expression {
+		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
+			Ok(expression) => Some(expression),
+			Err(err) => {
+				return plaintext_response(
+					hyper::StatusCode::BAD_REQUEST,
+					format!("invalid expression: {err}\n"),
+				);
+			},
+		},
+		None => None,
+	};
+	let rx = crate::proxy::dtrace::track_expression(expression);
+	let sse_stream = trace_sse_stream(rx);
 	::http::Response::builder()
 		.status(hyper::StatusCode::OK)
 		.header("Content-Type", "text/event-stream")
 		.header("Cache-Control", "no-cache")
 		.body(crate::http::Body::from_stream(sse_stream))
 		.expect("builder with known status code should not fail")
+}
+
+fn trace_sse_stream(
+	rx: crate::proxy::dtrace::TraceReceiver,
+) -> impl futures_util::Stream<Item = Result<Bytes, Infallible>> {
+	let keepalive = time::interval_at(
+		time::Instant::now() + Duration::from_secs(1),
+		Duration::from_secs(1),
+	);
+	let events =
+		futures_util::stream::unfold((rx, keepalive), |(mut rx, mut keepalive)| async move {
+			tokio::select! {
+				msg = rx.next() => {
+					let msg = msg?;
+					let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+						serde_json::json!({
+							"type": "serialization_error",
+							"error": e.to_string(),
+						})
+						.to_string()
+					});
+					Some((Ok(Bytes::from(format!("data: {payload}\n\n"))), (rx, keepalive)))
+				},
+				_ = keepalive.tick() => {
+					Some((Ok(Bytes::from_static(b": keepalive\n\n")), (rx, keepalive)))
+				},
+			}
+		});
+	futures_util::stream::once(async { Ok(Bytes::from_static(b": ready\n\n")) }).chain(events)
 }
 
 #[cfg(target_os = "linux")]

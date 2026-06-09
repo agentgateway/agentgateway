@@ -598,7 +598,13 @@ impl Gateway {
 			raw_stream.apply_tcp_settings(tcp)
 		}
 		// Tunnel protocol can come from the bind or policies; policies override.
-		let tunnel_protocol = if policies.proxy.is_some() {
+		let tunnel_protocol = if policies
+			.connect
+			.as_ref()
+			.is_some_and(|p| p.mode == frontend::ConnectMode::Tunnel)
+		{
+			TunnelProtocol::Connect
+		} else if policies.proxy.is_some() {
 			TunnelProtocol::Proxy
 		} else {
 			tunnel_protocol
@@ -629,6 +635,12 @@ impl Gateway {
 			TunnelProtocol::HboneGateway => {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
 			},
+			TunnelProtocol::Connect => {
+				let err = Self::terminate_connect_tunnel(inputs, raw_stream, policies, drain).await;
+				if let Err(e) = err {
+					warn!(src.addr = %peer_addr, "connect tunnel error: {e}");
+				}
+			},
 			TunnelProtocol::Proxy => {
 				let proxy_policy = policies.proxy.clone().unwrap_or_default();
 				let err = Self::terminate_proxy_protocol(
@@ -645,6 +657,89 @@ impl Gateway {
 				}
 			},
 		}
+	}
+
+	async fn terminate_connect_tunnel(
+		inputs: Arc<ProxyInputs>,
+		raw_stream: Socket,
+		policies: FrontendPolices,
+		drain: DrainWatcher,
+	) -> anyhow::Result<()> {
+		let connection = Arc::new(raw_stream.get_ext());
+		let def = frontend::HTTP::default();
+		let buffer = policies
+			.http
+			.as_ref()
+			.map(|h| h.max_buffer_size)
+			.unwrap_or(def.max_buffer_size);
+		let server = auto_server(policies.http.as_ref());
+
+		let serve = server.serve_connection_with_upgrades(
+			TokioIo::new(raw_stream),
+			hyper::service::service_fn(move |mut req: ::http::Request<hyper::body::Incoming>| {
+				let inputs = inputs.clone();
+				let connection = connection.clone();
+				let drain = drain.clone();
+				req.extensions_mut().insert(BufferLimit::new(buffer));
+				async move {
+					if req.method() != ::http::Method::CONNECT {
+						return Ok::<_, Infallible>(
+							ProxyError::MethodNotAllowed.into_response_with_grpc(false),
+						);
+					}
+					let Some(upgrade) = req.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else {
+						return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
+					};
+					let authority = match req.uri().authority() {
+						Some(authority) => authority.as_str(),
+						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
+					};
+					let (target_address, bind) = if let Ok(addr) = authority.parse::<SocketAddr>() {
+						let Some(bind) = inputs.stores.read_binds().find_bind(addr) else {
+							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
+						};
+						(addr, bind)
+					} else {
+						let Some(port) = req.uri().port_u16() else {
+							return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
+						};
+						let Some(bind) = inputs.stores.read_binds().find_bind_by_port(port) else {
+							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
+						};
+						let target_ip = if bind.address.ip().is_unspecified() {
+							connection
+								.get::<TCPConnectionInfo>()
+								.map(|tcp| tcp.local_addr.ip())
+								.unwrap_or_else(|| bind.address.ip())
+						} else {
+							bind.address.ip()
+						};
+						(SocketAddr::new(target_ip, port), bind)
+					};
+
+					tokio::task::spawn(async move {
+						let downstream = match upgrade.await {
+							Ok(u) => u,
+							Err(e) => {
+								error!("CONNECT upgrade error: {e}");
+								return;
+							},
+						};
+						let downstream = Socket::from_upgraded(connection, target_address, downstream);
+						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
+					});
+
+					Ok(
+						::http::Response::builder()
+							.status(StatusCode::OK)
+							.body(crate::http::Body::empty())
+							.expect("builder with known status code should not fail"),
+					)
+				}
+			}),
+		);
+		serve.await.map_err(|e| anyhow!("{e}"))?;
+		Ok(())
 	}
 
 	async fn proxy(
@@ -739,7 +834,8 @@ impl Gateway {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
-				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(async move {
+				let req = req.map(crate::http::Body::new);
+				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
 					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 				}))
 			}),
@@ -999,6 +1095,7 @@ impl Gateway {
 					issuer: crate::strng::EMPTY,
 					subject: crate::strng::EMPTY,
 					subject_cn: None,
+					certificate: None,
 				}),
 				server_name: None,
 				negotiated_alpn: None,
@@ -1386,6 +1483,7 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		max_buffer_size: _, // Not handled here
 		http1_max_headers,
 		http1_idle_timeout,
+		http1_header_case,
 		http2_window_size,
 		http2_connection_window_size,
 		http2_frame_size,
@@ -1400,6 +1498,10 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 	// See https://github.com/agentgateway/agentgateway/issues/504 for why "idle timeout" is used as "read header timeout"
 	b.http1().header_read_timeout(Some(*http1_idle_timeout));
+	b.http1().preserve_header_case(matches!(
+		http1_header_case,
+		frontend::HTTPHeaderCase::Preserve
+	));
 
 	if http2_window_size.is_some() || http2_connection_window_size.is_some() {
 		if let Some(w) = http2_connection_window_size {

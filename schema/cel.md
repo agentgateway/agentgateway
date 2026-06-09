@@ -16,15 +16,21 @@
 |`request.endTime`|string|The time the request completed|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
+|`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
+|`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
+|`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
 |`env`|object|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|
 |`env.podName`|string|The name of the pod (when running on Kubernetes)|
 |`env.namespace`|string|The namespace of the pod (when running on Kubernetes)|
 |`env.gateway`|string|The Gateway we are running as (when running on Kubernetes)|
 |`jwt`|object|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
+|`jwt.rawToken`|string|The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.|
 |`apiKey`|object|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
-|`apiKey.key`|string||
+|`apiKey.key`|string|The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.|
 |`basicAuth`|object|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
@@ -74,6 +80,7 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
+|`source.certificate`|string|PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.|
 |`source.unverifiedWorkload`|object|The workload context of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.<br><br>Fields are nested under `unverified` to signal that they are derived<br>from the source IP (not cryptographically authenticated). Policy<br>authors should prefer `source.identity.*` for trust-sensitive checks.|
 |`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
 |`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|

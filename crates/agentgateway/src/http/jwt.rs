@@ -405,12 +405,29 @@ struct Jwk {
 }
 
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(with = "Map<String, Value>"))]
 pub struct Claims {
 	pub inner: Map<String, Value>,
-	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub jwt: SecretString,
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Claims {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"JwtClaims".into()
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "object",
+			"properties": {
+				"rawToken": {
+					"description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
+					"type": "string"
+				}
+			},
+			"additionalProperties": true
+		})
+	}
 }
 
 impl DynamicType for Claims {
@@ -419,7 +436,10 @@ impl DynamicType for Claims {
 	}
 
 	fn field(&self, field: &str) -> Option<cel::Value<'_>> {
-		self.inner.field(field)
+		match field {
+			"rawToken" => Some(crate::cel::secret_string_to_value(&self.jwt)),
+			_ => self.inner.field(field),
+		}
 	}
 }
 

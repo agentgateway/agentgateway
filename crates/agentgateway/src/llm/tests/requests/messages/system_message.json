@@ -1,0 +1,26 @@
+{
+  "model": "claude-opus-4-8",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<system-reminder>\nAs you answer, be concise."
+        },
+        {
+          "type": "text",
+          "text": "hola",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    },
+    {
+      "role": "system",
+      "content": "The following skills are available for use."
+    }
+  ]
+}

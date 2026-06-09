@@ -1,0 +1,29 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/bedrock/reasoning.bin
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"delta":"Two plus two is four."}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"delta":"The answer is 4."}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":6,"response":{"created_at":123,"id":"","model":"input-model","object":"response","output":[],"status":"completed","usage":{"input_tokens":18,"input_tokens_details":{"cached_tokens":0},"output_tokens":46,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":64}}}
+
+
+
+{
+  "input_tokens": 18,
+  "output_tokens": 46,
+  "total_tokens": 64
+}

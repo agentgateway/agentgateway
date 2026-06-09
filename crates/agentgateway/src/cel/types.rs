@@ -9,7 +9,7 @@ use agent_core::strng::Strng;
 use bytes::Bytes;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue, StringValue};
+use cel::objects::{BytesValue, ListValue, MapValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
 use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
@@ -42,6 +42,8 @@ pub struct Executor<'a> {
 
 	pub response: Option<ResponseRef<'a>>,
 
+	pub proxy: ExtensionOrDirect<'a, ProxyContext>,
+
 	pub env: EnvContext,
 
 	pub source: ExtensionOrDirect<'a, SourceContext>,
@@ -68,6 +70,98 @@ pub struct Executor<'a> {
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ProxyContext {
+	/// Time spent processing the request before sending the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub request_processing_duration: Option<CelDuration>,
+	/// Time spent waiting for the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub upstream_duration: Option<CelDuration>,
+	/// Time spent processing the primary outbound response before sending the downstream response.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub response_processing_duration: Option<CelDuration>,
+}
+
+impl ProxyContext {
+	pub fn from_std_durations(
+		request_processing_duration: Option<std::time::Duration>,
+		upstream_duration: Option<std::time::Duration>,
+		response_processing_duration: Option<std::time::Duration>,
+	) -> Self {
+		fn proxy_duration(duration: Option<std::time::Duration>) -> Option<CelDuration> {
+			duration
+				.and_then(|duration| chrono::Duration::from_std(duration).ok())
+				.map(Into::into)
+		}
+
+		Self {
+			request_processing_duration: proxy_duration(request_processing_duration),
+			upstream_duration: proxy_duration(upstream_duration),
+			response_processing_duration: proxy_duration(response_processing_duration),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CelDuration(pub chrono::Duration);
+
+impl From<chrono::Duration> for CelDuration {
+	fn from(duration: chrono::Duration) -> Self {
+		Self(duration)
+	}
+}
+
+impl From<CelDuration> for chrono::Duration {
+	fn from(duration: CelDuration) -> Self {
+		duration.0
+	}
+}
+
+impl Serialize for CelDuration {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let duration = ::cel::format_duration(&self.0).ok_or_else(|| {
+			serde::ser::Error::custom(format!("duration too large to serialize: {:?}", self.0))
+		})?;
+		duration.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for CelDuration {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let duration = String::deserialize(deserializer)?;
+		let (remaining, duration) = ::cel::parse_duration(&duration)
+			.map_err(|err| serde::de::Error::custom(format!("invalid duration: {err:?}")))?;
+		if !remaining.is_empty() {
+			return Err(serde::de::Error::custom(format!(
+				"invalid duration: trailing input {remaining:?}"
+			)));
+		}
+		Ok(Self(duration))
+	}
+}
+
+impl DynamicType for CelDuration {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::Duration(self.0)
+	}
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
@@ -293,6 +387,19 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
 		self.executor.field(variable)
 	}
+	fn variables(&self) -> Option<Value<'a>> {
+		match self.executor.materialize() {
+			Value::Map(map) => {
+				let variables = map
+					.iter()
+					.filter(|(_, value)| !matches!(value, Value::Null))
+					.map(|(key, value)| (key, value.clone()))
+					.collect();
+				Some(Value::Map(MapValue::Borrow(variables)))
+			},
+			_ => None,
+		}
+	}
 	// A bit annoying, but a nice speed up for us
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
 		match expr {
@@ -359,6 +466,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Extension(resp.extensions());
 		if let Some(llm) = resp.extensions().get::<LLMContext>() {
 			self.llm = ExtensionOrDirect::Direct(Some(llm));
 		}
@@ -371,6 +479,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Direct(resp.proxy.as_ref());
 		if let Some(metadata) = resp.metadata.as_ref() {
 			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
 		}
@@ -406,6 +515,7 @@ impl<'a> Executor<'a> {
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
 		end_time: Option<&'a RequestTime>,
+		proxy: Option<&'a ProxyContext>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -416,6 +526,9 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		if this.proxy.deref().is_none() {
+			this.proxy = ExtensionOrDirect::Direct(proxy);
+		}
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
@@ -588,10 +701,12 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 	ResponseSnapshot {
 		code: resp.status(),
+		grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
 		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
+		proxy: resp.extensions_mut().remove::<ProxyContext>(),
 	}
 }
 
@@ -677,16 +792,23 @@ pub struct RequestRef<'a> {
 #[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
 	pub code: http::StatusCode,
+	pub grpc_status: Option<u8>,
 	pub headers: http::HeaderMap,
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
 	pub metadata: Option<TransformationMetadata>,
+	pub proxy: Option<ProxyContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
 pub struct ResponseRef<'a> {
 	/// The HTTP status code of the response.
 	pub code: u16,
+
+	/// The gRPC status code of the response, when present.
+	#[serde(rename = "grpcStatus", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "grpcStatus")]
+	pub grpc_status: Option<u8>,
 
 	/// The headers of the response.
 	pub headers: Headers<'a>,
@@ -699,6 +821,7 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 	fn from(value: &'a ResponseSnapshot) -> Self {
 		Self {
 			code: value.code.as_u16(),
+			grpc_status: value.grpc_status,
 			headers: Headers::new(&value.headers),
 			body: BodyExtensionOrDirect::Direct {
 				buffered: value.body.as_ref(),
@@ -771,6 +894,14 @@ pub struct ResponseRefSerde {
 	#[serde(default)]
 	pub code: u16,
 
+	/// The gRPC status code of the response, when present.
+	#[serde(
+		default,
+		rename = "grpcStatus",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub grpc_status: Option<u8>,
+
 	/// The headers of the response.
 	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
@@ -827,6 +958,7 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 	fn from(resp: &'a crate::http::Response) -> Self {
 		Self {
 			code: resp.status().as_u16(),
+			grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 			headers: Headers::new(resp.headers()),
 			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
@@ -1119,6 +1251,7 @@ impl From<llm::LLMRequest> for LLMContext {
 		let LLMRequest {
 			input_tokens,
 			input_format: _, // Expose this?
+			native_format: _,
 			request_model,
 			provider,
 			streaming,
@@ -1541,6 +1674,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `proxy` contains proxy timing information for the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub proxy: Option<ProxyContext>,
+
 	/// `env` contains selected process environment attributes exposed to CEL.
 	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
 	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
@@ -1591,15 +1728,8 @@ pub struct ExecutorSerde {
 	pub extproc: Option<ExtProcDynamicMetadata>,
 
 	/// `metadata` contains values set by transformation metadata expressions.
-	#[serde(
-		default,
-		skip_serializing_if = "is_transformation_metadata_none_or_empty"
-	)]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
-}
-
-fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
-	metadata.as_ref().is_none_or(|m| m.0.is_empty())
 }
 
 impl ExecutorSerde {
@@ -1662,6 +1792,7 @@ impl ExecutorSerde {
 		if let Some(resp) = &self.response {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
+				grpc_status: resp.grpc_status,
 				headers: Headers::new(&resp.headers),
 				body: BodyExtensionOrDirect::Direct {
 					buffered: resp.body.as_ref(),
@@ -1669,6 +1800,7 @@ impl ExecutorSerde {
 				},
 			});
 		}
+		exec.proxy = ExtensionOrDirect::Direct(self.proxy.as_ref());
 		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
@@ -1715,8 +1847,14 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
+			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		proxy: Some(ProxyContext {
+			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
+			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
+			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 		}),
 		env: Some(EnvContext {
 			pod_name: Some("pod-1".to_string()),
@@ -1734,6 +1872,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+				certificate: Default::default(),
 			}),
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),

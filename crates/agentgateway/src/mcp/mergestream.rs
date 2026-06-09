@@ -25,6 +25,21 @@ impl Messages {
 	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
 	}
+
+	pub fn map_server_messages(
+		self,
+		mut f: impl FnMut(ServerJsonRpcMessage) -> ServerJsonRpcMessage + Send + 'static,
+	) -> Self {
+		Messages(
+			self
+				.0
+				.map(move |message| match message {
+					Ok(message) => Ok(f(message)),
+					Err(err) => Err(err),
+				})
+				.boxed(),
+		)
+	}
 }
 
 impl Stream for Messages {

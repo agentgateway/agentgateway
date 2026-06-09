@@ -2,14 +2,17 @@ use agent_core::metrics::Recorder;
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::{Registry, Unit};
 
 use super::service::discovery::v3::DeltaDiscoveryResponse;
 
+#[derive(Debug)]
 pub struct Metrics {
 	pub connection_terminations: Family<ConnectionTermination, Counter>,
 	pub message_types: Family<TypeUrl, Counter>,
 	pub total_messages_size: Family<TypeUrl, Counter>,
+	pub config_synchronized: Gauge,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
@@ -56,10 +59,19 @@ impl Metrics {
 			total_messages_size.clone(),
 		);
 
+		let config_synchronized = Gauge::default();
+		config_synchronized.set(1);
+		registry.register(
+            "config_synchronized",
+            "Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration",
+            config_synchronized.clone()
+        );
+
 		Self {
 			connection_terminations,
 			message_types: message_count,
 			total_messages_size,
+			config_synchronized,
 		}
 	}
 }

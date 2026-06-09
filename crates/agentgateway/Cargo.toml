@@ -9,10 +9,11 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = []
-glibc = []
+default = ["jemalloc", "mimalloc", "tls-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
+tls-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
+tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
@@ -32,7 +33,10 @@ atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
+aws-types.workspace = true
 aws-lc-rs.workspace = true
+openssl = { workspace = true, optional = true }
+rustls-openssl = { workspace = true, optional = true }
 aws-smithy-eventstream.workspace = true
 aws-smithy-types.workspace = true
 axum-core.workspace = true
@@ -86,6 +90,7 @@ opentelemetry-http.workspace = true
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
+pem.workspace = true
 percent-encoding.workspace = true
 phonenumber.workspace = true
 pin-project-lite.workspace = true
@@ -217,6 +222,8 @@ declare_interior_mutable_const = "allow"
 [lints.rust]
 # This rule makes code more confusing
 mismatched_lifetime_syntaxes = "allow"
+# ossl350 is set by the openssl-sys crate when OpenSSL >= 3.5.0 is detected.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ossl350)'] }
 
 [[bench]]
 name = "bench_tests"

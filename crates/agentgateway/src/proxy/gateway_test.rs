@@ -1,14 +1,17 @@
+use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ::http::{Method, Version, header};
+use ::http::{HeaderMap, Method, StatusCode, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
-use http_body_util::BodyExt;
+use http_body::Frame;
+use http_body_util::{BodyExt, StreamBody};
 use hyper::client::conn::http1;
+use hyper::service::service_fn;
 use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use ppp::v2::{
@@ -28,16 +31,18 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
-use crate::http::{Body, Response};
-use crate::llm::{AIProvider, openai};
+use crate::http::{Body, Response, ext_proc};
+use crate::llm::{AIProvider, custom, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch, Target,
+	Backend, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol,
+	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch,
+	PolicyInheritance, PolicyTarget, ResourceName, Route, RouteMatch, SimpleBackendReference, Target,
+	TargetedPolicy,
 };
-use crate::types::backend;
+use crate::types::{backend, frontend};
 use crate::{read_body, *};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
@@ -242,6 +247,36 @@ fn build_proxy_v2_header(src: &str, dst: &str) -> Vec<u8> {
 	.unwrap()
 }
 
+async fn raw_header_backend() -> (std::net::SocketAddr, oneshot::Receiver<String>) {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (tx, rx) = oneshot::channel();
+	tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = stream.read(&mut chunk).await.unwrap();
+			assert!(
+				n > 0,
+				"raw header backend connection closed before request headers"
+			);
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		tx.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+		stream
+			.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+	});
+	(addr, rx)
+}
+
 async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
 	let token_response = Arc::new(StdMutex::new(None));
 	let mock = MockServer::start().await;
@@ -281,6 +316,42 @@ async fn basic_handling() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn http_header_case_preserve_forwards_original_case_to_backend() {
+	let (backend_addr, captured_request) = raw_header_backend().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(backend_addr)
+		.with_bind(simple_bind())
+		.with_route(basic_route(backend_addr));
+	t.attach_frontend_policy(json!({
+		"http": {
+			"http1HeaderCase": "preserve",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve(BIND_KEY);
+	io.write_all(
+		b"GET / HTTP/1.1\r\nHost: lo\r\nX-Case-Probe: preserve-me\r\nConnection: close\r\n\r\n",
+	)
+	.await
+	.unwrap();
+
+	let captured_request = tokio::time::timeout(Duration::from_secs(5), captured_request)
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(
+		captured_request.contains("\r\nX-Case-Probe: preserve-me\r\n"),
+		"backend request did not preserve header case:\n{captured_request}"
+	);
+	assert!(
+		!captured_request.contains("\r\nx-case-probe: preserve-me\r\n"),
+		"backend request lowercased preserved header:\n{captured_request}"
+	);
 }
 
 #[tokio::test]
@@ -444,7 +515,7 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 	let (_mock, _bind, io) = basic_setup().await;
-	let mut trace_rx = crate::proxy::dtrace::track();
+	let mut trace_rx = crate::proxy::dtrace::track_expression(None);
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
@@ -467,6 +538,49 @@ async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 }
 
 #[tokio::test]
+async fn debug_trace_expression_watchers_match_first_request() {
+	let (_mock, _bind, io) = basic_setup().await;
+	let mut first_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/first'").unwrap(),
+	));
+	let mut second_trace_rx = crate::proxy::dtrace::track_expression(Some(
+		crate::cel::Expression::new_strict("request.path == '/second'").unwrap(),
+	));
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/second").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), first_trace_rx.recv())
+			.await
+			.is_err(),
+		"first watcher should remain queued when its expression does not match",
+	);
+	let second_event = tokio::time::timeout(Duration::from_secs(1), second_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(second_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/first").await;
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let first_event = tokio::time::timeout(Duration::from_secs(1), first_trace_rx.recv())
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		serde_json::to_value(first_event).unwrap()["message"]["type"],
+		"requestStarted"
+	);
+}
+
+#[tokio::test]
 async fn basic_http2() {
 	let mock = simple_mock().await;
 	let t = setup_proxy_test("{}")
@@ -482,6 +596,78 @@ async fn basic_http2() {
 		.unwrap();
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+async fn grpc_trailer_backend(status: &'static str) -> std::net::SocketAddr {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let Ok((stream, _)) = listener.accept().await else {
+				return;
+			};
+			tokio::spawn(async move {
+				let svc = service_fn(move |_| async move {
+					let mut trailers = HeaderMap::new();
+					trailers.insert("grpc-status", status.parse().unwrap());
+					let body = StreamBody::new(tokio_stream::iter([
+						Ok::<_, Infallible>(Frame::data(bytes::Bytes::new())),
+						Ok(Frame::trailers(trailers)),
+					]));
+					Ok::<_, Infallible>(
+						::http::Response::builder()
+							.status(200)
+							.header(header::CONTENT_TYPE, "application/grpc")
+							.body(body)
+							.unwrap(),
+					)
+				});
+				let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+					.serve_connection(TokioIo::new(stream), svc)
+					.await;
+			});
+		}
+	});
+	addr
+}
+
+#[tokio::test]
+async fn grpc_status_trailer_is_available_to_access_log_cel() {
+	let backend = grpc_trailer_backend("13").await;
+	let path = format!("/grpc-{}", rand::rng().random::<u128>());
+	let t = setup_proxy_test(
+		r#"{"config":{"logging":{"fields":{"add":{"cel_grpc_status":"response.grpcStatus"}}}}}"#,
+	)
+	.unwrap()
+	.with_raw_backend(BackendWithPolicies {
+		backend: Backend::Opaque(
+			ResourceName::new(strng::format!("{}", backend), "".into()),
+			Target::Address(backend),
+		),
+		inline_policies: vec![BackendTrafficPolicy::HTTP(backend::HTTP {
+			version: Some(Version::HTTP_2),
+			..Default::default()
+		})],
+	})
+	.with_bind(simple_bind())
+	.with_route(basic_route(backend));
+	let io = t.serve_http2(strng::new("bind"));
+	let res = RequestBuilder::new(Method::POST, &format!("http://lo{path}"))
+		.version(Version::HTTP_2)
+		.header(header::CONTENT_TYPE, "application/grpc")
+		.body(Body::empty())
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
+	assert_eq!(log["grpc.status"].as_u64(), Some(13));
+	assert_eq!(log["cel_grpc_status"].as_u64(), Some(13));
 }
 
 #[tokio::test]
@@ -1075,6 +1261,169 @@ async fn llm_openai_tokenize() {
 	.await;
 }
 
+fn setup_custom_llm_provider_backend_mock(
+	mock: MockServer,
+	supported_formats: Vec<custom::ProviderFormat>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		supported_formats
+			.into_iter()
+			.map(|format| custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+fn setup_custom_llm_provider_backend_mock_with_formats(
+	mock: MockServer,
+	formats: Vec<custom::ProviderFormatConfig>,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let backend_name = "custom-ai";
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend_with_formats(
+			backend_name,
+			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			formats,
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	let io = t.serve_http(BIND_KEY);
+	(mock, t, io)
+}
+
+#[tokio::test]
+async fn llm_custom_provider_routes_to_provider_backend() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/chat/completions"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_native_format_fallback() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let response_body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
+	assert_eq!(response_body["object"], "chat.completion");
+	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["completion_tokens"], 21);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/messages"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
+	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_format_path_override() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let (mock, _bind, io) = setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/api/messages"
+	);
+}
+
+#[tokio::test]
+async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		include_bytes!("../llm/tests/requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 503);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert!(
+		String::from_utf8_lossy(&body)
+			.contains("unsupported conversion: from Completions to provider custom"),
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 0);
+}
+
 #[derive(Clone)]
 struct RecordingRateLimit {
 	requests: mpsc::UnboundedSender<crate::http::remoteratelimit::proto::RateLimitRequest>,
@@ -1596,6 +1945,7 @@ async fn tls_connection_drains_when_listener_changes() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1628,6 +1978,7 @@ async fn tls_backend_connection() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1669,6 +2020,7 @@ async fn tls_backend_connection_alpn() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http2_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1710,6 +2062,7 @@ async fn tls_backend_http2_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http1_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1751,6 +2104,7 @@ async fn tls_backend_http1_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_version_with_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -2068,6 +2422,7 @@ async fn tunnel_absolute_form() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tunnel_connect() {
 	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2149,6 +2504,367 @@ async fn tunnel_connect() {
 	assert!(connect_req.contains("Proxy-Authorization: Basic my-key\r\n"));
 
 	tunnel.abort();
+}
+
+#[tokio::test]
+async fn incoming_connect_dynamic_forward_proxy() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+	let upstream = tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = [0; 4];
+		stream.read_exact(&mut buf).await.unwrap();
+		assert_eq!(&buf, b"ping");
+		stream.write_all(b"pong").await.unwrap();
+	});
+
+	let t = setup_dfp_bind().with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"ping").await.unwrap();
+	let mut tunneled = [0; 4];
+	io.read_exact(&mut tunneled).await.unwrap();
+	assert_eq!(&tunneled, b"pong");
+	upstream.await.unwrap();
+}
+
+#[tokio::test]
+async fn incoming_connect_requires_frontend_connect_policy() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+
+	let t = setup_dfp_bind();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 405 Method Not Allowed\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_tunnel_reenters_bind_flow() {
+	let mock = simple_mock().await;
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15008".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = "127.0.0.1:18080".parse().unwrap();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*mock.address()))
+		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
+	let mut io = t.serve_tunnel(strng::literal!("outer"));
+	io.write_all(b"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled HTTP response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_applies_backend_tls() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		alpn: Some(vec!["http/1.1".to_string()]),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_connect_enabled()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendTrafficPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+
+	let mut io = t.serve(BIND_KEY);
+	let authority = mock.address().to_string();
+	io.write_all(format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n").as_bytes())
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(
+		format!("GET /foo HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n").as_bytes(),
+	)
+	.await
+	.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled TLS backend response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_requires_authority_port() {
+	let t = setup_dfp_bind().with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	io.write_all(b"CONNECT example.com HTTP/1.1\r\nHost: example.com\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 400 Bad Request\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_uses_backend_tunnel_proxy() {
+	let target_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = target_listener.local_addr().unwrap();
+	let target = tokio::spawn(async move {
+		let (mut stream, _) = target_listener.accept().await.unwrap();
+		let mut buf = [0; 4];
+		stream.read_exact(&mut buf).await.unwrap();
+		assert_eq!(&buf, b"ping");
+		stream.write_all(b"pong").await.unwrap();
+	});
+
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = listener.local_addr().unwrap();
+	let (connect_tx, connect_rx) = oneshot::channel();
+	let proxy = tokio::spawn(async move {
+		let (mut downstream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = downstream.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT request unexpectedly closed");
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		connect_tx
+			.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+		downstream
+			.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+			.await
+			.unwrap();
+		let mut upstream = TcpStream::connect(target_addr).await.unwrap();
+		let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+	});
+
+	let mut t = setup_dfp_bind().with_connect_enabled();
+	t.with_policy(TargetedPolicy {
+		key: strng::literal!("pol/backend-tunnel"),
+		name: None,
+		inheritance: PolicyInheritance::default(),
+		target: PolicyTarget::Backend(BackendTarget::Backend {
+			name: strng::literal!("dynamic"),
+			namespace: Default::default(),
+			section: None,
+		}),
+		policy: BackendTrafficPolicy::Tunnel(backend::Tunnel {
+			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+				proxy_addr,
+			))),
+		})
+		.into(),
+	});
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	let connect_req = connect_rx.await.unwrap();
+	assert!(connect_req.starts_with(&format!("CONNECT {target_addr} HTTP/1.1\r\n")));
+	assert!(connect_req.contains(&format!("Host: {target_addr}\r\n")));
+
+	io.write_all(b"ping").await.unwrap();
+	let mut tunneled = [0; 4];
+	io.read_exact(&mut tunneled).await.unwrap();
+	assert_eq!(&tunneled, b"pong");
+	drop(io);
+	target.await.unwrap();
+	proxy.await.unwrap();
+}
+
+#[tokio::test]
+async fn incoming_connect_snapshots_request_for_cel_logging() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+	let upstream = tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let _ = stream.read(&mut [0; 1]).await;
+	});
+
+	let config = serde_json::to_string(&json!({
+		"config": {
+			"logging": {
+				"fields": {
+					"add": {
+						"request": "request",
+						"backend": "backend",
+					},
+				},
+			},
+		},
+	}))
+	.unwrap();
+	let t = setup_dfp_bind_with_config(&config).with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+	drop(io);
+	upstream.await.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("endpoint", &target_addr.to_string()),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["http.path"].as_str(), Some("/"));
+	assert_eq!(log["request"]["method"].as_str(), Some("CONNECT"));
+	assert_eq!(log["request"]["path"].as_str(), Some("/"));
+	assert_eq!(
+		log["request"]["host"].as_str(),
+		Some(target_addr.to_string().as_str())
+	);
+	assert_eq!(log["request"]["scheme"].as_str(), Some("http"));
+	assert!(
+		log["backend"].is_object(),
+		"backend CEL context should be populated"
+	);
 }
 
 #[tokio::test]
@@ -2408,20 +3124,58 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 
 // --- Dynamic Forward Proxy (DFP) tests ---
 
+impl TestBind {
+	fn with_connect_enabled(self) -> Self {
+		self.with_connect_mode(frontend::ConnectMode::Route)
+	}
+
+	fn with_connect_mode(self, mode: frontend::ConnectMode) -> Self {
+		self.with_connect_policy(mode, None)
+	}
+
+	fn with_connect_mode_on_port(self, mode: frontend::ConnectMode, port: u16) -> Self {
+		self.with_connect_policy(mode, Some(port))
+	}
+
+	fn with_connect_policy(mut self, mode: frontend::ConnectMode, port: Option<u16>) -> Self {
+		self.with_policy(TargetedPolicy {
+			key: strng::literal!("pol/frontend-connect"),
+			name: None,
+			inheritance: PolicyInheritance::default(),
+			target: PolicyTarget::Gateway(ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+				port,
+			}),
+			policy: FrontendPolicy::Connect(frontend::Connect { mode }).into(),
+		});
+		self
+	}
+}
+
 /// Helper to set up a DFP test: creates a Dynamic backend and a route pointing to it.
-fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
+fn setup_dfp_bind() -> TestBind {
+	setup_dfp_bind_with_config("{}")
+}
+
+fn setup_dfp_bind_with_config(config: &str) -> TestBind {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
 	let dynamic_backend = Backend::Dynamic(backend_name, ());
 
 	let route = basic_named_route("/dynamic".into());
 
-	let t = setup_proxy_test("{}").unwrap();
+	let t = setup_proxy_test(config).unwrap();
 	let pi = t.inputs();
 	pi.stores
 		.binds
 		.write()
 		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
-	let t = t.with_bind(simple_bind()).with_route(route);
+	t.with_bind(simple_bind()).with_route(route)
+}
+
+fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_dfp_bind();
 	let io = t.serve_http(BIND_KEY);
 	(t, io)
 }
@@ -2468,6 +3222,44 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 	let t = t.with_bind(bind).with_route(route);
 	let io = t.serve_https(BIND_KEY, None);
 	(t, io)
+}
+
+/// DFP and inference routing are orthogonal: DFP chooses the upstream from the request authority,
+/// while inference routing expects an endpoint picker to choose the upstream endpoint.
+#[tokio::test]
+async fn dfp_rejects_inference_routing() {
+	let backend_name = ResourceName::new("dynamic".into(), "".into());
+	let dynamic_backend = BackendWithPolicies {
+		backend: Backend::Dynamic(backend_name, ()),
+		inline_policies: vec![BackendTrafficPolicy::InferenceRouting(
+			ext_proc::InferenceRouting {
+				target: Arc::new(SimpleBackendReference::InlineBackend(Target::from((
+					"127.0.0.1",
+					9002,
+				)))),
+				destination_mode: ext_proc::InferenceRoutingDestinationMode::Passthrough,
+				failure_mode: ext_proc::FailureMode::FailClosed,
+			},
+		)],
+	};
+
+	let route = basic_named_route("/dynamic".into());
+	let t = setup_proxy_test("{}").unwrap();
+	let pi = t.inputs();
+	pi.stores
+		.binds
+		.write()
+		.insert_backend(dynamic_backend.backend.name(), dynamic_backend);
+	let t = t.with_bind(simple_bind()).with_route(route);
+	let io = t.serve_http(BIND_KEY);
+
+	let res = send_request(io, Method::GET, "http://example.com/dynamic").await;
+	assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(
+		String::from_utf8_lossy(&body),
+		"processing failed: inferenceRouting is not supported with dynamic backends"
+	);
 }
 
 /// DFP resolves the destination from the request's Host/URI authority, including the port.
@@ -3093,6 +3885,181 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 }
 
 #[tokio::test]
+async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
+	use crate::proxy::httpproxy;
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::gatewayaddress::Destination;
+	use crate::types::discovery::{
+		GatewayAddress, Identity, InboundProtocol, NamespacedHostname, NetworkAddress, Service,
+		Workload,
+	};
+
+	let mock = simple_mock().await;
+	let waypoint_vip: std::net::IpAddr = "240.240.0.5".parse().unwrap();
+	let waypoint_ip: std::net::IpAddr = "10.20.0.12".parse().unwrap();
+	let gateway_ip: std::net::IpAddr = "172.18.7.110".parse().unwrap();
+	let remote_network = strng::literal!("network-2");
+	let t = setup_proxy_test("{}").unwrap();
+
+	let svc = Service {
+		name: strng::literal!("my-svc"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, mock.address().port())]),
+		waypoint: Some(GatewayAddress {
+			destination: Destination::Hostname(NamespacedHostname {
+				namespace: strng::literal!("default"),
+				hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+			}),
+			hbone_mtls_port: 15008,
+		}),
+		ingress_use_waypoint: true,
+		..Default::default()
+	};
+	let wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-wl-uid"),
+			name: strng::literal!("test-wl"),
+			namespace: strng::literal!("default"),
+			workload_ips: vec![mock.address().ip()],
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/my-svc.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(80, mock.address().port())]),
+		)]),
+	};
+	let wp_svc = Service {
+		name: strng::literal!("waypoint"),
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("waypoint.default.svc.cluster.local"),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: waypoint_vip,
+		}],
+		ports: std::collections::HashMap::from([(15008, 15008)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td2"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint-san"),
+		}],
+		..Default::default()
+	};
+	let wp_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-waypoint-wl-uid"),
+			name: strng::literal!("test-waypoint-wl"),
+			namespace: strng::literal!("default"),
+			service_account: strng::literal!("waypoint"),
+			network: remote_network.clone(),
+			workload_ips: vec![waypoint_ip],
+			network_gateway: Some(GatewayAddress {
+				destination: Destination::Address(NetworkAddress {
+					network: remote_network.clone(),
+					address: gateway_ip,
+				}),
+				hbone_mtls_port: 15008,
+			}),
+			..Default::default()
+		},
+		services: std::collections::HashMap::from([(
+			"default/waypoint.default.svc.cluster.local".to_string(),
+			std::collections::HashMap::from([(15008, 15008)]),
+		)]),
+	};
+	let gw_wl = LocalWorkload {
+		workload: Workload {
+			uid: strng::literal!("test-gateway-wl-uid"),
+			name: strng::literal!("test-gateway-wl"),
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+			network: remote_network.clone(),
+			workload_ips: vec![gateway_ip],
+			..Default::default()
+		},
+		services: Default::default(),
+	};
+
+	t.pi
+		.stores
+		.discovery
+		.sync_local(
+			vec![svc, wp_svc],
+			vec![wl, wp_wl, gw_wl],
+			Default::default(),
+		)
+		.unwrap();
+
+	let svc = t
+		.pi
+		.stores
+		.read_discovery()
+		.services
+		.get_by_namespaced_host(&NamespacedHostname {
+			namespace: strng::literal!("default"),
+			hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+		})
+		.expect("service must exist");
+
+	let backend_call = httpproxy::build_service_call(
+		&t.pi,
+		Default::default(),
+		&mut None,
+		Default::default(),
+		&svc,
+		&80,
+		None,
+		None,
+	)
+	.expect("build_service_call should succeed");
+
+	assert!(
+		backend_call.waypoint.is_none(),
+		"remote waypoint should be reached through double HBONE, not direct waypoint transport"
+	);
+	let (resolved_gw, gw_identities) = backend_call
+		.network_gateway
+		.expect("remote waypoint should resolve a network gateway");
+	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+		assert_eq!(addr.address, gateway_ip);
+		assert_eq!(addr.network, remote_network);
+	});
+	assert_eq!(resolved_gw.hbone_mtls_port, 15008);
+	// Outer tunnel: gateway workload id (the gateway is referenced by address, so no SANs).
+	assert_eq!(
+		gw_identities,
+		vec![Identity::Spiffe {
+			trust_domain: strng::EMPTY,
+			namespace: strng::literal!("istio-gateways"),
+			service_account: strng::literal!("istio-eastwest"),
+		}]
+	);
+	// Inner tunnel: waypoint workload id + waypoint service SANs.
+	assert_matches!(backend_call.transport_override, Some((InboundProtocol::HBONE, identities)) => {
+		assert_eq!(identities, vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td2"),
+				namespace: strng::literal!("default"),
+				service_account: strng::literal!("waypoint-san"),
+			},
+		]);
+	});
+	assert_matches!(backend_call.target, Target::Hostname(host, port) => {
+		assert_eq!(host.as_str(), "my-svc.default.svc.cluster.local");
+		assert_eq!(port, 80);
+	});
+}
+
+#[tokio::test]
 async fn ingress_use_waypoint_ip_based_waypoint() {
 	use crate::proxy::httpproxy;
 	use crate::store::LocalWorkload;
@@ -3365,6 +4332,11 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		hostname: gateway_hostname.clone(),
 		vips: vec![],
 		ports: std::collections::HashMap::from([(svc_port, gw_target_port)]),
+		subject_alt_names: vec![Identity::Spiffe {
+			trust_domain: strng::literal!("td-gw"),
+			namespace: gateway_namespace.clone(),
+			service_account: strng::literal!("gateway-san"),
+		}],
 		..Default::default()
 	};
 	let gw_wl = LocalWorkload {
@@ -3416,7 +4388,7 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	)
 	.expect("build_service_call should succeed");
 
-	let (resolved_gw, gw_identity) = backend_call
+	let (resolved_gw, gw_identities) = backend_call
 		.network_gateway
 		.expect("network_gateway must be resolved for hostname-form destination");
 
@@ -3428,12 +4400,20 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 		resolved_gw.hbone_mtls_port, gw_target_port,
 		"port should be the endpoint target port, not the service port"
 	);
+	// Outer-tunnel identities match ztunnel: gateway workload id + gateway service SANs.
 	assert_eq!(
-		gw_identity,
-		Identity::Spiffe {
-			trust_domain: strng::EMPTY,
-			namespace: gateway_namespace.clone(),
-			service_account: strng::literal!("gateway-sa"),
-		},
+		gw_identities,
+		vec![
+			Identity::Spiffe {
+				trust_domain: strng::EMPTY,
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-sa"),
+			},
+			Identity::Spiffe {
+				trust_domain: strng::literal!("td-gw"),
+				namespace: gateway_namespace.clone(),
+				service_account: strng::literal!("gateway-san"),
+			},
+		]
 	);
 }

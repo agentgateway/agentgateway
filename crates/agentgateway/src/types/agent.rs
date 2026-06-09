@@ -583,6 +583,7 @@ pub enum TunnelProtocol {
 	HboneWaypoint,
 	HboneGateway,
 	Proxy,
+	Connect,
 }
 
 // Protocol of the request
@@ -1975,7 +1976,23 @@ pub struct TargetedPolicy {
 	pub key: PolicyKey,
 	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
+	#[serde(default, skip_serializing_if = "PolicyInheritance::is_default")]
+	pub inheritance: PolicyInheritance,
 	pub policy: PolicyType,
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PolicyInheritance {
+	#[default]
+	Default,
+	Override,
+}
+
+impl PolicyInheritance {
+	pub fn is_default(&self) -> bool {
+		matches!(self, Self::Default)
+	}
 }
 
 /// Configuration for dynamic tracing policy
@@ -2273,11 +2290,15 @@ impl<'a> From<&'a PolicyTarget> for PolicyTargetRef<'a> {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FrontendPolicy {
+	#[serde(rename = "http")]
 	HTTP(frontend::HTTP),
+	#[serde(rename = "tls")]
 	TLS(frontend::TLS),
+	#[serde(rename = "tcp")]
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
 	Proxy(frontend::Proxy),
+	Connect(frontend::Connect),
 	AccessLog(frontend::LoggingPolicy),
 	Tracing(Arc<TracingPolicy>),
 	Metrics(frontend::MetricsFieldsPolicy),
@@ -2303,12 +2324,13 @@ pub enum TrafficPolicy {
 	Csrf(RequestPolicy<crate::http::csrf::Csrf>),
 
 	RequestHeaderModifier(RequestPolicy<filters::HeaderModifier>),
-	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
+	ResponseHeaderModifier(RequestPolicy<filters::HeaderModifier>),
 	RequestRedirect(RequestPolicy<filters::RequestRedirect>),
 	UrlRewrite(RequestPolicy<filters::UrlRewrite>),
 	HostRewrite(agent::HostRedirectOverride),
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(RequestPolicy<filters::DirectResponse>),
+	Buffer(RequestPolicy<http::buffer::Buffer>),
 	#[serde(rename = "cors")]
 	CORS(RequestPolicy<http::cors::Cors>),
 }

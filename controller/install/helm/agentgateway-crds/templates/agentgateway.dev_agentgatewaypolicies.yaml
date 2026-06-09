@@ -304,23 +304,55 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the AWS
-                                                    credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the AWS credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                                                     optionally `sessionToken`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
                                                     `serviceName` is the AWS SigV4 signing service name (for example,
@@ -329,9 +361,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -353,21 +387,39 @@ spec:
                                                   type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the Azure
-                                                    credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the Azure credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                                                     `clientSecret`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                               type: object
                                             gcp:
                                               description: |-
@@ -384,21 +436,39 @@ spec:
                                                   type: string
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                                                    Google credential JSON in the `credentials.json` key. When omitted,
-                                                    ambient credentials are used.
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing ADC-compatible Google credential JSON. When using
+                                                    the default Secret resolver, this must be stored in the `credentials.json`
+                                                    key. When omitted, ambient credentials are used.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -489,20 +559,39 @@ spec:
                                               type: object
                                             secretRef:
                                               description: |-
-                                                `secretRef` references a Kubernetes `Secret` storing the key to use as
-                                                the authorization value. This must be stored in the `Authorization` key.
+                                                `secretRef` references a credential source, defaulting to a Kubernetes
+                                                `Secret`, storing the key to use as the authorization value. When using
+                                                the default Secret resolver, this must be stored in the `Authorization`
+                                                key.
                                               properties:
-                                                name:
-                                                  default: ""
-                                                  description: |-
-                                                    Name of the referent.
-                                                    This field is effectively required, but due to backwards compatibility is
-                                                    allowed to be empty. Instances of this type with an empty value here are
-                                                    almost certainly wrong.
-                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                group:
+                                                  description: Group of the referenced
+                                                    credential. Empty selects the
+                                                    core API group.
                                                   type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential. Empty defaults to
+                                                    Secret.
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -675,7 +764,7 @@ spec:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
                                                 specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                                                `Secret`.
+                                                credential source, defaulting to a Kubernetes `Secret`.
 
                                                 An optional `ca.cert` field, if present, will be used to verify the
                                                 server certificate. If `caCertificateRefs` is also specified, the
@@ -684,20 +773,38 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalSecretObjectRef references a same-namespace credential.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: |-
-                                                      Name of the referent.
-                                                      This field is effectively required, but due to backwards compatibility is
-                                                      allowed to be empty. Instances of this type with an empty value here are
-                                                      almost certainly wrong.
-                                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  group:
+                                                    description: Group of the referenced
+                                                      credential. Empty selects the
+                                                      core API group.
                                                     type: string
+                                                  kind:
+                                                    description: Kind of the referenced
+                                                      credential. Empty defaults to
+                                                      Secret.
+                                                    type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      credential.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
+                                                x-kubernetes-validations:
+                                                - message: custom credential refs
+                                                    must set both group and kind
+                                                  rule: '(!has(self.group) || size(self.group)
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -865,23 +972,55 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the AWS
-                                                    credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the AWS credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                                                     optionally `sessionToken`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
                                                     `serviceName` is the AWS SigV4 signing service name (for example,
@@ -890,9 +1029,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -914,21 +1055,39 @@ spec:
                                                   type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the Azure
-                                                    credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the Azure credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                                                     `clientSecret`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                               type: object
                                             gcp:
                                               description: |-
@@ -945,21 +1104,39 @@ spec:
                                                   type: string
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                                                    Google credential JSON in the `credentials.json` key. When omitted,
-                                                    ambient credentials are used.
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing ADC-compatible Google credential JSON. When using
+                                                    the default Secret resolver, this must be stored in the `credentials.json`
+                                                    key. When omitted, ambient credentials are used.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -1050,20 +1227,39 @@ spec:
                                               type: object
                                             secretRef:
                                               description: |-
-                                                `secretRef` references a Kubernetes `Secret` storing the key to use as
-                                                the authorization value. This must be stored in the `Authorization` key.
+                                                `secretRef` references a credential source, defaulting to a Kubernetes
+                                                `Secret`, storing the key to use as the authorization value. When using
+                                                the default Secret resolver, this must be stored in the `Authorization`
+                                                key.
                                               properties:
-                                                name:
-                                                  default: ""
-                                                  description: |-
-                                                    Name of the referent.
-                                                    This field is effectively required, but due to backwards compatibility is
-                                                    allowed to be empty. Instances of this type with an empty value here are
-                                                    almost certainly wrong.
-                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                group:
+                                                  description: Group of the referenced
+                                                    credential. Empty selects the
+                                                    core API group.
                                                   type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential. Empty defaults to
+                                                    Secret.
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -1236,7 +1432,7 @@ spec:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
                                                 specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                                                `Secret`.
+                                                credential source, defaulting to a Kubernetes `Secret`.
 
                                                 An optional `ca.cert` field, if present, will be used to verify the
                                                 server certificate. If `caCertificateRefs` is also specified, the
@@ -1245,20 +1441,38 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalSecretObjectRef references a same-namespace credential.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: |-
-                                                      Name of the referent.
-                                                      This field is effectively required, but due to backwards compatibility is
-                                                      allowed to be empty. Instances of this type with an empty value here are
-                                                      almost certainly wrong.
-                                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  group:
+                                                    description: Group of the referenced
+                                                      credential. Empty selects the
+                                                      core API group.
                                                     type: string
+                                                  kind:
+                                                    description: Kind of the referenced
+                                                      credential. Empty defaults to
+                                                      Secret.
+                                                    type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      credential.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
+                                                x-kubernetes-validations:
+                                                - message: custom credential refs
+                                                    must set both group and kind
+                                                  rule: '(!has(self.group) || size(self.group)
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -1423,23 +1637,55 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the AWS
-                                                    credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the AWS credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                                                     optionally `sessionToken`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
                                                     `serviceName` is the AWS SigV4 signing service name (for example,
@@ -1448,9 +1694,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -1472,21 +1720,39 @@ spec:
                                                   type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the Azure
-                                                    credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the Azure credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                                                     `clientSecret`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                               type: object
                                             gcp:
                                               description: |-
@@ -1503,21 +1769,39 @@ spec:
                                                   type: string
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                                                    Google credential JSON in the `credentials.json` key. When omitted,
-                                                    ambient credentials are used.
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing ADC-compatible Google credential JSON. When using
+                                                    the default Secret resolver, this must be stored in the `credentials.json`
+                                                    key. When omitted, ambient credentials are used.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -1608,20 +1892,39 @@ spec:
                                               type: object
                                             secretRef:
                                               description: |-
-                                                `secretRef` references a Kubernetes `Secret` storing the key to use as
-                                                the authorization value. This must be stored in the `Authorization` key.
+                                                `secretRef` references a credential source, defaulting to a Kubernetes
+                                                `Secret`, storing the key to use as the authorization value. When using
+                                                the default Secret resolver, this must be stored in the `Authorization`
+                                                key.
                                               properties:
-                                                name:
-                                                  default: ""
-                                                  description: |-
-                                                    Name of the referent.
-                                                    This field is effectively required, but due to backwards compatibility is
-                                                    allowed to be empty. Instances of this type with an empty value here are
-                                                    almost certainly wrong.
-                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                group:
+                                                  description: Group of the referenced
+                                                    credential. Empty selects the
+                                                    core API group.
                                                   type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential. Empty defaults to
+                                                    Secret.
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -1794,7 +2097,7 @@ spec:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
                                                 specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                                                `Secret`.
+                                                credential source, defaulting to a Kubernetes `Secret`.
 
                                                 An optional `ca.cert` field, if present, will be used to verify the
                                                 server certificate. If `caCertificateRefs` is also specified, the
@@ -1803,20 +2106,38 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalSecretObjectRef references a same-namespace credential.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: |-
-                                                      Name of the referent.
-                                                      This field is effectively required, but due to backwards compatibility is
-                                                      allowed to be empty. Instances of this type with an empty value here are
-                                                      almost certainly wrong.
-                                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  group:
+                                                    description: Group of the referenced
+                                                      credential. Empty selects the
+                                                      core API group.
                                                     type: string
+                                                  kind:
+                                                    description: Kind of the referenced
+                                                      credential. Empty defaults to
+                                                      Secret.
+                                                    type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      credential.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
+                                                x-kubernetes-validations:
+                                                - message: custom credential refs
+                                                    must set both group and kind
+                                                  rule: '(!has(self.group) || size(self.group)
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -2198,23 +2519,55 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the AWS
-                                                    credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the AWS credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                                                     optionally `sessionToken`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
                                                     `serviceName` is the AWS SigV4 signing service name (for example,
@@ -2223,9 +2576,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -2247,21 +2602,39 @@ spec:
                                                   type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the Azure
-                                                    credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the Azure credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                                                     `clientSecret`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                               type: object
                                             gcp:
                                               description: |-
@@ -2278,21 +2651,39 @@ spec:
                                                   type: string
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                                                    Google credential JSON in the `credentials.json` key. When omitted,
-                                                    ambient credentials are used.
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing ADC-compatible Google credential JSON. When using
+                                                    the default Secret resolver, this must be stored in the `credentials.json`
+                                                    key. When omitted, ambient credentials are used.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -2383,20 +2774,39 @@ spec:
                                               type: object
                                             secretRef:
                                               description: |-
-                                                `secretRef` references a Kubernetes `Secret` storing the key to use as
-                                                the authorization value. This must be stored in the `Authorization` key.
+                                                `secretRef` references a credential source, defaulting to a Kubernetes
+                                                `Secret`, storing the key to use as the authorization value. When using
+                                                the default Secret resolver, this must be stored in the `Authorization`
+                                                key.
                                               properties:
-                                                name:
-                                                  default: ""
-                                                  description: |-
-                                                    Name of the referent.
-                                                    This field is effectively required, but due to backwards compatibility is
-                                                    allowed to be empty. Instances of this type with an empty value here are
-                                                    almost certainly wrong.
-                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                group:
+                                                  description: Group of the referenced
+                                                    credential. Empty selects the
+                                                    core API group.
                                                   type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential. Empty defaults to
+                                                    Secret.
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -2569,7 +2979,7 @@ spec:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
                                                 specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                                                `Secret`.
+                                                credential source, defaulting to a Kubernetes `Secret`.
 
                                                 An optional `ca.cert` field, if present, will be used to verify the
                                                 server certificate. If `caCertificateRefs` is also specified, the
@@ -2578,20 +2988,38 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalSecretObjectRef references a same-namespace credential.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: |-
-                                                      Name of the referent.
-                                                      This field is effectively required, but due to backwards compatibility is
-                                                      allowed to be empty. Instances of this type with an empty value here are
-                                                      almost certainly wrong.
-                                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  group:
+                                                    description: Group of the referenced
+                                                      credential. Empty selects the
+                                                      core API group.
                                                     type: string
+                                                  kind:
+                                                    description: Kind of the referenced
+                                                      credential. Empty defaults to
+                                                      Secret.
+                                                    type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      credential.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
+                                                x-kubernetes-validations:
+                                                - message: custom credential refs
+                                                    must set both group and kind
+                                                  rule: '(!has(self.group) || size(self.group)
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -2759,23 +3187,55 @@ spec:
                                                 Auth specifies an explicit AWS authentication method for the backend.
                                                 When omitted, we will try to use the default AWS SDK authentication methods.
                                               properties:
+                                                assumeRole:
+                                                  description: |-
+                                                    `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                                                    Ambient AWS credentials are used as the source credentials for STS.
+                                                  properties:
+                                                    roleArn:
+                                                      description: '`roleArn` is the
+                                                        AWS IAM role ARN to assume.'
+                                                      minLength: 1
+                                                      pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                                      type: string
+                                                  required:
+                                                  - roleArn
+                                                  type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the AWS
-                                                    credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the AWS credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                                                     optionally `sessionToken`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 serviceName:
                                                   description: |-
                                                     `serviceName` is the AWS SigV4 signing service name (for example,
@@ -2784,9 +3244,11 @@ spec:
                                                   maxLength: 256
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - secretRef
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: secretRef and assumeRole
+                                                  are mutually exclusive
+                                                rule: '!(has(self.secretRef) && has(self.assumeRole))'
                                             azure:
                                               description: Azure specifies an Azure
                                                 authentication method for the backend.
@@ -2808,21 +3270,39 @@ spec:
                                                   type: object
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing the Azure
-                                                    credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing the Azure credentials. When using the default Secret
+                                                    resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                                                     `clientSecret`.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                               type: object
                                             gcp:
                                               description: |-
@@ -2839,21 +3319,39 @@ spec:
                                                   type: string
                                                 secretRef:
                                                   description: |-
-                                                    `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                                                    Google credential JSON in the `credentials.json` key. When omitted,
-                                                    ambient credentials are used.
+                                                    `secretRef` references a credential source, defaulting to a Kubernetes
+                                                    `Secret`, containing ADC-compatible Google credential JSON. When using
+                                                    the default Secret resolver, this must be stored in the `credentials.json`
+                                                    key. When omitted, ambient credentials are used.
                                                   properties:
-                                                    name:
-                                                      default: ""
-                                                      description: |-
-                                                        Name of the referent.
-                                                        This field is effectively required, but due to backwards compatibility is
-                                                        allowed to be empty. Instances of this type with an empty value here are
-                                                        almost certainly wrong.
-                                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                    group:
+                                                      description: Group of the referenced
+                                                        credential. Empty selects
+                                                        the core API group.
                                                       type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential. Empty defaults
+                                                        to Secret.
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
                                                   type: object
                                                   x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 type:
                                                   description: |-
                                                     The type of token to generate. To authenticate to GCP services,
@@ -2944,20 +3442,39 @@ spec:
                                               type: object
                                             secretRef:
                                               description: |-
-                                                `secretRef` references a Kubernetes `Secret` storing the key to use as
-                                                the authorization value. This must be stored in the `Authorization` key.
+                                                `secretRef` references a credential source, defaulting to a Kubernetes
+                                                `Secret`, storing the key to use as the authorization value. When using
+                                                the default Secret resolver, this must be stored in the `Authorization`
+                                                key.
                                               properties:
-                                                name:
-                                                  default: ""
-                                                  description: |-
-                                                    Name of the referent.
-                                                    This field is effectively required, but due to backwards compatibility is
-                                                    allowed to be empty. Instances of this type with an empty value here are
-                                                    almost certainly wrong.
-                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                group:
+                                                  description: Group of the referenced
+                                                    credential. Empty selects the
+                                                    core API group.
                                                   type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential. Empty defaults to
+                                                    Secret.
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential.
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
                                               type: object
                                               x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
                                           x-kubernetes-validations:
                                           - message: location may only be set for
@@ -3130,7 +3647,7 @@ spec:
                                               description: |-
                                                 `mtlsCertificateRef` enables mutual TLS to the backend, using the
                                                 specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                                                `Secret`.
+                                                credential source, defaulting to a Kubernetes `Secret`.
 
                                                 An optional `ca.cert` field, if present, will be used to verify the
                                                 server certificate. If `caCertificateRefs` is also specified, the
@@ -3139,20 +3656,38 @@ spec:
                                                 If unspecified, no client certificate will be used.
                                               items:
                                                 description: |-
-                                                  LocalObjectReference contains enough information to let you locate the
-                                                  referenced object inside the same namespace.
+                                                  LocalSecretObjectRef references a same-namespace credential.
+                                                  The default case is to simply set the `name` field, which will refer to
+                                                  a Kubernetes `Secret` resource.
                                                 properties:
-                                                  name:
-                                                    default: ""
-                                                    description: |-
-                                                      Name of the referent.
-                                                      This field is effectively required, but due to backwards compatibility is
-                                                      allowed to be empty. Instances of this type with an empty value here are
-                                                      almost certainly wrong.
-                                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                                  group:
+                                                    description: Group of the referenced
+                                                      credential. Empty selects the
+                                                      core API group.
                                                     type: string
+                                                  kind:
+                                                    description: Kind of the referenced
+                                                      credential. Empty defaults to
+                                                      Secret.
+                                                    type: string
+                                                  name:
+                                                    description: Name of the referenced
+                                                      credential.
+                                                    maxLength: 253
+                                                    minLength: 1
+                                                    type: string
+                                                required:
+                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
+                                                x-kubernetes-validations:
+                                                - message: custom credential refs
+                                                    must set both group and kind
+                                                  rule: '(!has(self.group) || size(self.group)
+                                                    == 0) ? (!has(self.kind) || size(self.kind)
+                                                    == 0 || self.kind == ''Secret'')
+                                                    : (has(self.kind) && size(self.kind)
+                                                    > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -3593,23 +4128,51 @@ spec:
                           Auth specifies an explicit AWS authentication method for the backend.
                           When omitted, we will try to use the default AWS SDK authentication methods.
                         properties:
+                          assumeRole:
+                            description: |-
+                              `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+                              Ambient AWS credentials are used as the source credentials for STS.
+                            properties:
+                              roleArn:
+                                description: '`roleArn` is the AWS IAM role ARN to
+                                  assume.'
+                                minLength: 1
+                                pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
+                                type: string
+                            required:
+                            - roleArn
+                            type: object
                           secretRef:
                             description: |-
-                              `secretRef` references a Kubernetes `Secret` containing the AWS
-                              credentials. The `Secret` must have keys `accessKey`, `secretKey`, and
+                              `secretRef` references a credential source, defaulting to a Kubernetes
+                              `Secret`, containing the AWS credentials. When using the default Secret
+                              resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
                               optionally `sessionToken`.
                             properties:
-                              name:
-                                default: ""
-                                description: |-
-                                  Name of the referent.
-                                  This field is effectively required, but due to backwards compatibility is
-                                  allowed to be empty. Instances of this type with an empty value here are
-                                  almost certainly wrong.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              group:
+                                description: Group of the referenced credential. Empty
+                                  selects the core API group.
                                 type: string
+                              kind:
+                                description: Kind of the referenced credential. Empty
+                                  defaults to Secret.
+                                type: string
+                              name:
+                                description: Name of the referenced credential.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                           serviceName:
                             description: |-
                               `serviceName` is the AWS SigV4 signing service name (for example,
@@ -3618,9 +4181,10 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
-                        required:
-                        - secretRef
                         type: object
+                        x-kubernetes-validations:
+                        - message: secretRef and assumeRole are mutually exclusive
+                          rule: '!(has(self.secretRef) && has(self.assumeRole))'
                       azure:
                         description: Azure specifies an Azure authentication method
                           for the backend.
@@ -3641,21 +4205,35 @@ spec:
                             type: object
                           secretRef:
                             description: |-
-                              `secretRef` references a Kubernetes `Secret` containing the Azure
-                              credentials. The `Secret` must have keys `clientID`, `tenantID`, and
+                              `secretRef` references a credential source, defaulting to a Kubernetes
+                              `Secret`, containing the Azure credentials. When using the default Secret
+                              resolver, the `Secret` must have keys `clientID`, `tenantID`, and
                               `clientSecret`.
                             properties:
-                              name:
-                                default: ""
-                                description: |-
-                                  Name of the referent.
-                                  This field is effectively required, but due to backwards compatibility is
-                                  allowed to be empty. Instances of this type with an empty value here are
-                                  almost certainly wrong.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              group:
+                                description: Group of the referenced credential. Empty
+                                  selects the core API group.
                                 type: string
+                              kind:
+                                description: Kind of the referenced credential. Empty
+                                  defaults to Secret.
+                                type: string
+                              name:
+                                description: Name of the referenced credential.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                         type: object
                       gcp:
                         description: |-
@@ -3672,21 +4250,35 @@ spec:
                             type: string
                           secretRef:
                             description: |-
-                              `secretRef` references a Kubernetes `Secret` containing ADC-compatible
-                              Google credential JSON in the `credentials.json` key. When omitted,
-                              ambient credentials are used.
+                              `secretRef` references a credential source, defaulting to a Kubernetes
+                              `Secret`, containing ADC-compatible Google credential JSON. When using
+                              the default Secret resolver, this must be stored in the `credentials.json`
+                              key. When omitted, ambient credentials are used.
                             properties:
-                              name:
-                                default: ""
-                                description: |-
-                                  Name of the referent.
-                                  This field is effectively required, but due to backwards compatibility is
-                                  allowed to be empty. Instances of this type with an empty value here are
-                                  almost certainly wrong.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              group:
+                                description: Group of the referenced credential. Empty
+                                  selects the core API group.
                                 type: string
+                              kind:
+                                description: Kind of the referenced credential. Empty
+                                  defaults to Secret.
+                                type: string
+                              name:
+                                description: Name of the referenced credential.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
                             type: object
                             x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                           type:
                             description: |-
                               The type of token to generate. To authenticate to GCP services,
@@ -3774,20 +4366,34 @@ spec:
                         type: object
                       secretRef:
                         description: |-
-                          `secretRef` references a Kubernetes `Secret` storing the key to use as
-                          the authorization value. This must be stored in the `Authorization` key.
+                          `secretRef` references a credential source, defaulting to a Kubernetes
+                          `Secret`, storing the key to use as the authorization value. When using
+                          the default Secret resolver, this must be stored in the `Authorization`
+                          key.
                         properties:
-                          name:
-                            default: ""
-                            description: |-
-                              Name of the referent.
-                              This field is effectively required, but due to backwards compatibility is
-                              allowed to be empty. Instances of this type with an empty value here are
-                              almost certainly wrong.
-                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          group:
+                            description: Group of the referenced credential. Empty
+                              selects the core API group.
                             type: string
+                          kind:
+                            description: Kind of the referenced credential. Empty
+                              defaults to Secret.
+                            type: string
+                          name:
+                            description: Name of the referenced credential.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
                         type: object
                         x-kubernetes-map-type: atomic
+                        x-kubernetes-validations:
+                        - message: custom credential refs must set both group and
+                            kind
+                          rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
                     - message: location may only be set for key or passthrough auth
@@ -4509,7 +5115,7 @@ spec:
                         description: |-
                           `mtlsCertificateRef` enables mutual TLS to the backend, using the
                           specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-                          `Secret`.
+                          credential source, defaulting to a Kubernetes `Secret`.
 
                           An optional `ca.cert` field, if present, will be used to verify the
                           server certificate. If `caCertificateRefs` is also specified, the
@@ -4518,20 +5124,33 @@ spec:
                           If unspecified, no client certificate will be used.
                         items:
                           description: |-
-                            LocalObjectReference contains enough information to let you locate the
-                            referenced object inside the same namespace.
+                            LocalSecretObjectRef references a same-namespace credential.
+                            The default case is to simply set the `name` field, which will refer to
+                            a Kubernetes `Secret` resource.
                           properties:
-                            name:
-                              default: ""
-                              description: |-
-                                Name of the referent.
-                                This field is effectively required, but due to backwards compatibility is
-                                allowed to be empty. Instances of this type with an empty value here are
-                                almost certainly wrong.
-                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            group:
+                              description: Group of the referenced credential. Empty
+                                selects the core API group.
                               type: string
+                            kind:
+                              description: Kind of the referenced credential. Empty
+                                defaults to Secret.
+                              type: string
+                            name:
+                              description: Name of the referenced credential.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
                           type: object
                           x-kubernetes-map-type: atomic
+                          x-kubernetes-validations:
+                          - message: custom credential refs must set both group and
+                              kind
+                            rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
+                              || size(self.kind) == 0 || self.kind == ''Secret'')
+                              : (has(self.kind) && size(self.kind) > 0)'
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
@@ -5066,9 +5685,37 @@ spec:
                         - message: path must start with /
                           rule: '!has(self.path) || self.path.startsWith(''/'')'
                     type: object
+                  connect:
+                    description: |-
+                      connect defines settings for downstream HTTP CONNECT handling.
+
+                      If unset, CONNECT requests are rejected with Method Not Allowed.
+                    properties:
+                      mode:
+                        description: mode controls whether downstream CONNECT requests
+                          are accepted.
+                        enum:
+                        - Deny
+                        - Route
+                        - Tunnel
+                        type: string
+                    required:
+                    - mode
+                    type: object
                   http:
                     description: http defines settings on managing incoming HTTP requests.
                     properties:
+                      http1HeaderCase:
+                        description: |-
+                          `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
+                          This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+                          HTTP/2 requests are always lower case.
+
+                          Modifying the headers from other policies may result in the original case being lost.
+                        enum:
+                        - Lowercase
+                        - Preserve
+                        type: string
                       http1IdleTimeout:
                         description: |-
                           `http1IdleTimeout` defines the timeout before an unused connection is
@@ -5198,11 +5845,11 @@ spec:
                           rule: duration(self) >= duration('1s')
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [http1IdleTimeout http1MaxHeaders
-                        http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
+                    - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
+                        http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
                         http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
                         maxConnectionDuration] must be set
-                      rule: '[has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -5640,10 +6287,40 @@ spec:
                       rule: '!has(self.path) || self.path.startsWith(''/'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [accessLog http metrics networkAuthorization
-                    proxyProtocol tcp tls tracing] must be set
-                  rule: '[has(self.accessLog),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                - message: at least one of the fields in [accessLog connect http metrics
+                    networkAuthorization proxyProtocol tcp tls tracing] must be set
+                  rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
+              strategy:
+                description: |-
+                  strategy defines how this policy participates in policy merging and conflict resolution.
+
+                  Strategy settings apply to the policy object as a whole. Individual strategy fields may
+                  only be valid for specific policy kinds; for example, inheritance is only valid when this
+                  policy contains traffic settings.
+                properties:
+                  inheritance:
+                    description: |-
+                      inheritance controls whether less-specific traffic policies prevent more-specific traffic policies
+                      from contributing to the effective policy.
+
+                      This field is only valid on traffic policies. Frontend and backend policy merging does not use
+                      inheritance.
+
+                      When unset or set to `Default`, traffic policy fields are merged by specificity, with more-specific
+                      attachment points such as routes and route rules able to override fields from less-specific
+                      attachment points such as gateways and listeners.
+                      In other words, this policy provides `Default`s that can be overridden. For example, you may provide a `Default`
+                      timeout policy for the entire Gateway that is overridden by specific routes.
+
+                      When set to `Override`, this policy blocks traffic policies at more-specific attachment points from
+                      being included in the effective policy. This is useful when a gateway-level policy must remain
+                      authoritative for all routes below it.
+                    enum:
+                    - Default
+                    - Override
+                    type: string
+                type: object
               targetRefs:
                 description: |-
                   `targetRefs` specifies the target resources by reference to attach the
@@ -5840,10 +6517,6 @@ spec:
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                             == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                            == 1'
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for API key authentication.'
@@ -5853,15 +6526,16 @@ spec:
                         - Strict
                         type: string
                       secretRef:
-                        description: "`secretRef` references a Kubernetes `Secret`
-                          storing a set of API keys.\nIf there are many keys, `secretSelector`
-                          can be used instead.\n\nEach entry in the `Secret` represents
-                          one API key. The key is an\narbitrary identifier. The value
-                          can either be:\n* A string representing the API key.\n*
-                          A JSON object with two fields, `key` and `metadata`. `key`
-                          contains\n  the API key. `metadata` contains arbitrary JSON
-                          metadata associated\n  with the key, which may be used by
-                          other policies. For example, you\n  may write an authorization
+                        description: "`secretRef` references a credential source,
+                          defaulting to a Kubernetes\n`Secret`, storing a set of API
+                          keys. If there are many Secret-backed\nkeys, `secretSelector`
+                          can be used instead.\n\nEach entry in the credential data
+                          represents one API key. The key is an\narbitrary identifier.
+                          The value can either be:\n* A string representing the API
+                          key.\n* A JSON object with two fields, `key` and `metadata`.
+                          `key` contains\n  the API key. `metadata` contains arbitrary
+                          JSON metadata associated\n  with the key, which may be used
+                          by other policies. For example, you\n  may write an authorization
                           policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
                           \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
@@ -5869,28 +6543,42 @@ spec:
                           \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
                           \"k-456\""
                         properties:
-                          name:
-                            default: ""
-                            description: |-
-                              Name of the referent.
-                              This field is effectively required, but due to backwards compatibility is
-                              allowed to be empty. Instances of this type with an empty value here are
-                              almost certainly wrong.
-                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          group:
+                            description: Group of the referenced credential. Empty
+                              selects the core API group.
                             type: string
+                          kind:
+                            description: Kind of the referenced credential. Empty
+                              defaults to Secret.
+                            type: string
+                          name:
+                            description: Name of the referenced credential.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
                         type: object
                         x-kubernetes-map-type: atomic
+                        x-kubernetes-validations:
+                        - message: custom credential refs must set both group and
+                            kind
+                          rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                       secretSelector:
-                        description: "`secretSelector` selects multiple `Secret` resources
-                          containing API\nkeys. If the same key is defined in multiple
-                          secrets, the behavior is\nundefined.\n\nEach entry in the
-                          `Secret` represents one API key. The key is an\narbitrary
-                          identifier. The value can either be:\n* A string representing
-                          the API key.\n* A JSON object with two fields, `key` and
-                          `metadata`. `key` contains\n  the API key. `metadata` contains
-                          arbitrary JSON metadata associated\n  with the key, which
-                          may be used by other policies. For example, you\n  may write
-                          an authorization policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                        description: "`secretSelector` selects multiple Kubernetes
+                          `Secret` resources\ncontaining API keys. It is Secret-only;
+                          use `secretRef` for other\ncredential kinds. If the same
+                          key is defined in multiple secrets, the\nbehavior is undefined.\n\nEach
+                          entry in the `Secret` data represents one API key. The key
+                          is an\narbitrary identifier. The value can either be:\n*
+                          A string representing the API key.\n* A JSON object with
+                          two fields, `key` and `metadata`. `key` contains\n  the
+                          API key. `metadata` contains arbitrary JSON metadata associated\n
+                          \ with the key, which may be used by other policies. For
+                          example, you\n  may write an authorization policy allowing
+                          `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
                           \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
                           {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
@@ -6029,10 +6717,6 @@ spec:
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                             == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                            == 1'
                       mode:
                         default: Strict
                         description: '`mode` is the validation mode for basic auth
@@ -6048,28 +6732,41 @@ spec:
                           be used.
                         type: string
                       secretRef:
-                        description: "`secretRef` references a Kubernetes `Secret`
-                          storing the `.htaccess`\nfile. The `Secret` must have a
-                          key named `.htaccess`, and should contain\nthe complete
-                          `.htaccess` file.\n\nNote: passwords should be the hash
-                          of the password, not the raw password. Use the `htpasswd`
-                          or similar commands\nto generate a hash. MD5, bcrypt, crypt,
-                          and SHA-1 are supported.\n\nExample:\n\n\tapiVersion: v1\n\tkind:
-                          Secret\n\tmetadata:\n\t  name: basic-auth\n\tstringData:\n\t
+                        description: "`secretRef` references a credential source,
+                          defaulting to a Kubernetes\n`Secret`, storing the `.htaccess`
+                          file. When using the default Secret\nresolver, the `Secret`
+                          must have a key named `.htaccess`, and should\ncontain the
+                          complete `.htaccess` file.\n\nNote: passwords should be
+                          the hash of the password, not the raw password. Use the
+                          `htpasswd` or similar commands\nto generate a hash. MD5,
+                          bcrypt, crypt, and SHA-1 are supported.\n\nExample:\n\n\tapiVersion:
+                          v1\n\tkind: Secret\n\tmetadata:\n\t  name: basic-auth\n\tstringData:\n\t
                           \ .htaccess: |\n\t    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.\n\t
                           \   bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/"
                         properties:
-                          name:
-                            default: ""
-                            description: |-
-                              Name of the referent.
-                              This field is effectively required, but due to backwards compatibility is
-                              allowed to be empty. Instances of this type with an empty value here are
-                              almost certainly wrong.
-                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          group:
+                            description: Group of the referenced credential. Empty
+                              selects the core API group.
                             type: string
+                          kind:
+                            description: Kind of the referenced credential. Empty
+                              defaults to Secret.
+                            type: string
+                          name:
+                            description: Name of the referenced credential.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
                         type: object
                         x-kubernetes-map-type: atomic
+                        x-kubernetes-validations:
+                        - message: custom credential refs must set both group and
+                            kind
+                          rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
+                            || size(self.kind) == 0 || self.kind == ''Secret'') :
+                            (has(self.kind) && size(self.kind) > 0)'
                       users:
                         description: "`users` provides an inline list of username
                           and password pairs that will\nbe accepted. Each entry represents
@@ -6089,6 +6786,61 @@ spec:
                         be set
                       rule: '[has(self.users),has(self.secretRef)].filter(x,x==true).size()
                         == 1'
+                  buffer:
+                    description: |-
+                      `buffer` defines the policy for buffer requests and responses bodies. Buffered bodies will be accumulated in memory
+                      by the proxy until completion before being forwarded. This changes the proxies default behavior, which streams bodies.
+
+                      Warning: large bodies can lead to excessive memory usage in the proxy. Utilize with care, or with strict limits.
+                    properties:
+                      request:
+                        description: '`request` configures buffering of the request
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
+                      response:
+                        description: '`response` configures buffering of the response
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request response] must
+                        be set
+                      rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                        >= 1'
                   cors:
                     description: cors specifies the CORS configuration for the policy.
                     properties:
@@ -7864,10 +8616,6 @@ spec:
                             cookie expression] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                             == 1'
-                        - message: exactly one of the fields in [header queryParameter
-                            cookie] must be set
-                          rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                            == 1'
                       mcp:
                         description: |-
                           `mcp` optionally enables MCP OAuth metadata endpoint handling
@@ -9187,13 +9935,16 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    extProc, jwtAuthentication, basicAuthentication and apiKeyAuthentication
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.buffer),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:
             - message: At least one of traffic, frontend, or backend must be provided.
               rule: has(self.traffic) || has(self.frontend) || has(self.backend)
+            - message: strategy.inheritance may only be set on traffic policies
+              rule: '!has(self.strategy) || !has(self.strategy.inheritance) || (has(self.traffic)
+                && !has(self.frontend) && !has(self.backend))'
             - message: backend.mcp may not be used with a Service target
               rule: '!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)

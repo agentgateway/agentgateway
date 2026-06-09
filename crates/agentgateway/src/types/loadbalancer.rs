@@ -131,13 +131,17 @@ impl<T> EndpointGroup<T> {
 	}
 
 	/// Move an endpoint from rejected -> active (uneviction). The closure mutates
-	/// the endpoint info before re-insertion. No-op if not rejected.
-	fn unevict(&mut self, key: EndpointKey, edit: impl FnOnce(&EndpointWithInfo<T>)) {
+	/// the endpoint info before re-insertion and returns whether promotion should
+	/// proceed. No-op if not rejected.
+	fn unevict(&mut self, key: EndpointKey, edit: impl FnOnce(&EndpointWithInfo<T>) -> bool) {
 		if let Some(ep) = self.rejected.swap_remove(&key) {
-			edit(&ep);
-			let cap = ep.capacity;
-			self.active.insert(key, ep);
-			self.update_sampler(Some(cap));
+			if edit(&ep) {
+				let cap = ep.capacity;
+				self.active.insert(key, ep);
+				self.update_sampler(Some(cap));
+			} else {
+				self.rejected.insert(key, ep);
+			}
 		}
 	}
 
@@ -747,7 +751,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		tokio::task::spawn(async move {
 			let mut uneviction_heap: BinaryHeap<UnevictEntry> = Default::default();
 			let handle_eviction = |uneviction_heap: &mut BinaryHeap<UnevictEntry>| {
-				let UnevictEntry(_until, key, restore_health) =
+				let UnevictEntry(until, key, restore_health) =
 					uneviction_heap.pop().expect("heap is empty");
 
 				trace!(%key, "unevict");
@@ -759,11 +763,20 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 				eps.unevict(key, |ep| {
+					// Uneviction timers are queued independently from endpoint config changes.
+					// A rejected endpoint can be removed, re-added with the same key, and evicted
+					// again before the first timer fires. In that case the heap still contains the
+					// old timer, but the endpoint's current eviction deadline is different; keep
+					// the endpoint rejected and let the current timer handle restoration.
+					if ep.info.evicted_until.load().as_deref() != Some(&until) {
+						return false;
+					}
 					ep.info.evicted_until.store(None);
 					if let Some(h) = restore_health {
 						// Health scoring assumes normalized values in [0.0, 1.0].
 						ep.info.health.set(h.clamp(0.0, 1.0));
 					}
+					true
 				});
 				bucket.store(Arc::new(eps));
 			};
@@ -1193,6 +1206,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn endpoint_set_eviction_and_uneviction() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -1211,24 +1225,17 @@ mod tests {
 			Some(1.0),
 		);
 
-		// Poll until the eviction event is processed
-		agent_core::test_helpers::check_eventually(
-			Duration::from_millis(500),
-			|| async { eps.best_bucket().rejected.contains_key(&key) },
-			|rejected| *rejected,
-		)
-		.await
-		.expect("endpoint should be evicted");
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
 
-		// Wait for uneviction (100ms eviction duration + buffer)
-		tokio::time::sleep(Duration::from_millis(150)).await;
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
 		// Endpoint should be back in active with health reset to 1.0
 		let group = eps.best_bucket();
-		assert!(
-			group.active.contains_key(&key),
-			"endpoint should be unevicted"
-		);
 		let ep_info = &group.active.get(&key).unwrap().info;
 		assert_eq!(ep_info.health_score(), 1.0, "health should be reset to 1.0");
 	}
@@ -1266,6 +1273,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn endpoint_set_uneviction_restore_health_zero() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -1279,15 +1287,15 @@ mod tests {
 			Some(0.0),
 		);
 
-		tokio::time::sleep(Duration::from_millis(50)).await;
-		let group = eps.best_bucket();
-		assert!(group.rejected.contains_key(&key));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
-		// Wait for uneviction
-		tokio::time::sleep(Duration::from_millis(150)).await;
-
 		let group = eps.best_bucket();
-		assert!(group.active.contains_key(&key));
 		let ep_info = &group.active.get(&key).unwrap().info;
 		assert_eq!(
 			ep_info.health_score(),
@@ -1298,6 +1306,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn endpoint_set_uneviction_no_restore_health() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -1315,13 +1324,15 @@ mod tests {
 			None,
 		);
 
-		tokio::time::sleep(Duration::from_millis(50)).await;
-
-		// Wait for uneviction
-		tokio::time::sleep(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
 		let group = eps.best_bucket();
-		assert!(group.active.contains_key(&key));
 		let ep_info = &group.active.get(&key).unwrap().info;
 		// Health was recorded as 0.0 in finish_request (failure),
 		// starting from 0.7: 0.3*0 + 0.7*0.7 = 0.49
@@ -1330,6 +1341,50 @@ mod tests {
 			"health should be unchanged from pre-eviction EWMA, got {}",
 			ep_info.health_score()
 		);
+	}
+
+	#[tokio::test]
+	async fn stale_unevict_timer_does_not_restore_readded_endpoint() {
+		tokio::time::pause();
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		eps.evict(key.clone(), Instant::now() + Duration::from_millis(50));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("first endpoint should be evicted");
+
+		eps.remove(key.clone());
+		eps.insert_key(key.clone(), "backend2", 0);
+		eps.evict(key.clone(), Instant::now() + Duration::from_millis(200));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("re-added endpoint should be evicted");
+
+		tokio::time::advance(Duration::from_millis(100)).await;
+		tokio::task::yield_now().await;
+		let group = eps.best_bucket();
+		assert!(
+			group.rejected.contains_key(&key),
+			"old unevict timer must not restore the re-added endpoint early"
+		);
+
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("current unevict timer should eventually restore the endpoint");
+		let group = eps.best_bucket();
+		assert_eq!(*group.active.get(&key).unwrap().endpoint, "backend2");
+	}
+
+	async fn yield_until(mut f: impl FnMut() -> bool) -> Result<(), ()> {
+		for _ in 0..100 {
+			if f() {
+				return Ok(());
+			}
+			tokio::task::yield_now().await;
+		}
+		Err(())
 	}
 
 	#[test]

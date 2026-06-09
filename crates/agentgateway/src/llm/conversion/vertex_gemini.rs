@@ -968,6 +968,7 @@ pub mod to_completions {
 			role: completions::Role::Assistant,
 			content,
 			reasoning_content,
+			reasoning_signature: None,
 			tool_calls,
 			#[allow(deprecated)]
 			function_call: None,

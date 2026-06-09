@@ -84,9 +84,17 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 /// RequestPolicy is a wrapper around a request policy implementation to handle common construction
 /// and usage around conditional policies, etc.
 /// This is cheaply clone-able.
-#[derive(Debug, Default)]
-pub enum RequestPolicy<T> {
-	#[default]
+#[derive(Debug)]
+pub struct RequestPolicy<T> {
+	inner: RequestPolicyInner<T>,
+	// Set when a less-specific policy with inheritance=Override has populated this field.
+	// More-specific policies are still visited later in merge order, but must not replace this
+	// policy once the field is locked.
+	inheritance_locked: bool,
+}
+
+#[derive(Debug)]
+enum RequestPolicyInner<T> {
 	Empty,
 	Single(PolicyWithCondition<T>),
 	/// Multiple policies are run in order, and the first one that matches is used.
@@ -94,12 +102,30 @@ pub enum RequestPolicy<T> {
 	Multiple(Vec<PolicyWithCondition<T>>),
 }
 
+impl<T> Default for RequestPolicy<T> {
+	fn default() -> Self {
+		Self {
+			inner: RequestPolicyInner::Empty,
+			inheritance_locked: false,
+		}
+	}
+}
+
 impl<T> Clone for RequestPolicy<T> {
 	fn clone(&self) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			inheritance_locked: self.inheritance_locked,
+		}
+	}
+}
+
+impl<T> Clone for RequestPolicyInner<T> {
+	fn clone(&self) -> Self {
 		match self {
-			RequestPolicy::Empty => RequestPolicy::Empty,
-			RequestPolicy::Single(inner) => RequestPolicy::Single(inner.clone()),
-			RequestPolicy::Multiple(inners) => RequestPolicy::Multiple(inners.clone()),
+			RequestPolicyInner::Empty => RequestPolicyInner::Empty,
+			RequestPolicyInner::Single(inner) => RequestPolicyInner::Single(inner.clone()),
+			RequestPolicyInner::Multiple(inners) => RequestPolicyInner::Multiple(inners.clone()),
 		}
 	}
 }
@@ -124,21 +150,36 @@ impl<T: Serialize> Serialize for RequestPolicy<T> {
 	where
 		S: serde::Serializer,
 	{
-		match self {
-			RequestPolicy::Empty => serializer.serialize_none(),
-			RequestPolicy::Single(inner) if inner.condition.is_none() => inner.pol.serialize(serializer),
-			RequestPolicy::Single(inner) => inner.serialize(serializer),
-			RequestPolicy::Multiple(inners) => inners.serialize(serializer),
+		match &self.inner {
+			RequestPolicyInner::Empty => serializer.serialize_none(),
+			RequestPolicyInner::Single(inner) if inner.condition.is_none() => {
+				inner.pol.serialize(serializer)
+			},
+			RequestPolicyInner::Single(inner) => inner.serialize(serializer),
+			RequestPolicyInner::Multiple(inners) => inners.serialize(serializer),
 		}
 	}
 }
 
 impl<T> RequestPolicy<T> {
 	pub fn single(pol: T) -> Self {
-		RequestPolicy::Single(PolicyWithCondition {
-			pol: Arc::new(pol),
-			condition: None,
-		})
+		Self {
+			inner: RequestPolicyInner::Single(PolicyWithCondition {
+				pol: Arc::new(pol),
+				condition: None,
+			}),
+			inheritance_locked: false,
+		}
+	}
+
+	pub fn single_arc(pol: Arc<T>) -> Self {
+		Self {
+			inner: RequestPolicyInner::Single(PolicyWithCondition {
+				pol,
+				condition: None,
+			}),
+			inheritance_locked: false,
+		}
 	}
 
 	pub fn from_policy_inners<I>(policies: I) -> Self
@@ -146,10 +187,13 @@ impl<T> RequestPolicy<T> {
 		I: IntoIterator<Item = PolicyWithCondition<T>>,
 	{
 		let policies = policies.into_iter().collect::<Vec<_>>();
-		match policies.len() {
-			0 => RequestPolicy::Empty,
-			1 => RequestPolicy::Single(policies.into_iter().next().expect("len checked")),
-			_ => RequestPolicy::Multiple(policies),
+		Self {
+			inner: match policies.len() {
+				0 => RequestPolicyInner::Empty,
+				1 => RequestPolicyInner::Single(policies.into_iter().next().expect("len checked")),
+				_ => RequestPolicyInner::Multiple(policies),
+			},
+			inheritance_locked: false,
 		}
 	}
 
@@ -168,20 +212,24 @@ impl<T> RequestPolicy<T> {
 	}
 
 	pub fn into_policy_inners(self) -> Vec<PolicyWithCondition<T>> {
-		match self {
-			RequestPolicy::Empty => Vec::new(),
-			RequestPolicy::Single(inner) => vec![inner],
-			RequestPolicy::Multiple(inners) => inners,
+		match self.inner {
+			RequestPolicyInner::Empty => Vec::new(),
+			RequestPolicyInner::Single(inner) => vec![inner],
+			RequestPolicyInner::Multiple(inners) => inners,
 		}
 	}
 
 	pub fn iter(&self) -> impl Iterator<Item = &PolicyWithCondition<T>> {
-		match self {
-			RequestPolicy::Empty => [].as_slice(),
-			RequestPolicy::Single(inner) => std::slice::from_ref(inner),
-			RequestPolicy::Multiple(inners) => inners.as_slice(),
+		match &self.inner {
+			RequestPolicyInner::Empty => [].as_slice(),
+			RequestPolicyInner::Single(inner) => std::slice::from_ref(inner),
+			RequestPolicyInner::Multiple(inners) => inners.as_slice(),
 		}
 		.iter()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		matches!(self.inner, RequestPolicyInner::Empty)
 	}
 
 	/// Selects the first matching policy without applying it.
@@ -216,9 +264,23 @@ impl<T> RequestPolicy<T> {
 	}
 
 	pub fn set_if_unset(&mut self, policy: &RequestPolicy<T>) {
-		if matches!(self, RequestPolicy::Empty) {
+		if self.is_empty() {
 			*self = policy.clone();
 		}
+	}
+
+	// Merge a policy field while respecting traffic policy inheritance.
+	//
+	// Route policy merging walks from less-specific attachment points to more-specific ones
+	// (Gateway -> Listener -> Route -> RouteRule). Normally each later policy can replace the
+	// current field value. When a policy sets inheritance=Override, that field value is copied and
+	// locked so later, more-specific policies of the same field cannot replace it.
+	pub fn merge_with_inheritance(&mut self, policy: &RequestPolicy<T>, lock_inheritance: bool) {
+		if self.inheritance_locked {
+			return;
+		}
+		*self = policy.clone();
+		self.inheritance_locked = lock_inheritance;
 	}
 }
 
@@ -294,7 +356,7 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 }
 
 impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
-	/// Apply applies request policies and returns back the RespnsePolicy to run the response side.
+	/// Apply applies request policies and returns back the ResponsePolicy to run the response side.
 	pub async fn apply(
 		&self,
 		name: &'static str,
@@ -306,23 +368,41 @@ impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
-			.map(|p| ResponsePolicy(p))
+			.map(ResponsePolicy::new)
+	}
+
+	/// select_response evaluates request-side conditions and returns the selected policy to run on the
+	/// response path without applying it to the request.
+	pub fn select_response(
+		&self,
+		name: &'static str,
+		req: &crate::http::Request,
+	) -> ResponsePolicy<T> {
+		ResponsePolicy::new(self.select(name, req))
 	}
 }
 
 #[must_use]
 #[derive(Debug, Clone, Serialize)]
-pub struct ResponsePolicy<T>(Option<Arc<T>>);
+pub struct ResponsePolicy<T> {
+	inner: Option<Arc<T>>,
+}
 
 impl<T> Default for ResponsePolicy<T> {
 	fn default() -> Self {
-		Self(None)
+		Self { inner: None }
+	}
+}
+
+impl<T> ResponsePolicy<T> {
+	pub fn new(inner: Option<Arc<T>>) -> Self {
+		Self { inner }
 	}
 }
 
 impl<T: ResponsePolicyTrait + BackendPolicyTrait> BackendPolicy<T> {
 	pub fn as_response_policy(&self) -> ResponsePolicy<T> {
-		ResponsePolicy(self.0.clone())
+		ResponsePolicy::new(self.0.clone())
 	}
 }
 impl<T: ResponsePolicyTrait> ResponsePolicy<T> {
@@ -333,15 +413,17 @@ impl<T: ResponsePolicyTrait> ResponsePolicy<T> {
 		resp: &mut Response,
 		response_headers: &mut HeaderMap,
 	) -> Result<(), proxy::ProxyResponse> {
-		let Some(ref pol) = self.0 else { return Ok(()) };
+		let Some(ref pol) = self.inner else {
+			return Ok(());
+		};
 		let res = pol.apply(log, resp).await?.apply(response_headers);
 		dtrace::snapshot!(Response, name, log, &resp);
 		res
 	}
 
 	pub fn set_if_unset(&mut self, pol: &Arc<T>) {
-		if self.0.is_none() {
-			self.0 = Some(pol.clone());
+		if self.inner.is_none() {
+			self.inner = Some(pol.clone());
 		}
 	}
 }
@@ -378,12 +460,12 @@ impl<T: BackendPolicyTrait> BackendPolicy<T> {
 		response_headers: &mut HeaderMap,
 	) -> Result<ResponsePolicy<T>, proxy::ProxyResponse> {
 		let Some(ref pol) = self.0 else {
-			return Ok(ResponsePolicy(None));
+			return Ok(ResponsePolicy::new(None));
 		};
 
 		let res = pol.apply(client, log, req).await?.apply(response_headers);
 		dtrace::snapshot!(Request, name, &req);
-		res.map(|_| ResponsePolicy(Some(pol.clone())))
+		res.map(|_| ResponsePolicy::new(Some(pol.clone())))
 	}
 
 	pub fn register_expressions(&self, ctx: &mut ContextBuilder) {

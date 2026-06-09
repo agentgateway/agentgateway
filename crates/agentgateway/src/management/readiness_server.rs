@@ -50,7 +50,7 @@ impl Server {
 		self.ready.clone()
 	}
 
-	pub fn address(&self) -> SocketAddr {
+	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 

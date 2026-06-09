@@ -46,6 +46,7 @@ pub enum Mode {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(::cel::DynamicType)]
 pub struct Claims {
+	/// The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.
 	#[dynamic(with_value = "api_key_to_value")]
 	pub key: APIKey,
 	#[serde(default, flatten)]

@@ -1,0 +1,28 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "reasoningContent": {
+            "reasoningText": {
+              "text": "Two plus two is four."
+            }
+          }
+        },
+        {
+          "text": "The answer is 4."
+        }
+      ]
+    }
+  },
+  "stopReason": "end_turn",
+  "usage": {
+    "inputTokens": 18,
+    "outputTokens": 46,
+    "totalTokens": 64
+  },
+  "metrics": {
+    "latencyMs": 2083
+  }
+}

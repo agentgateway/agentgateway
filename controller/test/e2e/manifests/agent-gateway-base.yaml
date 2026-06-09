@@ -60,6 +60,8 @@ spec:
       port: 9090
     - name: grpc
       port: 7070
+    - name: raw-headers
+      port: 18081
   selector:
     app.kubernetes.io/name: testbox
 ---

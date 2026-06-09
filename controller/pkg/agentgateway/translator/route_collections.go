@@ -25,6 +25,7 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/api"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -948,15 +949,16 @@ type RouteContext struct {
 
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
-	Grants         ReferenceGrants
-	RouteParents   ParentResolver
-	Services       krt.Collection[*corev1.Service]
-	InferencePools krt.Collection[*inf.InferencePool]
-	Namespaces     krt.Collection[*corev1.Namespace]
-	ServiceEntries krt.Collection[*networkingclient.ServiceEntry]
-	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
-	References     plugins.ReferenceTypes
-	ControllerName string
+	Grants              ReferenceGrants
+	RouteParents        ParentResolver
+	Services            krt.Collection[*corev1.Service]
+	InferencePools      krt.Collection[*inf.InferencePool]
+	Namespaces          krt.Collection[*corev1.Namespace]
+	ServiceEntries      krt.Collection[*networkingclient.ServiceEntry]
+	Backends            krt.Collection[*agentgateway.AgentgatewayBackend]
+	References          plugins.ReferenceTypes
+	ControllerName      string
+	BackendRefGrantMode apisettings.BackendRefGrantMode
 }
 
 func (i RouteContextInputs) WithCtx(krtctx krt.HandlerContext) RouteContext {

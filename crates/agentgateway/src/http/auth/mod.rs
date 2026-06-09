@@ -6,7 +6,7 @@ pub mod gcp;
 use std::borrow::Cow;
 
 use ::http::HeaderValue;
-pub use aws::AwsAuth;
+pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;

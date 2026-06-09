@@ -71,6 +71,9 @@ type Options struct {
 	GlobalSettings              *apisettings.Settings
 	LeaderElectionID            string
 	ExtraStatusHandlers         map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	AgentGatewaySyncerOptions []syncer.AgentgatewaySyncerOption
 
@@ -118,7 +121,7 @@ func New(opts Options) (*setup, error) {
 		s.RestConfig = ctrl.GetConfigOrDie()
 	}
 	if s.APIClient == nil {
-		apiClient, err := apiclient.New(s.RestConfig)
+		apiClient, err := apiclient.New(s.RestConfig, s.GlobalSettings.IstioClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("error creating API client: %w", err)
 		}
@@ -218,7 +221,6 @@ func (s *setup) Start(ctx context.Context) error {
 		*s.GlobalSettings,
 		// control plane system namespace (default is agentgateway-system)
 		namespaces.GetPodNamespace(),
-		s.APIClient.ClusterID().String(),
 	)
 	if err != nil {
 		slog.Error("error creating agw collections", "error", err)
@@ -360,6 +362,7 @@ func (s *setup) buildSyncer(
 		AgwCollections:                 agwCollections,
 		Resolver:                       resolver,
 		JWKSLookup:                     jwksLookup,
+		CredentialResolverFactory:      s.CredentialResolverFactory,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,

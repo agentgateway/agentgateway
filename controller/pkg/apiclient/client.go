@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/kube"
 	"k8s.io/client-go/rest"
 
@@ -20,9 +21,9 @@ type client struct {
 	kgateway versioned.Interface
 }
 
-func New(restConfig *rest.Config) (*client, error) {
+func New(restConfig *rest.Config, clusterID string) (*client, error) {
 	restCfg := kube.NewClientConfigForRestConfig(restConfig)
-	kubeClient, err := kube.NewClient(restCfg, "")
+	kubeClient, err := kube.NewClient(restCfg, cluster.ID(clusterID))
 	if err != nil {
 		return nil, err
 	}

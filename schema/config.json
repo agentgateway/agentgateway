@@ -166,21 +166,21 @@
           ]
         },
         "adminAddr": {
-          "description": "Admin UI address in the format \"ip:port\"",
+          "description": "Admin UI address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "statsAddr": {
-          "description": "Stats/metrics server address in the format \"ip:port\"",
+          "description": "Stats/metrics server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
           ]
         },
         "readinessAddr": {
-          "description": "Readiness probe server address in the format \"ip:port\"",
+          "description": "Readiness probe server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
             "string",
             "null"
@@ -1359,6 +1359,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Csrf"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "buffer": {
+          "description": "Buffer request and response bodies before forwarding.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Buffer"
             },
             {
               "type": "null"
@@ -2896,10 +2908,34 @@
                 "string",
                 "null"
               ]
+            },
+            "assumeRole": {
+              "description": "Optional AWS STS role to assume before signing requests.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AwsAssumeRole"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false
         }
+      ]
+    },
+    "AwsAssumeRole": {
+      "type": "object",
+      "properties": {
+        "roleArn": {
+          "description": "AWS IAM role ARN to assume.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "roleArn"
       ]
     },
     "AzureAuth": {
@@ -5101,6 +5137,46 @@
       },
       "additionalProperties": false
     },
+    "Buffer": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "BufferBody": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "Policy2": {
       "type": "object",
       "properties": {
@@ -5800,6 +5876,18 @@
             "copilot"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -5954,6 +6042,56 @@
         }
       },
       "additionalProperties": false
+    },
+    "Provider8": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProviderFormatConfig"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "formats"
+      ]
+    },
+    "ProviderFormatConfig": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ProviderFormat"
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ]
+    },
+    "ProviderFormat": {
+      "type": "string",
+      "enum": [
+        "completions",
+        "messages",
+        "responses",
+        "embeddings",
+        "anthropicTokenCount",
+        "realtime"
+      ]
     },
     "LocalBackendPolicies": {
       "type": "object",
@@ -6544,7 +6682,8 @@
         "direct",
         "hboneWaypoint",
         "hboneGateway",
-        "proxy"
+        "proxy",
+        "connect"
       ]
     },
     "LocalFrontendPolicies": {
@@ -6610,6 +6749,18 @@
           ],
           "default": null
         },
+        "connect": {
+          "description": "Enable or disable downstream HTTP CONNECT handling.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Connect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "accessLog": {
           "description": "Settings for request access logs.",
           "anyOf": [
@@ -6658,6 +6809,11 @@
         "http1IdleTimeout": {
           "type": "string",
           "default": "10m0s"
+        },
+        "http1HeaderCase": {
+          "description": "Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.",
+          "$ref": "#/$defs/HTTPHeaderCase",
+          "default": "lowercase"
         },
         "http2WindowSize": {
           "type": [
@@ -6719,6 +6875,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "HTTPHeaderCase": {
+      "type": "string",
+      "enum": [
+        "lowercase",
+        "preserve"
+      ]
     },
     "TLS": {
       "type": "object",
@@ -6827,6 +6990,26 @@
       "enum": [
         "strict",
         "optional"
+      ]
+    },
+    "Connect": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ConnectMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "ConnectMode": {
+      "type": "string",
+      "enum": [
+        "deny",
+        "route",
+        "tunnel"
       ]
     },
     "LoggingPolicy": {
@@ -7449,6 +7632,16 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "tls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -7487,6 +7680,17 @@
         "provider": {
           "description": "provider of the LLM we are connecting too",
           "$ref": "#/$defs/LocalModelAIProvider"
+        },
+        "passthrough": {
+          "description": "passthrough controls how requests are handled.\nBy default, requests will be parsed and translated as needed.\nWith passthrough, they will be unmodified and optionally inspected (with `detect`).\nIn this mode, requests must be sent in the native format of the provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMPassthrough"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "defaults": {
           "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
@@ -7728,15 +7932,45 @@
       "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
-      "type": "string",
-      "enum": [
-        "openAI",
-        "gemini",
-        "vertex",
-        "anthropic",
-        "bedrock",
-        "azure",
-        "copilot"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "openAI",
+            "gemini",
+            "vertex",
+            "anthropic",
+            "bedrock",
+            "azure",
+            "copilot"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LocalLLMPassthrough": {
+      "oneOf": [
+        {
+          "description": "Pass through the request while extracting LLM telemetry and rate-limit inputs when possible.",
+          "type": "string",
+          "const": "detect"
+        },
+        {
+          "description": "Pass through the request without interpreting it as LLM traffic.",
+          "type": "string",
+          "const": "opaque"
+        }
       ]
     },
     "LLMRouteMatch": {
@@ -7836,6 +8070,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
             },
             {
               "type": "null"

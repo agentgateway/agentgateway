@@ -28,6 +28,7 @@ use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse, dtrace};
 use crate::telemetry::log::RequestLog;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
@@ -286,6 +287,15 @@ impl ExtAuthz {
 		}
 	}
 
+	fn request_scheme(req: &Request) -> String {
+		if let Some(scheme) = req.uri().scheme() {
+			return scheme.to_string();
+		}
+		http::x_headers::forwarded_scheme(req.headers())
+			.unwrap_or(http::uri::Scheme::HTTP)
+			.to_string()
+	}
+
 	fn get_header_values(
 		&self,
 		req: &Request,
@@ -355,7 +365,7 @@ impl ExtAuthz {
 		let chan = GrpcReferenceChannel {
 			target: self.target.clone(),
 			policies: Arc::new(self.policies.clone()),
-			client,
+			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz),
 		};
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
@@ -448,11 +458,7 @@ impl ExtAuthz {
 					.map(|s| s.as_str())
 					.unwrap_or("")
 					.to_string(),
-				scheme: req
-					.uri()
-					.scheme()
-					.map(|s| s.to_string())
-					.unwrap_or_else(|| "http".to_string()),
+				scheme: Self::request_scheme(req),
 				protocol: http::version_str(&req.version()).to_string(),
 				// Always empty per spec
 				query: "".to_string(),
@@ -800,7 +806,10 @@ impl ExtAuthz {
 			.extensions_mut()
 			.insert(BackendRequestTimeout(Duration::from_millis(200)));
 		let scope = dtrace::start_scope("ext_authz");
-		let resp = client.call_reference(check_req, &self.target).await;
+		let resp = client
+			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
+			.call_reference(check_req, &self.target)
+			.await;
 		let mut resp = match resp {
 			Ok(r) => r,
 			Err(e) => {
@@ -941,8 +950,7 @@ impl crate::store::BackendPolicyTrait for ExtAuthz {
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self
-			.check(client.clone(), req)
+		Box::pin(self.check(client.clone(), req))
 			.await
 			.map_err(ProxyResponse::from)
 	}
@@ -959,8 +967,7 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self
-			.check(client.clone(), req)
+		Box::pin(self.check(client.clone(), req))
 			.await
 			.map_err(ProxyResponse::from)
 	}

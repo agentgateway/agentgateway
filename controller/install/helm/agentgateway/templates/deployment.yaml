@@ -111,6 +111,33 @@ spec:
                  from pkg/deployer/wellknown.go rather than AGW_DEFAULT_IMAGE_* env vars. */}}
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: {{ .Values.discoveryNamespaceSelectors | toJson | quote }}
+            {{- /* Control-plane-wide Istio mesh defaults */}}
+            {{- with .Values.istio }}
+            {{- if .autoEnabled }}
+            - name: AGW_ISTIO_AUTO_ENABLED
+              value: "true"
+            {{- end }}
+            {{- if .namespace }}
+            - name: AGW_ISTIO_NAMESPACE
+              value: {{ .namespace | quote }}
+            {{- end }}
+            {{- if .revision }}
+            - name: AGW_ISTIO_REVISION
+              value: {{ .revision | quote }}
+            {{- end }}
+            {{- if .clusterId }}
+            - name: AGW_ISTIO_CLUSTER_ID
+              value: {{ .clusterId | quote }}
+            {{- end }}
+            {{- if .network }}
+            - name: AGW_ISTIO_NETWORK
+              value: {{ .network | quote }}
+            {{- end }}
+            {{- if .caAddress }}
+            - name: AGW_ISTIO_CA_ADDRESS
+              value: {{ .caAddress | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.controller.extraEnv }}
             {{- $extraEnv := .Values.controller.extraEnv }}
             {{- range $key := keys $extraEnv | sortAlpha }}

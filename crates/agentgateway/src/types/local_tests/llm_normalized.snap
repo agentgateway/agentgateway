@@ -87,7 +87,8 @@ backends:
                     pathPrefix: ~
                     tokenize: false
                     inlinePolicies:
-                      - backendTLS: ~
+                      - backendTLS:
+                          systemRoots: true
                       - backendAuth:
                           key:
                             value: "<redacted>"

@@ -19,6 +19,7 @@ const (
 	frontendTlsPolicySuffix     = ":frontend-tls"
 	frontendHttpPolicySuffix    = ":frontend-http"
 	frontendProxyPolicySuffix   = ":frontend-proxy"
+	frontendConnectPolicySuffix = ":frontend-connect"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
 	frontendMetricsPolicySuffix = ":frontend-metrics"
@@ -55,6 +56,10 @@ func translateFrontendPolicyToAgw(
 
 	if s := frontend.ProxyProtocol; s != nil {
 		appendPolicy("proxyProtocol")(translateFrontendProxyProtocol(policy, policyName), nil)
+	}
+
+	if s := frontend.Connect; s != nil {
+		appendPolicy("connect")(translateFrontendConnect(policy, policyName), nil)
 	}
 
 	if s := frontend.TLS; s != nil {
@@ -332,6 +337,37 @@ func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, nam
 	return proxyPolicy
 }
 
+func translateFrontendConnect(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	mode := api.FrontendPolicySpec_Connect_DENY
+	switch policy.Spec.Frontend.Connect.Mode {
+	case agentgateway.FrontendConnectModeRoute:
+		mode = api.FrontendPolicySpec_Connect_ROUTE
+	case agentgateway.FrontendConnectModeTunnel:
+		mode = api.FrontendPolicySpec_Connect_TUNNEL
+	case agentgateway.FrontendConnectModeDeny:
+		mode = api.FrontendPolicySpec_Connect_DENY
+	}
+	connectPolicy := &api.Policy{
+		Key:  name + frontendConnectPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Connect_{
+					Connect: &api.FrontendPolicySpec_Connect{
+						Mode: mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated frontend connect policy",
+		"policy", policy.Name,
+		"agentgateway_policy", connectPolicy.Name)
+
+	return connectPolicy
+}
+
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
 	var allowPolicies, denyPolicies, requirePolicies []string
@@ -490,6 +526,14 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	}
 	if v := http.HTTP1IdleTimeout; v != nil {
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
+	}
+	if v := http.HTTP1HeaderCase; v != nil {
+		switch *v {
+		case agentgateway.HTTPHeaderCasePreserve:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_PRESERVE
+		case agentgateway.HTTPHeaderCaseLowercase:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_LOWERCASE
+		}
 	}
 	if v := http.HTTP2WindowSize; v != nil {
 		spec.Http2WindowSize = quantityUint32(v)

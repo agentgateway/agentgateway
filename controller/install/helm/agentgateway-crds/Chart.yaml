@@ -4,5 +4,8 @@ description: A Helm chart for the agentgateway project CRDs
 icon: https://raw.githubusercontent.com/agentgateway/website/refs/heads/main/static/favicon.svg
 type: application
 version: "0.0.2"
-appVersion: "0.0.1"
+# appVersion is a placeholder. The real version is injected at release time by the
+# Makefile release-charts target via --app-version $(HELM_CHART_VERSION_V).
+# Using 0.0.0-dev makes it clear this is not a real release version.
+appVersion: "0.0.0-dev"
 

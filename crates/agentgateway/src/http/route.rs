@@ -22,18 +22,22 @@ mod tests;
 
 /// Check if a RouteMatch matches the given request (path, method, headers, query).
 fn matches_request(m: &RouteMatch, request: &Request) -> bool {
+	let request_path =
+		if request.method() == ::http::Method::CONNECT && request.uri().path().is_empty() {
+			"/"
+		} else {
+			request.uri().path()
+		};
 	let path_matches = match &m.path {
-		PathMatch::Exact(p) => request.uri().path() == p.as_str(),
-		PathMatch::Regex(r) => {
-			let path = request.uri().path();
-			r.find(path)
-				.map(|m| m.start() == 0 && m.end() == path.len())
-				.unwrap_or(false)
-		},
+		PathMatch::Exact(p) => request_path == p.as_str(),
+		PathMatch::Regex(r) => r
+			.find(request_path)
+			.map(|m| m.start() == 0 && m.end() == request_path.len())
+			.unwrap_or(false),
 		PathMatch::Invalid => false,
 		PathMatch::PathPrefix(p) => {
 			let p = p.trim_end_matches('/');
-			let Some(suffix) = request.uri().path().trim_end_matches('/').strip_prefix(p) else {
+			let Some(suffix) = request_path.trim_end_matches('/').strip_prefix(p) else {
 				return false;
 			};
 			// TODO this is not right!!

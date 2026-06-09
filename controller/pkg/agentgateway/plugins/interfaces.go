@@ -10,16 +10,33 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/api"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 )
 
+type ReferenceGrantChecker interface {
+	SecretAllowed(ctx krt.HandlerContext, kind schema.GroupVersionKind, secret types.NamespacedName, namespace string) bool
+	BackendAllowed(
+		ctx krt.HandlerContext,
+		k schema.GroupVersionKind,
+		backendName gwv1b1.ObjectName,
+		backendNamespace gwv1b1.Namespace,
+		sourceNamespace string,
+		refKind schema.GroupKind,
+		mode apisettings.BackendRefGrantMode,
+	) bool
+}
+
 type PolicyPluginInput struct {
 	References ReferenceIndex
+	Grants     ReferenceGrantChecker
 }
 
 type BackendPlugin struct {

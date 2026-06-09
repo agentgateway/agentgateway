@@ -18,8 +18,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.95.0"
-  GO_VERSION: "1.26.3"
+  RUST_VERSION: "1.96.0"
+  GO_VERSION: "1.26.4"
 
 jobs:
   #### Proxy jobs ####

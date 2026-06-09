@@ -800,6 +800,30 @@ fn rewrite_test() {
 				uri: "http://test.com/users".to_string(),
 			}),
 		),
+		// Test path prefix edge case - replace exact prefix with empty
+		(
+			"path_prefix_exact_empty_rewrite",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_empty_rewrite,
+				uri: "http://test.com/api",
+			},
+			Some(Want {
+				uri: "http://test.com/".to_string(),
+			}),
+		),
+		// Test path prefix edge case - replace exact prefix with empty and preserve query
+		(
+			"path_prefix_exact_empty_rewrite_with_query",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_empty_rewrite,
+				uri: "http://test.com/api?debug=true",
+			},
+			Some(Want {
+				uri: "http://test.com/?debug=true".to_string(),
+			}),
+		),
 		// Test complex query parameters with special characters
 		(
 			"complex_query_parameters",
@@ -824,6 +848,24 @@ fn rewrite_test() {
 			Some(Want {
 				uri: "http://test.com/v1".to_string(),
 			}),
+		),
+		(
+			"path_prefix_rewrite_rejects_partial_segment",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/apiary",
+			},
+			None,
+		),
+		(
+			"path_prefix_rewrite_rejects_encoded_slash_boundary",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/api%2Fv1",
+			},
+			None,
 		),
 		// Test hostname rewrite with HTTPS
 		(

@@ -98,7 +98,7 @@ async fn log_only_request_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 
-	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
@@ -157,7 +157,7 @@ async fn log_only_response_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"world")
@@ -351,6 +351,15 @@ fn api_key_secret_is_redacted_by_default() {
 	assert_eq!(
 		json!("test-api-key-id"),
 		eval("apiKey.key.unredacted()").unwrap()
+	);
+}
+
+#[test]
+fn jwt_token_is_redacted_by_default() {
+	assert_eq!(json!("<redacted>"), eval("jwt.rawToken").unwrap());
+	assert_eq!(
+		json!("fake.jwt.token"),
+		eval("jwt.rawToken.unredacted()").unwrap()
 	);
 }
 

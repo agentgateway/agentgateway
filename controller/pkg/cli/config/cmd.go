@@ -11,13 +11,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
-	defaultProxyAdminPort = 15000
-	shortOutput           = "short"
-	jsonOutput            = "json"
-	yamlOutput            = "yaml"
+	shortOutput = "short"
+	jsonOutput  = "json"
+	yamlOutput  = "yaml"
 )
 
 type commonFlags struct {
@@ -37,7 +37,7 @@ type configDumpSource struct {
 
 func Command() flag.Command {
 	common := &commonFlags{
-		proxyAdminPort: defaultProxyAdminPort,
+		proxyAdminPort: wellknown.ProxyAdminPort,
 		outputFormat:   shortOutput,
 	}
 
@@ -59,7 +59,7 @@ func Command() flag.Command {
 func (c *commonFlags) attach(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&c.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.PersistentFlags().StringVarP(&c.configDumpFile, "file", "f", "", "Agentgateway config dump JSON file")
-	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Envoy admin port")
+	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Agentgateway admin port")
 	cmd.PersistentFlags().StringVarP(&c.outputFormat, "output", "o", c.outputFormat, "Output format: one of short|json|yaml")
 }
 
