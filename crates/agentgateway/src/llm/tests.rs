@@ -24,6 +24,38 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
+fn bedrock_override_model_preserves_explicit_request_model() {
+	let provider = AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new(
+			"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+		)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	});
+
+	assert_eq!(provider.request_model_override(true), None);
+	assert_eq!(
+		provider.request_model_override(false).as_deref(),
+		Some("arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile")
+	);
+}
+
+#[test]
+fn non_bedrock_override_model_still_replaces_explicit_request_model() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: Some(strng::new("gpt-5")),
+	});
+
+	assert_eq!(
+		provider.request_model_override(true).as_deref(),
+		Some("gpt-5")
+	);
+}
+
+#[test]
 fn streaming_amend_on_drop_updates_local_rate_limit() {
 	let rate_limit =
 		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {

@@ -29,7 +29,9 @@ pub mod from_embeddings {
 		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
 			.map_err(AIError::RequestMarshal)?;
 
-		let model = provider.model.as_deref().unwrap_or(&typed.model);
+		let model = provider
+			.feature_model_id(Some(&typed.model))
+			.unwrap_or(&typed.model);
 
 		// Bedrock has two embedding model families with incompatible APIs:
 		// Cohere accepts batched text arrays; Titan accepts a single string.

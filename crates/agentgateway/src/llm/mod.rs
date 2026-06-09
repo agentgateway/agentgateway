@@ -329,6 +329,14 @@ impl AIProvider {
 			AIProvider::Custom(p) => p.model.clone(),
 		}
 	}
+	fn request_model_override(&self, has_request_model: bool) -> Option<Strng> {
+		match self {
+			// Bedrock model overrides may be opaque application inference profiles used only
+			// for the runtime path. Preserve an explicit request model for family checks.
+			AIProvider::Bedrock(_) if has_request_model => None,
+			_ => self.override_model(),
+		}
+	}
 	pub fn default_connector(&self) -> Option<(Target, BackendPolicies)> {
 		let btls = BackendPolicies {
 			backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
@@ -1592,7 +1600,7 @@ impl AIProvider {
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
 		};
 
-		if let Some(provider_model) = &self.override_model() {
+		if let Some(provider_model) = self.request_model_override(req.model().is_some()) {
 			*req.model() = Some(provider_model.to_string());
 		} else if req.model().is_none() {
 			return Err(AIError::MissingField("model not specified".into()));

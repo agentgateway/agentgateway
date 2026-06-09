@@ -1,6 +1,7 @@
 use agent_core::prelude::Strng;
 use bytes::Bytes;
 use http::HeaderMap;
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tracing::debug;
@@ -137,22 +138,95 @@ impl RequestType for Request {
 }
 
 pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
-	if path.ends_with(":streamRawPredict") || path.ends_with("/invoke-with-response-stream") {
+	if path.ends_with(":streamRawPredict")
+		|| path.ends_with("/invoke-with-response-stream")
+		|| path.ends_with("/converse-stream")
+	{
 		llm_info.streaming = true;
 	}
 	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		path
 			.split_once("/publishers/anthropic/models/")
 			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
-	} else if path.ends_with("/invoke-with-response-stream") || path.ends_with("/invoke") {
+	} else if path.ends_with("/invoke-with-response-stream")
+		|| path.ends_with("/invoke")
+		|| path.ends_with("/converse-stream")
+		|| path.ends_with("/converse")
+	{
 		path
 			.split_once("/model/")
-			.and_then(|(_, rest)| rest.split_once("/invoke").map(|(model, _)| model))
+			.and_then(|(_, rest)| strip_bedrock_model_suffix(rest))
 	} else {
 		None
 	};
 	if let Some(model) = model {
-		llm_info.request_model = model.into();
+		llm_info.request_model = percent_decode_str(model)
+			.decode_utf8_lossy()
+			.into_owned()
+			.into();
+	}
+}
+
+fn strip_bedrock_model_suffix(rest: &str) -> Option<&str> {
+	[
+		"/invoke-with-response-stream",
+		"/invoke",
+		"/converse-stream",
+		"/converse",
+	]
+	.into_iter()
+	.find_map(|suffix| rest.strip_suffix(suffix))
+}
+
+#[cfg(test)]
+mod tests {
+	use agent_core::strng;
+
+	use super::*;
+
+	fn llm_request() -> LLMRequest {
+		LLMRequest {
+			input_tokens: None,
+			input_format: crate::llm::InputFormat::Detect,
+			native_format: None,
+			request_model: strng::new("unknown"),
+			provider: strng::new("aws.bedrock"),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+		}
+	}
+
+	#[test]
+	fn amend_request_info_detects_bedrock_converse_stream_and_decodes_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/arn:aws:bedrock:us-east-1:123456789012:application-inference-profile%2Fmy-profile/converse-stream",
+		);
+
+		assert!(llm_info.streaming);
+		assert_eq!(
+			llm_info.request_model,
+			"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile"
+		);
+	}
+
+	#[test]
+	fn amend_request_info_detects_bedrock_converse_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+		);
+
+		assert!(!llm_info.streaming);
+		assert_eq!(
+			llm_info.request_model,
+			"anthropic.claude-3-5-sonnet-20241022-v2:0"
+		);
 	}
 }
 
