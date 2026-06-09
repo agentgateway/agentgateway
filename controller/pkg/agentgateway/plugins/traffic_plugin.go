@@ -118,6 +118,7 @@ type PolicyCtx struct {
 	Collections *AgwCollections
 	References  ReferenceIndex
 	Grants      ReferenceGrantChecker
+	SourceGVK   schema.GroupVersionKind
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
 
@@ -125,6 +126,16 @@ type PolicyCtx struct {
 	// in OSS, or an injected resolver (which may itself be a chain). Access it
 	// through ResolveCredentialRef, which is nil-safe.
 	CredentialResolver kubeutils.CredentialResolver
+}
+
+// PolicySourceGVK returns the Kubernetes kind that should be used as the
+// ReferenceGrant "from" kind for backend refs emitted while translating this
+// policy.
+func (ctx PolicyCtx) PolicySourceGVK() schema.GroupVersionKind {
+	if ctx.SourceGVK == (schema.GroupVersionKind{}) {
+		return wellknown.AgentgatewayPolicyGVK
+	}
+	return ctx.SourceGVK
 }
 
 // ResolveCredentialRef applies the context's credential resolver.
@@ -156,7 +167,16 @@ func TranslateAgentgatewayPolicy(
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Grants: grants, Resolver: resolver, JWKSLookup: jwksLookup, CredentialResolver: credentialResolver}
+	pctx := PolicyCtx{
+		Krt:                ctx,
+		Collections:        agw,
+		References:         references,
+		Grants:             grants,
+		SourceGVK:          wellknown.AgentgatewayPolicyGVK,
+		Resolver:           resolver,
+		JWKSLookup:         jwksLookup,
+		CredentialResolver: credentialResolver,
+	}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -1612,7 +1632,10 @@ func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicy
 	return api.TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
 }
 
-func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
+// BuildBackendRef constructs an agentgateway backend reference from a Gateway
+// API backendRef and enforces any configured cross-namespace ReferenceGrant
+// requirements for the policy source in ctx.
+func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
 	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
 	group := ptr.OrDefault(ref.Group, "")
 	gk := schema.GroupKind{
@@ -1625,23 +1648,40 @@ func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
+func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
+	return BuildBackendRef(ctx, ref, defaultNS)
+}
+
 func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
 	if ref.Namespace != nil &&
 		string(*ref.Namespace) != defaultNS &&
 		ctx.Collections.Settings.BackendRefGrantMode.RequirePolicyBackendGrant() {
+		sourceGVK := ctx.PolicySourceGVK()
 		if !ctx.Grants.BackendAllowed(
 			ctx.Krt,
-			wellknown.AgentgatewayPolicyGVK,
+			sourceGVK,
 			ref.Name,
 			*ref.Namespace,
 			defaultNS,
 			gk,
 			ctx.Collections.Settings.BackendRefGrantMode,
 		) {
-			return fmt.Errorf("backendRef %v/%v not accessible to an AgentgatewayPolicy in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, defaultNS)
+			return fmt.Errorf("backendRef %v/%v not accessible to %s %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, articleForKind(sourceGVK.Kind), sourceGVK.Kind, defaultNS)
 		}
 	}
 	return nil
+}
+
+func articleForKind(kind string) string {
+	if kind == "" {
+		return "a"
+	}
+	switch strings.ToLower(kind[:1]) {
+	case "a", "e", "i", "o", "u":
+		return "an"
+	default:
+		return "a"
+	}
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
@@ -1869,10 +1909,27 @@ func BackendReferencesFromPolicy(
 	agw *AgwCollections,
 	grants ReferenceGrantChecker,
 ) []*PolicyAttachment {
+	return BackendReferencesFromPolicyForSource(ctx, policy, references, agw, grants, wellknown.AgentgatewayPolicyGVK)
+}
+
+// BackendReferencesFromPolicyForSource emits policy backend attachments using
+// sourceGVK as the policy kind for ReferenceGrant checks and attachment source
+// metadata.
+func BackendReferencesFromPolicyForSource(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	references ReferenceIndex,
+	agw *AgwCollections,
+	grants ReferenceGrantChecker,
+	sourceGVK schema.GroupVersionKind,
+) []*PolicyAttachment {
+	if sourceGVK == (schema.GroupVersionKind{}) {
+		sourceGVK = wellknown.AgentgatewayPolicyGVK
+	}
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
+		Kind:           sourceGVK.Kind,
 	}
 
 	seenTargets := make(map[utils.TypedNamespacedName]struct{})
@@ -1910,7 +1967,7 @@ func BackendReferencesFromPolicy(
 		return nil
 	}
 
-	backends := referencedBackendsFromPolicy(ctx, policy, agw, grants)
+	backends := referencedBackendsFromPolicy(ctx, policy, agw, grants, sourceGVK)
 	if len(backends) == 0 {
 		return nil
 	}
@@ -1951,13 +2008,13 @@ func PolicyOrConditionalSeq[T any, P interface {
 	}
 }
 
-func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, grants ReferenceGrantChecker) []utils.TypedNamespacedName {
+func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, grants ReferenceGrantChecker, sourceGVK schema.GroupVersionKind) []utils.TypedNamespacedName {
 	var backends []utils.TypedNamespacedName
 	for _, ref := range referencedBackendRefsFromPolicy(policy) {
 		kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
 		group := ptr.OrDefault(ref.Group, "")
 		gk := schema.GroupKind{Group: string(group), Kind: string(kind)}
-		if err := checkBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants}, ref, policy.Namespace, gk); err != nil {
+		if err := checkBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants, SourceGVK: sourceGVK}, ref, policy.Namespace, gk); err != nil {
 			continue
 		}
 		backends = append(backends, utils.TypedNamespacedName{

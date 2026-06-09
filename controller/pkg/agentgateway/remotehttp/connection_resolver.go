@@ -5,6 +5,7 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -30,56 +31,6 @@ func (r *defaultResolver) resolveConnection(
 	refNamespace := string(ptr.OrDefault(backendRef.Namespace, gwv1.Namespace(defaultNS)))
 
 	switch {
-	case string(kind) == wellknown.AgentgatewayBackendGVK.Kind && string(group) == wellknown.AgentgatewayBackendGVK.Group:
-		backendNN := types.NamespacedName{Name: string(backendRef.Name), Namespace: refNamespace}
-		backend := ptr.Flatten(krt.FetchOne(krtctx, r.backends, krt.FilterObjectName(backendNN)))
-		if backend == nil {
-			return nil, fmt.Errorf("backend %s not found, policy %s", backendNN, types.NamespacedName{Namespace: defaultNS, Name: parentName})
-		}
-		if backend.Spec.Static == nil {
-			return nil, fmt.Errorf("only static backends are supported; backend: %s, policy: %s", backendNN, types.NamespacedName{Namespace: defaultNS, Name: parentName})
-		}
-
-		resolvedTLS, err := r.resolveTLS(
-			krtctx,
-			refNamespace,
-			string(group),
-			string(kind),
-			string(backendRef.Name),
-			nil,
-			nil,
-			backend.Spec.Policies,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error setting tls options; backend: %s, policy: %s, %w", backendNN, types.NamespacedName{Namespace: defaultNS, Name: parentName}, err)
-		}
-
-		var connectHost string
-		if backend.Spec.Static.UnixPath != nil {
-			connectHost = "unix://" + *backend.Spec.Static.UnixPath
-		} else {
-			connectHost = fmt.Sprintf("%s:%d", backend.Spec.Static.Host, backend.Spec.Static.Port)
-		}
-
-		conn := &connection{
-			connectHost: connectHost,
-			tls:         resolvedTLS,
-		}
-
-		if backend.Spec.Policies != nil && backend.Spec.Policies.Tunnel != nil {
-			proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, backend.Spec.Policies.Tunnel.BackendRef)
-			if err != nil {
-				return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
-			}
-			if proxy.tls != nil {
-				conn.proxyURL = "https://" + proxy.host
-			} else {
-				conn.proxyURL = "http://" + proxy.host
-			}
-			conn.proxyTLS = proxy.tls
-		}
-
-		return conn, nil
 	case string(kind) == wellknown.ServiceKind && string(group) == "":
 		resolvedTLS, err := r.resolveTLS(
 			krtctx,
@@ -107,8 +58,93 @@ func (r *defaultResolver) resolveConnection(
 			tls:         resolvedTLS,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported backend kind %s.%s for policy %s", group, kind, types.NamespacedName{Namespace: defaultNS, Name: parentName})
+		return r.resolveBackendConnection(
+			krtctx,
+			types.NamespacedName{Namespace: defaultNS, Name: parentName},
+			refNamespace,
+			schema.GroupKind{Group: string(group), Kind: string(kind)},
+			backendRef,
+		)
 	}
+}
+
+func (r *defaultResolver) resolveBackendConnection(
+	krtctx krt.HandlerContext,
+	policy types.NamespacedName,
+	refNamespace string,
+	gk schema.GroupKind,
+	backendRef gwv1.BackendObjectReference,
+) (*connection, error) {
+	backendNN := types.NamespacedName{Name: string(backendRef.Name), Namespace: refNamespace}
+	if r.backendResolvers[gk] == nil {
+		return nil, fmt.Errorf("unsupported backend kind %s.%s for policy %s", gk.Group, gk.Kind, policy)
+	}
+	backend, err := r.resolveBackend(krtctx, backendNN, gk)
+	if err != nil {
+		return nil, err
+	}
+	if backend == nil {
+		return nil, fmt.Errorf("backend %s not found, policy %s", backendNN, policy)
+	}
+	if backend.Static == nil {
+		return nil, fmt.Errorf("only static backends are supported; backend: %s, policy: %s", backendNN, policy)
+	}
+
+	resolvedTLS, err := r.resolveTLS(
+		krtctx,
+		refNamespace,
+		gk.Group,
+		gk.Kind,
+		string(backendRef.Name),
+		nil,
+		nil,
+		backend.Policies,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error setting tls options; backend: %s, policy: %s, %w", backendNN, policy, err)
+	}
+
+	var connectHost string
+	if backend.Static.UnixPath != nil {
+		connectHost = "unix://" + *backend.Static.UnixPath
+	} else {
+		connectHost = fmt.Sprintf("%s:%d", backend.Static.Host, backend.Static.Port)
+	}
+
+	conn := &connection{
+		connectHost: connectHost,
+		tls:         resolvedTLS,
+	}
+
+	if backend.Policies != nil && backend.Policies.Tunnel != nil {
+		proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, backend.Policies.Tunnel.BackendRef)
+		if err != nil {
+			return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
+		}
+		if proxy.tls != nil {
+			conn.proxyURL = "https://" + proxy.host
+		} else {
+			conn.proxyURL = "http://" + proxy.host
+		}
+		conn.proxyTLS = proxy.tls
+	}
+
+	return conn, nil
+}
+
+func (r *defaultResolver) resolveBackend(krtctx krt.HandlerContext, nn types.NamespacedName, gk schema.GroupKind) (*ResolvedBackend, error) {
+	resolver := r.backendResolvers[gk]
+	if resolver == nil {
+		return nil, fmt.Errorf("unsupported backend kind %s.%s", gk.Group, gk.Kind)
+	}
+	backend, ok, err := resolver(krtctx, nn)
+	if err != nil {
+		return nil, fmt.Errorf("error resolving backend %s: %w", nn, err)
+	}
+	if !ok {
+		return nil, nil
+	}
+	return backend, nil
 }
 
 type tunnelProxy struct {
@@ -129,23 +165,30 @@ func (r *defaultResolver) resolveTunnelProxy(
 	refNamespace := string(ptr.OrDefault(backendRef.Namespace, gwv1.Namespace(defaultNS)))
 
 	switch {
-	case string(kind) == wellknown.AgentgatewayBackendGVK.Kind && string(group) == wellknown.AgentgatewayBackendGVK.Group:
+	case string(kind) != wellknown.ServiceKind || string(group) != "":
 		nn := types.NamespacedName{Name: string(backendRef.Name), Namespace: refNamespace}
-		backend := ptr.Flatten(krt.FetchOne(krtctx, r.backends, krt.FilterObjectName(nn)))
+		gk := schema.GroupKind{Group: string(group), Kind: string(kind)}
+		if r.backendResolvers[gk] == nil {
+			return nil, fmt.Errorf("unsupported backend kind %s.%s for tunnel proxy", group, kind)
+		}
+		backend, err := r.resolveBackend(krtctx, nn, gk)
+		if err != nil {
+			return nil, err
+		}
 		if backend == nil {
 			return nil, fmt.Errorf("tunnel proxy backend %s not found", nn)
 		}
-		if backend.Spec.Static == nil {
+		if backend.Static == nil {
 			return nil, fmt.Errorf("only static backends are supported for tunnel proxy; backend: %s", nn)
 		}
-		if backend.Spec.Static.UnixPath != nil {
+		if backend.Static.UnixPath != nil {
 			return nil, fmt.Errorf("unix domain socket backends are not supported as tunnel proxies; backend: %s", nn)
 		}
 		var port int32
 		if p := ptr.OrEmpty(backendRef.Port); p != 0 {
 			port = int32(p)
-		} else if backend.Spec.Static.Port != 0 {
-			port = backend.Spec.Static.Port
+		} else if backend.Static.Port != 0 {
+			port = backend.Static.Port
 		} else {
 			return nil, fmt.Errorf("port is required for TCP tunnel proxy backend: %s", nn)
 		}
@@ -158,14 +201,14 @@ func (r *defaultResolver) resolveTunnelProxy(
 			string(backendRef.Name),
 			nil,
 			nil,
-			backend.Spec.Policies,
+			backend.Policies,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error resolving tls for tunnel proxy backend %s: %w", nn, err)
 		}
 
 		return &tunnelProxy{
-			host: fmt.Sprintf("%s:%d", backend.Spec.Static.Host, port),
+			host: fmt.Sprintf("%s:%d", backend.Static.Host, port),
 			tls:  proxyTLS,
 		}, nil
 
@@ -178,8 +221,6 @@ func (r *defaultResolver) resolveTunnelProxy(
 		return &tunnelProxy{
 			host: fmt.Sprintf("%s:%d", host, port),
 		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported backend kind %s.%s for tunnel proxy", group, kind)
 	}
+	return nil, fmt.Errorf("unsupported backend kind %s.%s for tunnel proxy", group, kind)
 }
