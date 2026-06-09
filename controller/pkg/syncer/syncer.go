@@ -489,15 +489,16 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	routeInputs := translator.RouteContextInputs{
-		Grants:         refGrants,
-		RouteParents:   routeParents,
-		ControllerName: s.controllerName,
-		Services:       s.agwCollections.Services,
-		Namespaces:     s.agwCollections.Namespaces,
-		ServiceEntries: s.agwCollections.ServiceEntries,
-		InferencePools: s.agwCollections.InferencePools,
-		Backends:       s.agwCollections.Backends,
-		References:     referenceTypes,
+		Grants:              refGrants,
+		RouteParents:        routeParents,
+		ControllerName:      s.controllerName,
+		Services:            s.agwCollections.Services,
+		Namespaces:          s.agwCollections.Namespaces,
+		ServiceEntries:      s.agwCollections.ServiceEntries,
+		InferencePools:      s.agwCollections.InferencePools,
+		Backends:            s.agwCollections.Backends,
+		References:          referenceTypes,
+		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
@@ -551,7 +552,7 @@ func (s *Syncer) buildAgwResources(
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
 	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
 	// are only reachable via PolicyAttachments (like ext_proc processor Services).
-	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, krtopts)
+	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("references/PolicyAndBackendReferences")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
@@ -562,7 +563,7 @@ func (s *Syncer) buildAgwResources(
 	referenceIndex = referenceIndex.WithListenerSetAttachments(listenerSetAttachmentsIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
-	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
+	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	for _, col := range policyStatuses {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}

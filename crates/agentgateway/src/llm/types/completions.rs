@@ -419,13 +419,13 @@ pub mod typed {
 		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
 		ChatCompletionMessageToolCalls as MessageToolCalls,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
-		ChatCompletionRequestAssistantMessage as RequestAssistantMessage,
+		ChatCompletionRequestAssistantMessageAudio as RequestAssistantMessageAudio,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
 		ChatCompletionRequestAssistantMessageContentPart as RequestAssistantMessageContentPart,
 		ChatCompletionRequestDeveloperMessage as RequestDeveloperMessage,
 		ChatCompletionRequestDeveloperMessageContent as RequestDeveloperMessageContent,
 		ChatCompletionRequestDeveloperMessageContentPart as RequestDeveloperMessageContentPart,
-		ChatCompletionRequestMessage as RequestMessage,
+		ChatCompletionRequestFunctionMessage as RequestFunctionMessage,
 		ChatCompletionRequestMessageContentPartImage as RequestMessageContentPartImage,
 		ChatCompletionRequestMessageContentPartText as RequestMessageContentPartText,
 		ChatCompletionRequestSystemMessage as RequestSystemMessage,
@@ -445,6 +445,52 @@ pub mod typed {
 		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
+
+	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
+	///
+	/// Identical wire format (`#[serde(tag = "role")]`, lowercase), but the `Assistant` variant
+	/// uses our own [`RequestAssistantMessage`] so an inbound assistant turn can carry
+	/// `reasoning_content` / `reasoning_signature`. async-openai's type has no field for those, so
+	/// the alternative was reading them out of the loose request's untyped `rest` map and
+	/// re-aligning by position — this keeps them on the message instead.
+	#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+	#[serde(tag = "role", rename_all = "lowercase")]
+	pub enum RequestMessage {
+		Developer(RequestDeveloperMessage),
+		System(RequestSystemMessage),
+		User(RequestUserMessage),
+		Assistant(RequestAssistantMessage),
+		Tool(RequestToolMessage),
+		Function(RequestFunctionMessage),
+	}
+
+	/// Agentgateway fork of async-openai's `ChatCompletionRequestAssistantMessage`, extended with
+	/// the reasoning fields needed to replay a thinking block back to the model (see
+	/// [`RequestMessage`]). The leading fields mirror the upstream layout one-to-one.
+	#[allow(deprecated)]
+	#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+	pub struct RequestAssistantMessage {
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub content: Option<RequestAssistantMessageContent>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub refusal: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub name: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub audio: Option<RequestAssistantMessageAudio>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub tool_calls: Option<Vec<MessageToolCalls>>,
+		/// Deprecated upstream and replaced by `tool_calls`; kept for wire-format parity.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub function_call: Option<FunctionCall>,
+		/// Agentgateway: reasoning text emitted on a prior turn, replayed back to the provider.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub reasoning_content: Option<String>,
+		/// Agentgateway: the Bedrock/Anthropic cryptographic attestation for `reasoning_content`.
+		/// Required for the provider to accept a replayed thinking block.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub reasoning_signature: Option<String>,
+	}
 
 	/// Represents a chat completion response returned by model, based on the provided input.
 	#[derive(Debug, Deserialize, Clone, Serialize)]
@@ -585,6 +631,17 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub reasoning_content: Option<String>,
 
+		/// Agentgateway: added reasoning_signature — the Bedrock/Anthropic cryptographic attestation
+		/// that must accompany a thinking block when it is fed back in a subsequent request.
+		/// Forwarded as-is from the upstream SignatureDelta event.
+		///
+		/// Note: this named field lives on the *response* delta only. The inbound *request* path
+		/// uses the untyped `types::completions::RequestMessage` whose `rest: serde_json::Value`
+		/// flatten map continues to hold `reasoning_signature` — so `extract_reasoning_replays` in
+		/// `bedrock.rs` still finds the signature on the request side regardless of this field.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub reasoning_signature: Option<String>,
+
 		/// Agentgateway: add opaque passthrough for fields like reasoning, etc that we do not support
 		#[serde(flatten)]
 		pub extra: Option<serde_json::Value>,
@@ -645,6 +702,18 @@ pub mod typed {
 		/// specific with them.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub reasoning_content: Option<String>,
+
+		/// Agentgateway: reasoning_signature — the Bedrock/Anthropic cryptographic attestation that
+		/// must accompany a thinking block when replayed in a subsequent turn. Extracted from the
+		/// Anthropic SignatureDelta event and forwarded verbatim so downstream consumers can preserve
+		/// thinking blocks across conversation turns.
+		///
+		/// Note: this named field lives on the *response* message only. The inbound *request* path
+		/// uses the untyped `types::completions::RequestMessage` whose `rest: serde_json::Value`
+		/// flatten map continues to hold `reasoning_signature` — so `extract_reasoning_replays` in
+		/// `bedrock.rs` still finds the signature on the request side regardless of this field.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub reasoning_signature: Option<String>,
 
 		/// Agentgateway: add opaque passthrough for fields like reasoning, etc that we do not support
 		#[serde(flatten)]

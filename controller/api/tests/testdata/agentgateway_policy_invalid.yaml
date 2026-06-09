@@ -121,6 +121,19 @@ spec:
       keepalive:
         interval: 100ms
 ---
+_err: 'at least one of the fields in [request response] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: empty-buffer
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer: {}
+---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -695,6 +708,55 @@ spec:
   traffic:
     hostRewrite:
       mode: Custom
+---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-frontend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  frontend:
+    tcp:
+      keepalive: {}
+---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-backend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  backend:
+    tls: {}
+---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-traffic-and-backend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  traffic:
+    timeouts:
+      request: 30s
+  backend:
+    tls: {}
 ---
 _err: ' exactly one of the fields in [targetRefs targetSelectors] must be set'
 apiVersion: agentgateway.dev/v1alpha1

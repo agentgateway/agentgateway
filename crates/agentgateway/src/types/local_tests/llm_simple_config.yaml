@@ -5,6 +5,9 @@ frontendPolicies:
 
 llm:
   policies:
+    cors:
+      allowOrigins:
+        - http://localhost:15000
     localRateLimit:
     - type: tokens
       fillInterval: 1s
@@ -37,6 +40,10 @@ llm:
       - name: "X-Org"
         value:
           exact: "engineering"
+    promptCaching:
+      cacheSystem: true
+      cacheMessages: true
+      minTokens: 1
   - name: gemini-0.5-pro
     provider: vertex
     params:

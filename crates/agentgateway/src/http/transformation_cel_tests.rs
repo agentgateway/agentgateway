@@ -333,7 +333,8 @@ fn test_response_transformation_metadata_available_to_headers() {
 	let resp_snapshot = log_context
 		.maybe_snapshot_response(&mut resp)
 		.expect("metadata log expressions should snapshot response metadata");
-	let log_exec = cel::Executor::new_logger(Some(&snap), Some(&resp_snapshot), None, None, None);
+	let log_exec =
+		cel::Executor::new_logger(Some(&snap), Some(&resp_snapshot), None, None, None, None);
 	let log_value = log_exec.eval(&log_expr).unwrap();
 	assert_eq!(
 		log_value,

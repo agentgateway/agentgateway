@@ -1378,6 +1378,18 @@
           ],
           "default": null
         },
+        "buffer": {
+          "description": "Buffer request and response bodies before forwarding.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Buffer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "timeout": {
           "description": "Timeout requests that exceed the configured duration.",
           "anyOf": [
@@ -3296,11 +3308,30 @@
           "items": {
             "$ref": "#/$defs/HeaderMatch"
           }
+        },
+        "failureMode": {
+          "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/FailureMode2"
         }
       },
       "additionalProperties": false,
       "required": [
         "target"
+      ]
+    },
+    "FailureMode2": {
+      "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.",
+      "oneOf": [
+        {
+          "description": "Reject the request when the webhook guardrail is unavailable (default).",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request through when the webhook guardrail is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "Moderation": {
@@ -3849,7 +3880,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         }
       },
@@ -3981,7 +4012,7 @@
         "value"
       ]
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
       "oneOf": [
         {
@@ -4018,7 +4049,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         }
       },
@@ -4480,7 +4511,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4671,7 +4702,7 @@
         }
       ]
     },
-    "FailureMode3": {
+    "FailureMode4": {
       "oneOf": [
         {
           "type": "string",
@@ -4772,7 +4803,7 @@
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/FailureMode4",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4922,7 +4953,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode4",
+          "$ref": "#/$defs/FailureMode5",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5033,7 +5064,7 @@
         }
       ]
     },
-    "FailureMode4": {
+    "FailureMode5": {
       "type": "string",
       "enum": [
         "failClosed",
@@ -5114,7 +5145,7 @@
         },
         "failureMode": {
           "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode4",
+          "$ref": "#/$defs/FailureMode5",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5299,6 +5330,46 @@
             "type": "string"
           },
           "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Buffer": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BufferBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "BufferBody": {
+      "type": "object",
+      "properties": {
+        "maxBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -5513,7 +5584,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode5"
+              "$ref": "#/$defs/FailureMode6"
             },
             {
               "type": "null"
@@ -5841,7 +5912,7 @@
         "conditional"
       ]
     },
-    "FailureMode5": {
+    "FailureMode6": {
       "oneOf": [
         {
           "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
@@ -7782,6 +7853,16 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "tls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -7820,6 +7901,17 @@
         "provider": {
           "description": "provider of the LLM we are connecting too",
           "$ref": "#/$defs/LocalModelAIProvider"
+        },
+        "passthrough": {
+          "description": "passthrough controls how requests are handled.\nBy default, requests will be parsed and translated as needed.\nWith passthrough, they will be unmodified and optionally inspected (with `detect`).\nIn this mode, requests must be sent in the native format of the provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMPassthrough"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "defaults": {
           "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
@@ -7922,6 +8014,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PromptGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "promptCaching": {
+          "description": "promptCaching configures cache point insertion for supported LLM providers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
             },
             {
               "type": "null"
@@ -8088,6 +8191,20 @@
         }
       ]
     },
+    "LocalLLMPassthrough": {
+      "oneOf": [
+        {
+          "description": "Pass through the request while extracting LLM telemetry and rate-limit inputs when possible.",
+          "type": "string",
+          "const": "detect"
+        },
+        {
+          "description": "Pass through the request without interpreting it as LLM traffic.",
+          "type": "string",
+          "const": "opaque"
+        }
+      ]
+    },
     "LLMRouteMatch": {
       "type": "object",
       "properties": {
@@ -8192,6 +8309,18 @@
           ],
           "default": null
         },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "localRateLimit": {
           "description": "Rate limit incoming requests. State is kept local.",
           "type": "array",
@@ -8250,7 +8379,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode5"
+              "$ref": "#/$defs/FailureMode6"
             },
             {
               "type": "null"

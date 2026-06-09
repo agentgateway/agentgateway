@@ -327,6 +327,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -781,6 +782,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -2060,6 +2062,11 @@
 |`binds[].listeners[].routes[].policies.transformations.response.metadata`|object||
 |`binds[].listeners[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|[]string||
+|`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`binds[].listeners[].routes[].policies.buffer.request`|object||
+|`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer||
+|`binds[].listeners[].routes[].policies.buffer.response`|object||
+|`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer||
 |`binds[].listeners[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string||
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string||
@@ -2769,6 +2776,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -3223,6 +3231,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -4014,6 +4023,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -4468,6 +4478,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -5229,6 +5240,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -5683,6 +5695,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -7205,6 +7218,7 @@
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`policies[].policy.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -7659,6 +7673,7 @@
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`policies[].policy.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -8938,6 +8953,11 @@
 |`policies[].policy.transformations.response.metadata`|object||
 |`policies[].policy.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`policies[].policy.csrf.additionalOrigins`|[]string||
+|`policies[].policy.buffer`|object|Buffer request and response bodies before forwarding.|
+|`policies[].policy.buffer.request`|object||
+|`policies[].policy.buffer.request.maxBytes`|integer||
+|`policies[].policy.buffer.response`|object||
+|`policies[].policy.buffer.response.maxBytes`|integer||
 |`policies[].policy.timeout`|object|Timeout requests that exceed the configured duration.|
 |`policies[].policy.timeout.requestTimeout`|string||
 |`policies[].policy.timeout.backendRequestTimeout`|string||
@@ -9642,6 +9662,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -10096,6 +10117,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -10887,6 +10909,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -11341,6 +11364,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -12101,6 +12125,7 @@
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -12555,6 +12580,7 @@
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -13151,6 +13177,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -13605,6 +13632,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -14884,6 +14912,11 @@
 |`routeGroups[].routes[].policies.transformations.response.metadata`|object||
 |`routeGroups[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`routeGroups[].routes[].policies.csrf.additionalOrigins`|[]string||
+|`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`routeGroups[].routes[].policies.buffer.request`|object||
+|`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer||
+|`routeGroups[].routes[].policies.buffer.response`|object||
+|`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer||
 |`routeGroups[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string||
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string||
@@ -15593,6 +15626,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -16047,6 +16081,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -16838,6 +16873,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -17292,6 +17328,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -18053,6 +18090,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -18507,6 +18545,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -18857,6 +18896,14 @@
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object||
 |`llm`|object||
 |`llm.port`|integer||
+|`llm.tls`|object||
+|`llm.tls.cert`|string||
+|`llm.tls.key`|string||
+|`llm.tls.root`|string||
+|`llm.tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
+|`llm.tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
+|`llm.tls.maxTLSVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
+|`llm.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
@@ -18881,6 +18928,7 @@
 |`llm.models[].provider.custom.formats`|[]object||
 |`llm.models[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`.|
 |`llm.models[].provider.custom.formats[].path`|string||
+|`llm.models[].passthrough`|enum|passthrough controls how requests are handled.<br>By default, requests will be parsed and translated as needed.<br>With passthrough, they will be unmodified and optionally inspected (with `detect`).<br>In this mode, requests must be sent in the native format of the provider.<br>Possible values: `detect`, `opaque`.|
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
@@ -18992,6 +19040,7 @@
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`llm.models[].guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models[].guardrails.request[].openAIModeration`|object||
 |`llm.models[].guardrails.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`llm.models[].guardrails.request[].openAIModeration.policies`|object||
@@ -19446,6 +19495,7 @@
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`llm.models[].guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -19776,6 +19826,12 @@
 |`llm.models[].guardrails.response[].rejection.headers.add`|object||
 |`llm.models[].guardrails.response[].rejection.headers.set`|object||
 |`llm.models[].guardrails.response[].rejection.headers.remove`|[]string||
+|`llm.models[].promptCaching`|object|promptCaching configures cache point insertion for supported LLM providers.|
+|`llm.models[].promptCaching.cacheSystem`|boolean||
+|`llm.models[].promptCaching.cacheMessages`|boolean||
+|`llm.models[].promptCaching.cacheTools`|boolean||
+|`llm.models[].promptCaching.minTokens`|integer||
+|`llm.models[].promptCaching.cacheMessageOffset`|integer||
 |`llm.models[].matches`|[]object|matches specifies the conditions under which this model should be used in addition to matching the model name.|
 |`llm.models[].matches[].headers`|[]object||
 |`llm.models[].matches[].headers[].name`|string||
@@ -20392,6 +20448,13 @@
 |`llm.policies.apiKey.location.expression.expression`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
+|`llm.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`llm.policies.cors.allowCredentials`|boolean||
+|`llm.policies.cors.allowHeaders`|[]string||
+|`llm.policies.cors.allowMethods`|[]string||
+|`llm.policies.cors.allowOrigins`|[]string||
+|`llm.policies.cors.exposeHeaders`|[]string||
+|`llm.policies.cors.maxAge`|string||
 |`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
 |`llm.policies.localRateLimit[].maxTokens`|integer||
 |`llm.policies.localRateLimit[].tokensPerFill`|integer||
@@ -20993,6 +21056,7 @@
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`mcp.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.model`|string|Model to use. Defaults to `omni-moderation-latest`|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies`|object||
@@ -21447,6 +21511,7 @@
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value`|object|Exactly one of exact or regex may be set.|
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
+|`mcp.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Configuration for AWS Bedrock Guardrails integration.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -22726,6 +22791,11 @@
 |`mcp.policies.transformations.response.metadata`|object||
 |`mcp.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
 |`mcp.policies.csrf.additionalOrigins`|[]string||
+|`mcp.policies.buffer`|object|Buffer request and response bodies before forwarding.|
+|`mcp.policies.buffer.request`|object||
+|`mcp.policies.buffer.request.maxBytes`|integer||
+|`mcp.policies.buffer.response`|object||
+|`mcp.policies.buffer.response.maxBytes`|integer||
 |`mcp.policies.timeout`|object|Timeout requests that exceed the configured duration.|
 |`mcp.policies.timeout.requestTimeout`|string||
 |`mcp.policies.timeout.backendRequestTimeout`|string||

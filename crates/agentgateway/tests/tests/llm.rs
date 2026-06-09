@@ -1256,7 +1256,7 @@ async fn send_messages_with_image_url(gw: &AgentGateway) {
 								"type": "image",
 								"source": {
 									"type": "url",
-									"url": "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png"
+									"url": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6a26f71ab79bc169ff9bdec4_8dfc12d1.png"
 								}
 							}
 						]

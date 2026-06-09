@@ -11,6 +11,7 @@ binds:
           - mcp-protocol-version
           - content-type
           - cache-control
+          - mcp-session-id
           exposeHeaders:
           - "Mcp-Session-Id"
       backends:

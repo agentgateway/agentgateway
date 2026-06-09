@@ -25,6 +25,7 @@ import (
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/api"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -730,6 +731,7 @@ func resourceMapper(t any, parent RouteParentReference) *api.Resource {
 		if inner.ServiceKey != nil {
 			// if linked by Service, no need for hostname matching
 			inner.Hostnames = nil
+			inner.ServicePort = uint32(parent.Port) //nolint:gosec // G115: Gateway API PortNumber is int32 with validation 1-65535, always safe
 		}
 
 		return ToAgwResource(AgwTCPRoute{TCPRoute: inner})
@@ -742,6 +744,7 @@ func resourceMapper(t any, parent RouteParentReference) *api.Resource {
 		if inner.ServiceKey != nil {
 			// if linked by Service, no need for hostname matching
 			inner.Hostnames = nil
+			inner.ServicePort = uint32(parent.Port) //nolint:gosec // G115: Gateway API PortNumber is int32 with validation 1-65535, always safe
 		}
 
 		return ToAgwResource(AgwRoute{Route: inner})
@@ -753,7 +756,11 @@ func resourceMapper(t any, parent RouteParentReference) *api.Resource {
 
 func routeKeySuffix(parent RouteParentReference) string {
 	if parent.ServiceKey != nil {
-		return ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Name
+		suffix := ".svc." + parent.ServiceKey.Namespace + "." + parent.ServiceKey.Name
+		if parent.Port != 0 {
+			suffix += fmt.Sprintf(".%d", parent.Port)
+		}
+		return suffix
 	}
 	section := string(parent.ParentSection)
 	if section == "" {
@@ -948,15 +955,16 @@ type RouteContext struct {
 
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
-	Grants         ReferenceGrants
-	RouteParents   ParentResolver
-	Services       krt.Collection[*corev1.Service]
-	InferencePools krt.Collection[*inf.InferencePool]
-	Namespaces     krt.Collection[*corev1.Namespace]
-	ServiceEntries krt.Collection[*networkingclient.ServiceEntry]
-	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
-	References     plugins.ReferenceTypes
-	ControllerName string
+	Grants              ReferenceGrants
+	RouteParents        ParentResolver
+	Services            krt.Collection[*corev1.Service]
+	InferencePools      krt.Collection[*inf.InferencePool]
+	Namespaces          krt.Collection[*corev1.Namespace]
+	ServiceEntries      krt.Collection[*networkingclient.ServiceEntry]
+	Backends            krt.Collection[*agentgateway.AgentgatewayBackend]
+	References          plugins.ReferenceTypes
+	ControllerName      string
+	BackendRefGrantMode apisettings.BackendRefGrantMode
 }
 
 func (i RouteContextInputs) WithCtx(krtctx krt.HandlerContext) RouteContext {

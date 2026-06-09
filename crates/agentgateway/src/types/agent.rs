@@ -607,6 +607,9 @@ pub struct Route {
 	/// Service this route targets (set when parentRef is a Service).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
+	/// Port of the targeted service this route is scoped to. Zero matches any port.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub service_port: u16,
 	#[serde(flatten)]
 	// User facing name of the route
 	pub name: RouteName,
@@ -888,6 +891,9 @@ pub struct TCPRoute {
 	/// Service this route targets (set when parentRef is a Service).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub service_key: Option<crate::types::discovery::NamespacedHostname>,
+	/// Port of the targeted service this route is scoped to. Zero matches any port.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub service_port: u16,
 	// User facing name of the route
 	#[serde(flatten)]
 	pub name: RouteName,
@@ -1879,6 +1885,16 @@ impl TCPRouteSet {
 			.and_then(|rl| self.all.get(rl))
 	}
 
+	/// All routes for a hostname, in precedence order (oldest/alphabetical key first).
+	pub fn get_hostname_routes(&self, hnm: &HostnameMatchRef) -> impl Iterator<Item = &TCPRoute> {
+		self
+			.inner
+			.get(hnm)
+			.into_iter()
+			.flatten()
+			.filter_map(|rl| self.all.get(rl))
+	}
+
 	pub fn insert(&mut self, r: TCPRoute) {
 		if self.all.contains_key(&r.key) {
 			self.remove(&r.key);
@@ -1976,7 +1992,23 @@ pub struct TargetedPolicy {
 	pub key: PolicyKey,
 	pub name: Option<TypedResourceName>,
 	pub target: PolicyTarget,
+	#[serde(default, skip_serializing_if = "PolicyInheritance::is_default")]
+	pub inheritance: PolicyInheritance,
 	pub policy: PolicyType,
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PolicyInheritance {
+	#[default]
+	Default,
+	Override,
+}
+
+impl PolicyInheritance {
+	pub fn is_default(&self) -> bool {
+		matches!(self, Self::Default)
+	}
 }
 
 /// Configuration for dynamic tracing policy
@@ -2308,12 +2340,13 @@ pub enum TrafficPolicy {
 	Csrf(RequestPolicy<crate::http::csrf::Csrf>),
 
 	RequestHeaderModifier(RequestPolicy<filters::HeaderModifier>),
-	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
+	ResponseHeaderModifier(RequestPolicy<filters::HeaderModifier>),
 	RequestRedirect(RequestPolicy<filters::RequestRedirect>),
 	UrlRewrite(RequestPolicy<filters::UrlRewrite>),
 	HostRewrite(agent::HostRedirectOverride),
 	RequestMirror(Vec<filters::RequestMirror>),
 	DirectResponse(RequestPolicy<filters::DirectResponse>),
+	Buffer(RequestPolicy<http::buffer::Buffer>),
 	#[serde(rename = "cors")]
 	CORS(RequestPolicy<http::cors::Cors>),
 }
@@ -2693,6 +2726,7 @@ mod tests {
 		Route {
 			key: strng::new(key),
 			service_key: None,
+			service_port: 0,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			matches,
@@ -2705,6 +2739,7 @@ mod tests {
 		TCPRoute {
 			key: strng::new(key),
 			service_key: None,
+			service_port: 0,
 			name: RouteName::default(),
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			backends: vec![],

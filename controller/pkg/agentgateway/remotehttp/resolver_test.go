@@ -4,9 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -434,6 +437,42 @@ func TestResolve(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveWithAdditionalBackendResolver(t *testing.T) {
+	ctx := testutils.BuildMockPolicyContext(t, nil)
+	backendGK := schema.GroupKind{Group: "example.io", Kind: "ExampleBackend"}
+	group := new(gwv1.Group(backendGK.Group))
+	kind := new(gwv1.Kind(backendGK.Kind))
+	resolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps: ctx.Collections.ConfigMaps,
+		Services:   ctx.Collections.Services,
+		BackendResolvers: map[schema.GroupKind]remotehttp.BackendResolver{
+			backendGK: func(_ krt.HandlerContext, nn types.NamespacedName) (*remotehttp.ResolvedBackend, bool, error) {
+				require.Equal(t, types.NamespacedName{Namespace: "default", Name: "custom"}, nn)
+				return &remotehttp.ResolvedBackend{
+					Static: &agentgateway.StaticBackend{
+						Host: "custom.example.com",
+						Port: 8443,
+					},
+				}, true, nil
+			},
+		},
+	})
+
+	resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{
+		ParentName:       "policy",
+		DefaultNamespace: "default",
+		BackendRef: gwv1.BackendObjectReference{
+			Group: group,
+			Kind:  kind,
+			Name:  "custom",
+		},
+		Path: "/oauth2/v3/certs",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "http://custom.example.com:8443/oauth2/v3/certs", resolved.Target.URL)
 }
 
 func testService(name, namespace string, ports []corev1.ServicePort) *corev1.Service {

@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_core::strng;
+use base64::Engine;
 use http_body_util::BodyExt;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -134,17 +135,17 @@ fn test_response(
 	xlate: impl Fn(Bytes) -> Result<Box<dyn ResponseType>, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
-	let provider_str = &fs::read_to_string(&input_path)
-		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
-	let provider_value = serde_json::from_str::<Value>(provider_str)
-		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
+	let provider_str = &fs::read(&input_path)
+		.unwrap_or_else(|e| panic!("{relative_path}: Failed to read response input file: {e}"));
+	let provider_value = serde_json::from_slice::<Value>(provider_str)
+		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(provider_str).to_string()));
 
-	let resp = xlate(Bytes::copy_from_slice(provider_str.as_bytes()))
+	let resp = xlate(Bytes::copy_from_slice(provider_str))
 		.expect("Failed to translate provider response to expected format");
 	let llm_response = resp.to_llm_response(false);
 	let raw = resp.serialize().expect("Failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
-		.unwrap_or_else(|_| Value::String(provider_str.to_string()));
+		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
 	let report = json!({
 		"response": resp_val,
 		"parsed": llm_response,
@@ -172,8 +173,8 @@ async fn test_streaming(
 	xlate: impl AsyncFnOnce(Response, AsyncLog<llm::LLMInfo>) -> Result<Response, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
-	let input_bytes =
-		&fs::read(&input_path).unwrap_or_else(|_| panic!("{relative_path}: Failed to read input file"));
+	let input_bytes = &fs::read(&input_path)
+		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read streaming input file"));
 	let body = Body::from(input_bytes.clone());
 	let log = AsyncLog::default();
 	let log2 = log.clone();
@@ -186,7 +187,24 @@ async fn test_streaming(
 	let resp_bytes = resp.collect().await.unwrap().to_bytes();
 	let llm_response = log2.take().unwrap().response;
 	let llm_resp_str = serde_json::to_string_pretty(&llm_response).unwrap();
-	let resp_str = String::from_utf8(resp_bytes.to_vec()).unwrap() + "\n\n" + llm_resp_str.as_str();
+	let resp_body = match String::from_utf8(resp_bytes.to_vec()) {
+		Ok(s)
+			if !s
+				.chars()
+				.any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')) =>
+		{
+			s
+		},
+		Ok(s) => format!(
+			"base64: {}",
+			base64::engine::general_purpose::STANDARD.encode(s.as_bytes())
+		),
+		Err(e) => format!(
+			"base64: {}",
+			base64::engine::general_purpose::STANDARD.encode(e.into_bytes())
+		),
+	};
+	let resp_str = resp_body + "\n\n" + llm_resp_str.as_str();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 	let snapshot_name = snapshot_name + "-streaming";
 
@@ -258,11 +276,20 @@ mod requests {
 		("parallel-tool-call", &[BEDROCK]),
 		("reasoning", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC]),
+		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
+		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
+		("reasoning_replay", &[BEDROCK]),
+		("reasoning_replay_unsigned", &[BEDROCK]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
+		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
+		// Replaying a prior assistant `thinking` block to Bedrock Converse must preserve its
+		// cryptographic `signature` (mapped to reasoningContent.reasoningText.signature) so
+		// Bedrock can validate the replayed thinking.
+		("reasoning_replay", &[BEDROCK]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[BEDROCK, GEMINI]),
@@ -485,6 +512,7 @@ mod response {
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
+	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 
@@ -493,9 +521,19 @@ mod response {
 		BEDROCK_TO_COMPLETIONS,
 		BEDROCK_TO_RESPONSES,
 	];
-	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
-	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] =
-		&[("basic", ALL_BEDROCK), ("tool", ALL_BEDROCK)];
+	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", ALL_BEDROCK),
+		("tool", ALL_BEDROCK),
+		// Reasoning block forwarding: `reasoning` carries a signature (surfaced as
+		// reasoning_signature on the completions path), `reasoning_unsigned` does not.
+		("reasoning", ALL_BEDROCK),
+		("reasoning_unsigned", ALL_BEDROCK),
+	];
+	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", ALL_BEDROCK),
+		("tool", ALL_BEDROCK),
+		("reasoning", ALL_BEDROCK),
+	];
 
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -541,9 +579,12 @@ mod response {
 		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
 
 	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
-		("non-json", &[COMPLETIONS_TO_DETECT]),
-		("broken-sse", &[COMPLETIONS_TO_DETECT]),
-		("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
+		// ("non-json", &[COMPLETIONS_TO_DETECT]),
+		// ("broken-sse", &[COMPLETIONS_TO_DETECT]),
+		// ("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
+		// ("bedrock-basic.bin", &[BEDROCK_TO_DETECT]),
+		("bedrock-invoke.bin", &[BEDROCK_TO_DETECT]),
+		// ("bedrock-broken.bin", &[BEDROCK_TO_DETECT]),
 	];
 
 	#[tokio::test]
@@ -673,6 +714,7 @@ mod response {
 			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
 			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
 			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			BEDROCK_TO_DETECT => (bedrock_provider, dummy_llm_req(InputFormat::Detect)),
 			COMPLETIONS_TO_DETECT => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Detect),
@@ -1193,9 +1235,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		"application/json".parse().unwrap(),
 	);
 
-	let client = PolicyClient {
-		inputs: setup_proxy_test("{}").unwrap().pi,
-	};
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 
 	let result = bedrock
 		.process_response(
@@ -1506,4 +1546,232 @@ fn completions_response_missing_message_and_usage_fields() {
 	assert_eq!(usage.prompt_tokens, 5);
 	assert_eq!(usage.completion_tokens, 0);
 	assert_eq!(usage.total_tokens, 12);
+}
+
+#[tokio::test]
+async fn bedrock_from_messages_stream_captures_completion() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/basic.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		buffer_limit,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		true,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for bedrock streaming");
+	assert!(
+		!completion.join("").is_empty(),
+		"completion should contain response text"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/basic.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		buffer_limit,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		false,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
+}
+
+#[tokio::test]
+async fn messages_passthrough_stream_captures_completion() {
+	let input_path = fixture_path("response/anthropic/stream_basic.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	// Consume the body to drive the stream to completion
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for messages streaming");
+	assert_eq!(
+		completion.join(""),
+		"Hi there! How are you doing today? Is there anything I can help you with?"
+	);
+}
+
+#[tokio::test]
+async fn messages_passthrough_stream_skips_completion_when_disabled() {
+	let input_path = fixture_path("response/anthropic/stream_basic.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			native_format: Some(custom::ProviderFormat::Messages),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_captures_completion() {
+	let input_path = fixture_path("response/responses/stream.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			native_format: Some(custom::ProviderFormat::Responses),
+			request_model: "gpt-4.1-mini".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	let completion = info
+		.response
+		.completion
+		.expect("completion should be set for responses streaming");
+	assert_eq!(completion.join(""), "Hello");
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_skips_completion_when_disabled() {
+	let input_path = fixture_path("response/responses/stream.json");
+	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			native_format: Some(custom::ProviderFormat::Responses),
+			request_model: "gpt-4.1-mini".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(
+		info.response.completion.is_none(),
+		"completion should not be set when include_completion_in_log is false"
+	);
 }

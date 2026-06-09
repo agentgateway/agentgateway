@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
@@ -43,6 +43,8 @@ pub struct Executor<'a> {
 
 	pub response: Option<ResponseRef<'a>>,
 
+	pub proxy: ExtensionOrDirect<'a, ProxyContext>,
+
 	pub env: EnvContext,
 
 	pub source: ExtensionOrDirect<'a, SourceContext>,
@@ -72,6 +74,98 @@ pub struct Executor<'a> {
 	pub extmcp: ExtensionOrDirect<'a, ExtMcpDynamicMetadata>,
 
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ProxyContext {
+	/// Time spent processing the request before sending the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub request_processing_duration: Option<CelDuration>,
+	/// Time spent waiting for the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub upstream_duration: Option<CelDuration>,
+	/// Time spent processing the primary outbound response before sending the downstream response.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub response_processing_duration: Option<CelDuration>,
+}
+
+impl ProxyContext {
+	pub fn from_std_durations(
+		request_processing_duration: Option<std::time::Duration>,
+		upstream_duration: Option<std::time::Duration>,
+		response_processing_duration: Option<std::time::Duration>,
+	) -> Self {
+		fn proxy_duration(duration: Option<std::time::Duration>) -> Option<CelDuration> {
+			duration
+				.and_then(|duration| chrono::Duration::from_std(duration).ok())
+				.map(Into::into)
+		}
+
+		Self {
+			request_processing_duration: proxy_duration(request_processing_duration),
+			upstream_duration: proxy_duration(upstream_duration),
+			response_processing_duration: proxy_duration(response_processing_duration),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CelDuration(pub chrono::Duration);
+
+impl From<chrono::Duration> for CelDuration {
+	fn from(duration: chrono::Duration) -> Self {
+		Self(duration)
+	}
+}
+
+impl From<CelDuration> for chrono::Duration {
+	fn from(duration: CelDuration) -> Self {
+		duration.0
+	}
+}
+
+impl Serialize for CelDuration {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let duration = ::cel::format_duration(&self.0).ok_or_else(|| {
+			serde::ser::Error::custom(format!("duration too large to serialize: {:?}", self.0))
+		})?;
+		duration.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for CelDuration {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let duration = String::deserialize(deserializer)?;
+		let (remaining, duration) = ::cel::parse_duration(&duration)
+			.map_err(|err| serde::de::Error::custom(format!("invalid duration: {err:?}")))?;
+		if !remaining.is_empty() {
+			return Err(serde::de::Error::custom(format!(
+				"invalid duration: trailing input {remaining:?}"
+			)));
+		}
+		Ok(Self(duration))
+	}
+}
+
+impl DynamicType for CelDuration {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::Duration(self.0)
+	}
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
@@ -378,6 +472,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Extension(resp.extensions());
 		if let Some(llm) = resp.extensions().get::<LLMContext>() {
 			self.llm = ExtensionOrDirect::Direct(Some(llm));
 		}
@@ -390,6 +485,7 @@ impl<'a> Executor<'a> {
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Direct(resp.proxy.as_ref());
 		if let Some(metadata) = resp.metadata.as_ref() {
 			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
 		}
@@ -425,6 +521,7 @@ impl<'a> Executor<'a> {
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
 		end_time: Option<&'a RequestTime>,
+		proxy: Option<&'a ProxyContext>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -435,6 +532,9 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		if this.proxy.deref().is_none() {
+			this.proxy = ExtensionOrDirect::Direct(proxy);
+		}
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
@@ -613,6 +713,7 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		body: resp.extensions_mut().remove::<BufferedBody>(),
 		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
 		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
+		proxy: resp.extensions_mut().remove::<ProxyContext>(),
 	}
 }
 
@@ -704,6 +805,7 @@ pub struct ResponseSnapshot {
 	pub body: Option<BufferedBody>,
 	pub recorded_body: Option<RecordedBodyHandle>,
 	pub metadata: Option<TransformationMetadata>,
+	pub proxy: Option<ProxyContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -1099,6 +1201,16 @@ pub struct LLMContext {
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub first_token: Option<Instant>,
+	/// Time from request start until the first response token is received.
+	#[dynamic(rename = "timeToFirstToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_to_first_token: Option<CelDuration>,
+	/// Average time from first response token to response completion per output token.
+	#[dynamic(rename = "timePerOutputToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_per_output_token: Option<CelDuration>,
 	/// The number of tokens in the request, when using the token counting endpoint
 	/// These are not counted as 'input tokens' since they do not consume input tokens.
 	#[dynamic(rename = "countTokens")]
@@ -1125,6 +1237,8 @@ impl From<llm::LLMInfo> for LLMContext {
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			reasoning_tokens: resp.reasoning_tokens,
 			input_image_tokens: resp.input_image_tokens,
 			input_text_tokens: resp.input_text_tokens,
@@ -1145,6 +1259,30 @@ impl From<llm::LLMInfo> for LLMContext {
 		base
 	}
 }
+
+impl LLMContext {
+	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
+		let Some(first_token) = self.first_token else {
+			return;
+		};
+		self.time_to_first_token =
+			chrono::Duration::from_std(first_token.duration_since(request_start))
+				.ok()
+				.map(Into::into);
+		if let Some(output_tokens) = self
+			.output_tokens
+			.filter(|output_tokens| *output_tokens > 0)
+		{
+			let first_to_last = response_end.duration_since(first_token);
+			let time_per_output_token =
+				Duration::from_secs_f64(first_to_last.as_secs_f64() / output_tokens as f64);
+			self.time_per_output_token = chrono::Duration::from_std(time_per_output_token)
+				.ok()
+				.map(Into::into);
+		}
+	}
+}
+
 impl From<llm::LLMRequest> for LLMContext {
 	fn from(info: LLMRequest) -> Self {
 		let LLMRequest {
@@ -1166,6 +1304,8 @@ impl From<llm::LLMRequest> for LLMContext {
 			prompt,
 
 			first_token: None,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
@@ -1572,6 +1712,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `proxy` contains proxy timing information for the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub proxy: Option<ProxyContext>,
+
 	/// `env` contains selected process environment attributes exposed to CEL.
 	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
 	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
@@ -1698,6 +1842,7 @@ impl ExecutorSerde {
 				},
 			});
 		}
+		exec.proxy = ExtensionOrDirect::Direct(self.proxy.as_ref());
 		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
@@ -1748,6 +1893,11 @@ pub fn full_example_executor() -> ExecutorSerde {
 			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		proxy: Some(ProxyContext {
+			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
+			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
+			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 		}),
 		env: Some(EnvContext {
 			pod_name: Some("pod-1".to_string()),
@@ -1810,6 +1960,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			total_tokens: Some(150),
 			service_tier: Some("default".into()),
 			first_token: None,
+			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
+			time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 			count_tokens: Some(10),
 
 			prompt: None,

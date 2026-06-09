@@ -1,0 +1,7 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/detect/bedrock-broken.bin
+---
+base64: AAAA77+9AAAAUuOBgzMLOmV2ZW50LXR5cGUHAAxtZXNzYWdlU3RhcnQNOmNvbnRlbnQtdHlwZQcAEGFwcGxpY2F0aW9uL2pzb24NOm1lc3NhZ2UtdHlsbW5vcHFyc3R1dnd4eXpBQkNERUZHSElKS0xNTiIsInVzYWdlIjp7ImlucHV0VG9rZW5zIjoxNSwib3V0cHV0VG9rZW5zIjoxNDIsInRvdGFsVG9rZW5zIjoxNTd9fe+/vQtz77+9
+
+{}

@@ -633,12 +633,12 @@ func buildAgwDestination(
 	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK.GroupKind())
 	// check if the reference is allowed
 	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
-		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
+		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref, ctx.BackendRefGrantMode) {
 			return rb, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionResolvedRefs,
 				Status:  metav1.ConditionFalse,
 				Reason:  gwv1.RouteReasonRefNotPermitted,
-				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", to.Name, *toNs, k.Kind, ns),
+				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", *toNs, to.Name, k.Kind, ns),
 			}
 		}
 	}
@@ -733,7 +733,13 @@ func ReferenceAllowed(
 	localNamespace string,
 ) *ParentError {
 	if parent.ServiceKey != nil {
-		// Parent resolver already verified this reference exists.
+		// Parent resolver already verified this referenced Service exists.
+		if parentRef.Port != 0 && !slices.Contains(parent.ServicePorts, parentRef.Port) {
+			return &ParentError{
+				Reason:  ParentErrorNotAccepted,
+				Message: fmt.Sprintf("port %v not found", parentRef.Port),
+			}
+		}
 	} else if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		// check that the referenced svc exists
 		key := parentRef.Namespace + "/" + parentRef.Name
@@ -874,6 +880,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 				ParentGateway:     pr.ParentGateway,
 				ListenerKey:       pr.ListenerKey,
 				ServiceKey:        pr.ServiceKey,
+				Port:              pk.Port,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -923,6 +930,8 @@ type RouteParentReference struct {
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
 	ServiceKey *types.NamespacedName
+	// Port is the parentRef port, scoping the route to one port. Zero means any port.
+	Port gwv1.PortNumber
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid

@@ -958,6 +958,9 @@ impl AIProvider {
 		}
 
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
+		if original_format == InputFormat::Detect {
+			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
+		}
 		llm_info.native_format = native_format;
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
@@ -1424,6 +1427,18 @@ impl AIProvider {
 		};
 
 		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		let stream_format = match self {
+			AIProvider::Bedrock(_) => "awsEventStream",
+			_ => "sseJson",
+		};
+		crate::proxy::dtrace::trace(|trace| {
+			trace.llm_streaming_translation(
+				self.provider().to_string(),
+				format!("{input_format:?}"),
+				native_format.map(|f| format!("{f:?}")),
+				stream_format.to_string(),
+			)
+		});
 		Ok(match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
@@ -1434,13 +1449,17 @@ impl AIProvider {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Completions)) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
-				resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(
 				AIProvider::Custom(_),
@@ -1465,6 +1484,9 @@ impl AIProvider {
 			(AIProvider::Vertex(_), InputFormat::Completions, _) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
 			},
+			(AIProvider::Bedrock(_), InputFormat::Detect, _) => {
+				types::detect::passthrough_aws_stream(logger, resp)
+			},
 			(_, InputFormat::Detect, _) => types::detect::passthrough_stream(logger, resp),
 			// Responses with OpenAI: just passthrough
 			(
@@ -1474,21 +1496,23 @@ impl AIProvider {
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
 				_,
-			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger)),
+			) => resp.map(|b| {
+				conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Gemini(_), InputFormat::Responses, _) => {
 				resp.map(|b| conversion::openai_compat::to_responses::translate_stream(b, buffer, logger))
 			},
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
-			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Vertex(_), InputFormat::Messages, _) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages, _) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
@@ -1511,7 +1535,14 @@ impl AIProvider {
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_messages::translate_stream(b, buffer, logger, &model, &msg)
+					conversion::bedrock::from_messages::translate_stream(
+						b,
+						buffer,
+						logger,
+						&model,
+						&msg,
+						include_completion_in_log,
+					)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
@@ -1564,7 +1595,11 @@ impl AIProvider {
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
 		} else if req.model().is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
+			if let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path()) {
+				*req.model() = Some(path_model.to_string());
+			} else {
+				return Err(AIError::MissingField("model not specified".into()));
+			}
 		}
 		Ok((parts, req))
 	}

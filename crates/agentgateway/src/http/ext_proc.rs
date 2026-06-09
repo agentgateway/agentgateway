@@ -23,6 +23,7 @@ use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::{http, *};
 
@@ -393,7 +394,7 @@ impl ExtProcInstance {
 		trace!("connecting to {:?}", target);
 		let chan = GrpcReferenceChannel {
 			target,
-			client,
+			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc),
 			policies: Arc::new(policies),
 		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);

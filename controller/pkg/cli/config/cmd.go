@@ -11,13 +11,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
-	defaultProxyAdminPort = 15000
-	shortOutput           = "short"
-	jsonOutput            = "json"
-	yamlOutput            = "yaml"
+	shortOutput = "short"
+	jsonOutput  = "json"
+	yamlOutput  = "yaml"
 )
 
 type commonFlags struct {
@@ -37,7 +37,7 @@ type configDumpSource struct {
 
 func Command() flag.Command {
 	common := &commonFlags{
-		proxyAdminPort: defaultProxyAdminPort,
+		proxyAdminPort: wellknown.ProxyAdminPort,
 		outputFormat:   shortOutput,
 	}
 

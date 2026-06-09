@@ -40,6 +40,7 @@ func allEnvVarsSet() map[string]string {
 		"AGW_GATEWAY_CLASS_PARAMETERS_REFS":            `{"kgateway":{"name":"custom-gwp","namespace":"infra"},"agentgateway":{"name":"custom-gwp-agw","namespace":"infra"}}`,
 		"AGW_XDS_AUTH":                                 "false",
 		"AGW_XDS_MODE":                                 "tls",
+		"AGW_BACKEND_REF_GRANT_MODE":                   "route-and-policy",
 		"AGW_ENABLE_EXPERIMENTAL_GATEWAY_API_FEATURES": "false",
 		"AGW_PROXY_IMAGE_REGISTRY":                     "my-registry",
 		"AGW_PROXY_IMAGE_REPOSITORY":                   "my-repo",
@@ -84,6 +85,7 @@ func TestSettings(t *testing.T) {
 				DisableLeaderElection:                false,
 				XdsAuth:                              true,
 				XdsMode:                              XdsModePlaintext,
+				BackendRefGrantMode:                  BackendRefGrantModeRoute,
 				EnableExperimentalGatewayAPIFeatures: true,
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",
@@ -117,6 +119,7 @@ func TestSettings(t *testing.T) {
 				DisableLeaderElection:                true,
 				XdsAuth:                              false,
 				XdsMode:                              XdsModeTLS,
+				BackendRefGrantMode:                  BackendRefGrantModeRouteAndPolicy,
 				EnableExperimentalGatewayAPIFeatures: false,
 				ProxyImageRegistry:                   "my-registry",
 				ProxyImageRepository:                 "my-repo",
@@ -162,6 +165,13 @@ func TestSettings(t *testing.T) {
 			expectedErrorStr: `invalid DNS lookup family: "invalid"`,
 		},
 		{
+			name: "errors on invalid backend reference grant mode",
+			envVars: map[string]string{
+				"AGW_BACKEND_REF_GRANT_MODE": "invalid",
+			},
+			expectedErrorStr: `invalid backend ReferenceGrant mode: "invalid"`,
+		},
+		{
 			name: "errors on invalid gatewayclass parameters refs: missing name",
 			envVars: map[string]string{
 				"AGW_GATEWAY_CLASS_PARAMETERS_REFS": `{"kgateway":{"namespace":"missing-name"}}`,
@@ -198,6 +208,7 @@ func TestSettings(t *testing.T) {
 				DisableLeaderElection:                false,
 				XdsAuth:                              true,
 				XdsMode:                              XdsModePlaintext,
+				BackendRefGrantMode:                  BackendRefGrantModeRoute,
 				EnableExperimentalGatewayAPIFeatures: true,
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",

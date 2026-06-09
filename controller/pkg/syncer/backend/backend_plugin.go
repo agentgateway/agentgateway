@@ -116,7 +116,19 @@ func appendLLMProviderBackendReferences(llm *agentgateway.LLMProvider, app func(
 	if llm == nil || llm.Custom == nil || llm.Custom.BackendRef == nil {
 		return
 	}
-	app(*llm.Custom.BackendRef)
+	var group *gwv1.Group
+	if llm.Custom.BackendRef.Group != nil {
+		group = new(gwv1.Group(*llm.Custom.BackendRef.Group))
+	}
+	var kind *gwv1.Kind
+	if llm.Custom.BackendRef.Kind != nil {
+		kind = new(gwv1.Kind(*llm.Custom.BackendRef.Kind))
+	}
+	var port *gwv1.PortNumber
+	if llm.Custom.BackendRef.Port != nil {
+		port = new(gwv1.PortNumber(*llm.Custom.BackendRef.Port))
+	}
+	app(gwv1.BackendObjectReference{Group: group, Kind: kind, Name: gwv1.ObjectName(llm.Custom.BackendRef.Name), Port: port})
 }
 
 // BuildAgwBackend translates a Backend to an AgwBackend
@@ -586,13 +598,15 @@ func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_
 	}
 }
 
-func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref gwv1.BackendObjectReference) (*api.BackendReference, error) {
-	if ref.Namespace != nil && string(*ref.Namespace) != namespace {
-		return nil, fmt.Errorf("custom provider backendRef must be namespace-local")
+func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref agentgateway.LocalBackendObjectReference) (*api.BackendReference, error) {
+	kind := gwv1.Kind(wellknown.ServiceKind)
+	if ref.Kind != nil {
+		kind = gwv1.Kind(*ref.Kind)
 	}
-
-	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
-	group := ptr.OrDefault(ref.Group, "")
+	group := gwv1.Group("")
+	if ref.Group != nil {
+		group = gwv1.Group(*ref.Group)
+	}
 	gk := schema.GroupKind{
 		Group: string(group),
 		Kind:  string(kind),
@@ -603,7 +617,12 @@ func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, 
 		return nil, fmt.Errorf("custom provider backendRef may target only Service or InferencePool")
 	}
 
-	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, ref.Name, ref.Namespace, ref.Port)
+	var port *gwv1.PortNumber
+	if ref.Port != nil {
+		port = new(gwv1.PortNumber(*ref.Port))
+	}
+
+	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, gwv1.ObjectName(ref.Name), nil, port)
 }
 
 func translateAwsBackends(

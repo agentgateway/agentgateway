@@ -373,9 +373,7 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 	) -> anyhow::Result<Option<Response>> {
-		let client = PolicyClient {
-			inputs: backend_info.inputs.clone(),
-		};
+		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
 			.prompt_guard
 			.as_ref()
@@ -764,7 +762,23 @@ impl Policy {
 	) -> anyhow::Result<Option<Response>> {
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = webhook::send_request(client, &webhook.target, &headers, messsages).await?;
+		let whr = match webhook::send_request(client, &webhook.target, &headers, messsages).await {
+			Ok(whr) => whr,
+			Err(e) => {
+				return match webhook.failure_mode {
+					FailureMode::FailOpen => {
+						warn!("webhook guardrail unavailable, failing open: {}", e);
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Request,
+							crate::telemetry::metrics::GuardrailAction::FailOpen,
+						);
+						Ok(None)
+					},
+					FailureMode::FailClosed => Err(e),
+				};
+			},
+		};
 		match whr.action {
 			RequestAction::Mask(mask) => {
 				debug!(
@@ -822,7 +836,23 @@ impl Policy {
 	) -> anyhow::Result<Option<Response>> {
 		let messsages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = webhook::send_response(client, &webhook.target, &headers, messsages).await?;
+		let whr = match webhook::send_response(client, &webhook.target, &headers, messsages).await {
+			Ok(whr) => whr,
+			Err(e) => {
+				return match webhook.failure_mode {
+					FailureMode::FailOpen => {
+						warn!("webhook guardrail unavailable, failing open: {}", e);
+						Self::record_guardrail_trip(
+							client,
+							crate::telemetry::metrics::GuardrailPhase::Response,
+							crate::telemetry::metrics::GuardrailAction::FailOpen,
+						);
+						Ok(None)
+					},
+					FailureMode::FailClosed => Err(e),
+				};
+			},
+		};
 		match whr.action {
 			ResponseAction::Mask(mask) => {
 				debug!(
@@ -1219,11 +1249,33 @@ pub struct NamedRegex {
 	name: String,
 }
 
+/// Defines how the proxy behaves when a webhook guardrail is unreachable or
+/// returns an error.
+///
+/// Defaults to `failClosed`. When failing closed, the error is propagated and
+/// the LLM request is rejected. When failing open, the request is allowed
+/// through despite the webhook failure.
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+pub enum FailureMode {
+	/// Reject the request when the webhook guardrail is unavailable (default).
+	#[default]
+	#[serde(rename = "failClosed")]
+	FailClosed,
+	/// Allow the request through when the webhook guardrail is unavailable.
+	#[serde(rename = "failOpen")]
+	FailOpen,
+}
+
 #[apply(schema!)]
 pub struct Webhook {
 	pub target: SimpleBackendReference,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,
+	/// Behavior when the webhook is unreachable or returns an error.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub failure_mode: FailureMode,
 }
 
 #[apply(schema!)]

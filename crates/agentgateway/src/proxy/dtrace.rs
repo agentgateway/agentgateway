@@ -299,6 +299,7 @@ pub enum MessageType {
 		evaluatedRoutes: Vec<RouteKey>,
 	},
 	PolicySelection {
+		phase: String,
 		effectivePolicy: Value,
 	},
 	// The final result of a policy evaluation.
@@ -322,6 +323,23 @@ pub enum MessageType {
 		status: Option<u16>,
 		error: Option<String>,
 	},
+	LlmRouteResolved {
+		provider: String,
+		routeType: String,
+	},
+	LlmRequestDetected {
+		provider: String,
+		inputFormat: String,
+		nativeFormat: Option<String>,
+		requestModel: String,
+		streaming: bool,
+	},
+	LlmStreamingTranslation {
+		provider: String,
+		inputFormat: String,
+		nativeFormat: Option<String>,
+		streamFormat: String,
+	},
 	RequestFinished,
 }
 
@@ -338,6 +356,9 @@ impl MessageType {
 			}
 			| MessageType::PolicySelection { .. }
 			| MessageType::BackendCallStart { .. }
+			| MessageType::LlmRouteResolved { .. }
+			| MessageType::LlmRequestDetected { .. }
+			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
 			| MessageType::PolicyEvent { .. }
 			| MessageType::RequestFinished => Severity::Info,
@@ -607,8 +628,9 @@ impl DebugTracer {
 			requestState: data,
 		})
 	}
-	pub fn selected_policies(&self, effective_policy: Value) {
+	pub fn selected_policies(&self, phase: &str, effective_policy: Value) {
 		self.send(MessageType::PolicySelection {
+			phase: phase.to_string(),
 			effectivePolicy: effective_policy,
 		})
 	}
@@ -674,6 +696,42 @@ impl DebugTracer {
 		error: Option<String>,
 	) {
 		self.send_with_timings(start, end, MessageType::BackendCallResult { status, error })
+	}
+	pub fn llm_route_resolved(&self, provider: String, route_type: String) {
+		self.send(MessageType::LlmRouteResolved {
+			provider,
+			routeType: route_type,
+		})
+	}
+	pub fn llm_request_detected(
+		&self,
+		provider: String,
+		input_format: String,
+		native_format: Option<String>,
+		request_model: String,
+		streaming: bool,
+	) {
+		self.send(MessageType::LlmRequestDetected {
+			provider,
+			inputFormat: input_format,
+			nativeFormat: native_format,
+			requestModel: request_model,
+			streaming,
+		})
+	}
+	pub fn llm_streaming_translation(
+		&self,
+		provider: String,
+		input_format: String,
+		native_format: Option<String>,
+		stream_format: String,
+	) {
+		self.send(MessageType::LlmStreamingTranslation {
+			provider,
+			inputFormat: input_format,
+			nativeFormat: native_format,
+			streamFormat: stream_format,
+		})
 	}
 }
 

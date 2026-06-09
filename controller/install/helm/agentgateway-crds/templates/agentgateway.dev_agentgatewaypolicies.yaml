@@ -2408,6 +2408,15 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    failureMode:
+                                      description: |-
+                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                        or returns an error. `FailOpen` allows the request to continue.
+                                        `FailClosed` (default) rejects the request.
+                                      enum:
+                                      - FailClosed
+                                      - FailOpen
+                                      type: string
                                     forwardHeaderMatches:
                                       description: |-
                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
@@ -3973,6 +3982,15 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    failureMode:
+                                      description: |-
+                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                        or returns an error. `FailOpen` allows the request to continue.
+                                        `FailClosed` (default) rejects the request.
+                                      enum:
+                                      - FailClosed
+                                      - FailOpen
+                                      type: string
                                     forwardHeaderMatches:
                                       description: |-
                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
@@ -6485,6 +6503,36 @@ spec:
                     networkAuthorization proxyProtocol tcp tls tracing] must be set
                   rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
+              strategy:
+                description: |-
+                  strategy defines how this policy participates in policy merging and conflict resolution.
+
+                  Strategy settings apply to the policy object as a whole. Individual strategy fields may
+                  only be valid for specific policy kinds; for example, inheritance is only valid when this
+                  policy contains traffic settings.
+                properties:
+                  inheritance:
+                    description: |-
+                      inheritance controls whether less-specific traffic policies prevent more-specific traffic policies
+                      from contributing to the effective policy.
+
+                      This field is only valid on traffic policies. Frontend and backend policy merging does not use
+                      inheritance.
+
+                      When unset or set to `Default`, traffic policy fields are merged by specificity, with more-specific
+                      attachment points such as routes and route rules able to override fields from less-specific
+                      attachment points such as gateways and listeners.
+                      In other words, this policy provides `Default`s that can be overridden. For example, you may provide a `Default`
+                      timeout policy for the entire Gateway that is overridden by specific routes.
+
+                      When set to `Override`, this policy blocks traffic policies at more-specific attachment points from
+                      being included in the effective policy. This is useful when a gateway-level policy must remain
+                      authoritative for all routes below it.
+                    enum:
+                    - Default
+                    - Override
+                    type: string
+                type: object
               targetRefs:
                 description: |-
                   `targetRefs` specifies the target resources by reference to attach the
@@ -6950,6 +6998,61 @@ spec:
                         be set
                       rule: '[has(self.users),has(self.secretRef)].filter(x,x==true).size()
                         == 1'
+                  buffer:
+                    description: |-
+                      `buffer` defines the policy for buffer requests and responses bodies. Buffered bodies will be accumulated in memory
+                      by the proxy until completion before being forwarded. This changes the proxies default behavior, which streams bodies.
+
+                      Warning: large bodies can lead to excessive memory usage in the proxy. Utilize with care, or with strict limits.
+                    properties:
+                      request:
+                        description: '`request` configures buffering of the request
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
+                      response:
+                        description: '`response` configures buffering of the response
+                          body.'
+                        properties:
+                          maxBytes:
+                            anyOf:
+                            - type: integer
+                            - type: string
+                            description: |-
+                              `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+                              if unset, defaults to the global proxy setting, which defaults to 2Mi.
+                            maxLength: 32
+                            minLength: 1
+                            pattern: ^[+-]?([0-9]+(\.[0-9]*)?|\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|[eE](\+?0*([0-9]|1[0-8])|-0*[0-9]))?$
+                            x-kubernetes-int-or-string: true
+                            x-kubernetes-validations:
+                            - message: value must be at least 1 byte and fit within
+                                uint32
+                              rule: (self >= 1 && self <= 4294967295) || self.size()
+                                > 0
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [request response] must
+                        be set
+                      rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
+                        >= 1'
                   cors:
                     description: cors specifies the CORS configuration for the policy.
                     properties:
@@ -10044,13 +10147,16 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,
-                    extProc, jwtAuthentication, basicAuthentication, and apiKeyAuthentication
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                    extProc, jwtAuthentication, basicAuthentication and apiKeyAuthentication
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.authorization),has(self.buffer),has(self.cors),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:
             - message: At least one of traffic, frontend, or backend must be provided.
               rule: has(self.traffic) || has(self.frontend) || has(self.backend)
+            - message: strategy.inheritance may only be set on traffic policies
+              rule: '!has(self.strategy) || !has(self.strategy.inheritance) || (has(self.traffic)
+                && !has(self.frontend) && !has(self.backend))'
             - message: backend.mcp may not be used with a Service target
               rule: '!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs)
                 || !self.targetRefs.exists(t, t.kind == ''Service'')) && (!has(self.targetSelectors)

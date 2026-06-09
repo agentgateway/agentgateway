@@ -1,0 +1,46 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/reasoning_replay_unsigned.json
+info:
+  model: "anthropic.claude-3-7-sonnet-20250219-v1:0"
+  messages:
+    - role: user
+      content: Hi
+    - role: assistant
+      content: Hello
+      reasoning_content: no signature here
+    - role: user
+      content: Continue
+---
+{
+  "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Hi"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "text": "Hello"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Continue"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 4096
+  }
+}
