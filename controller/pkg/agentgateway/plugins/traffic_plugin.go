@@ -1666,7 +1666,11 @@ func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaul
 			gk,
 			ctx.Collections.Settings.BackendRefGrantMode,
 		) {
-			return fmt.Errorf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, sourceGVK.Kind, defaultNS)
+			article := "a"
+			if sourceGVK.Kind != "" && strings.ContainsAny(strings.ToLower(sourceGVK.Kind[:1]), "aeiou") {
+				article = "an"
+			}
+			return fmt.Errorf("backendRef %v/%v not accessible to %s %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, article, sourceGVK.Kind, defaultNS)
 		}
 	}
 	return nil
