@@ -49,7 +49,7 @@ message McpRequestResult {
   // Honored on Pass and Mutated, ignored on Error and for stdio upstreams.
   HeaderMutation header_mutation = 4;
   // Arbitrary key/value bag stashed in request extensions and exposed to CEL as
-  // `extmcp.<key>`. Subsequent backend filters (e.g. `transformation`) can read
+  // `extMcp.<key>`. Subsequent backend filters (e.g. `transformation`) can read
   // from it. Honored on Pass and Mutated; merged with later drivers' metadata.
   google.protobuf.Struct metadata = 5;
 }
