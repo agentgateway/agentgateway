@@ -1595,7 +1595,11 @@ impl AIProvider {
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
 		} else if req.model().is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
+			if let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path()) {
+				*req.model() = Some(path_model.to_string());
+			} else {
+				return Err(AIError::MissingField("model not specified".into()));
+			}
 		}
 		Ok((parts, req))
 	}

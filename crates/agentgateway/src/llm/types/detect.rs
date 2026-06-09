@@ -1,4 +1,5 @@
 use agent_core::prelude::Strng;
+use agent_core::strng;
 use bytes::Bytes;
 use http::HeaderMap;
 use percent_encoding::percent_decode_str;
@@ -144,6 +145,12 @@ pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 	{
 		llm_info.streaming = true;
 	}
+	if let Some(model) = extract_model_from_path(path) {
+		llm_info.request_model = model;
+	}
+}
+
+pub(crate) fn extract_model_from_path(path: &str) -> Option<Strng> {
 	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		path
 			.split_once("/publishers/anthropic/models/")
@@ -159,12 +166,7 @@ pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 	} else {
 		None
 	};
-	if let Some(model) = model {
-		llm_info.request_model = percent_decode_str(model)
-			.decode_utf8_lossy()
-			.into_owned()
-			.into();
-	}
+	model.map(|model| strng::new(percent_decode_str(model).decode_utf8_lossy()))
 }
 
 fn strip_bedrock_model_suffix(rest: &str) -> Option<&str> {
@@ -227,6 +229,48 @@ mod tests {
 			llm_info.request_model,
 			"anthropic.claude-3-5-sonnet-20241022-v2:0"
 		);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_raw_predict_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/us-east5/publishers/anthropic/models/vertex-detect:rawPredict",
+		);
+
+		assert_eq!(llm_info.request_model, "vertex-detect");
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_bedrock_invoke_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/us.anthropic.claude-haiku-4-5-20251001-v1:0/invoke",
+		);
+
+		assert_eq!(
+			llm_info.request_model,
+			"us.anthropic.claude-haiku-4-5-20251001-v1:0"
+		);
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_stream_raw_predict_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/us-east5/publishers/anthropic/models/vertex-detect:streamRawPredict",
+		);
+
+		assert_eq!(llm_info.request_model, "vertex-detect");
+		assert!(llm_info.streaming);
 	}
 }
 

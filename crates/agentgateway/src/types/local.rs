@@ -2487,6 +2487,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	routes.push(Route {
 		key: strng::new("llm:model:fallback"),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: strng::new("model:fallback"),
 			namespace: strng::new("internal"),
