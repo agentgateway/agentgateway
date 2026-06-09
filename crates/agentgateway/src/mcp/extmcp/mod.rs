@@ -16,7 +16,7 @@ use serde_json::Value;
 
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
 
 /// Per-request bag of values that `extMcp` request-phase processors attach via
@@ -119,11 +119,21 @@ impl ExtMcp {
 	}
 }
 
-// TLS, retries, and load balancing come from the backend referenced by `target`.
+// Retries and load balancing come from the backend referenced by `target`;
+// TLS/auth may also be set inline via `policies`.
 #[apply(schema!)]
 pub struct Remote {
 	/// Reference to the external MCP policy service backend.
+	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
+	/// Policies to connect to the backend.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<BackendTrafficPolicy>,
 	/// Behavior when the processor is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -283,14 +293,16 @@ mod tests {
 processors:
   - kind: remote
     methods: { "tools/call": request, "*/list": response }
-    target: { host: 127.0.0.1:9999 }
+    host: 127.0.0.1:9999
+    policies:
+      backendTLS: {}
     failureMode: failOpen
     requestHeaders:
       allowed: [x-tenant]
       disallowed: [":authority"]
   - kind: remote
     methods: { "tools/call": full }
-    target: { backend: my-backend }
+    backend: my-backend
 "#;
 		let ext: ExtMcp = serde_yaml::from_str(cfg).expect("deser ExtMcp");
 		assert_eq!(ext.processors.len(), 2);
@@ -304,6 +316,7 @@ processors:
 			SimpleBackendReference::InlineBackend(_)
 		));
 		assert_eq!(r0.failure_mode, FailureMode::FailOpen);
+		assert_eq!(r0.policies.len(), 1, "backendTLS should translate");
 		assert_eq!(r0.request_headers.allowed.len(), 1);
 		assert!(
 			r0.request_headers
@@ -325,6 +338,7 @@ processors:
 				methods: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
 				kind: ProcessorKind::Remote(Remote {
 					target: Arc::new(SimpleBackendReference::Backend("b".into())),
+					policies: Vec::new(),
 					failure_mode: FailureMode::default(),
 					metadata: HashMap::new(),
 					request_headers: HeaderFilter::default(),

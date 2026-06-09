@@ -161,14 +161,115 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].policies.extMcp`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service`|object||
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name`|object||
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.service.port`|integer||
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].service`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].service.name`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].service.port`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.http.version`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -2107,14 +2208,115 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.port`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -2418,14 +2620,115 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -3562,14 +3865,115 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -4676,14 +5080,115 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`binds[].listeners[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service`|object||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name`|object||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].service`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.http.version`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`binds[].listeners[].routes[].backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -6534,14 +7039,115 @@
 |`policies[].policy.mcpAuthorization.rules`|[]string||
 |`policies[].policy.extMcp`|object|External MCP policy processors.|
 |`policies[].policy.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`policies[].policy.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`policies[].policy.extMcp.processors[].target.service`|object||
-|`policies[].policy.extMcp.processors[].target.service.name`|object||
-|`policies[].policy.extMcp.processors[].target.service.name.namespace`|string||
-|`policies[].policy.extMcp.processors[].target.service.name.hostname`|string||
-|`policies[].policy.extMcp.processors[].target.service.port`|integer||
-|`policies[].policy.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`policies[].policy.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extMcp.processors[].service`|object||
+|`policies[].policy.extMcp.processors[].service.name`|object||
+|`policies[].policy.extMcp.processors[].service.name.namespace`|string||
+|`policies[].policy.extMcp.processors[].service.name.hostname`|string||
+|`policies[].policy.extMcp.processors[].service.port`|integer||
+|`policies[].policy.extMcp.processors[].host`|string|Hostname or IP address|
+|`policies[].policy.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`policies[].policy.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`policies[].policy.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`policies[].policy.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`policies[].policy.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`policies[].policy.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`policies[].policy.extMcp.processors[].policies.transformations.request`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.request.add`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.request.set`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`policies[].policy.extMcp.processors[].policies.transformations.request.body`|string||
+|`policies[].policy.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.response`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.response.add`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.response.set`|object||
+|`policies[].policy.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`policies[].policy.extMcp.processors[].policies.transformations.response.body`|string||
+|`policies[].policy.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`policies[].policy.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`policies[].policy.extMcp.processors[].policies.backendTLS.cert`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.key`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.root`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`policies[].policy.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`policies[].policy.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`policies[].policy.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`policies[].policy.extMcp.processors[].policies.http.version`|string||
+|`policies[].policy.extMcp.processors[].policies.http.requestTimeout`|string||
+|`policies[].policy.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`policies[].policy.extMcp.processors[].policies.tcp.keepalives`|object||
+|`policies[].policy.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`policies[].policy.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`policies[].policy.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`policies[].policy.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`policies[].policy.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`policies[].policy.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`policies[].policy.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`policies[].policy.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -8475,14 +9081,115 @@
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
 |`backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.extMcp.processors[].service`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].service.name`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].service.name.namespace`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].service.name.hostname`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].service.port`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`backends[].mcp.targets[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.http.version`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -8786,14 +9493,115 @@
 |`backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.policies.extMcp`|object|External MCP policy processors.|
 |`backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].ai.policies.extMcp.processors[].target.service`|object||
-|`backends[].ai.policies.extMcp.processors[].target.service.name`|object||
-|`backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
-|`backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
-|`backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
-|`backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extMcp.processors[].service`|object||
+|`backends[].ai.policies.extMcp.processors[].service.name`|object||
+|`backends[].ai.policies.extMcp.processors[].service.name.namespace`|string||
+|`backends[].ai.policies.extMcp.processors[].service.name.hostname`|string||
+|`backends[].ai.policies.extMcp.processors[].service.port`|integer||
+|`backends[].ai.policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`backends[].ai.policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].ai.policies.extMcp.processors[].policies.http.version`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -9930,14 +10738,115 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
 |`backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].service`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.namespace`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.version`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -11043,14 +11952,115 @@
 |`backends[].policies.mcpAuthorization.rules`|[]string||
 |`backends[].policies.extMcp`|object|External MCP policy processors.|
 |`backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].policies.extMcp.processors[].target.service`|object||
-|`backends[].policies.extMcp.processors[].target.service.name`|object||
-|`backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`backends[].policies.extMcp.processors[].target.service.port`|integer||
-|`backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extMcp.processors[].service`|object||
+|`backends[].policies.extMcp.processors[].service.name`|object||
+|`backends[].policies.extMcp.processors[].service.name.namespace`|string||
+|`backends[].policies.extMcp.processors[].service.name.hostname`|string||
+|`backends[].policies.extMcp.processors[].service.port`|integer||
+|`backends[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`backends[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`backends[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`backends[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`backends[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`backends[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`backends[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`backends[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`backends[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`backends[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`backends[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`backends[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`backends[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`backends[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`backends[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`backends[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`backends[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`backends[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`backends[].policies.extMcp.processors[].policies.http.version`|string||
+|`backends[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`backends[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`backends[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`backends[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`backends[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`backends[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`backends[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`backends[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -11975,14 +12985,115 @@
 |`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].policies.extMcp`|object|External MCP policy processors.|
 |`routeGroups[].routes[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].policies.extMcp.processors[].target.service`|object||
-|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name`|object||
-|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].policies.extMcp.processors[].target.service.port`|integer||
-|`routeGroups[].routes[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extMcp.processors[].service`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].service.name`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].service.port`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.http.version`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -13921,14 +15032,115 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].service.port`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http.version`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -14232,14 +15444,115 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.policies.extMcp`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service`|object||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].service`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].service.name`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.http.version`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].ai.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -15376,14 +16689,115 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.version`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -16490,14 +17904,115 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string||
 |`routeGroups[].routes[].backends[].policies.extMcp`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service`|object||
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name`|object||
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.service.port`|integer||
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].service`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].service.name`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.http.version`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`routeGroups[].routes[].backends[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -19134,14 +20649,115 @@
 |`mcp.targets[].policies.mcpAuthorization.rules`|[]string||
 |`mcp.targets[].policies.extMcp`|object|External MCP policy processors.|
 |`mcp.targets[].policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`mcp.targets[].policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.targets[].policies.extMcp.processors[].target.service`|object||
-|`mcp.targets[].policies.extMcp.processors[].target.service.name`|object||
-|`mcp.targets[].policies.extMcp.processors[].target.service.name.namespace`|string||
-|`mcp.targets[].policies.extMcp.processors[].target.service.name.hostname`|string||
-|`mcp.targets[].policies.extMcp.processors[].target.service.port`|integer||
-|`mcp.targets[].policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`mcp.targets[].policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.extMcp.processors[].service`|object||
+|`mcp.targets[].policies.extMcp.processors[].service.name`|object||
+|`mcp.targets[].policies.extMcp.processors[].service.name.namespace`|string||
+|`mcp.targets[].policies.extMcp.processors[].service.name.hostname`|string||
+|`mcp.targets[].policies.extMcp.processors[].service.port`|integer||
+|`mcp.targets[].policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`mcp.targets[].policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.targets[].policies.extMcp.processors[].policies.http.version`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.targets[].policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.targets[].policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.targets[].policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.targets[].policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`mcp.targets[].policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
@@ -19211,14 +20827,115 @@
 |`mcp.policies.mcpAuthorization.rules`|[]string||
 |`mcp.policies.extMcp`|object|External MCP policy processors.|
 |`mcp.policies.extMcp.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`mcp.policies.extMcp.processors[].target`|object|Reference to the external MCP policy service backend.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.policies.extMcp.processors[].target.service`|object||
-|`mcp.policies.extMcp.processors[].target.service.name`|object||
-|`mcp.policies.extMcp.processors[].target.service.name.namespace`|string||
-|`mcp.policies.extMcp.processors[].target.service.name.hostname`|string||
-|`mcp.policies.extMcp.processors[].target.service.port`|integer||
-|`mcp.policies.extMcp.processors[].target.host`|string|Hostname or IP address|
-|`mcp.policies.extMcp.processors[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extMcp.processors[].service`|object||
+|`mcp.policies.extMcp.processors[].service.name`|object||
+|`mcp.policies.extMcp.processors[].service.name.namespace`|string||
+|`mcp.policies.extMcp.processors[].service.name.hostname`|string||
+|`mcp.policies.extMcp.processors[].service.port`|integer||
+|`mcp.policies.extMcp.processors[].host`|string|Hostname or IP address|
+|`mcp.policies.extMcp.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extMcp.processors[].policies`|object|Policies to connect to the backend.|
+|`mcp.policies.extMcp.processors[].policies.requestHeaderModifier`|object|Headers to be modified in the request.|
+|`mcp.policies.extMcp.processors[].policies.requestHeaderModifier.add`|object||
+|`mcp.policies.extMcp.processors[].policies.requestHeaderModifier.set`|object||
+|`mcp.policies.extMcp.processors[].policies.requestHeaderModifier.remove`|[]string||
+|`mcp.policies.extMcp.processors[].policies.transformations`|object|Modify requests and responses sent to and from the backend.|
+|`mcp.policies.extMcp.processors[].policies.transformations.request`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.request.add`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.request.set`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.request.remove`|[]string||
+|`mcp.policies.extMcp.processors[].policies.transformations.request.body`|string||
+|`mcp.policies.extMcp.processors[].policies.transformations.request.metadata`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.response`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.response.add`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.response.set`|object||
+|`mcp.policies.extMcp.processors[].policies.transformations.response.remove`|[]string||
+|`mcp.policies.extMcp.processors[].policies.transformations.response.body`|string||
+|`mcp.policies.extMcp.processors[].policies.transformations.response.metadata`|object||
+|`mcp.policies.extMcp.processors[].policies.backendTLS`|object|Send TLS to the backend.|
+|`mcp.policies.extMcp.processors[].policies.backendTLS.cert`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.key`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.root`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.hostname`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.insecure`|boolean||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.insecureHost`|boolean||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.alpn`|[]string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.subjectAltNames`|[]string||
+|`mcp.policies.extMcp.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth`|object|Authenticate to the backend.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.header.prefix`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.cookie.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.passthrough.location.expression.expression`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.value`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.value.file`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.header`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.header.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.header.prefix`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.queryParameter.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.cookie`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.cookie.name`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.expression`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.key.location.expression.expression`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp.credential.file`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.region`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure`|object|Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig`|object|Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.developerImplicit`|object||
+|`mcp.policies.extMcp.processors[].policies.backendAuth.azure.implicit`|object||
+|`mcp.policies.extMcp.processors[].policies.http`|object|Specify HTTP settings for the backend|
+|`mcp.policies.extMcp.processors[].policies.http.version`|string||
+|`mcp.policies.extMcp.processors[].policies.http.requestTimeout`|string||
+|`mcp.policies.extMcp.processors[].policies.tcp`|object|Specify TCP settings for the backend|
+|`mcp.policies.extMcp.processors[].policies.tcp.keepalives`|object||
+|`mcp.policies.extMcp.processors[].policies.tcp.keepalives.enabled`|boolean||
+|`mcp.policies.extMcp.processors[].policies.tcp.keepalives.time`|string||
+|`mcp.policies.extMcp.processors[].policies.tcp.keepalives.interval`|string||
+|`mcp.policies.extMcp.processors[].policies.tcp.keepalives.retries`|integer||
+|`mcp.policies.extMcp.processors[].policies.tcp.connectTimeout`|object||
+|`mcp.policies.extMcp.processors[].policies.tcp.connectTimeout.secs`|integer||
+|`mcp.policies.extMcp.processors[].policies.tcp.connectTimeout.nanos`|integer||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel`|object|Specify a tunnel to use when connecting to the backend|
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy`|object|Reference to the proxy address<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.service`|object||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name`|object||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.namespace`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.service.name.hostname`|string||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.service.port`|integer||
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.extMcp.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.extMcp.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.extMcp.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
 |`mcp.policies.extMcp.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|

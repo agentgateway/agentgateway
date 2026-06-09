@@ -2986,6 +2986,7 @@ mod extmcp_test_support {
 	) -> BackendTrafficPolicy {
 		let remote = extmcp::Remote {
 			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
+			policies: Vec::new(),
 			failure_mode,
 			metadata,
 			request_headers: Default::default(),

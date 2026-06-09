@@ -1887,9 +1887,16 @@
         {
           "type": "object",
           "properties": {
-            "target": {
-              "description": "Reference to the external MCP policy service backend.",
-              "$ref": "#/$defs/SimpleLocalBackend"
+            "policies": {
+              "description": "Policies to connect to the backend.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SimpleLocalBackendPolicies"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "failureMode": {
               "description": "Behavior when the processor is unavailable or returns an error.",
@@ -1913,8 +1920,68 @@
             }
           },
           "required": [
-            "kind",
-            "target"
+            "kind"
+          ],
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "invalid"
+              ]
+            },
+            {
+              "description": "Service reference. Service must be defined in the top level services list.",
+              "type": "object",
+              "properties": {
+                "service": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "$ref": "#/$defs/NamespacedHostname"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "format": "uint16",
+                      "minimum": 0,
+                      "maximum": 65535
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "port"
+                  ]
+                }
+              },
+              "required": [
+                "service"
+              ]
+            },
+            {
+              "description": "Hostname or IP address",
+              "type": "object",
+              "properties": {
+                "host": {
+                  "description": "Hostname or IP address",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "host"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "backend": {
+                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "backend"
+              ]
+            }
           ]
         }
       ]
@@ -1927,612 +1994,6 @@
         "response",
         "full"
       ]
-    },
-    "FailureMode": {
-      "type": "string",
-      "enum": [
-        "failClosed",
-        "failOpen"
-      ]
-    },
-    "HeaderFilter": {
-      "description": "Allow/deny filter over request headers, mirroring ext_authz: empty `allowed`\nforwards every header plus all pseudo-headers (`:authority`, `:method`, ...);\na non-empty `allowed` forwards only the listed names. `disallowed` always\nwins. Header names match case-insensitively; pseudo-headers match exactly.",
-      "type": "object",
-      "properties": {
-        "allowed": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HeaderOrPseudo"
-          }
-        },
-        "disallowed": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HeaderOrPseudo"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "HeaderOrPseudo": {
-      "type": "string"
-    },
-    "Authorization": {
-      "$ref": "#/$defs/RuleSet"
-    },
-    "LocalMcpAuthentication": {
-      "type": "object",
-      "properties": {
-        "issuer": {
-          "type": "string"
-        },
-        "audiences": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "provider": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpIDP"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "resourceMetadata": {
-          "$ref": "#/$defs/ResourceMetadata"
-        },
-        "jwks": {
-          "$ref": "#/$defs/FileInlineOrRemote"
-        },
-        "mode": {
-          "$ref": "#/$defs/McpAuthenticationMode",
-          "default": "strict"
-        },
-        "authorizationLocation": {
-          "$ref": "#/$defs/AuthorizationLocation",
-          "default": {
-            "header": {
-              "name": "authorization",
-              "prefix": "Bearer "
-            }
-          }
-        },
-        "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions"
-        },
-        "clientId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "issuer",
-        "audiences",
-        "resourceMetadata",
-        "jwks"
-      ]
-    },
-    "McpIDP": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "auth0": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "auth0"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "keycloak": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "keycloak"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "okta": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "okta"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "ResourceMetadata": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "FileInlineOrRemote": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "file": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "file"
-          ]
-        },
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "url"
-          ]
-        }
-      ]
-    },
-    "McpAuthenticationMode": {
-      "oneOf": [
-        {
-          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
-          "type": "string",
-          "const": "strict"
-        },
-        {
-          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "optional"
-        },
-        {
-          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "permissive"
-        }
-      ]
-    },
-    "AuthorizationLocation": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "header": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "prefix": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "header"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "queryParameter": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "queryParameter"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "cookie": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "cookie"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "CEL expression that evaluates to the credential string.\nOnly supported for credential extraction.",
-          "type": "object",
-          "properties": {
-            "expression": {
-              "type": "object",
-              "properties": {
-                "expression": {
-                  "$ref": "#/$defs/Expression"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "expression"
-              ]
-            }
-          },
-          "required": [
-            "expression"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
-      "type": "object",
-      "properties": {
-        "requiredClaims": {
-          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "exp"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "A2aPolicy": {
-      "type": "object",
-      "additionalProperties": false
-    },
-    "Policy": {
-      "type": "object",
-      "properties": {
-        "promptGuard": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptGuard"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "defaults": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "overrides": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "transformations": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Expression"
-          }
-        },
-        "prompts": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptEnrichment"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "modelAliases": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "promptCaching": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptCachingConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "routes": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/RouteType"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PromptGuard": {
-      "type": "object",
-      "properties": {
-        "request": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RequestGuard"
-          }
-        },
-        "response": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ResponseGuard"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "RequestGuard": {
-      "type": "object",
-      "properties": {
-        "rejection": {
-          "$ref": "#/$defs/RequestRejection",
-          "default": {
-            "body": "The request was rejected due to inappropriate content",
-            "status": 403
-          }
-        }
-      },
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "regex": {
-              "$ref": "#/$defs/RegexRules"
-            }
-          },
-          "required": [
-            "regex"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "webhook": {
-              "$ref": "#/$defs/Webhook"
-            }
-          },
-          "required": [
-            "webhook"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "openAIModeration": {
-              "$ref": "#/$defs/Moderation"
-            }
-          },
-          "required": [
-            "openAIModeration"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "bedrockGuardrails": {
-              "$ref": "#/$defs/BedrockGuardrails"
-            }
-          },
-          "required": [
-            "bedrockGuardrails"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "googleModelArmor": {
-              "$ref": "#/$defs/GoogleModelArmor"
-            }
-          },
-          "required": [
-            "googleModelArmor"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "azureContentSafety": {
-              "$ref": "#/$defs/AzureContentSafety"
-            }
-          },
-          "required": [
-            "azureContentSafety"
-          ]
-        }
-      ]
-    },
-    "RequestRejection": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "$ref": "#/$defs/Bytes",
-          "default": "The request was rejected due to inappropriate content"
-        },
-        "status": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 403
-        },
-        "headers": {
-          "description": "Optional headers to add, set, or remove from the rejection response",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "RegexRules": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/Action",
-          "default": "mask"
-        },
-        "rules": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RegexRule"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "rules"
-      ]
-    },
-    "Action": {
-      "type": "string",
-      "enum": [
-        "mask",
-        "reject"
-      ]
-    },
-    "RegexRule": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "builtin": {
-              "$ref": "#/$defs/Builtin"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "builtin"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "pattern": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "pattern"
-          ]
-        }
-      ]
-    },
-    "Builtin": {
-      "type": "string",
-      "enum": [
-        "ssn",
-        "creditCard",
-        "phoneNumber",
-        "email",
-        "caSin"
-      ]
-    },
-    "Webhook": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "$ref": "#/$defs/SimpleLocalBackend"
-        },
-        "forwardHeaderMatches": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HeaderMatch"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "target"
-      ]
-    },
-    "Moderation": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "description": "Model to use. Defaults to `omni-moderation-latest`",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "policies": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "SimpleLocalBackendPolicies": {
       "type": "object",
@@ -2865,6 +2326,101 @@
           },
           "required": [
             "azure"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "prefix": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "CEL expression that evaluates to the credential string.\nOnly supported for credential extraction.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          "required": [
+            "expression"
           ],
           "additionalProperties": false
         }
@@ -3258,6 +2814,517 @@
       "required": [
         "proxy"
       ]
+    },
+    "FailureMode": {
+      "type": "string",
+      "enum": [
+        "failClosed",
+        "failOpen"
+      ]
+    },
+    "HeaderFilter": {
+      "description": "Allow/deny filter over request headers, mirroring ext_authz: empty `allowed`\nforwards every header plus all pseudo-headers (`:authority`, `:method`, ...);\na non-empty `allowed` forwards only the listed names. `disallowed` always\nwins. Header names match case-insensitively; pseudo-headers match exactly.",
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        },
+        "disallowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "HeaderOrPseudo": {
+      "type": "string"
+    },
+    "Authorization": {
+      "$ref": "#/$defs/RuleSet"
+    },
+    "LocalMcpAuthentication": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "type": "string"
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpIDP"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resourceMetadata": {
+          "$ref": "#/$defs/ResourceMetadata"
+        },
+        "jwks": {
+          "$ref": "#/$defs/FileInlineOrRemote"
+        },
+        "mode": {
+          "$ref": "#/$defs/McpAuthenticationMode",
+          "default": "strict"
+        },
+        "authorizationLocation": {
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "jwtValidationOptions": {
+          "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "audiences",
+        "resourceMetadata",
+        "jwks"
+      ]
+    },
+    "McpIDP": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "auth0": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "auth0"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "keycloak": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "keycloak"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "okta": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "okta"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ResourceMetadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "FileInlineOrRemote": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      ]
+    },
+    "McpAuthenticationMode": {
+      "oneOf": [
+        {
+          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
+          "type": "string",
+          "const": "strict"
+        },
+        {
+          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "optional"
+        },
+        {
+          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "permissive"
+        }
+      ]
+    },
+    "JWTValidationOptions": {
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "type": "object",
+      "properties": {
+        "requiredClaims": {
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "exp"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "A2aPolicy": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "promptGuard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaults": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "transformations": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "prompts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptEnrichment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelAliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "promptCaching": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "routes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/RouteType"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PromptGuard": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RequestGuard"
+          }
+        },
+        "response": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResponseGuard"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequestGuard": {
+      "type": "object",
+      "properties": {
+        "rejection": {
+          "$ref": "#/$defs/RequestRejection",
+          "default": {
+            "body": "The request was rejected due to inappropriate content",
+            "status": 403
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "regex": {
+              "$ref": "#/$defs/RegexRules"
+            }
+          },
+          "required": [
+            "regex"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "webhook": {
+              "$ref": "#/$defs/Webhook"
+            }
+          },
+          "required": [
+            "webhook"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "openAIModeration": {
+              "$ref": "#/$defs/Moderation"
+            }
+          },
+          "required": [
+            "openAIModeration"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bedrockGuardrails": {
+              "$ref": "#/$defs/BedrockGuardrails"
+            }
+          },
+          "required": [
+            "bedrockGuardrails"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "googleModelArmor": {
+              "$ref": "#/$defs/GoogleModelArmor"
+            }
+          },
+          "required": [
+            "googleModelArmor"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ]
+        }
+      ]
+    },
+    "RequestRejection": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/Bytes",
+          "default": "The request was rejected due to inappropriate content"
+        },
+        "status": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 403
+        },
+        "headers": {
+          "description": "Optional headers to add, set, or remove from the rejection response",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegexRules": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action",
+          "default": "mask"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegexRule"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rules"
+      ]
+    },
+    "Action": {
+      "type": "string",
+      "enum": [
+        "mask",
+        "reject"
+      ]
+    },
+    "RegexRule": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "builtin": {
+              "$ref": "#/$defs/Builtin"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "builtin"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pattern"
+          ]
+        }
+      ]
+    },
+    "Builtin": {
+      "type": "string",
+      "enum": [
+        "ssn",
+        "creditCard",
+        "phoneNumber",
+        "email",
+        "caSin"
+      ]
+    },
+    "Webhook": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/SimpleLocalBackend"
+        },
+        "forwardHeaderMatches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
+    },
+    "Moderation": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "Model to use. Defaults to `omni-moderation-latest`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",

@@ -600,6 +600,7 @@ fn convert_ext_mcp(
 		};
 		Ok(crate::mcp::extmcp::Remote {
 			target,
+			policies: Vec::new(),
 			failure_mode,
 			metadata,
 			request_headers,

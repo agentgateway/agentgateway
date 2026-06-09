@@ -254,7 +254,7 @@ fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcRefer
 	ExtMcpClient::new(GrpcReferenceChannel {
 		target: remote.target.clone(),
 		client,
-		policies: Arc::new(Vec::new()),
+		policies: Arc::new(remote.policies.clone()),
 	})
 }
 
