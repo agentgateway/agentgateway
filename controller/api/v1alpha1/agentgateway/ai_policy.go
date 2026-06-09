@@ -134,6 +134,12 @@ type Webhook struct {
 	// By default, no headers are forwarded.
 	// +optional
 	ForwardHeaderMatches []gwv1.HTTPHeaderMatch `json:"forwardHeaderMatches,omitempty"`
+
+	// `failureMode` controls behavior when the webhook guardrail is unavailable
+	// or returns an error. `FailOpen` allows the request to continue.
+	// `FailClosed` (default) rejects the request.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
 }
 
 // CustomResponse configures a response to return to the client if request content

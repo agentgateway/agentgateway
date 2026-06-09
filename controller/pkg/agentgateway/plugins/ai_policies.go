@@ -124,7 +124,8 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
-		Backend: be,
+		Backend:     be,
+		FailureMode: webhookFailureMode(webhook.FailureMode),
 	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
@@ -148,6 +149,13 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	}
 
 	return w, nil
+}
+
+func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_Webhook_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
+	}
+	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {

@@ -3077,6 +3077,15 @@ spec:
                                                         rule: '(size(self.group) ==
                                                           0 && self.kind == ''Service'')
                                                           ? has(self.port) : true'
+                                                    failureMode:
+                                                      description: |-
+                                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                                        or returns an error. `FailOpen` allows the request to continue.
+                                                        `FailClosed` (default) rejects the request.
+                                                      enum:
+                                                      - FailClosed
+                                                      - FailOpen
+                                                      type: string
                                                     forwardHeaderMatches:
                                                       description: |-
                                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
@@ -4863,6 +4872,15 @@ spec:
                                                         rule: '(size(self.group) ==
                                                           0 && self.kind == ''Service'')
                                                           ? has(self.port) : true'
+                                                    failureMode:
+                                                      description: |-
+                                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                                        or returns an error. `FailOpen` allows the request to continue.
+                                                        `FailClosed` (default) rejects the request.
+                                                      enum:
+                                                      - FailClosed
+                                                      - FailOpen
+                                                      type: string
                                                     forwardHeaderMatches:
                                                       description: |-
                                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
@@ -9602,6 +9620,15 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    failureMode:
+                                      description: |-
+                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                        or returns an error. `FailOpen` allows the request to continue.
+                                        `FailClosed` (default) rejects the request.
+                                      enum:
+                                      - FailClosed
+                                      - FailOpen
+                                      type: string
                                     forwardHeaderMatches:
                                       description: |-
                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
@@ -11167,6 +11194,15 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    failureMode:
+                                      description: |-
+                                        `failureMode` controls behavior when the webhook guardrail is unavailable
+                                        or returns an error. `FailOpen` allows the request to continue.
+                                        `FailClosed` (default) rejects the request.
+                                      enum:
+                                      - FailClosed
+                                      - FailOpen
+                                      type: string
                                     forwardHeaderMatches:
                                       description: |-
                                         ForwardHeaderMatches defines a list of HTTP header matches that will be
