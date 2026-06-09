@@ -19,6 +19,12 @@ spec:
             failureMode: FailClosed
             metadata:
               tenant: 'jwt.sub'
+            allowedRequestHeaders:
+              - x-tenant
+              - ':authority'
+              - authorization
+            disallowedRequestHeaders:
+              - authorization
           methods:
             tools/call: Full
             tools/list: Request
@@ -47,6 +53,12 @@ output:
               tools/call: FULL
               tools/list: REQUEST
             remote:
+              allowedRequestHeaders:
+              - x-tenant
+              - :authority
+              - authorization
+              disallowedRequestHeaders:
+              - authorization
               metadata:
                 tenant: jwt.sub
               target:

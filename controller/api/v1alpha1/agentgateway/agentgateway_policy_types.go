@@ -1544,6 +1544,23 @@ type ExtMcpRemote struct {
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
 	Metadata map[string]shared.CELExpression `json:"metadata,omitempty"`
+
+	// `allowedRequestHeaders` lists the incoming request headers forwarded to
+	// the policy server in `McpRequest.headers`. If empty, all headers and
+	// pseudo-headers (`:authority`, `:method`, ...) are forwarded. Matching is
+	// case-insensitive.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=64
+	AllowedRequestHeaders []HeaderName `json:"allowedRequestHeaders,omitempty"`
+
+	// `disallowedRequestHeaders` lists header names never forwarded to the
+	// policy server, even if listed in `allowedRequestHeaders`. Matching is
+	// case-insensitive.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=64
+	DisallowedRequestHeaders []HeaderName `json:"disallowedRequestHeaders,omitempty"`
 }
 
 type MCPAuthentication struct {

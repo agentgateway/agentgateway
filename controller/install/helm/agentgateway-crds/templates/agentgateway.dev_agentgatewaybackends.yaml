@@ -12285,6 +12285,27 @@ spec:
                                   description: '`remote` configures a gRPC policy
                                     server.'
                                   properties:
+                                    allowedRequestHeaders:
+                                      description: |-
+                                        `allowedRequestHeaders` lists the incoming request headers forwarded to
+                                        the policy server in `McpRequest.headers`. If empty, all headers and
+                                        pseudo-headers (`:authority`, `:method`, ...) are forwarded. Matching is
+                                        case-insensitive.
+                                      items:
+                                        description: An HTTP Header Name.
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: pseudo-headers must be one of :authority,
+                                            :method, :path, :scheme, or :status
+                                          rule: '!self.startsWith('':'') || self in
+                                            ['':authority'', '':method'', '':path'',
+                                            '':scheme'', '':status'']'
+                                      maxItems: 64
+                                      type: array
+                                      x-kubernetes-list-type: set
                                     backendRef:
                                       description: |-
                                         `backendRef` references the remote ExtMcp policy server.
@@ -12357,6 +12378,26 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    disallowedRequestHeaders:
+                                      description: |-
+                                        `disallowedRequestHeaders` lists header names never forwarded to the
+                                        policy server, even if listed in `allowedRequestHeaders`. Matching is
+                                        case-insensitive.
+                                      items:
+                                        description: An HTTP Header Name.
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^:?[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                        x-kubernetes-validations:
+                                        - message: pseudo-headers must be one of :authority,
+                                            :method, :path, :scheme, or :status
+                                          rule: '!self.startsWith('':'') || self in
+                                            ['':authority'', '':method'', '':path'',
+                                            '':scheme'', '':status'']'
+                                      maxItems: 64
+                                      type: array
+                                      x-kubernetes-list-type: set
                                     failureMode:
                                       description: |-
                                         `failureMode` controls behavior when the policy server is unreachable

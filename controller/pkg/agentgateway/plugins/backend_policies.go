@@ -233,12 +233,15 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		for name, phase := range p.Methods {
 			methods[name] = mcpMethodPhase(phase)
 		}
+		headerName := func(h agentgateway.HeaderName) string { return string(h) }
 		processors = append(processors, &api.BackendPolicySpec_ExtMcp_Processor{
 			Kind: &api.BackendPolicySpec_ExtMcp_Processor_Remote{
 				Remote: &api.BackendPolicySpec_ExtMcp_Remote{
-					Target:      be,
-					FailureMode: extMcpFailureMode(p.Remote.FailureMode),
-					Metadata:    metadata,
+					Target:                   be,
+					FailureMode:              extMcpFailureMode(p.Remote.FailureMode),
+					Metadata:                 metadata,
+					AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
+					DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
 				},
 			},
 			Methods: methods,
