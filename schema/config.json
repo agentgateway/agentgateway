@@ -6659,6 +6659,18 @@
             }
           ]
         },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "transformations": {
           "description": "Modify requests and responses",
           "anyOf": [
@@ -8062,6 +8074,18 @@
             }
           ]
         },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "transformations": {
           "description": "Modify requests and responses",
           "anyOf": [
@@ -8100,18 +8124,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Authorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "cors": {
-          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CorsSerde"
             },
             {
               "type": "null"

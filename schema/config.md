@@ -6050,6 +6050,13 @@
 |`binds[].listeners[].policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
 |`binds[].listeners[].policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
 |`binds[].listeners[].policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
+|`binds[].listeners[].policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`binds[].listeners[].policies.cors.allowCredentials`|boolean||
+|`binds[].listeners[].policies.cors.allowHeaders`|[]string||
+|`binds[].listeners[].policies.cors.allowMethods`|[]string||
+|`binds[].listeners[].policies.cors.allowOrigins`|[]string||
+|`binds[].listeners[].policies.cors.exposeHeaders`|[]string||
+|`binds[].listeners[].policies.cors.maxAge`|string||
 |`binds[].listeners[].policies.transformations`|object|Modify requests and responses|
 |`binds[].listeners[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -18619,6 +18626,13 @@
 |`llm.policies.extProc.processingOptions.requestTrailerMode`|enum|Possible values: `send`, `skip`.|
 |`llm.policies.extProc.processingOptions.responseTrailerMode`|enum|Possible values: `send`, `skip`.|
 |`llm.policies.extProc.processingOptions.allowModeOverride`|boolean|Allow ext_proc `mode_override` values from matching headers responses to update<br>subsequent request/response processing phases for this exchange.|
+|`llm.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
+|`llm.policies.cors.allowCredentials`|boolean||
+|`llm.policies.cors.allowHeaders`|[]string||
+|`llm.policies.cors.allowMethods`|[]string||
+|`llm.policies.cors.allowOrigins`|[]string||
+|`llm.policies.cors.exposeHeaders`|[]string||
+|`llm.policies.cors.maxAge`|string||
 |`llm.policies.transformations`|object|Modify requests and responses|
 |`llm.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -18678,13 +18692,6 @@
 |`llm.policies.apiKey.location.expression.expression`|string||
 |`llm.policies.authorization`|object|Authorization policies for HTTP access.|
 |`llm.policies.authorization.rules`|[]string||
-|`llm.policies.cors`|object|Handle CORS preflight requests and append configured CORS headers to applicable requests.|
-|`llm.policies.cors.allowCredentials`|boolean||
-|`llm.policies.cors.allowHeaders`|[]string||
-|`llm.policies.cors.allowMethods`|[]string||
-|`llm.policies.cors.allowOrigins`|[]string||
-|`llm.policies.cors.exposeHeaders`|[]string||
-|`llm.policies.cors.maxAge`|string||
 |`llm.policies.localRateLimit`|[]object|Rate limit incoming requests. State is kept local.|
 |`llm.policies.localRateLimit[].maxTokens`|integer||
 |`llm.policies.localRateLimit[].tokensPerFill`|integer||

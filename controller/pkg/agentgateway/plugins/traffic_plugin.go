@@ -517,7 +517,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Cors != nil {
-		appendPolicy("cors")(processCorsPolicy(traffic.Cors, basePolicyName, policyName), nil)
+		appendPolicy("cors")(processCorsPolicy(traffic.Cors, traffic.Phase, basePolicyName, policyName), nil)
 	}
 
 	if traffic.HeaderModifiers != nil {
@@ -1024,12 +1024,13 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 	return policies
 }
 
-func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy types.NamespacedName) *api.Policy {
+func processCorsPolicy(cors *agentgateway.CORS, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	corsPolicy := &api.Policy{
 		Key:  basePolicyName + corsPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
 				Kind: &api.TrafficPolicySpec_Cors{Cors: &api.CORS{
 					AllowCredentials: ptr.OrEmpty(cors.AllowCredentials),
 					AllowHeaders:     slices.Map(cors.AllowHeaders, func(h gwv1.HTTPHeaderName) string { return string(h) }),

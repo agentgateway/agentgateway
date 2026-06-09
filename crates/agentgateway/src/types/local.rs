@@ -1416,9 +1416,6 @@ struct LocalLLMPolicy {
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
-	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
-	#[serde(default)]
-	cors: Option<http::cors::Cors>,
 	/// Rate limit incoming requests. State is kept local.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
@@ -1442,6 +1439,9 @@ struct LocalGatewayPolicy {
 	/// Extend agentgateway with an external processor
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
+	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
+	#[serde(default)]
+	cors: Option<http::cors::Cors>,
 	/// Modify requests and responses
 	#[serde(default)]
 	#[cfg_attr(
@@ -1464,6 +1464,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			jwt_auth,
 			ext_authz,
 			ext_proc,
+			cors,
 			transformations,
 			basic_auth,
 			api_key,
@@ -1473,6 +1474,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			jwt_auth,
 			ext_authz,
 			ext_proc,
+			cors,
 			transformations,
 			basic_auth,
 			api_key,
@@ -2047,12 +2049,6 @@ fn llm_model_match_specificity(model_name: &str) -> usize {
 	model_name.chars().filter(|c| *c != '*').count()
 }
 
-fn add_llm_cors_policy(inline_policies: &mut Vec<TrafficPolicy>, cors: &Option<http::cors::Cors>) {
-	if let Some(cors) = cors.clone() {
-		inline_policies.push(TrafficPolicy::CORS(RequestPolicy::single(cors)));
-	}
-}
-
 #[allow(deprecated)]
 async fn convert_llm_config(
 	client: client::Client,
@@ -2078,11 +2074,10 @@ async fn convert_llm_config(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = Vec::new();
-	let (llm_cors, listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
+	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
 		let LocalLLMPolicy {
 			gateway,
 			authorization,
-			cors,
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
@@ -2106,12 +2101,11 @@ async fn convert_llm_config(
 		)
 		.await?;
 		(
-			cors,
 			gateway_policies.route_policies,
 			route_policies.route_policies,
 		)
 	} else {
-		(None, vec![], vec![])
+		(vec![], vec![])
 	};
 
 	// Create transformation policy to set x-gateway-model-name header from request body
@@ -2163,7 +2157,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	})
 	.to_string();
 
-	let mut model_list_inline_policies = vec![
+	let model_list_inline_policies = vec![
 		TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(
 			crate::http::filters::HeaderModifier {
 				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
@@ -2178,8 +2172,6 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			status: ::http::StatusCode::OK,
 		})),
 	];
-	add_llm_cors_policy(&mut model_list_inline_policies, &llm_cors);
-
 	let model_list_route = Route {
 		key: strng::new("llm:admin:model-list"),
 		service_key: None,
@@ -2439,11 +2431,10 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
-		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+		let model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
 			routes: llm_routes.into_iter().collect(),
 			..Default::default()
 		}))];
-		add_llm_cors_policy(&mut model_route_inline_policies, &llm_cors);
 
 		let model_route = Route {
 			key: route_key.clone(),
@@ -2467,7 +2458,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 		routes.push(model_route);
 	}
 
-	let mut fallback_inline_policies = vec![
+	let fallback_inline_policies = vec![
 		TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(
 			crate::http::filters::HeaderModifier {
 				set: vec![(strng::new("Content-Type"), strng::new("application/json"))],
@@ -2500,8 +2491,6 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			status: ::http::StatusCode::NOT_FOUND,
 		})),
 	];
-	add_llm_cors_policy(&mut fallback_inline_policies, &llm_cors);
-
 	routes.push(Route {
 		key: strng::new("llm:model:fallback"),
 		service_key: None,

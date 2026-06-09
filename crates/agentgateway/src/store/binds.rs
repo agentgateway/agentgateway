@@ -331,6 +331,7 @@ pub struct RoutePolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayPolicies {
+	pub cors: RequestPolicy<http::cors::Cors>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -344,6 +345,7 @@ pub struct GatewayPolicies {
 impl GatewayPolicies {
 	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
 		[
+			&self.cors as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.oidc as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
@@ -914,6 +916,9 @@ impl Store {
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
 			match rule {
+				TrafficPolicy::CORS(p) => {
+					pol.cors.set_if_unset(p);
+				},
 				TrafficPolicy::Oidc(p) => {
 					pol.oidc.set_if_unset(p);
 				},

@@ -831,6 +831,36 @@ async fn gateway_phase_oidc_bypasses_cors_preflight_requests() {
 }
 
 #[tokio::test]
+async fn gateway_phase_cors_handles_preflight_before_route_selection() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io,
+		Method::OPTIONS,
+		"http://lo/no-route-needed",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+#[tokio::test]
 async fn network_authorization_allow() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
