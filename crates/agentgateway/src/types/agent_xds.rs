@@ -624,7 +624,11 @@ fn convert_ext_mcp(
 		drivers.push(crate::mcp::extmcp::Driver { methods, kind });
 	}
 
-	Ok(crate::mcp::extmcp::ExtMcp { drivers })
+	let ext = crate::mcp::extmcp::ExtMcp { drivers };
+	for w in ext.load_warnings() {
+		diagnostics.add_warning(w);
+	}
+	Ok(ext)
 }
 
 // Parse configured header names, dropping (with a warning) any that aren't valid

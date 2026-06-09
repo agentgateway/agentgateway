@@ -1619,6 +1619,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::McpAuthorization(p))
 		}
 		if let Some(p) = ext_mcp {
+			for w in p.load_warnings() {
+				tracing::warn!("{w}");
+			}
 			pols.push(BackendTrafficPolicy::ExtMcp(Arc::new(p)))
 		}
 		if let Some(p) = a2a {
@@ -2969,6 +2972,9 @@ pub(crate) async fn split_policies(
 		backend_policies.push(BackendTrafficPolicy::McpAuthorization(p))
 	}
 	if let Some(p) = ext_mcp {
+		for w in p.load_warnings() {
+			tracing::warn!("{w}");
+		}
 		backend_policies.push(BackendTrafficPolicy::ExtMcp(Arc::new(p)))
 	}
 	if let Some(p) = mcp_authentication {

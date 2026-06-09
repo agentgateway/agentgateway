@@ -90,6 +90,19 @@ impl ExtMcp {
 	pub fn runs_response(&self, method: &str) -> bool {
 		self.drivers.iter().any(|d| d.runs_response(method))
 	}
+
+	/// Config warnings to surface at load time (xds diagnostics or logs).
+	pub fn load_warnings(&self) -> Vec<String> {
+		let mut out = Vec::new();
+		for m in methods::REQUEST_PHASE_UNSUPPORTED {
+			if self.runs_request(m) {
+				out.push(format!(
+					"extMcp: methods match {m:?} with a request phase, but only the response phase runs for this method"
+				));
+			}
+		}
+		out
+	}
 }
 
 // TLS, retries, and load balancing come from the backend referenced by `target`.
@@ -290,5 +303,35 @@ drivers:
 			SimpleBackendReference::Backend(_)
 		));
 		assert_eq!(r1.failure_mode, FailureMode::FailClosed);
+	}
+
+	fn ext_with_methods(pairs: &[(&str, Phase)]) -> ExtMcp {
+		ExtMcp {
+			drivers: vec![Driver {
+				methods: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+				kind: DriverKind::Remote(Remote {
+					target: Arc::new(SimpleBackendReference::Backend("b".into())),
+					failure_mode: FailureMode::default(),
+					metadata: HashMap::new(),
+					request_headers: HeaderFilter::default(),
+				}),
+			}],
+		}
+	}
+
+	#[test]
+	fn warns_on_request_phase_for_unsupported_methods() {
+		// A catchall request phase matches subscribe/unsubscribe/complete, none of
+		// which run the request hook.
+		let warnings = ext_with_methods(&[("*", Phase::Full)]).load_warnings();
+		assert_eq!(warnings.len(), 3, "{warnings:?}");
+		assert!(warnings[0].contains("resources/subscribe"));
+
+		// Response-only and supported-method configs are clean.
+		assert!(
+			ext_with_methods(&[("*", Phase::Response), ("tools/call", Phase::Full)])
+				.load_warnings()
+				.is_empty()
+		);
 	}
 }
