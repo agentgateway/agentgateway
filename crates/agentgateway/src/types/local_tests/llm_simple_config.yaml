@@ -40,6 +40,10 @@ llm:
       - name: "X-Org"
         value:
           exact: "engineering"
+    promptCaching:
+      cacheSystem: true
+      cacheMessages: true
+      minTokens: 1
   - name: gemini-0.5-pro
     provider: vertex
     params:

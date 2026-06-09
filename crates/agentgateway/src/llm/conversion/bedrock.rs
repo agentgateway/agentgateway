@@ -2655,6 +2655,12 @@ mod helpers {
 		if model_lower.contains("amazon.nova") {
 			return true;
 		}
+		if model_lower.contains(":application-inference-profile/") {
+			// If they are using inference profiles, the model name is obscured; we have no clue whether
+			// It's supported or not.
+			// Instead, we assume true; if users want to use models without support they can turn off caching manually.
+			return true;
+		}
 		false
 	}
 

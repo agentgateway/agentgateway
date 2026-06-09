@@ -21,7 +21,7 @@ use crate::http::transformation_cel::{LocalTransformationConfig, Transformation}
 use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
 };
-use crate::llm::policy::PromptGuard;
+use crate::llm::policy::{PromptCachingConfig, PromptGuard};
 use crate::llm::{
 	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
 };
@@ -534,6 +534,9 @@ pub struct LocalLLMModels {
 	/// guardrails to apply to the request or response
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	guardrails: Option<PromptGuard>,
+	/// promptCaching configures cache point insertion for supported LLM providers.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	prompt_caching: Option<PromptCachingConfig>,
 
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -2374,7 +2377,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			prompts: None,
 			model_aliases: Default::default(),
 			wildcard_patterns: Arc::new(vec![]),
-			prompt_caching: None,
+			prompt_caching: model_config.prompt_caching.clone(),
 			routes: Default::default(),
 		})));
 		let backend_with_policies = BackendWithPolicies {

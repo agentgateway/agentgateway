@@ -18056,6 +18056,12 @@
 |`llm.models[].guardrails.response[].rejection.headers.add`|object||
 |`llm.models[].guardrails.response[].rejection.headers.set`|object||
 |`llm.models[].guardrails.response[].rejection.headers.remove`|[]string||
+|`llm.models[].promptCaching`|object|promptCaching configures cache point insertion for supported LLM providers.|
+|`llm.models[].promptCaching.cacheSystem`|boolean||
+|`llm.models[].promptCaching.cacheMessages`|boolean||
+|`llm.models[].promptCaching.cacheTools`|boolean||
+|`llm.models[].promptCaching.minTokens`|integer||
+|`llm.models[].promptCaching.cacheMessageOffset`|integer||
 |`llm.models[].matches`|[]object|matches specifies the conditions under which this model should be used in addition to matching the model name.|
 |`llm.models[].matches[].headers`|[]object||
 |`llm.models[].matches[].headers[].name`|string||

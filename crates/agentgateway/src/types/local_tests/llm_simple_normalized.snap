@@ -314,7 +314,13 @@ backends:
           unhealthyExpression: response.code >= 500 || response.code == 429
           eviction:
             duration: 30s
-      - ai: {}
+      - ai:
+          promptCaching:
+            cacheSystem: true
+            cacheMessages: true
+            cacheTools: false
+            minTokens: 1
+            cacheMessageOffset: 0
   - backend:
       ai:
         name: "llm:model:gemini-0.5-pro:1"

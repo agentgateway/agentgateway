@@ -7818,6 +7818,17 @@
             }
           ]
         },
+        "promptCaching": {
+          "description": "promptCaching configures cache point insertion for supported LLM providers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "matches": {
           "description": "matches specifies the conditions under which this model should be used in addition to matching the model name.",
           "type": "array",
