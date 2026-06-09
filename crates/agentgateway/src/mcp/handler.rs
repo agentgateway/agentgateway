@@ -510,9 +510,7 @@ impl Relay {
 		let stream = us.generic_stream(r, &ctx).await?;
 
 		match extmcp {
-			Some(extmcp) => {
-				messages_to_response(id.clone(), wrap_with_extmcp(id, stream, extmcp), mcp_log)
-			},
+			Some(extmcp) => messages_to_response(id, wrap_with_extmcp(stream, extmcp), mcp_log),
 			None => messages_to_response(id, stream, mcp_log),
 		}
 	}
@@ -691,7 +689,7 @@ impl Relay {
 			.as_deref()
 			.and_then(|sn| self.build_extmcp_ctx(&r, &ctx, sn))
 		{
-			Some(extmcp) => messages_to_response(id.clone(), wrap_with_extmcp(id, ms, extmcp), None),
+			Some(extmcp) => messages_to_response(id, wrap_with_extmcp(ms, extmcp), None),
 			None => messages_to_response(id, ms, None),
 		}
 	}
@@ -827,7 +825,6 @@ fn messages_to_response(
 }
 
 fn wrap_with_extmcp(
-	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	extmcp: ExtMcpCtx,
 ) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
@@ -835,11 +832,10 @@ fn wrap_with_extmcp(
 	let extmcp = Arc::new(extmcp);
 	stream.then(move |rpc| {
 		let ctx = extmcp.clone();
-		let id = id.clone();
 		async move {
 			match rpc {
 				Ok(mut rpc) => {
-					if let Some(scrubbed) = apply_extmcp_response_intercept(&ctx, &id, &rpc).await {
+					if let Some(scrubbed) = apply_extmcp_response_intercept(&ctx, &rpc).await {
 						rpc = scrubbed;
 					}
 					Ok(rpc)
@@ -880,17 +876,13 @@ fn into_sse_stream(
 
 async fn apply_extmcp_response_intercept(
 	ctx: &ExtMcpCtx,
-	request_id: &RequestId,
 	msg: &ServerJsonRpcMessage,
 ) -> Option<ServerJsonRpcMessage> {
 	use crate::mcp::extmcp::Outcome;
+	// The stream is request-scoped, so the only Response on it is the terminal.
 	let ServerJsonRpcMessage::Response(resp) = msg else {
 		return None;
 	};
-	if resp.id != *request_id {
-		// only apply to the terminal request for the given response, ignore notifications
-		return None;
-	}
 	let mut json = match serde_json::to_value(&resp.result) {
 		Ok(v) => v,
 		Err(e) => {
@@ -917,16 +909,13 @@ async fn apply_extmcp_response_intercept(
 					tracing::warn!(error = %e, "extMcp: failed to deserialize mutated result");
 					return Some(ServerJsonRpcMessage::error(
 						ErrorData::internal_error(format!("extMcp produced an invalid response: {e}"), None),
-						request_id.clone(),
+						resp.id.clone(),
 					));
 				},
 			};
-			Some(ServerJsonRpcMessage::response(
-				new_result,
-				request_id.clone(),
-			))
+			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
-		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, request_id.clone())),
+		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, resp.id.clone())),
 	}
 }
 
