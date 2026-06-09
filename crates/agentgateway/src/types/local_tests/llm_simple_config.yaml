@@ -44,7 +44,7 @@ llm:
       cacheSystem: true
       cacheMessages: true
       minTokens: 1
-  - name: gemini-0.5-pro
+  - name: '*'
     provider: vertex
     params:
       model: claude-haiku-4-5-20251001

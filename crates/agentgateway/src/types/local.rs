@@ -2043,6 +2043,10 @@ fn llm_model_name_header_match(model_name: &str) -> anyhow::Result<HeaderValueMa
 	bail!("model name wildcard must be either at the beginning or the end: '{model_name}'")
 }
 
+fn llm_model_match_specificity(model_name: &str) -> usize {
+	model_name.chars().filter(|c| *c != '*').count()
+}
+
 fn add_llm_cors_policy(inline_policies: &mut Vec<TrafficPolicy>, cors: &Option<http::cors::Cors>) {
 	if let Some(cors) = cors.clone() {
 		inline_policies.push(TrafficPolicy::CORS(RequestPolicy::single(cors)));
@@ -2206,8 +2210,20 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	};
 	routes.push(model_list_route);
 
+	let ordered_models = models
+		.iter()
+		.cloned()
+		.enumerate()
+		.sorted_by_key(|(original_idx, model)| {
+			(
+				std::cmp::Reverse(llm_model_match_specificity(&model.name)),
+				*original_idx,
+			)
+		})
+		.collect_vec();
+
 	// Create routes and backends for each model
-	for (idx, model_config) in models.iter().cloned().enumerate() {
+	for (idx, (_, model_config)) in ordered_models.into_iter().enumerate() {
 		let mut model_config = model_config;
 		model_config.apply_base_url()?;
 		let model_name = strng::new(&model_config.name);
@@ -2388,9 +2404,8 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 
 		// Create route for this model
 		// Index is needed because the same name can be used with different match criteria
-		// Important: index is before model, to ensure we rank ties by order of first-in-list
-		// This ensures if I have '*' and 'foo/*', I can prefer `foo/*` by making it first.
-		// TODO: should we automatically make more explicit prefixes higher ranked?
+		// Models are sorted by specificity first, so more precise model matches win
+		// over less precise matches like "*", regardless of the original model list order.
 		// 999999 routes ought to be enough for anyone.
 		let route_key = strng::format!("llm:model:{idx:06}:{}", model_config.name);
 		let user_matches = if model_config.matches.is_empty() {
