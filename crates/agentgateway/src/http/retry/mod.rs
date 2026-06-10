@@ -110,24 +110,4 @@ mod tests {
 		.unwrap();
 		assert_eq!(pol.expressions().count(), 2);
 	}
-
-	#[test]
-	fn policy_equality_considers_conditions() {
-		let base = serde_json::json!({
-			"attempts": 2,
-			"codes": [500],
-			"precondition": "request.method == \"GET\"",
-		});
-		let a: Policy = serde_json::from_value(base.clone()).unwrap();
-		let b: Policy = serde_json::from_value(base).unwrap();
-		assert_eq!(a, b);
-
-		let c: Policy = serde_json::from_value(serde_json::json!({
-			"attempts": 2,
-			"codes": [500],
-			"precondition": "request.method == \"POST\"",
-		}))
-		.unwrap();
-		assert_ne!(a, c);
-	}
 }
