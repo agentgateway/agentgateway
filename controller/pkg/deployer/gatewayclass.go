@@ -44,6 +44,9 @@ func GetCommonExemptFeatures() sets.Set[features.Feature] {
 	for _, feature := range features.MeshExtendedFeatures.UnsortedList() {
 		exemptFeatures.Insert(feature)
 	}
+	for _, feature := range features.UDPRouteFeatures.UnsortedList() {
+		exemptFeatures.Insert(feature)
+	}
 	return exemptFeatures
 }
 
