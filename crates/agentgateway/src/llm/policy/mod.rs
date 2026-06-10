@@ -108,16 +108,22 @@ impl<'de> Deserialize<'de> for SortedRoutes {
 #[apply(schema!)]
 #[derive(Default)]
 pub struct Policy {
+	/// Prompt and response guardrails to apply to LLM traffic.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_guard: Option<PromptGuard>,
+	/// Default request body values added only when the client did not provide them.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub defaults: Option<HashMap<String, serde_json::Value>>,
+	/// Request body values that replace client-provided values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub overrides: Option<HashMap<String, serde_json::Value>>,
+	/// Request body values computed from CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub transformations: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// Messages to add before or after the client prompt.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
+	/// Model name aliases that rewrite requested model names.
 	#[serde(
 		rename = "modelAliases",
 		default,
@@ -129,8 +135,10 @@ pub struct Policy {
 	/// Wrapped in Arc to avoid cloning compiled regex during policy merging.
 	#[serde(skip)]
 	pub wildcard_patterns: Arc<Vec<(ModelAliasPattern, Strng)>>,
+	/// Prompt caching settings for providers that support cache markers.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+	/// Route type overrides selected by request path suffix.
 	#[serde(default, skip_serializing_if = "SortedRoutes::is_empty")]
 	#[cfg_attr(
 		feature = "schema",
@@ -180,18 +188,23 @@ impl ModelAliasPattern {
 #[apply(schema!)]
 #[serde(default)]
 pub struct PromptCachingConfig {
+	/// Add cache markers to system prompts when supported by the provider.
 	#[serde(rename = "cacheSystem")]
 	pub cache_system: bool,
 
+	/// Add cache markers to chat messages when supported by the provider.
 	#[serde(rename = "cacheMessages")]
 	pub cache_messages: bool,
 
+	/// Add cache markers to tool definitions when supported by the provider.
 	#[serde(rename = "cacheTools")]
 	pub cache_tools: bool,
 
+	/// Minimum prompt size required before cache markers are added.
 	#[serde(rename = "minTokens")]
 	pub min_tokens: Option<usize>,
 
+	/// Message offset used when choosing where to place cache markers.
 	#[serde(rename = "cacheMessageOffset")]
 	pub cache_message_offset: usize,
 }
@@ -211,18 +224,20 @@ impl Default for PromptCachingConfig {
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 pub struct PromptEnrichment {
+	/// Messages appended to the end of each chat request.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub append: Vec<crate::llm::SimpleChatCompletionMessage>,
+	/// Messages prepended to the beginning of each chat request.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub prepend: Vec<crate::llm::SimpleChatCompletionMessage>,
 }
 
 #[apply(schema!)]
 pub struct PromptGuard {
-	// Guards applied to client requests before they reach the LLM
+	/// Guards applied to client requests before they reach the LLM.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub request: Vec<RequestGuard>,
-	// Guards applied to LLM responses before they reach the client
+	/// Guards applied to LLM responses before they reach the client.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub response: Vec<ResponseGuard>,
 }
@@ -1171,36 +1186,50 @@ enum RegexResult {
 
 #[apply(schema!)]
 pub struct RequestGuard {
+	/// Response returned when the request is rejected.
 	#[serde(default)]
 	pub rejection: RequestRejection,
+	/// Guardrail provider or rule set to apply.
 	#[serde(flatten)]
 	pub kind: RequestGuardKind,
 }
 
 #[apply(schema!)]
 pub enum RequestGuardKind {
+	/// Apply regex-based masking or rejection rules.
 	Regex(RegexRules),
+	/// Call a webhook to evaluate the prompt.
 	Webhook(Webhook),
+	/// Use OpenAI moderation to evaluate the prompt.
 	OpenAIModeration(Moderation),
+	/// Use AWS Bedrock Guardrails to evaluate the prompt.
 	BedrockGuardrails(BedrockGuardrails),
+	/// Use Google Model Armor to evaluate the prompt.
 	GoogleModelArmor(GoogleModelArmor),
+	/// Use Azure Content Safety to evaluate the prompt.
 	AzureContentSafety(AzureContentSafety),
 }
 
 #[apply(schema!)]
 pub struct RegexRules {
+	/// Action to take when a regex rule matches.
 	#[serde(default)]
 	pub action: Action,
+	/// Regex or built-in patterns to evaluate.
 	pub rules: Vec<RegexRule>,
 }
 
 #[apply(schema!)]
 #[serde(untagged)]
 pub enum RegexRule {
+	/// Use a built-in sensitive data pattern.
 	Builtin {
+		/// Built-in pattern name.
 		builtin: Builtin,
 	},
+	/// Use a custom regular expression.
 	Regex {
+		/// Regular expression pattern to evaluate.
 		#[serde(with = "serde_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		pattern: regex::Regex,
@@ -1227,11 +1256,16 @@ impl RequestRejection {
 
 #[apply(schema!)]
 pub enum Builtin {
+	/// U.S. Social Security number pattern.
 	#[serde(rename = "ssn")]
 	Ssn,
+	/// Credit card number pattern.
 	CreditCard,
+	/// Phone number pattern.
 	PhoneNumber,
+	/// Email address pattern.
 	Email,
+	/// Canadian Social Insurance Number pattern.
 	CaSin,
 }
 
@@ -1269,7 +1303,9 @@ pub enum FailureMode {
 
 #[apply(schema!)]
 pub struct Webhook {
+	/// Backend that receives guardrail webhook requests.
 	pub target: SimpleBackendReference,
+	/// Incoming request headers to forward to the webhook.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,
 	/// Behavior when the webhook is unreachable or returns an error.
@@ -1280,9 +1316,10 @@ pub struct Webhook {
 
 #[apply(schema!)]
 pub struct Moderation {
-	/// Model to use. Defaults to `omni-moderation-latest`
+	/// Moderation model to use. Defaults to `omni-moderation-latest`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Backend policies used when calling the moderation provider.
 	#[serde(
 		default,
 		deserialize_with = "crate::types::local::de_from_local_backend_policy",
@@ -1402,19 +1439,23 @@ pub struct DetectJailbreakConfig {
 #[apply(schema!)]
 #[derive(Default)]
 pub enum Action {
+	/// Replace matching content with masked text.
 	#[default]
 	Mask,
+	/// Reject the request or response when content matches.
 	Reject,
 }
 
 #[apply(schema!)]
 pub struct RequestRejection {
+	/// Response body returned when content is rejected.
 	#[serde(default = "default_body", serialize_with = "ser_string_or_bytes")]
 	pub body: Bytes,
+	/// HTTP status code returned when content is rejected.
 	#[serde(default = "default_code", with = "http_serde::status_code")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
 	pub status: StatusCode,
-	/// Optional headers to add, set, or remove from the rejection response
+	/// Headers to add, set, or remove from the rejection response.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub headers: Option<HeaderModifier>,
 }
@@ -1431,18 +1472,25 @@ impl Default for RequestRejection {
 
 #[apply(schema!)]
 pub struct ResponseGuard {
+	/// Response returned when the LLM response is rejected.
 	#[serde(default)]
 	pub rejection: RequestRejection,
+	/// Guardrail provider or rule set to apply.
 	#[serde(flatten)]
 	pub kind: ResponseGuardKind,
 }
 
 #[apply(schema!)]
 pub enum ResponseGuardKind {
+	/// Apply regex-based masking or rejection rules.
 	Regex(RegexRules),
+	/// Call a webhook to evaluate the response.
 	Webhook(Webhook),
+	/// Use AWS Bedrock Guardrails to evaluate the response.
 	BedrockGuardrails(BedrockGuardrails),
+	/// Use Google Model Armor to evaluate the response.
 	GoogleModelArmor(GoogleModelArmor),
+	/// Use Azure Content Safety to evaluate the response.
 	AzureContentSafety(AzureContentSafety),
 }
 

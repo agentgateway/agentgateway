@@ -12,7 +12,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
@@ -59,9 +58,9 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 			ControllerName: gwv1.GatewayController(controllerName),
 			Conditions: []metav1.Condition{
 				{
-					Type:               string(shared.PolicyConditionAccepted),
+					Type:               string(agentgateway.PolicyConditionAccepted),
 					Status:             metav1.ConditionTrue,
-					Reason:             string(shared.PolicyReasonValid),
+					Reason:             string(agentgateway.PolicyReasonValid),
 					Message:            "Accepted by fake controller",
 					LastTransitionTime: metav1.Now(),
 				},

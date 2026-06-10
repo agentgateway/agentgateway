@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 func TestOverlayApplier_ApplyOverlays_NilParams(t *testing.T) {
@@ -42,8 +41,8 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabels(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Deployment: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				Deployment: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Labels: map[string]string{
 							"custom-label": "custom-value",
 						},
@@ -80,8 +79,8 @@ func TestOverlayApplier_ApplyOverlays_MetadataAnnotations(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Service: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				Service: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Annotations: map[string]string{
 							"custom-annotation": "custom-value",
 						},
@@ -131,7 +130,7 @@ func TestOverlayApplier_ApplyOverlays_DeploymentSpec(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Deployment: &shared.KubernetesResourceOverlay{
+				Deployment: &agentgateway.KubernetesResourceOverlay{
 					Spec: &apiextensionsv1.JSON{Raw: specPatch},
 				},
 			},
@@ -189,7 +188,7 @@ func TestOverlayApplier_ApplyOverlays_DeleteContainerWithPatchDirective(t *testi
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Deployment: &shared.KubernetesResourceOverlay{
+				Deployment: &agentgateway.KubernetesResourceOverlay{
 					Spec: &apiextensionsv1.JSON{Raw: specPatch},
 				},
 			},
@@ -240,7 +239,7 @@ func TestOverlayApplier_ApplyOverlays_ServiceSpec(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Service: &shared.KubernetesResourceOverlay{
+				Service: &agentgateway.KubernetesResourceOverlay{
 					Spec: &apiextensionsv1.JSON{Raw: specPatch},
 				},
 			},
@@ -273,18 +272,18 @@ func TestOverlayApplier_ApplyOverlays_MultipleObjects(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Deployment: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				Deployment: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Labels: map[string]string{"app": "modified"},
 					},
 				},
-				Service: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				Service: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Labels: map[string]string{"svc": "modified"},
 					},
 				},
-				ServiceAccount: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				ServiceAccount: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Labels: map[string]string{"sa": "modified"},
 					},
 				},
@@ -361,7 +360,7 @@ var gatewayLabels = map[string]string{
 
 func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{}
+	overlay := &agentgateway.KubernetesResourceOverlay{}
 
 	obj, err := createPodDisruptionBudget(dep, overlay)
 	require.NoError(t, err)
@@ -372,8 +371,8 @@ func TestCreatePodDisruptionBudget_InheritsDeploymentLabels(t *testing.T) {
 
 func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{
-		Metadata: &shared.ObjectMetadata{
+	overlay := &agentgateway.KubernetesResourceOverlay{
+		Metadata: &agentgateway.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
 		},
 	}
@@ -390,7 +389,7 @@ func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 
 func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{}
+	overlay := &agentgateway.KubernetesResourceOverlay{}
 
 	obj, err := createHorizontalPodAutoscaler(dep, overlay)
 	require.NoError(t, err)
@@ -401,8 +400,8 @@ func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 
 func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{
-		Metadata: &shared.ObjectMetadata{
+	overlay := &agentgateway.KubernetesResourceOverlay{
+		Metadata: &agentgateway.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
 		},
 	}
@@ -419,7 +418,7 @@ func TestCreateHorizontalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 
 func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{}
+	overlay := &agentgateway.KubernetesResourceOverlay{}
 
 	obj, err := createVerticalPodAutoscaler(dep, overlay)
 	require.NoError(t, err)
@@ -430,8 +429,8 @@ func TestCreateVerticalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {
 
 func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{
-		Metadata: &shared.ObjectMetadata{
+	overlay := &agentgateway.KubernetesResourceOverlay{
+		Metadata: &agentgateway.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
 		},
 	}
@@ -448,8 +447,8 @@ func TestCreateVerticalPodAutoscaler_OverlayLabelsMergeOnTop(t *testing.T) {
 
 func TestCreatePodDisruptionBudget_DeploymentLabelsNotMutated(t *testing.T) {
 	dep := deploymentWithLabels(gatewayLabels)
-	overlay := &shared.KubernetesResourceOverlay{
-		Metadata: &shared.ObjectMetadata{
+	overlay := &agentgateway.KubernetesResourceOverlay{
+		Metadata: &agentgateway.ObjectMetadata{
 			Labels: map[string]string{"extra": "label"},
 		},
 	}

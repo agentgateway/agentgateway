@@ -10,7 +10,10 @@ use crate::http::authorization::{RuleSet, RuleSets};
 use crate::*;
 
 #[apply(schema!)]
-pub struct McpAuthorization(RuleSet);
+pub struct McpAuthorization(
+	/// CEL authorization rules for MCP tools, prompts, and resources.
+	RuleSet,
+);
 
 impl McpAuthorization {
 	pub fn new(rule_set: RuleSet) -> Self {

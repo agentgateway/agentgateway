@@ -6,14 +6,13 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 func TestOwnersFromPolicyUseCanonicalSpecScopedPaths(t *testing.T) {
 	policy := &agentgateway.AgentgatewayPolicy{}
 	policy.Namespace = "default"
 	policy.Name = "example"
-	policy.Spec.TargetRefs = make([]shared.LocalPolicyTargetReferenceWithSectionName, 4)
+	policy.Spec.TargetRefs = make([]agentgateway.LocalPolicyTargetReferenceWithSectionName, 4)
 	policy.Spec.Traffic = &agentgateway.Traffic{
 		JWTAuthentication: &agentgateway.JWTAuthentication{
 			Providers: []agentgateway.JWTProvider{

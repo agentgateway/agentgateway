@@ -241,6 +241,7 @@ type TLSConfig_CertificateSource int32
 const (
 	TLSConfig_INLINE         TLSConfig_CertificateSource = 0
 	TLSConfig_ISTIO_WORKLOAD TLSConfig_CertificateSource = 1
+	TLSConfig_DYNAMIC_CA     TLSConfig_CertificateSource = 2
 )
 
 // Enum value maps for TLSConfig_CertificateSource.
@@ -248,10 +249,12 @@ var (
 	TLSConfig_CertificateSource_name = map[int32]string{
 		0: "INLINE",
 		1: "ISTIO_WORKLOAD",
+		2: "DYNAMIC_CA",
 	}
 	TLSConfig_CertificateSource_value = map[string]int32{
 		"INLINE":         0,
 		"ISTIO_WORKLOAD": 1,
+		"DYNAMIC_CA":     2,
 	}
 )
 
@@ -13825,7 +13828,7 @@ const file_resource_proto_rawDesc = "" +
 	"\adynamic\x18\x06 \x01(\v2..agentgateway.dev.resource.DynamicForwardProxyH\x00R\adynamic\x129\n" +
 	"\x03aws\x18\b \x01(\v2%.agentgateway.dev.resource.AwsBackendH\x00R\x03aws\x12U\n" +
 	"\x0finline_policies\x18\a \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\x06\n" +
-	"\x04kind\"\x88\v\n" +
+	"\x04kind\"\x98\v\n" +
 	"\tTLSConfig\x12\x12\n" +
 	"\x04cert\x18\x01 \x01(\fR\x04cert\x12\x1f\n" +
 	"\vprivate_key\x18\x02 \x01(\fR\n" +
@@ -13838,11 +13841,13 @@ const file_resource_proto_rawDesc = "" +
 	"maxVersion\x88\x01\x01\x12J\n" +
 	"\tmtls_mode\x18\a \x01(\x0e2-.agentgateway.dev.resource.TLSConfig.MTLSModeR\bmtlsMode\x12e\n" +
 	"\x13key_exchange_groups\x18\b \x03(\x0e25.agentgateway.dev.resource.TLSConfig.KeyExchangeGroupR\x11keyExchangeGroups\x12e\n" +
-	"\x12certificate_source\x18\t \x01(\x0e26.agentgateway.dev.resource.TLSConfig.CertificateSourceR\x11certificateSource\"3\n" +
+	"\x12certificate_source\x18\t \x01(\x0e26.agentgateway.dev.resource.TLSConfig.CertificateSourceR\x11certificateSource\"C\n" +
 	"\x11CertificateSource\x12\n" +
 	"\n" +
 	"\x06INLINE\x10\x00\x12\x12\n" +
-	"\x0eISTIO_WORKLOAD\x10\x01\"e\n" +
+	"\x0eISTIO_WORKLOAD\x10\x01\x12\x0e\n" +
+	"\n" +
+	"DYNAMIC_CA\x10\x02\"e\n" +
 	"\n" +
 	"TLSVersion\x12\x1b\n" +
 	"\x17TLS_VERSION_UNSPECIFIED\x10\x00\x12\f\n" +

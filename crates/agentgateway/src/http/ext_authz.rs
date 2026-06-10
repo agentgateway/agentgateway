@@ -55,13 +55,13 @@ pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
 
 #[apply(schema!)]
 pub struct BodyOptions {
-	/// Maximum size of request body to buffer (default: 8192)
+	/// Maximum request body size to send to the authorization service. Defaults to 8192 bytes.
 	#[serde(default)]
 	pub max_request_bytes: u32,
-	/// If true, send partial body when max_request_bytes is reached
+	/// Whether to send a partial body when the request exceeds `maxRequestBytes`.
 	#[serde(default)]
 	pub allow_partial_message: bool,
-	/// If true, pack body as raw bytes in gRPC
+	/// Whether to send the body as raw bytes for gRPC authorization checks.
 	#[serde(default)]
 	pub pack_as_bytes: bool,
 }
@@ -79,41 +79,47 @@ impl Default for BodyOptions {
 #[apply(schema!)]
 #[derive(Default)]
 pub enum FailureMode {
+	/// Allow the request when the authorization service cannot make a decision.
 	Allow,
+	/// Deny the request when the authorization service cannot make a decision.
 	#[default]
 	Deny,
+	/// Deny the request with the configured HTTP status code.
 	DenyWithStatus(u16),
 }
 
 #[apply(schema!)]
 pub enum Protocol {
+	/// Call the authorization service using the gRPC authorization protocol.
 	#[serde(rename_all = "camelCase")]
 	Grpc {
-		/// Additional context to send to the authorization service.
-		/// This maps to the `context_extensions` field of the request, and only allows static values.
+		/// Static context values to send to the authorization service.
+		/// Maps to the `context_extensions` field in the request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		context: Option<HashMap<String, String>>,
-		/// Additional metadata to send to the authorization service.
-		/// This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-		/// If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+		/// Metadata values to send to the authorization service, computed from CEL expressions.
+		/// Maps to the `metadata_context.filter_metadata` field in the request.
+		/// If unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		metadata: Option<HashMap<String, Arc<cel::Expression>>>,
 	},
+	/// Call the authorization service using HTTP.
 	#[serde(rename_all = "camelCase")]
 	Http {
+		/// CEL expression that computes the authorization request path.
 		path: Option<Arc<cel::Expression>>,
-		/// When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
-		/// the provided expression rather than directly returning the error.
+		/// CEL expression that computes a redirect URL when authorization fails.
+		/// When the authorization service returns unauthorized, this redirects instead of returning the error directly.
 		redirect: Option<Arc<cel::Expression>>,
-		/// Specific headers from the authorization response will be copied into the request to the backend.
+		/// Authorization response headers to copy into the backend request.
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
 		#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
 		#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
 		include_response_headers: Vec<HeaderName>,
-		/// Specific headers to add in the authorization request (empty = all headers), based on the expression
+		/// Headers to add to the authorization request using CEL expressions. Empty means all headers.
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		add_request_headers: HashMap<HeaderOrPseudo, Arc<cel::Expression>>,
-		/// Metadata to include under the `extauthz` variable, based on the authorization response.
+		/// Metadata values to expose under the `extauthz` variable after authorization.
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		metadata: HashMap<String, Arc<cel::Expression>>,
 	},
@@ -162,10 +168,10 @@ where
 
 #[apply(schema!)]
 pub struct ExtAuthz {
-	/// Reference to the external authorization service backend
+	/// Backend that receives authorization checks.
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Policies to connect to the backend
+	/// Backend policies used when connecting to the authorization service.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -173,21 +179,20 @@ pub struct ExtAuthz {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
-	/// The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+	/// Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.
 	#[serde(default)]
 	pub protocol: Protocol,
-	/// Behavior when the authorization service is unavailable or returns an error
+	/// Behavior when the authorization service is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
-	/// Specific headers to include in the authorization request.
-	/// If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
+	/// Request headers to send to the authorization service.
+	/// If unset, gRPC sends all request headers and HTTP sends only `Authorization`.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub include_request_headers: Vec<HeaderOrPseudo>,
-	/// Options for including the request body in the authorization request
+	/// Options for sending the request body to the authorization service.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_request_body: Option<BodyOptions>,
-	/// Cache gRPC authorization results by CEL-derived request key.
-	///
+	/// Cache gRPC authorization results using CEL expressions as the cache key.
 	/// Warning: the safety of this feature depends on the cache key accurately capturing the fields
 	/// the server operates on. For example, if you return a different result based on header A but only
 	/// cache header B, users may get incorrect cache hits.

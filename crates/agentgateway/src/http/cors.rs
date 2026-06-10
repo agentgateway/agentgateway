@@ -103,16 +103,22 @@ impl<'de> serde::Deserialize<'de> for Cors {
 
 #[apply(schema_de!)]
 pub struct CorsSerde {
+	/// Add `Access-Control-Allow-Credentials: true` on allowed CORS responses.
 	#[serde(default)]
 	pub allow_credentials: bool,
+	/// Values to return in `Access-Control-Allow-Headers` for allowed preflight requests.
 	#[serde(default)]
 	pub allow_headers: Vec<String>,
+	/// Values to return in `Access-Control-Allow-Methods` for allowed preflight requests.
 	#[serde(default)]
 	pub allow_methods: Vec<String>,
+	/// Request origins that receive CORS response headers. Use `*` to match any origin.
 	#[serde(default)]
 	pub allow_origins: Vec<String>,
+	/// Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.
 	#[serde(default)]
 	pub expose_headers: Vec<String>,
+	/// Value to return in `Access-Control-Max-Age` for allowed preflight requests.
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub max_age: Option<Duration>,

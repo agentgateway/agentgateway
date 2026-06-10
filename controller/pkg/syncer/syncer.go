@@ -620,6 +620,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		}
 		if obj.TLSInfo.IstioWorkloadCert {
 			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
+		} else if obj.TLSInfo.DynamicCA {
+			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert

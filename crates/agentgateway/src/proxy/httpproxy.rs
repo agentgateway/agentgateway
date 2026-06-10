@@ -341,6 +341,13 @@ async fn apply_gateway_policies(
 ) -> Result<(), ProxyResponse> {
 	let c = &client;
 
+	// CORS must run before authentication so preflight requests can short-circuit
+	// and rejected browser requests still receive the configured response headers.
+	policies
+		.cors
+		.apply_without_response("gateway cors", c, l, req, response_policies.headers())
+		.await?;
+
 	policies
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())

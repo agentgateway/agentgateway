@@ -88,6 +88,7 @@ impl<'a> From<&'a RouteTarget> for RouteTargetRef<'a> {
 pub struct Store {
 	ipv6_enabled: bool,
 	core_ids: Option<Vec<core_affinity::CoreId>>,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -331,6 +332,7 @@ pub struct RoutePolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GatewayPolicies {
+	pub cors: RequestPolicy<http::cors::Cors>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -344,6 +346,7 @@ pub struct GatewayPolicies {
 impl GatewayPolicies {
 	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
 		[
+			&self.cors as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.oidc as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
@@ -548,14 +551,23 @@ impl Store {
 	}
 
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+		Self::new(
+			ipv6_enabled,
+			crate::ThreadingMode::Multithreaded,
+			Default::default(),
+		)
 	}
 
-	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
+	pub fn new(
+		ipv6_enabled: bool,
+		threading_mode: crate::ThreadingMode,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
+	) -> Self {
 		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 		let (listener_change_tx, listener_change_rx) = watch::channel(0);
 		Self {
 			ipv6_enabled,
+			dynamic_ca_cert_cache,
 			core_ids: match threading_mode {
 				crate::ThreadingMode::Multithreaded => None,
 				crate::ThreadingMode::ThreadPerCore => {
@@ -915,6 +927,9 @@ impl Store {
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
 			match rule {
+				TrafficPolicy::CORS(p) => {
+					pol.cors.set_if_unset(p);
+				},
 				TrafficPolicy::Oidc(p) => {
 					pol.oidc.set_if_unset(p);
 				},
@@ -1569,7 +1584,8 @@ impl Store {
 		raw: XdsListener,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		let (lis, bind_name) = Listener::from_xds(&raw, diagnostics)?;
+		let (lis, bind_name) =
+			Listener::from_xds(&raw, diagnostics, self.dynamic_ca_cert_cache.clone())?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}

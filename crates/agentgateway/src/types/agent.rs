@@ -87,6 +87,7 @@ struct ServerTlsInputs {
 	default_cipher_suites: Vec<crate::transport::tls::CipherSuite>,
 	// Default key exchange groups configured at creation time.
 	default_key_exchange_groups: Vec<crate::transport::tls::KeyExchangeGroup>,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -161,6 +162,7 @@ pub struct ServerTLSConfig {
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum ServerTlsCertificateSource {
 	Static,
+	DynamicCa,
 	IstioWorkload { mtls: bool, default_alpns: Alpns },
 }
 
@@ -230,6 +232,7 @@ impl ServerTLSConfig {
 			default_alpns,
 			default_cipher_suites: cipher_suites.clone().unwrap_or_default(),
 			default_key_exchange_groups: key_exchange_groups.clone().unwrap_or_default(),
+			dynamic_ca_cert_cache: Default::default(),
 		});
 		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
 		let groups = key_exchange_groups.as_deref().filter(|g| !g.is_empty());
@@ -246,6 +249,49 @@ impl ServerTLSConfig {
 			base_config: Some(Arc::new(base)),
 			inputs: Some(inputs),
 			insecure_fallback_verifier,
+			per_profile_config: Arc::new(Default::default()),
+		})
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	pub(crate) fn dynamic_ca_with_profile(
+		ca_cert_pem: Vec<u8>,
+		ca_key_pem: Vec<u8>,
+		default_alpns: Vec<Vec<u8>>,
+		min_version: Option<TLSVersion>,
+		max_version: Option<TLSVersion>,
+		cipher_suites: Option<Vec<crate::transport::tls::CipherSuite>>,
+		key_exchange_groups: Option<Vec<crate::transport::tls::KeyExchangeGroup>>,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
+	) -> anyhow::Result<Self> {
+		let inputs = Arc::new(ServerTlsInputs {
+			cert_pem: ca_cert_pem,
+			key_pem: ca_key_pem,
+			root_pem: None,
+			allow_insecure_mtls: false,
+			default_alpns,
+			default_cipher_suites: cipher_suites.clone().unwrap_or_default(),
+			default_key_exchange_groups: key_exchange_groups.clone().unwrap_or_default(),
+			dynamic_ca_cert_cache,
+		});
+		let suites = cipher_suites.as_deref().filter(|s| !s.is_empty());
+		let groups = key_exchange_groups.as_deref().filter(|g| !g.is_empty());
+		let base = crate::types::dynamic_ca_cert::build_dynamic_ca_server_config(
+			&inputs.cert_pem,
+			&inputs.key_pem,
+			None,
+			&inputs.default_alpns,
+			min_version,
+			max_version,
+			suites.unwrap_or(&[]),
+			groups.unwrap_or(&[]),
+			&inputs.dynamic_ca_cert_cache,
+		)?;
+		Ok(Self {
+			source: ServerTlsCertificateSource::DynamicCa,
+			base_config: Some(Arc::new(base)),
+			inputs: Some(inputs),
+			insecure_fallback_verifier: None,
 			per_profile_config: Arc::new(Default::default()),
 		})
 	}
@@ -333,14 +379,33 @@ impl ServerTLSConfig {
 			return Ok(Arc::clone(cached_config));
 		}
 
-		let (base, _insecure_fallback_verifier) = Self::build_server_config(
-			&inputs,
-			Some(&key.alpns),
-			key.min_version,
-			key.max_version,
-			&key.cipher_suites,
-			&key.key_exchange_groups,
-		)?;
+		let base = match self.source {
+			ServerTlsCertificateSource::Static => {
+				let (base, _insecure_fallback_verifier) = Self::build_server_config(
+					&inputs,
+					Some(&key.alpns),
+					key.min_version,
+					key.max_version,
+					&key.cipher_suites,
+					&key.key_exchange_groups,
+				)?;
+				base
+			},
+			ServerTlsCertificateSource::DynamicCa => {
+				crate::types::dynamic_ca_cert::build_dynamic_ca_server_config(
+					&inputs.cert_pem,
+					&inputs.key_pem,
+					Some(&key.alpns),
+					&inputs.default_alpns,
+					key.min_version,
+					key.max_version,
+					&key.cipher_suites,
+					&key.key_exchange_groups,
+					&inputs.dynamic_ca_cert_cache,
+				)?
+			},
+			ServerTlsCertificateSource::IstioWorkload { .. } => unreachable!(),
+		};
 		let base = Arc::new(base);
 		writer.insert(key.clone(), Arc::clone(&base));
 		Ok(base)
@@ -439,7 +504,7 @@ impl ServerTLSConfig {
 	}
 }
 
-fn tls_versions_for_range(
+pub(super) fn tls_versions_for_range(
 	min_version: Option<TLSVersion>,
 	max_version: Option<TLSVersion>,
 ) -> anyhow::Result<Vec<&'static rustls::SupportedProtocolVersion>> {
@@ -1003,24 +1068,33 @@ pub enum PathMatch {
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum HostRedirect {
+	/// Replace the full authority, including host and optional port.
 	Full(Strng),
+	/// Replace only the host and preserve the effective port.
 	Host(Strng),
+	/// Replace only the port.
 	Port(NonZeroU16),
+	/// Use the selected backend host when possible.
 	Auto,
+	/// Leave the authority unchanged.
 	None,
 }
 
 #[apply(schema!)]
 #[derive(Eq, PartialEq, Copy)]
 pub enum HostRedirectOverride {
+	/// Use the selected backend host when possible.
 	Auto,
+	/// Leave the authority unchanged.
 	None,
 }
 
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum PathRedirect {
+	/// Replace the full request path.
 	Full(Strng),
+	/// Replace only the matched path prefix.
 	Prefix(Strng),
 }
 
@@ -2014,9 +2088,10 @@ impl PolicyInheritance {
 /// Configuration for dynamic tracing policy
 #[apply(schema!)]
 pub struct TracingConfig {
+	/// Backend that receives exported traces.
 	#[serde(flatten)]
 	pub provider_backend: SimpleBackendReference,
-	/// Policies to connect to the backend
+	/// Backend policies used when exporting traces.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -2045,10 +2120,10 @@ pub struct TracingConfig {
 	/// requests that use this frontend policy.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
 	pub client_sampling: Option<Arc<cel::Expression>>,
-	// OTLP path. Default is /v1/traces
+	/// OTLP HTTP path used to export traces.
 	#[serde(default = "default_otlp_path")]
 	pub path: String,
-	// protocol specifies the OTLP protocol variant to use. Default is HTTP
+	/// OTLP protocol used to export traces. Defaults to HTTP.
 	#[serde(default)]
 	pub protocol: TracingProtocol,
 }
@@ -2515,17 +2590,26 @@ impl From<McpAuthenticationMode> for crate::http::jwt::Mode {
 // Non-xds config for MCP authentication
 #[apply(schema_de!)]
 pub struct LocalMcpAuthentication {
+	/// Expected token issuer, matched against the JWT `iss` claim.
 	pub issuer: String,
+	/// Accepted token audiences, matched against the JWT `aud` claim.
 	pub audiences: Vec<String>,
+	/// Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
 	pub provider: Option<McpIDP>,
+	/// Protected resource metadata returned to MCP clients.
 	pub resource_metadata: ResourceMetadata,
+	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	pub jwks: FileInlineOrRemote,
+	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
+	/// Where to read the JWT from in incoming MCP requests.
 	#[serde(default)]
 	pub authorization_location: http::auth::AuthorizationLocation,
+	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	/// OAuth client ID advertised to MCP clients when needed.
 	pub client_id: Option<String>,
 }
 
@@ -2756,6 +2840,7 @@ mod tests {
 			default_alpns: vec![b"h2".to_vec()],
 			default_cipher_suites: vec![CipherSuite::TLS_AES_128_GCM_SHA256],
 			default_key_exchange_groups: vec![KeyExchangeGroup::P384],
+			dynamic_ca_cert_cache: Default::default(),
 		};
 
 		let tls = frontend::TLS {
@@ -2785,6 +2870,44 @@ mod tests {
 		let key = tls.server_tls_profile_key(&inputs);
 		assert_eq!(key.cipher_suites, vec![CipherSuite::TLS_AES_256_GCM_SHA384]);
 		assert_eq!(key.key_exchange_groups, vec![KeyExchangeGroup::X25519]);
+	}
+
+	#[tokio::test]
+	async fn dynamic_ca_tls_config_applies_frontend_tls_profile() {
+		let ca_key = rcgen::KeyPair::generate().expect("generate CA key");
+		let mut ca_params = rcgen::CertificateParams::default();
+		ca_params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+		let ca_cert = ca_params.self_signed(&ca_key).expect("generate CA cert");
+
+		let tls_config = ServerTLSConfig::dynamic_ca_with_profile(
+			ca_cert.pem().into_bytes(),
+			ca_key.serialize_pem().into_bytes(),
+			vec![b"h2".to_vec()],
+			None,
+			None,
+			None,
+			None,
+			Default::default(),
+		)
+		.expect("build dynamic CA TLS config");
+
+		let base = tls_config
+			.config_for(None, None)
+			.await
+			.expect("base config");
+		assert_eq!(base.alpn_protocols, vec![b"h2".to_vec()]);
+
+		let frontend_tls = frontend::TLS {
+			alpn: Some(vec![b"http/1.1".to_vec()]),
+			..Default::default()
+		};
+		let profiled = tls_config
+			.config_for(Some(&frontend_tls), None)
+			.await
+			.expect("profiled config");
+
+		assert!(!Arc::ptr_eq(&base, &profiled));
+		assert_eq!(profiled.alpn_protocols, vec![b"http/1.1".to_vec()]);
 	}
 
 	#[test]

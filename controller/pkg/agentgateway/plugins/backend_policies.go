@@ -19,7 +19,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -240,7 +239,7 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 
 	var unhealthyCondition string
 	if healthPolicy.UnhealthyCondition != nil {
-		unhealthyCondition = *castCELPtr(healthPolicy.UnhealthyCondition, func(expr shared.CELExpression) {
+		unhealthyCondition = *castCELPtr(healthPolicy.UnhealthyCondition, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("backend health unhealthyCondition is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -462,12 +461,12 @@ func translateBackendMCPAuthorization(policy *agentgateway.AgentgatewayPolicy) (
 	auth := backend.MCP.Authorization
 	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
-	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr shared.CELExpression) {
+	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr agentgateway.CELExpression) {
 		errs = append(errs, fmt.Errorf("backend MCP authorization matchExpression is not a valid CEL expression: %s", expr))
 	})
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, policies...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, policies...)
 	} else {
 		allowPolicies = append(allowPolicies, policies...)

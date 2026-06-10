@@ -131,23 +131,34 @@ impl Debug for Jwt {
 #[apply(schema_de!)]
 #[serde(untagged)]
 pub enum LocalJwtConfig {
+	/// Validate JWTs against one or more trusted token issuers.
 	#[serde(rename_all = "camelCase")]
 	Multi {
+		/// Controls whether requests must include a JWT and how validation failures are handled.
 		#[serde(default)]
 		mode: Mode,
+		/// Where to read the JWT from in incoming requests.
 		#[serde(default)]
 		location: AuthorizationLocation,
+		/// Trusted issuers and their signing keys.
 		providers: Vec<ProviderConfig>,
 	},
+	/// Validate JWTs against a single trusted token issuer.
 	#[serde(rename_all = "camelCase")]
 	Single {
+		/// Controls whether requests must include a JWT and how validation failures are handled.
 		#[serde(default)]
 		mode: Mode,
+		/// Where to read the JWT from in incoming requests.
 		#[serde(default)]
 		location: AuthorizationLocation,
+		/// Expected token issuer, matched against the JWT `iss` claim.
 		issuer: String,
+		/// Accepted token audiences, matched against the JWT `aud` claim when set.
 		audiences: Option<Vec<String>>,
+		/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 		jwks: serdes::FileInlineOrRemote,
+		/// Claim requirements to enforce after the token signature is verified.
 		#[serde(default)]
 		jwt_validation_options: JWTValidationOptions,
 	},
@@ -155,9 +166,13 @@ pub enum LocalJwtConfig {
 
 #[apply(schema_de!)]
 pub struct ProviderConfig {
+	/// Expected token issuer, matched against the JWT `iss` claim.
 	pub issuer: String,
+	/// Accepted token audiences, matched against the JWT `aud` claim when set.
 	pub audiences: Option<Vec<String>>,
+	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	pub jwks: serdes::FileInlineOrRemote,
+	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
 }
@@ -165,15 +180,15 @@ pub struct ProviderConfig {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum Mode {
-	/// A valid token, issued by a configured issuer, must be present.
+	/// Require a valid JWT from a configured issuer.
 	Strict,
-	/// If a token exists, validate it.
+	/// Validate the JWT when present.
 	/// This is the default option.
-	/// Warning: this allows requests without a JWT token!
+	/// Warning: this allows requests without a JWT.
 	#[default]
 	Optional,
-	/// Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).
-	/// Warning: this allows requests without a JWT token!
+	/// Decode valid JWTs for later policy use.
+	/// Warning: this allows requests with missing or invalid JWTs.
 	Permissive,
 }
 

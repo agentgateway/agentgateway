@@ -183,6 +183,7 @@ message TLSConfig {
   enum CertificateSource {
     INLINE = 0;
     ISTIO_WORKLOAD = 1;
+    DYNAMIC_CA = 2;
   }
 
   enum TLSVersion {

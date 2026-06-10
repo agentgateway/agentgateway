@@ -794,17 +794,18 @@ mod tests {
 		})
 		.await;
 
-		let msg = tokio::time::timeout(Duration::from_secs(1), trace_rx.recv())
-			.await
-			.expect("trace event should be emitted")
-			.expect("trace receiver should still be open");
-		match msg.message {
-			MessageType::Cel { expr, result, .. } => {
-				assert_eq!(expr, "request.path");
-				assert_eq!(result, serde_json::json!("/test"));
-			},
-			other => panic!("expected CEL trace event, got {other:?}"),
-		}
+		tokio::time::timeout(Duration::from_secs(1), async {
+			while let Some(msg) = trace_rx.recv().await {
+				if let MessageType::Cel { expr, result, .. } = msg.message {
+					assert_eq!(expr, "request.path");
+					assert_eq!(result, serde_json::json!("/test"));
+					return;
+				}
+			}
+			panic!("trace receiver closed before CEL trace event was emitted");
+		})
+		.await
+		.expect("trace event should be emitted");
 	}
 
 	#[tokio::test]

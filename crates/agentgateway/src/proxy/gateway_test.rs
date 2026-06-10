@@ -146,6 +146,7 @@ fn https_bind() -> Bind {
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -828,6 +829,36 @@ async fn gateway_phase_oidc_bypasses_cors_preflight_requests() {
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.method, Method::OPTIONS);
+}
+
+#[tokio::test]
+async fn gateway_phase_cors_handles_preflight_before_route_selection() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io,
+		Method::OPTIONS,
+		"http://lo/no-route-needed",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
 }
 
 #[tokio::test]
@@ -3247,6 +3278,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -3579,6 +3611,7 @@ async fn auto_protocol_mixed_listeners() {
 				hostname: strng::new("*.example.com"),
 				protocol: ListenerProtocol::HTTPS(
 					types::local::LocalTLSServerConfig {
+						mode: Default::default(),
 						cert: "../../examples/tls/certs/cert.pem".into(),
 						key: "../../examples/tls/certs/key.pem".into(),
 						root: None,

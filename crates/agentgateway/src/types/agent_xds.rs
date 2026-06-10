@@ -257,6 +257,7 @@ impl TryFrom<proto::agent::tls_config::KeyExchangeGroup>
 fn server_tls_config_from_proto(
 	value: &proto::agent::TlsConfig,
 	diagnostics: &mut Diagnostics,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 ) -> ServerTLSConfig {
 	// Defaults set here. These can be overridden by Frontend policy
 	// TODO: this default only makes sense for HTTPS, distinguish from TLS
@@ -296,6 +297,28 @@ fn server_tls_config_from_proto(
 			},
 		};
 		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
+	}
+
+	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
+		if value.root.is_some() {
+			diagnostics.add_warning("mTLS is not supported with DYNAMIC_CA certificates");
+		}
+		return match super::dynamic_ca_cert::build_dynamic_ca_tls_config_with_profile(
+			value.cert.clone(),
+			value.private_key.clone(),
+			default_alpns,
+			min_version,
+			max_version,
+			cipher_suites,
+			key_exchange_groups,
+			dynamic_ca_cert_cache,
+		) {
+			Ok(sc) => sc,
+			Err(e) => {
+				diagnostics.add_warning(format!("dynamic CA TLS CA is invalid: {e}"));
+				ServerTLSConfig::new_invalid()
+			},
+		};
 	}
 
 	match ServerTLSConfig::from_pem_with_profile(
@@ -932,6 +955,7 @@ fn listener_protocol_from_proto(
 	protocol: proto::agent::Protocol,
 	tls: Option<&proto::agent::TlsConfig>,
 	diagnostics: &mut Diagnostics,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 ) -> Result<ListenerProtocol, ProtoError> {
 	use crate::types::proto::agent::Protocol;
 	match (protocol, tls) {
@@ -940,11 +964,13 @@ fn listener_protocol_from_proto(
 		(Protocol::Https, Some(tls)) => Ok(ListenerProtocol::HTTPS(server_tls_config_from_proto(
 			tls,
 			diagnostics,
+			dynamic_ca_cert_cache,
 		))),
 		// TLS termination
 		(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(server_tls_config_from_proto(
 			tls,
 			diagnostics,
+			dynamic_ca_cert_cache,
 		)))),
 		// TLS passthrough
 		(Protocol::Tls, None) => Ok(ListenerProtocol::TLS(None)),
@@ -997,10 +1023,12 @@ impl Listener {
 	pub fn from_xds(
 		s: &proto::agent::Listener,
 		diagnostics: &mut Diagnostics,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	) -> Result<(Self, BindKey), ProtoError> {
 		let proto = proto::agent::Protocol::try_from(s.protocol)?;
-		let protocol = listener_protocol_from_proto(proto, s.tls.as_ref(), diagnostics)
-			.map_err(|e| ProtoError::Generic(format!("{e}")))?;
+		let protocol =
+			listener_protocol_from_proto(proto, s.tls.as_ref(), diagnostics, dynamic_ca_cert_cache)
+				.map_err(|e| ProtoError::Generic(format!("{e}")))?;
 		let l = Listener {
 			key: strng::new(&s.key),
 			name: s
