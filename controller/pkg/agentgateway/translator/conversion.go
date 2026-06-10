@@ -156,7 +156,7 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
+		Key:         internalL4RouteRuleKey(obj, pos),
 		Name:        utils.RouteName(wellknown.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -246,7 +246,7 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".tls",
+		Key:         internalL4RouteRuleKey(obj, pos) + ".tls",
 		Name:        utils.RouteName(wellknown.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -265,6 +265,15 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 	})
 
 	return res, backendErr
+}
+
+func internalL4RouteRuleKey(obj controllers.Object, pos int) string {
+	key := utils.InternalRouteRuleKey(obj.GetNamespace(), obj.GetName(), pos)
+	created := obj.GetCreationTimestamp()
+	if created.IsZero() {
+		return key
+	}
+	return fmt.Sprintf("%010d/%s", created.Unix(), key)
 }
 
 func buildAgwTCPDestination(

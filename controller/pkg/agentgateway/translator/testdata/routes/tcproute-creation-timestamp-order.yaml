@@ -1,0 +1,133 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: tcp-gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: tcp
+    protocol: TCP
+    port: 8088
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: beta-route
+  namespace: default
+  creationTimestamp: "2026-06-10T10:00:00Z"
+spec:
+  parentRefs:
+  - name: tcp-gw
+    sectionName: tcp
+  rules:
+  - backendRefs:
+    - name: infra-backend-v2
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: alpha-route
+  namespace: default
+  creationTimestamp: "2026-06-10T10:00:00Z"
+spec:
+  parentRefs:
+  - name: tcp-gw
+    sectionName: tcp
+  rules:
+  - backendRefs:
+    - name: infra-backend-v1
+      port: 8080
+---
+# Output
+output:
+- gateway:
+    Name: tcp-gw
+    Namespace: default
+  resource:
+    tcpRoute:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v1.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: 1781085600/default/alpha-route.00.tcp
+      listenerKey: default/tcp-gw.tcp
+      name:
+        kind: TCPRoute
+        name: alpha-route
+        namespace: default
+- gateway:
+    Name: tcp-gw
+    Namespace: default
+  resource:
+    tcpRoute:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: infra-backend-v2.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: 1781085600/default/beta-route.00.tcp
+      listenerKey: default/tcp-gw.tcp
+      name:
+        kind: TCPRoute
+        name: beta-route
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TCPRoute
+  metadata:
+    name: alpha-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tcp-gw
+        namespace: default
+        sectionName: tcp
+- apiVersion: gateway.networking.k8s.io/v1alpha2
+  kind: TCPRoute
+  metadata:
+    name: beta-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: tcp-gw
+        namespace: default
+        sectionName: tcp

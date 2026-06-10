@@ -1978,11 +1978,7 @@ impl TCPRouteSet {
 
 		for hostname_match in Self::hostname_matchers(&r) {
 			let v = self.inner.entry(hostname_match).or_default();
-			let to_insert = v.binary_search_by(|existing| {
-				let _have = self.all.get(existing).expect("corrupted state");
-				// TODO: not sure that is right
-				Ordering::reverse(r.key.cmp(existing))
-			});
+			let to_insert = v.binary_search_by(|existing| existing.cmp(&r.key));
 			let insert_idx = to_insert.unwrap_or_else(|pos| pos);
 			v.insert(insert_idx, r.key.clone());
 		}
@@ -3154,6 +3150,18 @@ InvalidKeyData
 			.get_hostname(&HostnameMatchRef::Exact("old.example.com"))
 			.expect("route should be present");
 		assert_eq!(got.key, strng::new("tcp-2"));
+	}
+
+	#[test]
+	fn test_tcp_route_set_prefers_alphabetical_route_key_for_same_timestamp() {
+		let mut route_set = TCPRouteSet::default();
+		route_set.insert(tcp_route("1781085600/default/beta-route.00.tcp", vec![]));
+		route_set.insert(tcp_route("1781085600/default/alpha-route.00.tcp", vec![]));
+
+		let got = route_set
+			.get_hostname(&HostnameMatchRef::None)
+			.expect("route should be present");
+		assert_eq!(got.key, strng::new("1781085600/default/alpha-route.00.tcp"));
 	}
 
 	#[test]
