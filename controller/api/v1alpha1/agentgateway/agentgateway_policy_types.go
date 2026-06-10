@@ -34,11 +34,11 @@ type AgentgatewayPolicy struct {
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// spec defines the desired state of AgentgatewayPolicy.
+	// Desired policy configuration.
 	// +required
 	Spec AgentgatewayPolicySpec `json:"spec"`
 
-	// status defines the current state of AgentgatewayPolicy.
+	// Current policy status.
 	// +optional
 	Status gwv1.PolicyStatus `json:"status,omitzero"`
 	// TODO: embed this into a typed Status field when
@@ -66,7 +66,7 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 // +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 type AgentgatewayPolicySpec struct {
-	// `targetRefs` specifies the target resources by reference to attach the
+	// Target resources to attach the
 	// policy to.
 	//
 	// +listType=atomic
@@ -77,8 +77,7 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	TargetRefs []shared.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
 
-	// `targetSelectors` specifies the target selectors used to select resources
-	// to attach the policy to.
+	// Target selectors used to select resources to attach the policy to.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool' && r.group == 'inference.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, AgentgatewayBackend, or InferencePool resources"
@@ -86,7 +85,7 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	TargetSelectors []shared.LocalPolicyTargetSelectorWithSectionName `json:"targetSelectors,omitempty"`
 
-	// strategy defines how this policy participates in policy merging and conflict resolution.
+	// Policy merge and conflict resolution strategy.
 	//
 	// Strategy settings apply to the policy object as a whole. Individual strategy fields may
 	// only be valid for specific policy kinds; for example, inheritance is only valid when this
@@ -94,7 +93,7 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	Strategy *PolicyStrategy `json:"strategy,omitempty"`
 
-	// frontend defines settings for how to handle incoming traffic.
+	// Settings for how to handle incoming traffic.
 	//
 	// A frontend policy can only target a `Gateway`. `Listener` and
 	// `ListenerSet` are not valid targets.
@@ -106,7 +105,7 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	Frontend *Frontend `json:"frontend,omitempty"`
 
-	// traffic defines settings for how process traffic.
+	// Settings for how to process traffic.
 	//
 	// A traffic policy can target a `Gateway` (optionally, with a
 	// `sectionName` indicating the listener), `ListenerSet`, or `Route`
@@ -120,7 +119,7 @@ type AgentgatewayPolicySpec struct {
 	// +optional
 	Traffic *Traffic `json:"traffic,omitempty"`
 
-	// backend defines settings for how to connect to destination backends.
+	// Settings for how to connect to destination backends.
 	//
 	// A backend policy can target a `Gateway` (optionally, with a
 	// `sectionName` indicating the listener), `ListenerSet`, `Route`
@@ -143,7 +142,7 @@ type AgentgatewayPolicySpec struct {
 }
 
 type PolicyStrategy struct {
-	// inheritance controls whether less-specific traffic policies prevent more-specific traffic policies
+	// Controls whether less-specific traffic policies prevent more-specific traffic policies
 	// from contributing to the effective policy.
 	//
 	// This field is only valid on traffic policies. Frontend and backend policy merging does not use
@@ -163,7 +162,7 @@ type PolicyStrategy struct {
 	Inheritance *PolicyInheritance `json:"inheritance,omitempty"`
 }
 
-// PolicyInheritance defines how a traffic policy affects policy inheritance across attachment
+// How a traffic policy affects policy inheritance across attachment
 // specificity levels.
 // +k8s:enum
 type PolicyInheritance string
@@ -178,30 +177,30 @@ const (
 )
 
 type BackendSimple struct {
-	// tcp defines settings for managing TCP connections to the backend.
+	// Settings for managing TCP connections to the backend.
 	// +optional
 	TCP *BackendTCP `json:"tcp,omitempty"`
-	// tls defines settings for managing TLS connections to the backend.
+	// Settings for managing TLS connections to the backend.
 	//
 	// If this field is set, TLS will be initiated to the backend; the system trusted CA certificates will be used to
 	// validate the server, and the SNI will automatically be set based on the destination.
 	// +optional
 	TLS *BackendTLS `json:"tls,omitempty"`
-	// http defines settings for managing HTTP requests to the backend.
+	// Settings for managing HTTP requests to the backend.
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
-	// `tunnel` defines settings for managing tunnel connections (with behavior like `HTTPS_PROXY`) to the backend.
+	// Settings for managing tunnel connections, with behavior like `HTTPS_PROXY`, to the backend.
 	// +optional
 	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
 
-	// `auth` defines settings for managing authentication to the backend.
+	// Settings for managing authentication to the backend.
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
 }
 
 type Health struct {
-	// UnhealthyCondition is a CEL expression that determines whether a response indicates an unhealthy backend.
+	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
 	//
 	// For example, to evict on 5xx responses: `response.code >= 500`.
@@ -212,14 +211,14 @@ type Health struct {
 	// +optional
 	UnhealthyCondition *shared.CELExpression `json:"unhealthyCondition,omitempty"`
 
-	// Eviction defines settings for evicting unhealthy backends.
+	// Settings for evicting unhealthy backends.
 	// +optional
 	Eviction *BackendEviction `json:"eviction,omitempty"`
 }
 
-// BackendEviction defines settings for evicting unhealthy backends.
+// Settings for evicting unhealthy backends.
 type BackendEviction struct {
-	// Duration specifies the base time a backend should be evicted after being marked unhealthy.
+	// Base time a backend should be evicted after being marked unhealthy.
 	// Subsequent evictions use multiplicative backoff (duration * times_evicted).
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
@@ -230,7 +229,7 @@ type BackendEviction struct {
 	// +optional
 	Duration *metav1.Duration `json:"duration,omitempty"`
 
-	// RestoreHealth is the health score (0–100) assigned to a backend when it returns from eviction.
+	// Health score from 0 to 100 assigned to a backend when it returns from eviction.
 	// For gradual recovery, set below 100; for full recovery immediately, set 100.
 	// If unset, the backend resumes with the health it had when evicted.
 	//
@@ -239,7 +238,7 @@ type BackendEviction struct {
 	// +optional
 	RestoreHealth *int32 `json:"restoreHealth,omitempty"`
 
-	// ConsecutiveFailures is the number of consecutive unhealthy responses required before the backend is evicted.
+	// Number of consecutive unhealthy responses required before the backend is evicted.
 	// For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
 	// When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
 	// When neither is set, a single unhealthy response can trigger eviction.
@@ -248,7 +247,7 @@ type BackendEviction struct {
 	// +optional
 	ConsecutiveFailures *int32 `json:"consecutiveFailures,omitempty"`
 
-	// HealthThreshold is the EWMA (exponentially-weighted moving average) health score threshold, expressed as 0–100.
+	// EWMA health score threshold, expressed as 0 to 100.
 	// When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
 	// For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
 	// Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
@@ -266,16 +265,16 @@ type BackendEviction struct {
 type BackendWithAI struct {
 	BackendSimple `json:",inline"`
 
-	// `ai` specifies settings for AI workloads. This is only applicable when
+	// Settings for AI workloads. This is only applicable when
 	// connecting to a `Backend` of type `ai`.
 	// +optional
 	AI *BackendAI `json:"ai,omitempty"`
 
-	// transformation is used to mutate and transform requests and responses sent to and from the backend.
+	// Mutates and transforms requests and responses sent to and from the backend.
 	// +optional
 	Transformation *Transformation `json:"transformation,omitempty"`
 
-	// health defines settings for passive and active health checking.
+	// Settings for passive and active health checking.
 	// +optional
 	Health *Health `json:"health,omitempty"`
 }
@@ -284,26 +283,26 @@ type BackendWithAI struct {
 type BackendFull struct {
 	BackendSimple `json:",inline"`
 
-	// `ai` specifies settings for AI workloads. This is only applicable when
+	// Settings for AI workloads. This is only applicable when
 	// connecting to a `Backend` of type `ai`.
 	// +optional
 	AI *BackendAI `json:"ai,omitempty"`
 
-	// `mcp` specifies settings for MCP workloads. This is only applicable when
+	// Settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
 	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 
-	// transformation is used to mutate and transform requests and responses sent to and from the backend.
+	// Mutates and transforms requests and responses sent to and from the backend.
 	// +optional
 	Transformation *Transformation `json:"transformation,omitempty"`
 
-	// health defines settings for passive and active health checking.
+	// Settings for passive and active health checking.
 	// +optional
 	Health *Health `json:"health,omitempty"`
 
-	// extAuth specifies the external authentication configuration for requests
+	// External authentication configuration for requests
 	// sent to this backend.
 	// +optional
 	ExtAuth *ExtAuth `json:"extAuth,omitempty"`
@@ -326,7 +325,7 @@ type LongString = string
 // +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 type SNI = string
 
-// ByteSize is a byte quantity that must fit in a uint32 dataplane field.
+// Byte quantity that must fit in the data plane size limit.
 // +kubebuilder:validation:XIntOrString
 // +kubebuilder:validation:MaxLength=32
 // +kubebuilder:validation:MinLength=1
@@ -394,7 +393,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
 type BackendTLS struct {
-	// `mtlsCertificateRef` enables mutual TLS to the backend, using the
+	// Enables mutual TLS to the backend, using the
 	// specified key (`tls.key`) and cert (`tls.crt`) from the referenced
 	// credential source, defaulting to a Kubernetes `Secret`.
 	//
@@ -408,7 +407,7 @@ type BackendTLS struct {
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
 	MtlsCertificateRef []shared.LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
-	// `caCertificateRefs` defines the CA certificate `ConfigMap` to use to
+	// CA certificate `ConfigMap` to use to
 	// verify the server certificate.
 	// If unset, the system's trusted certificates are used.
 	//
@@ -417,7 +416,7 @@ type BackendTLS struct {
 	// +optional
 	CACertificateRefs []corev1.LocalObjectReference `json:"caCertificateRefs,omitempty"`
 
-	// insecureSkipVerify originates TLS but skips verification of the backend's certificate.
+	// Originates TLS but skips verification of the backend's certificate.
 	// WARNING: This is an insecure option that should only be used if the risks are understood.
 	//
 	// There are two modes:
@@ -430,13 +429,13 @@ type BackendTLS struct {
 	// +optional
 	InsecureSkipVerify *InsecureTLSMode `json:"insecureSkipVerify,omitempty"`
 
-	// `sni` specifies the Server Name Indicator (`SNI`) to be used in the TLS
+	// Server Name Indicator (`SNI`) to use in the TLS
 	// handshake. If unset, the `SNI` is automatically set based on the
 	// destination hostname.
 	// +optional
 	Sni *SNI `json:"sni,omitempty"`
 
-	// `verifySubjectAltNames` specifies the Subject Alternative Names (`SAN`)
+	// Subject Alternative Names (`SAN`)
 	// to verify in the server certificate.
 	// If not present, the destination hostname is automatically used.
 	//
@@ -445,7 +444,7 @@ type BackendTLS struct {
 	// +optional
 	VerifySubjectAltNames []ShortString `json:"verifySubjectAltNames,omitempty"`
 
-	// `alpnProtocols` sets the Application-Layer Protocol Negotiation (`ALPN`)
+	// Application-Layer Protocol Negotiation (`ALPN`)
 	// value to use in the TLS handshake.
 	//
 	// If not present, defaults to `["h2", "http/1.1"]`.
@@ -455,7 +454,7 @@ type BackendTLS struct {
 	// +optional
 	AlpnProtocols *[]TinyString `json:"alpnProtocols,omitempty"`
 
-	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS connection.
+	// Ordered list of key exchange groups for a TLS connection.
 	// For example: `X25519_MLKEM768,X25519`.
 	// +optional
 	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
@@ -463,23 +462,23 @@ type BackendTLS struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Frontend struct {
-	// tcp defines settings on managing incoming TCP connections.
+	// Settings for managing incoming TCP connections.
 	// +optional
 	TCP *FrontendTCP `json:"tcp,omitempty"`
-	// networkAuthorization defines CEL authorization on downstream network connections.
+	// CEL authorization on downstream network connections.
 	//
 	// This runs before protocol handling and is intended for L4 access control,
 	// for example using `source.address` with `cidr(...).containsIP(...)`.
 	// +optional
 	NetworkAuthorization *shared.Authorization `json:"networkAuthorization,omitempty"`
-	// tls defines settings on managing incoming TLS connections.
+	// Settings for managing incoming TLS connections.
 	// +optional
 	TLS *FrontendTLS `json:"tls,omitempty"`
-	// http defines settings on managing incoming HTTP requests.
+	// Settings for managing incoming HTTP requests.
 	// +optional
 	HTTP *FrontendHTTP `json:"http,omitempty"`
 
-	// proxyProtocol defines settings for downstream PROXY protocol handling.
+	// Settings for downstream PROXY protocol handling.
 	//
 	// If configured, incoming connections may require a PROXY header before
 	// normal protocol handling. This can also be configured to allow both
@@ -487,21 +486,21 @@ type Frontend struct {
 	// +optional
 	ProxyProtocol *FrontendProxyProtocol `json:"proxyProtocol,omitempty"`
 
-	// connect defines settings for downstream HTTP CONNECT handling.
+	// Settings for downstream HTTP CONNECT handling.
 	//
 	// If unset, CONNECT requests are rejected with Method Not Allowed.
 	// +optional
 	Connect *FrontendConnect `json:"connect,omitempty"`
 
-	// `accessLog` contains access logging configuration.
+	// Access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
 
-	// `tracing` contains various settings for the OpenTelemetry tracer.
+	// OpenTelemetry tracing settings.
 	// +optional
 	Tracing *Tracing `json:"tracing,omitempty"`
 
-	// `metrics` contains custom Prometheus metric label configuration.
+	// Custom Prometheus metric label configuration.
 	// CEL expressions are evaluated per-request and added as labels to all
 	// Prometheus metrics exposed by agentgateway.
 	// +optional
@@ -536,14 +535,14 @@ const (
 )
 
 type FrontendProxyProtocol struct {
-	// version controls which PROXY protocol version is accepted.
+	// PROXY protocol version to accept.
 	//
 	// If unset, this defaults to `V2`.
 	// +kubebuilder:default=V2
 	// +optional
 	Version ProxyProtocolVersion `json:"version,omitempty"`
 
-	// mode controls whether PROXY headers are required or optional.
+	// Whether PROXY headers are required or optional.
 	//
 	// If unset, this defaults to `Strict`.
 	// +kubebuilder:default=Strict
@@ -566,36 +565,36 @@ const (
 )
 
 type FrontendConnect struct {
-	// mode controls whether downstream CONNECT requests are accepted.
+	// Whether downstream CONNECT requests are accepted.
 	// +required
 	Mode FrontendConnectMode `json:"mode"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendHTTP struct {
-	// `maxBufferSize` defines the maximum HTTP body size that will be buffered
+	// Maximum HTTP body size that will be buffered
 	// into memory.
 	// Bodies will only be buffered for policies which require buffering.
 	// If unset, this defaults to `2mb`.
 	// +optional
 	MaxBufferSize *ByteSize `json:"maxBufferSize,omitempty"`
 
-	// `http1MaxHeaders` defines the maximum number of headers that are allowed
+	// Maximum number of headers allowed
 	// in `HTTP/1.1` requests.
 	// If unset, this defaults to 100.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=4096
 	// +optional
 	HTTP1MaxHeaders *int32 `json:"http1MaxHeaders,omitempty"`
-	// `http1IdleTimeout` defines the timeout before an unused connection is
+	// Timeout before an unused connection is
 	// closed.
 	// If unset, this defaults to 10 minutes.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
 	HTTP1IdleTimeout *metav1.Duration `json:"http1IdleTimeout,omitempty"`
-	// `httpHeaderCase` controls `HTTP/1` request header name casing when encoding responses on the same connection.
-	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming our outgoing request, this will be ignored.
+	// Controls HTTP/1 request header name casing when encoding responses on the same connection.
+	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming or outgoing request, this will be ignored.
 	// HTTP/2 requests are always lower case.
 	//
 	// Modifying the headers from other policies may result in the original case being lost.
@@ -603,21 +602,21 @@ type FrontendHTTP struct {
 	// +optional
 	HTTP1HeaderCase *HTTPHeaderCase `json:"http1HeaderCase,omitempty"`
 
-	// `http2WindowSize` indicates the initial window size for stream-level flow
+	// Initial window size for stream-level flow
 	// control for received data.
 	// +optional
 	HTTP2WindowSize *ByteSize `json:"http2WindowSize,omitempty"`
-	// `http2ConnectionWindowSize` indicates the initial window size for
+	// Initial window size for
 	// connection-level flow control for received data.
 	// +optional
 	HTTP2ConnectionWindowSize *ByteSize `json:"http2ConnectionWindowSize,omitempty"`
-	// `http2FrameSize` sets the maximum frame size to use.
+	// Maximum frame size to use.
 	// If unset, this defaults to `16kb`.
 	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isLessThan(quantity('16384'))",message="http2FrameSize must be at least 16384 bytes"
 	// +kubebuilder:validation:XValidation:rule="!quantity(string(self)).isGreaterThan(quantity('1677215'))",message="http2FrameSize must be at most 1677215 bytes"
 	// +optional
 	HTTP2FrameSize *ByteSize `json:"http2FrameSize,omitempty"`
-	// `http2MaxHeaderSize` sets the maximum aggregate size of decoded HTTP/2
+	// Maximum aggregate size of decoded HTTP/2
 	// request headers.
 	// If unset, this defaults to `16Ki`.
 	// +optional
@@ -630,7 +629,7 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveTimeout *metav1.Duration `json:"http2KeepaliveTimeout,omitempty"`
-	// `maxConnectionDuration` specifies the maximum time a connection is allowed to remain open.
+	// Maximum time a connection is allowed to remain open.
 	// After this duration, the connection is gracefully closed after the current in-flight request completes.
 	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
@@ -641,14 +640,14 @@ type FrontendHTTP struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendTLS struct {
-	// `handshakeTimeout` specifies the deadline for a TLS handshake to
+	// Deadline for a TLS handshake to
 	// complete. If unset, this defaults to `15s`.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="handshakeTimeout must be at least 100ms"
 	// +optional
 	HandshakeTimeout *metav1.Duration `json:"handshakeTimeout,omitempty"`
 
-	// `alpnProtocols` sets the Application-Layer Protocol Negotiation (`ALPN`)
+	// Application-Layer Protocol Negotiation (`ALPN`)
 	// value to use in the TLS handshake.
 	//
 	// If not present, defaults to `["h2", "http/1.1"]`.
@@ -658,22 +657,22 @@ type FrontendTLS struct {
 	// +optional
 	AlpnProtocols *[]TinyString `json:"alpnProtocols,omitempty"`
 
-	// MinTLSVersion configures the minimum TLS version to support.
+	// Minimum TLS version to support.
 	// +optional
 	MinTLSVersion *TLSVersion `json:"minProtocolVersion,omitempty"`
 
-	// MaxTLSVersion configures the maximum TLS version to support.
+	// Maximum TLS version to support.
 	// +optional
 	MaxTLSVersion *TLSVersion `json:"maxProtocolVersion,omitempty"`
 
-	// CipherSuites configures the list of cipher suites for a TLS listener.
+	// Cipher suites for a TLS listener.
 	// The value is a comma-separated list of cipher suites, for example
 	// `TLS13_AES_256_GCM_SHA384,TLS13_AES_128_GCM_SHA256`.
 	// Use this in the TLS options field of a TLS listener.
 	// +optional
 	CipherSuites []CipherSuite `json:"cipherSuites,omitempty"`
 
-	// keyExchangeGroups configures the ordered list of key exchange groups for a TLS listener.
+	// Ordered list of key exchange groups for a TLS listener.
 	// For example: `X25519_MLKEM768,X25519`.
 	// +optional
 	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
@@ -721,28 +720,28 @@ const (
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendTCP struct {
-	// keepalive defines settings for enabling TCP keepalives on the connection.
+	// Settings for enabling TCP keepalives on the connection.
 	// +optional
 	KeepAlive *Keepalive `json:"keepalive,omitempty"`
 }
 
 // TCP keepalive settings.
 type Keepalive struct {
-	// retries specifies the maximum number of keep-alive probes to send before dropping the connection.
+	// Maximum number of keepalive probes to send before dropping the connection.
 	// If unset, this defaults to 9.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=64
 	// +optional
 	Retries *int32 `json:"retries,omitempty"`
 
-	// time specifies the number of seconds a connection needs to be idle before keep-alive probes start being sent.
+	// Time a connection needs to be idle before keepalive probes start being sent.
 	// If unset, this defaults to 180s.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="time must be at least 1 second"
 	// +optional
 	Time *metav1.Duration `json:"time,omitempty"`
 
-	// interval specifies the number of seconds between keep-alive probes.
+	// Time between keepalive probes.
 	// If unset, this defaults to 180s.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
@@ -778,32 +777,32 @@ type Traffic struct {
 	// +optional
 	Phase *PolicyPhase `json:"phase,omitempty"` //nolint:kubeapilinter // false positive for the nophase sub-linter
 
-	// transformation is used to mutate and transform requests and responses
+	// Mutates and transforms requests and responses
 	// before forwarding them to the destination.
 	// +optional
 	Transformation *TransformationOrConditional `json:"transformation,omitempty"`
 
-	// extProc specifies the external processing configuration for the policy.
+	// External processing configuration for the policy.
 	// +optional
 	ExtProc *ExtProcOrConditional `json:"extProc,omitempty"`
 
-	// extAuth specifies the external authentication configuration for the policy.
-	// This controls what external server to send requests to for authentication.
+	// External authentication configuration for the policy.
+	// This selects the external server to send requests to for authentication.
 	//
 	// An extAuth policy can be conditionally set by nesting configuration under the `conditional` field.
 	// +optional
 	ExtAuth *ExtAuthOrConditional `json:"extAuth,omitempty"`
 
-	// rateLimit specifies the rate limiting configuration for the policy.
-	// This controls the rate at which requests are allowed to be processed.
+	// Rate limiting configuration for the policy.
+	// This limits the rate at which requests are processed.
 	// +optional
 	RateLimit *RateLimitsOrConditional `json:"rateLimit,omitempty"`
 
-	// cors specifies the CORS configuration for the policy.
+	// CORS configuration for the policy.
 	// +optional
 	Cors *CORS `json:"cors,omitempty"`
 
-	// csrf specifies the Cross-Site Request Forgery (CSRF) policy for this traffic policy.
+	// Cross-Site Request Forgery (CSRF) policy for this traffic policy.
 	//
 	// The CSRF policy has the following behavior:
 	// * Safe methods (`GET`, `HEAD`, `OPTIONS`) are automatically allowed.
@@ -814,55 +813,55 @@ type Traffic struct {
 	// +optional
 	Csrf *CSRF `json:"csrf,omitempty"`
 
-	// headerModifiers defines the policy to modify request and response headers.
+	// Request and response header modification policy.
 	// +optional
 	HeaderModifiers *shared.HeaderModifiers `json:"headerModifiers,omitempty"`
 
-	// `hostRewrite` specifies how to rewrite the `Host` header for requests.
+	// How to rewrite the `Host` header for requests.
 	//
 	// If the `HTTPRoute` `urlRewrite` filter already specifies a host rewrite,
 	// this setting is ignored.
 	// +optional
 	HostnameRewrite *HostnameRewrite `json:"hostRewrite,omitempty"`
 
-	// `timeouts` defines the timeouts for requests.
+	// Request timeouts.
 	// It is applicable to `HTTPRoute` resources and ignored for other targeted
 	// kinds.
 	// +optional
 	Timeouts *Timeouts `json:"timeouts,omitempty"`
 
-	// retry defines the policy for retrying requests.
+	// Retry policy.
 	// +optional
 	Retry *Retry `json:"retry,omitempty"`
 
-	// `authorization` specifies the access rules based on roles and
+	// Access rules based on roles and
 	// permissions.
-	// If multiple authorization rules are applied across different policies (at the same, or different, attahcment points),
+	// If multiple authorization rules are applied across different policies, at the same or different attachment points,
 	// all rules are merged.
 	// +optional
 	Authorization *shared.Authorization `json:"authorization,omitempty"`
 
-	// `jwtAuthentication` authenticates users based on JWT tokens.
+	// Authenticates users based on JWT tokens.
 	// +optional
 	JWTAuthentication *JWTAuthentication `json:"jwtAuthentication,omitempty"`
 
-	// `basicAuthentication` authenticates users based on the `Basic`
+	// Authenticates users based on the `Basic`
 	// authentication scheme (RFC 7617), where a username and password are
 	// encoded in the request.
 	// +optional
 	BasicAuthentication *BasicAuthentication `json:"basicAuthentication,omitempty"`
 
-	// `apiKeyAuthentication` authenticates users based on a configured API
+	// Authenticates users based on a configured API
 	// key.
 	// +optional
 	APIKeyAuthentication *APIKeyAuthentication `json:"apiKeyAuthentication,omitempty"`
 
-	// `directResponse` configures the policy to send a direct response to the
+	// Sends a direct response to the
 	// client.
 	// +optional
 	DirectResponse *DirectResponseOrConditional `json:"directResponse,omitempty"`
 
-	// `buffer` defines the policy for buffer requests and responses bodies. Buffered bodies will be accumulated in memory
+	// Buffers request and response bodies. Buffered bodies are accumulated in memory
 	// by the proxy until completion before being forwarded. This changes the proxies default behavior, which streams bodies.
 	//
 	// Warning: large bodies can lead to excessive memory usage in the proxy. Utilize with care, or with strict limits.
@@ -871,17 +870,17 @@ type Traffic struct {
 	Buffer *Buffer `json:"buffer,omitempty"`
 }
 
-// DirectResponse defines the policy to send a direct response to the client.
+// Direct response policy.
 //
 // +kubebuilder:validation:XValidation:rule="!(has(self.body) && has(self.bodyExpression))",message="body and bodyExpression may not both be set"
 type DirectResponse struct {
-	// StatusCode defines the HTTP status code to return for this route.
+	// HTTP status code to return.
 	//
-	// +optional // This is actually required, but making it required breaks Conditional
+	// +optional
 	// +kubebuilder:validation:Minimum=200
 	// +kubebuilder:validation:Maximum=599
 	StatusCode *int32 `json:"status,omitempty"`
-	// Body defines the content to be returned in the HTTP response body.
+	// Content to return in the HTTP response body.
 	// The maximum length of the body is restricted to prevent excessively large responses.
 	// If this field is omitted, no body is included in the response.
 	//
@@ -890,14 +889,14 @@ type DirectResponse struct {
 	// +kubebuilder:validation:MaxLength=4096
 	Body *string `json:"body,omitempty"`
 
-	// BodyExpression is a CEL expression that produces the HTTP response body.
+	// CEL expression that produces the HTTP response body.
 	// Strings and bytes are written directly; other values are serialized as JSON.
 	// If this field is omitted, no expression body is included in the response.
 	//
 	// +optional
 	BodyExpression *shared.CELExpression `json:"bodyExpression,omitempty"`
 
-	// Headers defines response headers to set on the direct response.
+	// Response headers to set on the direct response.
 	//
 	// +listType=map
 	// +listMapKey=name
@@ -908,10 +907,10 @@ type DirectResponse struct {
 }
 
 type DirectResponseConditional struct {
-	// `condition` must evaluate to true for this policy to execute.
+	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
 	Condition shared.CELExpression `json:"condition,omitempty"`
-	// `policy` definition.
+	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.status)",message="status is required"
 	Policy DirectResponse `json:"policy"`
@@ -921,7 +920,7 @@ type DirectResponseConditional struct {
 type DirectResponseOrConditional struct {
 	// +optional
 	DirectResponse `json:",inline"`
-	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level directResponse fields.
+	// Conditional policy execution. Set this or the top-level directResponse fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
 	// in case no conditions are met.
@@ -978,7 +977,7 @@ type AuthorizationLocation struct {
 type AuthorizationExtractionLocation struct {
 	AuthorizationLocationFields `json:",inline"`
 
-	// expression extracts the credential from the request using a CEL expression.
+	// CEL expression that extracts the credential from the request.
 	// +optional
 	Expression *shared.CELExpression `json:"expression,omitempty"`
 }
@@ -1009,7 +1008,7 @@ type AuthorizationCookieLocation struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
-	// `mode` is the validation mode for JWT authentication.
+	// Validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
@@ -1019,12 +1018,12 @@ type JWTAuthentication struct {
 	// +required
 	Providers []JWTProvider `json:"providers"`
 
-	// `location` controls where JWT credentials are read from.
+	// Where JWT credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 
-	// `mcp` optionally enables MCP OAuth metadata endpoint handling
+	// Enables MCP OAuth metadata endpoint handling
 	// and MCP-specific authentication behavior on top of standard JWT validation.
 	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
 	// +optional
@@ -1032,11 +1031,11 @@ type JWTAuthentication struct {
 }
 
 type JWTProvider struct {
-	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
+	// IdP that issued the JWT. This corresponds to the
 	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +required
 	Issuer ShortString `json:"issuer"`
-	// `audiences` specifies the list of allowed audiences that are allowed
+	// Allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
 	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
@@ -1044,25 +1043,25 @@ type JWTProvider struct {
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Audiences []string `json:"audiences,omitempty"`
-	// `jwks` defines the JSON Web Key Set used to validate the signature of the
+	// JSON Web Key Set used to validate the signature of the
 	// JWT.
 	// +required
 	JWKS JWKS `json:"jwks"`
 }
 
-// JWTMCPConfig holds MCP-specific extensions for JWT authentication.
+// MCP-specific extensions for JWT authentication.
 type JWTMCPConfig struct {
-	// `resourceMetadata` defines the metadata to use for MCP resources,
+	// Metadata to use for MCP resources,
 	// served at the MCP OAuth metadata endpoints.
 	// +optional
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
 
-	// `provider` specifies the identity provider to use for MCP authentication flows.
+	// Identity provider to use for MCP authentication flows.
 	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
 
-	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// Client ID to use for short-circuiting Dynamic Client Registration.
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
@@ -1070,11 +1069,11 @@ type JWTMCPConfig struct {
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline
 type JWKS struct {
-	// `remote` specifies how to reach the JSON Web Key Set from a remote
+	// How to reach the JSON Web Key Set from a remote
 	// address.
 	// +optional
 	Remote *RemoteJWKS `json:"remote,omitempty"`
-	// `inline` specifies an inline JSON Web Key Set used to validate the
+	// Inline JSON Web Key Set used to validate the
 	// signature of the JWT.
 	// +kubebuilder:validation:MinLength=2
 	// +kubebuilder:validation:MaxLength=65536
@@ -1094,7 +1093,7 @@ type RemoteJWKS struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
 	CacheDuration *metav1.Duration `json:"cacheDuration,omitempty"`
-	// `backendRef` references the remote JWKS server to reach.
+	// Remote JWKS server to reach.
 	// Supported types are `Service` and static `Backend`. An
 	// `AgentgatewayPolicy` containing backend TLS config can then be attached
 	// to the `Service` or `Backend` in order to set TLS options for a
@@ -1117,18 +1116,18 @@ const (
 
 // +kubebuilder:validation:ExactlyOneOf=users;secretRef
 type BasicAuthentication struct {
-	// `mode` is the validation mode for basic auth authentication.
+	// Validation mode for basic authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode BasicAuthenticationMode `json:"mode,omitempty"`
 
-	// `realm` specifies the `realm` to return in the `WWW-Authenticate`
+	// `realm` value to return in the `WWW-Authenticate`
 	// header for failed authentication requests. If unset, `Restricted` will
 	// be used.
 	// +optional
 	Realm *string `json:"realm,omitempty"`
 
-	// `users` provides an inline list of username and password pairs that will
+	// Inline list of username and password pairs that will
 	// be accepted. Each entry represents one line of the `htpasswd` format:
 	// https://httpd.apache.org/docs/2.4/programs/htpasswd.html.
 	//
@@ -1146,7 +1145,7 @@ type BasicAuthentication struct {
 	// +optional
 	Users []string `json:"users,omitempty"`
 
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the `.htaccess` file. When using the default Secret
 	// resolver, the `Secret` must have a key named `.htaccess`, and should
 	// contain the complete `.htaccess` file.
@@ -1167,7 +1166,7 @@ type BasicAuthentication struct {
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// `location` controls where Basic credentials are read from.
+	// Where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
@@ -1190,12 +1189,12 @@ const (
 
 // +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector
 type APIKeyAuthentication struct {
-	// `mode` is the validation mode for API key authentication.
+	// Validation mode for API key authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing a set of API keys. If there are many Secret-backed
 	// keys, `secretSelector` can be used instead.
 	//
@@ -1226,7 +1225,7 @@ type APIKeyAuthentication struct {
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// `secretSelector` selects multiple Kubernetes `Secret` resources
+	// Selects multiple Kubernetes `Secret` resources
 	// containing API keys. It is Secret-only; use `secretRef` for other
 	// credential kinds. If the same key is defined in multiple secrets, the
 	// behavior is undefined.
@@ -1258,31 +1257,31 @@ type APIKeyAuthentication struct {
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
 
-	// `location` controls where API keys are read from.
+	// Where API keys are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
 type BufferBody struct {
-	// `maxBytes` specifies the maximum number of bytes to buffer of the request/response body.
+	// Maximum number of bytes to buffer from the request or response body.
 	// +optional
-	// if unset, defaults to the global proxy setting, which defaults to 2Mi.
+	// If unset, defaults to the global proxy setting, which defaults to 2Mi.
 	MaxBytes *ByteSize `json:"maxBytes,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Buffer struct {
-	// `request` configures buffering of the request body.
+	// Request body buffering settings.
 	// +optional
 	Request *BufferBody `json:"request,omitempty"`
-	// `response` configures buffering of the response body.
+	// Response body buffering settings.
 	// +optional
 	Response *BufferBody `json:"response,omitempty"`
 }
 
 type SecretSelector struct {
-	// Label selector to select the target resource.
+	// Labels that must be present on each selected Secret.
 	// +required
 	MatchLabels map[string]string `json:"matchLabels"`
 }
@@ -1298,21 +1297,21 @@ const (
 // +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
-	// `key` provides an inline key to use as the value of the
+	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
 	// `Secret` is preferred.
 	// +kubebuilder:validation:MaxLength=2048
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
 
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the key to use as the authorization value. When using
 	// the default Secret resolver, this must be stored in the `Authorization`
 	// key.
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// `passthrough` passes through an existing token that has been sent by the
+	// Passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
 	// authentication, will strip the original client credentials. Passthrough backend authentication
 	// causes the original token to be added back into the request. If there are no client authentication policies on the
@@ -1320,24 +1319,24 @@ type BackendAuth struct {
 	// +optional
 	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
 
-	// Auth specifies an explicit AWS authentication method for the backend.
-	// When omitted, we will try to use the default AWS SDK authentication methods.
+	// Explicit AWS authentication method for the backend.
+	// When omitted, default AWS SDK credential discovery is used.
 	//
 	// +optional
 	AWS *AwsAuth `json:"aws,omitempty"`
 
-	// Azure specifies an Azure authentication method for the backend.
+	// Azure authentication method for the backend.
 	//
 	// +optional
 	Azure *AzureAuth `json:"azure,omitempty"`
 
-	// Auth specifies to use a Google  authentication method for the backend.
-	// When omitted, we will try to use the default AWS SDK authentication methods.
+	// Google authentication method for the backend.
+	// When omitted, default Google credential discovery is used.
 	//
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
 
-	// `location` controls where  backend credentials are inserted.
+	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
 	// This applies to `key`, `secretRef`, and `passthrough`.
 	// +optional
@@ -1352,7 +1351,7 @@ const (
 	GcpAuthTypeIdToken     GcpAuthType = "IdToken"
 )
 
-// GcpAuth specifies how to authenticate on Google Cloud Platform.
+// Google Cloud authentication settings.
 // +kubebuilder:validation:XValidation:rule="has(self.audience) ? self.type == 'IdToken' : true",message="audience is only valid with IdToken"
 type GcpAuth struct {
 	// The type of token to generate. To authenticate to GCP services,
@@ -1361,14 +1360,14 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing ADC-compatible Google credential JSON. When using
 	// the default Secret resolver, this must be stored in the `credentials.json`
 	// key. When omitted, ambient credentials are used.
 	//
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
-	// `audience` allows explicitly configuring the `aud` of the ID token. Only
+	// Explicit `aud` value for the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.
 	//
@@ -1376,24 +1375,24 @@ type GcpAuth struct {
 	Audience *ShortString `json:"audience,omitempty"`
 }
 
-// AwsAuth specifies the authentication method to use for the backend.
+// AWS authentication settings for the backend.
 //
 // +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing the AWS credentials. When using the default Secret
 	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// `assumeRole` configures AWS STS AssumeRole before signing backend requests.
+	// AWS STS AssumeRole settings to use before signing backend requests.
 	// Ambient AWS credentials are used as the source credentials for STS.
 	//
 	// +optional
 	AssumeRole *AwsAssumeRole `json:"assumeRole,omitempty"`
 
-	// `serviceName` is the AWS SigV4 signing service name (for example,
+	// AWS SigV4 signing service name, for example
 	// `bedrock`, `bedrock-agentcore`, or `execute-api`). If unset, typed AWS
 	// backends may provide this automatically.
 	//
@@ -1401,9 +1400,9 @@ type AwsAuth struct {
 	ServiceName *ShortString `json:"serviceName,omitempty"`
 }
 
-// AwsAssumeRole configures AWS STS AssumeRole for backend authentication.
+// AWS STS AssumeRole settings for backend authentication.
 type AwsAssumeRole struct {
-	// `roleArn` is the AWS IAM role ARN to assume.
+	// AWS IAM role ARN to assume.
 	//
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
@@ -1412,7 +1411,7 @@ type AwsAssumeRole struct {
 }
 
 type AzureAuth struct {
-	// `secretRef` references a credential source, defaulting to a Kubernetes
+	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing the Azure credentials. When using the default Secret
 	// resolver, the `Secret` must have keys `clientID`, `tenantID`, and
 	// `clientSecret`.
@@ -1420,7 +1419,7 @@ type AzureAuth struct {
 	// +optional
 	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// Details for managed identity authentication
+	// Managed identity authentication settings.
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
@@ -1440,26 +1439,26 @@ type BackendAuthPassthrough struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type BackendAI struct {
-	// Enrich requests sent to the LLM provider by appending and prepending system prompts. This can be configured only for
+	// Enriches requests sent to the LLM provider by appending and prepending system prompts. This can be configured only for
 	// LLM providers that use the `CHAT` or `CHAT_STREAMING` API route type.
 	// +optional
 	PromptEnrichment *AIPromptEnrichment `json:"prompt,omitempty"`
 
-	// `promptGuard` enables adding guardrails to LLM requests and responses.
+	// Guardrails for LLM requests and responses.
 	// +optional
 	PromptGuard *AIPromptGuard `json:"promptGuard,omitempty"`
 
-	// Provide defaults to merge with user input fields. If the field is already set, the field in the request is used.
+	// Defaults to merge with user input fields. If the field is already set, the field in the request is used.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Defaults []FieldDefault `json:"defaults,omitempty"`
-	// Provide overrides to merge with user input fields. If the field is already set, the field will be overwritten.
+	// Overrides to merge with user input fields. If the field is already set, the field is overwritten.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Overrides []FieldDefault `json:"overrides,omitempty"`
-	// Provide CEL transformations to compute and set fields in the request body.
+	// CEL transformations to compute and set fields in the request body.
 	// The expression result overwrites any existing value for that field.
 	// This has a higher priority than `overrides` if both are set for the same
 	// key.
@@ -1468,21 +1467,21 @@ type BackendAI struct {
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
-	// ModelAliases maps friendly model names to actual provider model names.
+	// Maps friendly model names to actual provider model names.
 	// Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.
 	// Note: This field is only applicable when using the agentgateway data plane.
 	// +kubebuilder:validation:MaxProperties=64
 	// +optional
 	ModelAliases map[string]string `json:"modelAliases,omitempty"`
 
-	// `promptCaching` enables automatic prompt caching for supported
+	// Automatic prompt caching for supported
 	// providers, currently AWS Bedrock.
 	// Reduces API costs by caching static content like system prompts and tool definitions.
 	// Only applicable for Bedrock Claude 3+ and Nova models.
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 
-	// `routes` defines how to identify the type of traffic to handle.
+	// Rules for identifying the type of traffic to handle.
 	// The keys are URL path suffixes matched using ends-with comparison, for
 	// example `"/v1/chat/completions"`.
 	// The special `*` wildcard matches any path.
@@ -1491,7 +1490,7 @@ type BackendAI struct {
 	Routes map[string]RouteType `json:"routes,omitempty"`
 }
 
-// RouteType specifies how the AI gateway should process incoming requests
+// How the AI gateway should process incoming requests
 // based on the URL path and the API format expected.
 // +k8s:enum
 type RouteType string
@@ -1532,7 +1531,7 @@ const (
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type BackendMCP struct {
-	// authorization defines MCPBackend level authorization. Unlike authorization at the HTTP level, which will reject
+	// MCP backend authorization. Unlike authorization at the HTTP level, which rejects
 	// unauthorized requests with a `403` error, this policy works at the
 	// `MCPBackend` level.
 	//
@@ -1543,7 +1542,7 @@ type BackendMCP struct {
 	// item and reject requests that do not meet the rule.
 	// +optional
 	Authorization *shared.Authorization `json:"authorization,omitempty"`
-	// `authentication` defines `MCPBackend`-specific authentication rules.
+	// MCP backend-specific authentication rules.
 	//
 	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
 	// other policies such as transformation and rate limiting.
@@ -1553,21 +1552,21 @@ type BackendMCP struct {
 }
 
 type MCPAuthentication struct {
-	// ResourceMetadata defines the metadata to use for MCP resources.
+	// Metadata to use for MCP resources.
 	// +optional
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata"`
 
-	// `provider` specifies the identity provider to use for authentication.
+	// Identity provider to use for authentication.
 	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
-	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
+	// IdP that issued the JWT. This corresponds to the
 	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
 	// +optional
 	Issuer ShortString `json:"issuer,omitempty"`
 
-	// `audiences` specifies the list of allowed audiences that are allowed
+	// Allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
 	// ([RFC 7519 §4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)).
 	// If unset, any audience is allowed.
@@ -1576,17 +1575,17 @@ type MCPAuthentication struct {
 	// +optional
 	Audiences []string `json:"audiences,omitempty"`
 
-	// `jwks` defines the remote JSON Web Key used to validate the signature of
+	// Remote JSON Web Key used to validate the signature of
 	// the JWT.
 	// +required
 	JWKS RemoteJWKS `json:"jwks"`
 
-	// `mode` is the validation mode for JWT authentication.
+	// Validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
-	// `clientId` is an optional client ID to use for short-circuiting Dynamic Client Registration.
+	// Client ID to use for short-circuiting Dynamic Client Registration.
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
@@ -1602,14 +1601,14 @@ const (
 )
 
 type BackendTunnel struct {
-	// `backendRef` references the proxy server to reach.
+	// Proxy server to reach.
 	// Supported types: `Service` and `Backend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 }
 
 type BackendHTTP struct {
-	// `version` specifies the HTTP protocol version to use when connecting to
+	// HTTP protocol version to use when connecting to
 	// the backend.
 	// If not specified, the version is automatically determined:
 	// * `Service` types can specify it with `appProtocol` on the `Service`
@@ -1623,7 +1622,7 @@ type BackendHTTP struct {
 	// +optional
 	Version *HTTPVersion `json:"version,omitempty"`
 
-	// requestTimeout specifies the deadline for receiving a response from the backend.
+	// Deadline for receiving a response from the backend.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="requestTimeout must be at least 1ms"
 	// +optional
@@ -1639,11 +1638,11 @@ const (
 )
 
 type BackendTCP struct {
-	// `keepAlive` defines settings for enabling TCP keepalives on the
+	// Settings for enabling TCP keepalives on the
 	// connection.
 	// +optional
 	Keepalive *Keepalive `json:"keepalive,omitempty"`
-	// `connectTimeout` defines the deadline for establishing a connection to
+	// Deadline for establishing a connection to
 	// the destination.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="connectTimeout must be at least 100ms"
@@ -1653,20 +1652,20 @@ type BackendTCP struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Transformation struct {
-	// `request` is used to modify the request path.
+	// Request transformation settings.
 	// +optional
 	Request *Transform `json:"request,omitempty"`
 
-	// `response` is used to modify the response path.
+	// Response transformation settings.
 	// +optional
 	Response *Transform `json:"response,omitempty"`
 }
 
 type TransformationConditional struct {
-	// `condition` must evaluate to true for this policy to execute.
+	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
 	Condition shared.CELExpression `json:"condition,omitempty"`
-	// `policy` definition.
+	// Policy to apply when the condition matches.
 	// +required
 	Policy Transformation `json:"policy"`
 }
@@ -1674,15 +1673,15 @@ type TransformationConditional struct {
 // +kubebuilder:validation:ConditionalPolicy
 // +kubebuilder:validation:AtLeastOneFieldSet
 type TransformationOrConditional struct {
-	// `request` is used to modify the request path.
+	// Request transformation settings.
 	// +optional
 	Request *Transform `json:"request,omitempty"`
 
-	// `response` is used to modify the response path.
+	// Response transformation settings.
 	// +optional
 	Response *Transform `json:"response,omitempty"`
 
-	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level transformation fields.
+	// Conditional policy execution. Set this or the top-level transformation fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
 	// in case no conditions are met.
@@ -1708,7 +1707,7 @@ func (t *TransformationOrConditional) ConditionalPolicy() (*Transformation, iter
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type Transform struct {
-	// `set` is a list of headers and the value they should be set to.
+	// Headers to set and the values to use.
 	//
 	// +listType=map
 	// +listMapKey=name
@@ -1717,7 +1716,7 @@ type Transform struct {
 	// +optional
 	Set []HeaderTransformation `json:"set,omitempty"`
 
-	// `add` is a list of headers to add to the request and what that value
+	// Headers to add to the request and what each value
 	// should be set to. If there is already a header with these values then
 	// append the value as an extra entry.
 	//
@@ -1728,7 +1727,7 @@ type Transform struct {
 	// +optional
 	Add []HeaderTransformation `json:"add,omitempty"`
 
-	// `remove` is a list of header names to remove from the request or
+	// Header names to remove from the request or
 	// response.
 	//
 	// +listType=set
@@ -1737,11 +1736,11 @@ type Transform struct {
 	// +optional
 	Remove []HeaderName `json:"remove,omitempty"`
 
-	// `body` controls manipulation of the HTTP body.
+	// HTTP body transformation.
 	// +optional
 	Body *shared.CELExpression `json:"body,omitempty"`
 
-	// `metadata` stores CEL-evaluated values under the `metadata` CEL variable
+	// Stores CEL-evaluated values under the `metadata` CEL variable
 	// for subsequent policy evaluations. `metadata` is evaluated before header
 	// or body transformations.
 	//
@@ -1751,7 +1750,7 @@ type Transform struct {
 	Metadata map[string]shared.CELExpression `json:"metadata,omitempty"`
 }
 
-// An HTTP Header Name.
+// HTTP header name.
 //
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=256
@@ -1760,7 +1759,7 @@ type Transform struct {
 // +k8s:deepcopy-gen=false
 type HeaderName string
 
-// An HTTP header name. Unlike HeaderName, this does not allow pseudo-headers.
+// HTTP header name that does not allow pseudo-headers.
 //
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=256
@@ -1772,7 +1771,7 @@ type DirectResponseHeader struct {
 	// The name of the header to set.
 	// +required
 	Name HTTPHeaderName `json:"name"`
-	// `value` is the CEL expression to apply to generate the output value for
+	// CEL expression that generates the output value for
 	// the header.
 	// +required
 	Value shared.CELExpression `json:"value"`
@@ -1782,13 +1781,13 @@ type HeaderTransformation struct {
 	// The name of the header to add.
 	// +required
 	Name HeaderName `json:"name"`
-	// `value` is the CEL expression to apply to generate the output value for
+	// CEL expression that generates the output value for
 	// the header.
 	// +required
 	Value shared.CELExpression `json:"value"`
 }
 
-// BodySendMode controls how HTTP bodies are delivered to the external processor.
+// How HTTP bodies are delivered to the external processor.
 // +kubebuilder:validation:Enum=None;Buffered;BufferedPartial;FullDuplexStreamed
 type BodySendMode string
 
@@ -1805,7 +1804,7 @@ const (
 	BodySendModeFullDuplexStreamed BodySendMode = "FullDuplexStreamed"
 )
 
-// HeaderSendMode controls whether HTTP headers are delivered to the external processor.
+// Whether HTTP headers are delivered to the external processor.
 // +kubebuilder:validation:Enum=Send;Skip
 type HeaderSendMode string
 
@@ -1816,7 +1815,7 @@ const (
 	HeaderSendModeSkip HeaderSendMode = "Skip"
 )
 
-// TrailerSendMode controls whether HTTP trailers are delivered to the external processor.
+// Whether HTTP trailers are delivered to the external processor.
 // +kubebuilder:validation:Enum=Skip;Send
 type TrailerSendMode string
 
@@ -1827,9 +1826,9 @@ const (
 	TrailerSendModeSend TrailerSendMode = "Send"
 )
 
-// ProcessingOptions configures how ext_proc handles request and response phases.
+// External processor request and response phase settings.
 type ProcessingOptions struct {
-	// requestBodyMode controls how request bodies are sent to the external processor.
+	// How request bodies are sent to the external processor.
 	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
 	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
 	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
@@ -1837,7 +1836,7 @@ type ProcessingOptions struct {
 	// +kubebuilder:default=FullDuplexStreamed
 	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
 
-	// responseBodyMode controls how response bodies are sent to the external processor.
+	// How response bodies are sent to the external processor.
 	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
 	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
 	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
@@ -1845,31 +1844,31 @@ type ProcessingOptions struct {
 	// +kubebuilder:default=FullDuplexStreamed
 	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`
 
-	// requestHeaderMode controls whether request headers are sent to the external processor.
+	// Whether request headers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
 	// +kubebuilder:default=Send
 	RequestHeaderMode *HeaderSendMode `json:"requestHeaderMode,omitempty"`
 
-	// responseHeaderMode controls whether response headers are sent to the external processor.
+	// Whether response headers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
 	// +kubebuilder:default=Send
 	ResponseHeaderMode *HeaderSendMode `json:"responseHeaderMode,omitempty"`
 
-	// requestTrailerMode controls whether request trailers are sent to the external processor.
+	// Whether request trailers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
 	// +kubebuilder:default=Send
 	RequestTrailerMode *TrailerSendMode `json:"requestTrailerMode,omitempty"`
 
-	// responseTrailerMode controls whether response trailers are sent to the external processor.
+	// Whether response trailers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
 	// +kubebuilder:default=Send
 	ResponseTrailerMode *TrailerSendMode `json:"responseTrailerMode,omitempty"`
 
-	// allowModeOverride allows ext_proc `mode_override` values from matching headers responses to update
+	// Allows ext_proc `mode_override` values from matching header responses to update
 	// subsequent request/response processing phases for this exchange. Defaults to `false`.
 	// +optional
 	// +kubebuilder:default=false
@@ -1877,20 +1876,20 @@ type ProcessingOptions struct {
 }
 
 type ExtProc struct {
-	// `backendRef` references the External Processor server to reach.
+	// External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +optional // This is actually required, but making it required breaks Conditional
+	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
-	// processingOptions configures how request and response phases are sent to ext_proc.
+	// How request and response phases are sent to ext_proc.
 	// +optional
 	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
 }
 
 type ExtProcConditional struct {
-	// `condition` must evaluate to true for this policy to execute.
+	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
 	Condition shared.CELExpression `json:"condition,omitempty"`
-	// `policy` definition.
+	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
 	Policy ExtProc `json:"policy"`
@@ -1900,7 +1899,7 @@ type ExtProcConditional struct {
 type ExtProcOrConditional struct {
 	// +optional
 	ExtProc `json:",inline"`
-	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extProc fields.
+	// Conditional policy execution. Set this or the top-level extProc fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
 	// in case no conditions are met.
@@ -1938,10 +1937,10 @@ type ConditionalPolicy[T any] interface {
 }
 
 type ExtAuthConditional struct {
-	// `condition` must evaluate to true for this policy to execute.
+	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
 	Condition shared.CELExpression `json:"condition,omitempty"`
-	// `policy` definition.
+	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
 	// +kubebuilder:validation:XValidation:rule="[has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
@@ -1953,7 +1952,7 @@ type ExtAuthConditional struct {
 type ExtAuthOrConditional struct {
 	// +optional
 	ExtAuth `json:",inline"`
-	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level extAuth fields.
+	// Conditional policy execution. Set this or the top-level extAuth fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
 	// in case no conditions are met.
@@ -1988,36 +1987,36 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 
 // +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
 type ExtAuth struct {
-	// `backendRef` references the External Authorization server to reach.
+	// External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
-	// +optional // This is actually required, but making it required breaks Conditional
+	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
-	// FailureMode controls behavior when the external authorization service is
+	// Behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.
 	// "FailClosed" (default) denies the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
-	// grpc specifies that the gRPC External Authorization
+	// Uses the gRPC External Authorization
 	// [protocol](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/auth/v3/external_auth.proto) should be used.
 	// +optional
 	GRPC *AgentExtAuthGRPC `json:"grpc,omitempty"`
 
-	// `http` specifies that the HTTP protocol should be used for connecting to
+	// Uses HTTP to connect to
 	// the authorization server. The authorization server must return a `200`
 	// status code, otherwise the request is considered an authorization
 	// failure.
 	// +optional
 	HTTP *AgentExtAuthHTTP `json:"http,omitempty"`
 
-	// `forwardBody` configures whether to include the HTTP body in the request.
+	// Whether to include the HTTP body in the authorization request.
 	// If enabled, the request body will be buffered.
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
 
-	// `cache` configures caching of gRPC authorization results.
+	// Caches gRPC authorization results.
 	//
 	// WARNING: the safety of this feature depends on the cache key accurately
 	// capturing every request property that the authorization service uses to
@@ -2035,7 +2034,7 @@ type ExtAuth struct {
 }
 
 type ExtAuthCache struct {
-	// `key` is an ordered list of CEL expressions evaluated against the request
+	// Ordered list of CEL expressions evaluated against the request
 	// to construct the cache key.
 	//
 	// +kubebuilder:validation:MinItems=1
@@ -2043,7 +2042,7 @@ type ExtAuthCache struct {
 	// +required
 	Key []shared.CELExpression `json:"key"`
 
-	// `ttl` is either a duration string, such as `5m`, or a CEL expression that
+	// Duration string, such as `5m`, or a CEL expression that
 	// returns the duration that cached authorization results may be reused, or a
 	// timestamp when the cached authorization result expires. The expression is
 	// evaluated after the authorization response has been applied to the request.
@@ -2051,7 +2050,7 @@ type ExtAuthCache struct {
 	// +required
 	TTL shared.CELExpression `json:"ttl"`
 
-	// `maxEntries` is the maximum number of authorization results to keep in
+	// Maximum number of authorization results to keep in
 	// the cache. If unset, this defaults to 10000.
 	//
 	// +kubebuilder:validation:Minimum=1
@@ -2060,7 +2059,7 @@ type ExtAuthCache struct {
 }
 
 type AgentExtAuthHTTP struct {
-	// `path` specifies the path to send to the authorization server. If
+	// Path to send to the authorization server. If
 	// unset, this defaults to the original request path.
 	// This is a CEL expression, which allows customizing the path based on the
 	// incoming request. For example, to add a prefix, use
@@ -2068,13 +2067,13 @@ type AgentExtAuthHTTP struct {
 	// +optional
 	Path *shared.CELExpression `json:"path,omitempty"`
 
-	// `redirect` defines an optional expression to determine a path to
+	// Optional expression that determines a path to
 	// redirect to on authorization failure. This is useful to redirect to a
 	// sign-in page.
 	// +optional
 	Redirect *shared.CELExpression `json:"redirect,omitempty"`
 
-	// `allowedRequestHeaders` specifies what additional headers from the client request
+	// Additional headers from the client request that
 	// will be sent to the authorization server.
 	//
 	// If unset, the following headers are sent by default: `Authorization`.
@@ -2083,7 +2082,7 @@ type AgentExtAuthHTTP struct {
 	// +kubebuilder:validation:MaxItems=64
 	AllowedRequestHeaders []ShortString `json:"allowedRequestHeaders,omitempty"`
 
-	// `addRequestHeaders` specifies what additional headers to add to the
+	// Additional headers to add to the
 	// request to the authorization server. While `allowedRequestHeaders` just
 	// passes the original headers through, `addRequestHeaders` allows defining
 	// custom headers based on CEL expressions.
@@ -2092,14 +2091,14 @@ type AgentExtAuthHTTP struct {
 	// +kubebuilder:validation:MaxProperties=64
 	AddRequestHeaders map[string]shared.CELExpression `json:"addRequestHeaders,omitempty"`
 
-	// `allowedResponseHeaders` specifies what headers from the authorization response
+	// Headers from the authorization response that
 	// will be copied into the request to the backend.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=64
 	AllowedResponseHeaders []ShortString `json:"allowedResponseHeaders,omitempty"`
 
-	// `responseMetadata` specifies what metadata fields should be constructed
+	// Metadata fields to construct
 	// from the authorization response. These will be included under the
 	// `extauthz` variable in future CEL expressions. Setting this is useful
 	// for things like logging usernames, without needing to include them as
@@ -2111,13 +2110,13 @@ type AgentExtAuthHTTP struct {
 }
 
 type AgentExtAuthGRPC struct {
-	// `contextExtensions` specifies additional arbitrary key-value pairs to
+	// Additional arbitrary key-value pairs to
 	// send to the authorization server in the `context_extensions` field.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
 	ContextExtensions map[string]string `json:"contextExtensions,omitempty"`
-	// `requestMetadata` specifies metadata to be sent to the authorization
+	// Metadata to send to the authorization
 	// server. This maps to the `metadata_context.filter_metadata` field of the
 	// request, and allows dynamic CEL expressions. If unset, by default the
 	// `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as
@@ -2129,7 +2128,7 @@ type AgentExtAuthGRPC struct {
 }
 
 type ExtAuthBody struct {
-	// `maxSize` specifies, in bytes, the largest body that will be buffered
+	// Largest body, in bytes, that will be buffered
 	// and sent to the authorization server. If the body size is larger than
 	// `maxSize`, then the request will be rejected with a response.
 	//
@@ -2139,22 +2138,22 @@ type ExtAuthBody struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type RateLimits struct {
-	// Local defines a local rate limiting policy.
+	// Local rate limiting policy.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	Local []LocalRateLimit `json:"local,omitempty"`
 
-	// Global defines a global rate limiting policy using an external service.
+	// Global rate limiting policy using an external service.
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
 }
 
 type RateLimitsConditional struct {
-	// `condition` must evaluate to true for this policy to execute.
+	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
 	Condition shared.CELExpression `json:"condition,omitempty"`
-	// `policy` definition.
+	// Policy to apply when the condition matches.
 	// +required
 	Policy RateLimits `json:"policy"`
 }
@@ -2162,17 +2161,17 @@ type RateLimitsConditional struct {
 // +kubebuilder:validation:ConditionalPolicy
 // +kubebuilder:validation:AtLeastOneFieldSet
 type RateLimitsOrConditional struct {
-	// Local defines a local rate limiting policy.
+	// Local rate limiting policy.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
 	Local []LocalRateLimit `json:"local,omitempty"`
 
-	// Global defines a global rate limiting policy using an external service.
+	// Global rate limiting policy using an external service.
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
 
-	// `conditional`, if set, will enable conditional policy execution. You must either set this, or set the top level rateLimit fields.
+	// Conditional policy execution. Set this or the top-level rateLimit fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
 	// in case no conditions are met.
@@ -2197,23 +2196,23 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 }
 
 type GlobalRateLimit struct {
-	// `backendRef` references the rate limit server to reach.
+	// Rate limit server to reach.
 	// Supported types: `Service` and `Backend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
-	// `failureMode` controls behavior when the remote rate limit service is
+	// Behavior when the remote rate limit service is
 	// unavailable or returns an error. `FailOpen` allows the request to continue.
 	// `FailClosed` (default) denies the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
-	// `domain` specifies the domain under which this limit should apply.
+	// Domain under which this limit should apply.
 	// This is an arbitrary string that enables a rate limit server to distinguish between different applications.
 	// +required
 	Domain ShortString `json:"domain"`
 
-	// `descriptors` define the dimensions for rate limiting. These values are
+	// Dimensions for rate limiting. These values are
 	// passed to the rate limit service which applies configured limits based
 	// on them. Each descriptor represents a single rate limit rule with one or
 	// more entries.
@@ -2233,17 +2232,17 @@ const (
 )
 
 type RateLimitDescriptor struct {
-	// `entries` are the individual components that make up this descriptor.
+	// Individual components that make up this descriptor.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +required
 	Entries []RateLimitDescriptorEntry `json:"entries"`
-	// `unit` defines what to use as the cost function. If unspecified,
+	// Cost unit. If unspecified,
 	// `Requests` is used.
 	// +optional
 	Unit *RateLimitUnit `json:"unit,omitempty"`
-	// `cost` is a Common Expression Language (`CEL`) expression that determines
+	// Common Expression Language (`CEL`) expression that determines
 	// the cost of the request for this descriptor. If unset, `Requests` costs
 	// default to 1, and `Tokens` costs default to the total token count.
 	//
@@ -2256,12 +2255,12 @@ type RateLimitDescriptor struct {
 	Cost *shared.CELExpression `json:"cost,omitempty"`
 }
 
-// A descriptor entry defines a single entry in a rate limit descriptor.
+// Entry in a rate limit descriptor.
 type RateLimitDescriptorEntry struct {
-	// `name` specifies the name of the descriptor.
+	// Name of the descriptor.
 	// +required
 	Name TinyString `json:"name"`
-	// `expression` is a Common Expression Language (`CEL`) expression that
+	// Common Expression Language (`CEL`) expression that
 	// defines the value for the descriptor.
 	//
 	// For example, to rate limit based on the Client IP: `source.address`.
@@ -2280,18 +2279,18 @@ const (
 	LocalRateLimitUnitHours   LocalRateLimitUnit = "Hours"
 )
 
-// Policy for local rate limiting. Local rate limits are handled locally on a per-proxy basis, without co-ordination
+// Local rate limiting policy. Local rate limits are handled on a per-proxy basis, without coordination
 // between instances of the proxy.
 // +kubebuilder:validation:ExactlyOneOf=requests;tokens
 type LocalRateLimit struct {
-	// `requests` specifies the number of HTTP requests per unit of time that
+	// Number of HTTP requests per unit of time that
 	// are allowed. Requests exceeding this limit will fail with a `429`
 	// error.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Requests *int32 `json:"requests,omitempty"`
 
-	// `tokens` specifies the number of LLM tokens per unit of time that are
+	// Number of LLM tokens per unit of time that are
 	// allowed. Requests exceeding this limit will fail with a `429` error.
 	//
 	// Both input and output tokens are counted. However, token counts are not known until the request completes. As a
@@ -2301,12 +2300,12 @@ type LocalRateLimit struct {
 	// +optional
 	Tokens *int32 `json:"tokens,omitempty"`
 
-	// `unit` specifies the unit of time that requests are limited on.
+	// Unit of time for the limit.
 	//
 	// +required
 	Unit LocalRateLimitUnit `json:"unit"`
 
-	// `burst` specifies an allowance of requests above the request-per-unit
+	// Allowance of requests above the request-per-unit
 	// that should be allowed within a short period of time.
 	// +optional
 	Burst *int32 `json:"burst,omitempty"`
@@ -2318,7 +2317,7 @@ type CORS struct {
 }
 
 type CSRF struct {
-	// `additionalOrigins` specifies additional source origins that will be
+	// Additional source origins that will be
 	// allowed in addition to the destination origin. The `Origin` consists of
 	// a scheme and a host, with an optional port, and takes the form
 	// `<scheme>://<host>(:<port>)`.
@@ -2330,7 +2329,7 @@ type CSRF struct {
 }
 
 type HostnameRewrite struct {
-	// `mode` sets the hostname rewrite mode.
+	// Hostname rewrite mode.
 	//
 	// The following may be specified:
 	// * `Auto`: automatically set the `Host` header based on the destination.
@@ -2345,7 +2344,7 @@ type HostnameRewrite struct {
 }
 
 type Timeouts struct {
-	// request specifies a timeout for an individual request from the gateway to a backend. This covers the time from when
+	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
@@ -2354,44 +2353,44 @@ type Timeouts struct {
 	Request *metav1.Duration `json:"request,omitempty"`
 }
 
-// Retry defines the retry policy.
+// Retry policy.
 type Retry struct {
 	*gwv1.HTTPRouteRetry `json:",inline"`
 }
 
-// AccessLog specifies how per-request access logs are emitted.
+// Per-request access log settings.
 type AccessLog struct {
-	// `filter` specifies a CEL expression that is used to filter logs. A log
+	// CEL expression used to filter logs. A log
 	// will only be emitted if the expression evaluates to `true`.
 	// +optional
 	Filter *shared.CELExpression `json:"filter,omitempty"`
-	// `attributes` specifies customizations to the key-value pairs that are
+	// Customizations to the key-value pairs that are
 	// logged.
 	// +optional
 	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
 
-	// `otlp` configures OTLP access log export to an
+	// OTLP access log export to an
 	// OpenTelemetry-compatible backend.
 	// +optional
 	Otlp *OtlpAccessLog `json:"otlp,omitempty"`
 }
 
-// OtlpAccessLog defines configuration for shipping access logs to an
+// Ships access logs to an
 // OpenTelemetry-compatible backend via OTLP.
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 type OtlpAccessLog struct {
-	// `backendRef` references the OTLP server to send access logs to.
+	// OTLP server to send access logs to.
 	// Supported types: `Service` and `AgentgatewayBackend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
-	// `protocol` specifies the OTLP protocol variant to use.
+	// OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
-	// `path` specifies the OTLP/HTTP path to use. This is only applicable
+	// OTLP/HTTP path to use. This is only applicable
 	// when `protocol` is `HTTP`. If unset, this defaults to `/v1/logs`.
 	// +optional
 	Path *LongString `json:"path,omitempty"`
@@ -2399,13 +2398,13 @@ type OtlpAccessLog struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type LogTracingAttributes struct {
-	// `remove` lists the default fields that should be removed. For example,
+	// Default fields to remove. For example,
 	// `http.method`.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=32
 	// +optional
 	Remove []TinyString `json:"remove,omitempty"`
-	// `add` specifies additional key-value pairs to be added to each entry.
+	// Additional key-value pairs to add to each entry.
 	// The value is a CEL expression. If the CEL expression fails to evaluate,
 	// the pair will be excluded.
 	// +kubebuilder:validation:MinItems=1
@@ -2421,9 +2420,9 @@ type AttributeAdd struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
-// MetricLabels specifies custom labels to add to Prometheus metrics.
+// Custom labels to add to Prometheus metrics.
 type MetricLabels struct {
-	// `attributes` specifies customizations to the labels that are
+	// Customizations to the labels that are
 	// added to Prometheus metrics.
 	// +required
 	Attributes MetricAttributes `json:"attributes"`
@@ -2431,7 +2430,7 @@ type MetricLabels struct {
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type MetricAttributes struct {
-	// `add` specifies additional key-value pairs to be added as custom labels
+	// Additional key-value pairs to add as custom labels
 	// to all Prometheus metrics. The value is a CEL expression evaluated
 	// per-request. If the CEL expression fails to evaluate, the label value
 	// is set to "unknown".
@@ -2459,38 +2458,38 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 type Tracing struct {
-	// `backendRef` references the OTLP server to reach.
+	// OTLP server to reach.
 	// Supported types: `Service` and `AgentgatewayBackend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
-	// `protocol` specifies the OTLP protocol variant to use.
+	// OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
-	// `path` specifies the OTLP path to use. This is only applicable when
+	// OTLP path to use. This is only applicable when
 	// `protocol` is `HTTP`. If unset, this defaults to `/v1/traces`.
 	// +optional
 	Path *LongString `json:"path,omitempty"`
 
-	// `attributes` specifies customizations to the key-value pairs that are
+	// Customizations to the key-value pairs that are
 	// included in the trace.
 	// +optional
 	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
 
-	// `resources` describes the entity producing telemetry and specifies the
+	// Entity producing telemetry and resources
 	// resources to be included in the trace.
 	// +optional
 	Resources []ResourceAdd `json:"resources,omitempty"`
 
-	// `randomSampling` is an expression to determine the amount of random
+	// Expression that determines the amount of random
 	// sampling. Random sampling will initiate a new trace span if the incoming
 	// request does not have a trace initiated already. This should evaluate to
 	// a float between `0.0` and `1.0`, or a boolean (`true` or `false`). If
 	// unspecified, random sampling is disabled.
 	// +optional
 	RandomSampling *shared.CELExpression `json:"randomSampling,omitempty"`
-	// `clientSampling` is an expression to determine the amount of client
+	// Expression that determines the amount of client
 	// sampling. Client sampling determines whether to initiate a new trace
 	// span if the incoming request does have a trace already. This should
 	// evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or

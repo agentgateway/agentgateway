@@ -8,7 +8,7 @@ import (
 // Control-plane Authorization rules not specific to policies:
 // +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 
-// Select the object by `name` and `namespace`.
+// Selects one object by `name` and, optionally, `namespace`.
 // You can target only one object at a time.
 type NamespacedObjectReference struct {
 	// The name of the target resource.
@@ -21,9 +21,8 @@ type NamespacedObjectReference struct {
 	Namespace *gwv1.Namespace `json:"namespace,omitempty"`
 }
 
-// Select the object to attach the policy by `Group`, `Kind`, and `Name`.
+// Selects one same-namespace object by `group`, `kind`, and `name`.
 // The object must be in the same namespace as the policy.
-// You can target only one object at a time.
 type LocalPolicyTargetReference struct {
 	// The API group of the target resource.
 	// For Kubernetes Gateway API resources, the group is `gateway.networking.k8s.io`.
@@ -39,20 +38,18 @@ type LocalPolicyTargetReference struct {
 	Name gwv1.ObjectName `json:"name"`
 }
 
-// Select the object to attach the policy by `Group`, `Kind`, `Name`, and
-// `SectionName`.
+// Selects one same-namespace object by `group`, `kind`, `name`, and,
+// optionally, `sectionName`.
 // The object must be in the same namespace as the policy.
-// You can target only one object at a time.
 type LocalPolicyTargetReferenceWithSectionName struct {
 	LocalPolicyTargetReference `json:",inline"`
 
-	// The section name of the target resource.
+	// The named section of the target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
 }
 
-// LocalPolicyTargetSelector selects the object to attach the policy by
-// `Group`, `Kind`, and `MatchLabels`.
+// Selects same-namespace objects by `group`, `kind`, and `matchLabels`.
 // The object must be in the same namespace as the policy and match the
 // specified labels.
 type LocalPolicyTargetSelector struct {
@@ -65,63 +62,51 @@ type LocalPolicyTargetSelector struct {
 	// +required
 	Kind gwv1.Kind `json:"kind"`
 
-	// Label selector to select the target resource.
+	// Labels that must be present on each selected target resource.
 	// +required
 	MatchLabels map[string]string `json:"matchLabels"`
 }
 
-// LocalPolicyTargetSelectorWithSectionName selects the object to attach the
-// policy by `Group`, `Kind`, `MatchLabels`, and optionally `SectionName`.
-// The object must be in the same namespace as the policy and match the
-// specified labels.
-// Do not use `targetSelectors` when reconciliation times are critical,
-// especially if you
-// have a large number of policies that target the same resource.
-// Instead, use `targetRefs` to attach the policy.
+// Selects same-namespace objects by `group`, `kind`, `matchLabels`, and,
+// optionally, `sectionName`.
+// Each selected object must be in the same namespace as the policy and match
+// the specified labels.
+// Prefer `targetRefs` when reconciliation latency is important, especially
+// when many policies target the same resource.
 type LocalPolicyTargetSelectorWithSectionName struct {
 	LocalPolicyTargetSelector `json:",inline"`
 
-	// The section name of the target resource.
+	// The named section of each selected target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
 }
 
 type PolicyStatus struct {
-	//
+	// The current condition state for the policy.
 	// +optional
 	// +listType=map
 	// +listMapKey=type
 	// +kubebuilder:validation:MaxItems=8
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// Status for each ancestor that is affected by this policy.
 	// +kubebuilder:validation:MaxItems=16
 	// +required
 	Ancestors []PolicyAncestorStatus `json:"ancestors"`
 }
 
 type PolicyAncestorStatus struct {
-	// AncestorRef corresponds with a ParentRef in the spec that this
-	// PolicyAncestorStatus struct describes the status of.
+	// The ancestor resource that this status entry describes.
 	// +required
 	AncestorRef gwv1.ParentReference `json:"ancestorRef"`
 
-	// ControllerName is a domain/path string that indicates the name of the
-	// controller that wrote this status. This corresponds with the
-	// `controllerName` field on `GatewayClass`.
+	// The controller that wrote this status entry.
 	//
 	// Example: `example.net/gateway-controller`.
-	//
-	// The format of this field is `DOMAIN "/" PATH`, where `DOMAIN` and `PATH` are
-	// valid
-	// ([Kubernetes names](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names)).
-	//
-	// Controllers MUST populate this field when writing status. Controllers
-	// should ensure that entries in status populated with their `ControllerName`
-	// are cleaned up when they are no longer necessary.
 	// +required
 	ControllerName string `json:"controllerName"`
 
-	// Conditions describes the status of the Policy with respect to the given Ancestor.
+	// Conditions for this policy's effect on the specified ancestor.
 	//
 	// +optional
 	// +listType=map
@@ -131,72 +116,35 @@ type PolicyAncestorStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// Specifies the way to match a string.
-// +kubebuilder:validation:ExactlyOneOf=exact;prefix;suffix;contains;safeRegex
-type StringMatcher struct {
-	// The input string must match exactly the string specified here.
-	// Example: `abc` matches the value `abc`.
-	// +optional
-	Exact *string `json:"exact,omitempty"`
-
-	// The input string must have the prefix specified here.
-	// Note: empty prefix is not allowed, please use regex instead.
-	// Example: `abc` matches the value `abc.xyz`.
-	// +optional
-	Prefix *string `json:"prefix,omitempty"`
-
-	// The input string must have the suffix specified here.
-	// Note: empty prefix is not allowed, please use regex instead.
-	// Example: `abc` matches the value `xyz.abc`.
-	// +optional
-	Suffix *string `json:"suffix,omitempty"`
-
-	// The input string must contain the substring specified here.
-	// Example: `abc` matches the value `xyz.abc.def`.
-	// +optional
-	Contains *string `json:"contains,omitempty"`
-
-	// The input string must match the Google RE2 regular expression specified here.
-	// See https://github.com/google/re2/wiki/Syntax for the syntax.
-	// +optional
-	SafeRegex *string `json:"safeRegex,omitempty"`
-
-	// If true, indicates the exact/prefix/suffix/contains matching should be
-	// case insensitive. This has no effect on the regex match.
-	// For example, the matcher data will match both input string Data and data if this
-	// option is set to true.
-	// +optional
-	IgnoreCase *bool `json:"ignoreCase,omitempty"`
-}
-
-// HeaderModifiers can be used to define the policy to modify request and response headers.
+// Modifies request and response headers.
 // +kubebuilder:validation:AtLeastOneFieldSet
 type HeaderModifiers struct {
-	// Request modifies request headers.
+	// Header changes to apply before forwarding a request.
 	// +optional
 	Request *gwv1.HTTPHeaderFilter `json:"request,omitempty"`
 
-	// Response modifies response headers.
+	// Header changes to apply before returning a response.
 	// +optional
 	Response *gwv1.HTTPHeaderFilter `json:"response,omitempty"`
 }
 
-// LocalSecretObjectRef references a same-namespace credential.
-// The default case is to simply set the `name` field, which will refer to
-// a Kubernetes `Secret` resource.
+// References a same-namespace credential.
+// Set only `name` to reference a Kubernetes Secret.
 //
 // +structType=atomic
 // +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
 type LocalSecretObjectRef struct {
-	// Name of the referenced credential.
+	// The name of the referenced credential.
 	// +required
 	Name gwv1.ObjectName `json:"name"`
 
-	// Group of the referenced credential. Empty selects the core API group.
+	// The API group of the referenced credential.
+	// Empty selects the core API group.
 	// +optional
 	Group string `json:"group,omitempty"`
 
-	// Kind of the referenced credential. Empty defaults to Secret.
+	// The kind of the referenced credential.
+	// Empty defaults to `Secret`.
 	// +optional
 	Kind string `json:"kind,omitempty"`
 }

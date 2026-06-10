@@ -1,38 +1,38 @@
 package shared
 
-// Authorization defines the configuration for role-based access control.
+// Configures CEL-based authorization.
 type Authorization struct {
-	// `policy` specifies the authorization rule to evaluate.
+	// The authorization rule to evaluate.
 	//
-	// * For `Allow` rules: any policy allows the request.
-	// * For `Require` rules: all policies must match for the request to be allowed.
-	// * For `Deny` rules: any matching policy denies the request. Note: a CEL expression that fails to evaluate is not
-	// considered to match, making this a risky policy; prefer to use `Require`.
+	// * `Allow`: any matching allow rule allows the request.
+	// * `Require`: every require rule must match for the request to be allowed.
+	// * `Deny`: any matching deny rule denies the request.
 	//
-	// The presence of at least one `Allow` rule triggers a deny-by-default policy, requiring at least 1 match to allow.
-	// With no rules, all requires are allowed.
+	// A CEL expression that fails to evaluate does not match. Prefer `Require`
+	// for deny-by-default behavior.
+	//
+	// If at least one `Allow` rule is configured, requests are denied unless at
+	// least one allow rule matches.
 	// +required
 	Policy AuthorizationPolicy `json:"policy"`
 
-	// `action` defines whether the rule allows, denies, or requires the request if
-	// matched. If unspecified, the default is `Allow`.
-	// Require policies are conjunctive across merged policies: all require policies must match.
+	// The effect of this rule when it matches.
+	// If unspecified, defaults to `Allow`.
+	// `Require` rules are cumulative: all require rules must match.
 	// +kubebuilder:default=Allow
 	// +optional
 	Action AuthorizationPolicyAction `json:"action,omitempty"`
 }
 
-// CELExpression represents a Common Expression Language (CEL) expression.
+// A Common Expression Language (CEL) expression.
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=16384
 // +k8s:deepcopy-gen=false
 type CELExpression string
 
-// AuthorizationPolicy defines a single authorization rule.
+// Defines CEL expressions for a single authorization rule.
 type AuthorizationPolicy struct {
-	// MatchExpressions defines a set of conditions that must be satisfied for the rule to match.
-	// These expressions should be in the form of a Common Expression Language
-	// (`CEL`) expression.
+	// CEL expressions that must all evaluate to true for the rule to match.
 	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=256

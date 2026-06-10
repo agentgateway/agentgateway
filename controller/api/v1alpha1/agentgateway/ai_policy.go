@@ -7,7 +7,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
-// AIPromptEnrichment defines the config to enrich requests sent to the LLM provider by appending and prepending system prompts.
+// Enriches requests sent to the LLM provider by appending and prepending system prompts.
 //
 // Prompt enrichment allows you to add additional context to the prompt before sending it to the model.
 // Unlike RAG or other dynamic context methods, prompt enrichment is static and is applied to every request.
@@ -40,11 +40,11 @@ import (
 //	      - role: USER
 //	        content: "Describe the painting as if you were a famous art critic from the 17th century."
 type AIPromptEnrichment struct {
-	// A list of messages to be prepended to the prompt sent by the client.
+	// Messages to prepend to the prompt sent by the client.
 	// +optional
 	Prepend []Message `json:"prepend,omitempty"`
 
-	// A list of messages to be appended to the prompt sent by the client.
+	// Messages to append to the prompt sent by the client.
 	// +optional
 	Append []Message `json:"append,omitempty"`
 }
@@ -98,14 +98,14 @@ const (
 	REJECT Action = "Reject"
 )
 
-// Regex configures the regular expression (regex) matching for prompt guards and data masking.
+// Regular expression matching for prompt guards and data masking.
 type Regex struct {
-	// A list of regex patterns to match against the request or response.
+	// Regex patterns to match against the request or response.
 	// Matches and built-ins are additive.
 	// +optional
 	Matches []LongString `json:"matches,omitempty"`
 
-	// A list of built-in regex patterns to match against the request or response.
+	// Built-in regex patterns to match against the request or response.
 	// Matches and built-ins are additive.
 	// +optional
 	Builtins []BuiltIn `json:"builtins,omitempty"`
@@ -119,40 +119,39 @@ type Regex struct {
 	Action *Action `json:"action,omitempty"`
 }
 
-// Webhook configures a webhook to forward requests or responses to for prompt guarding.
+// Webhook for prompt guard request or response checks.
 type Webhook struct {
-	// backendRef references the webhook server to reach.
+	// Webhook server to reach.
 	//
 	// Supported types: Service and Backend.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
-	// ForwardHeaderMatches defines a list of HTTP header matches that will be
-	// used to select the headers to forward to the webhook.
+	// HTTP header matches used to select the headers to forward to the webhook.
 	// Request headers are used when forwarding requests and response headers
 	// are used when forwarding responses.
 	// By default, no headers are forwarded.
 	// +optional
 	ForwardHeaderMatches []gwv1.HTTPHeaderMatch `json:"forwardHeaderMatches,omitempty"`
 
-	// `failureMode` controls behavior when the webhook guardrail is unavailable
+	// Behavior when the webhook guardrail is unavailable
 	// or returns an error. `FailOpen` allows the request to continue.
 	// `FailClosed` (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 }
 
-// CustomResponse configures a response to return to the client if request content
+// Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
 // +kubebuilder:validation:AtLeastOneFieldSet
 type CustomResponse struct {
-	// A custom response message to return to the client. If not specified, defaults to
+	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
 	// +kubebuilder:default="The request was rejected due to inappropriate content"
 	// +optional
 	Message string `json:"message,omitempty"`
 
-	// The status code to return to the client. Defaults to 403.
+	// Status code to return to the client. Defaults to 403.
 	// +kubebuilder:default=403
 	// +kubebuilder:validation:Minimum=200
 	// +kubebuilder:validation:Maximum=599
@@ -161,61 +160,61 @@ type CustomResponse struct {
 }
 
 type OpenAIModeration struct {
-	// `model` specifies the moderation model to use. For example,
+	// Moderation model to use. For example,
 	// `omni-moderation`.
 	// +optional
 	Model *string `json:"model,omitempty"`
-	// policies controls policies for communicating with OpenAI.
+	// Policies for communicating with OpenAI.
 	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
-	// GuardrailIdentifier is the identifier of the Guardrail policy to use for the backend.
+	// Identifier of the Guardrail policy to use for the backend.
 	// +required
 	GuardrailIdentifier ShortString `json:"identifier"`
 
-	// GuardrailVersion is the version of the Guardrail policy to use for the backend.
+	// Version of the Guardrail policy to use for the backend.
 	// +required
 	GuardrailVersion ShortString `json:"version"`
 
-	// Region is the AWS region where the guardrail is deployed (for example,
+	// AWS region where the guardrail is deployed, for example
 	// `us-west-2`).
 	// +required
 	Region ShortString `json:"region"`
 
-	// policies controls policies for communicating with AWS Bedrock Guardrails.
+	// Policies for communicating with AWS Bedrock Guardrails.
 	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
-	// TemplateID is the template ID for Google Model Armor.
+	// Template ID for Google Model Armor.
 	// +required
 	TemplateID ShortString `json:"templateId"`
 
-	// ProjectID is the Google Cloud project ID.
+	// Google Cloud project ID.
 	// +required
 	ProjectID ShortString `json:"projectId"`
 
-	// Location is the Google Cloud location (for example, `us-central1`).
+	// Google Cloud location, for example `us-central1`.
 	// Defaults to `us-central1` if not specified.
 	// +kubebuilder:default="us-central1"
 	// +optional
 	Location *ShortString `json:"location,omitempty"`
 
-	// policies controls policies for communicating with Google Model Armor.
+	// Policies for communicating with Google Model Armor.
 	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
-// PromptguardRequest defines the prompt guards to apply to requests sent by the client.
+// Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
 type PromptguardRequest struct {
-	// A custom response message to return to the client. If not specified, defaults to
+	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
@@ -224,30 +223,30 @@ type PromptguardRequest struct {
 	// +optional
 	Regex *Regex `json:"regex,omitempty"`
 
-	// Configure a webhook to forward requests to for prompt guarding.
+	// Webhook that receives requests for prompt guarding.
 	// +optional
 	Webhook *Webhook `json:"webhook,omitempty"`
 
-	// `openAIModeration` passes prompt data through the OpenAI Moderations
+	// Passes prompt data through the OpenAI Moderations
 	// endpoint.
 	// See https://developers.openai.com/api/reference/resources/moderations for more information.
 	// +optional
 	OpenAIModeration *OpenAIModeration `json:"openAIModeration,omitempty"`
 
-	// `bedrockGuardrails` configures AWS Bedrock Guardrails for prompt
+	// AWS Bedrock Guardrails settings for prompt
 	// guarding.
 	// +optional
 	BedrockGuardrails *BedrockGuardrails `json:"bedrockGuardrails,omitempty"`
 
-	// `googleModelArmor` configures Google Model Armor for prompt guarding.
+	// Google Model Armor settings for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
 }
 
-// PromptguardResponse configures the response that the prompt guard applies to responses returned by the LLM provider.
+// Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
 type PromptguardResponse struct {
-	// A custom response message to return to the client. If not specified, defaults to
+	// Custom response message to return to the client. If not specified, defaults to
 	// `The response was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
@@ -256,21 +255,21 @@ type PromptguardResponse struct {
 	// +optional
 	Regex *Regex `json:"regex,omitempty"`
 
-	// Configure a webhook to forward responses to for prompt guarding.
+	// Webhook that receives responses for prompt guarding.
 	// +optional
 	Webhook *Webhook `json:"webhook,omitempty"`
 
-	// `bedrockGuardrails` configures AWS Bedrock Guardrails for prompt
+	// AWS Bedrock Guardrails settings for prompt
 	// guarding.
 	// +optional
 	BedrockGuardrails *BedrockGuardrails `json:"bedrockGuardrails,omitempty"`
 
-	// `googleModelArmor` configures Google Model Armor for prompt guarding.
+	// Google Model Armor settings for prompt guarding.
 	// +optional
 	GoogleModelArmor *GoogleModelArmor `json:"googleModelArmor,omitempty"`
 }
 
-// AIPromptGuard configures a prompt guards to block unwanted requests to the LLM provider and mask sensitive data.
+// Prompt guards that block unwanted requests to the LLM provider and mask sensitive data.
 // Prompt guards can be used to reject requests based on the content of the prompt, as well as
 // mask responses based on the content of the response.
 //
@@ -307,7 +306,7 @@ type AIPromptGuard struct {
 	Response []PromptguardResponse `json:"response,omitempty"`
 }
 
-// FieldDefault provides default values for specific fields in the JSON request body sent to the LLM provider.
+// Default value for a field in the JSON request body sent to the LLM provider.
 // These defaults are merged with the user-provided request to ensure missing fields are populated.
 //
 // User input fields here refer to the fields in the JSON request body that a client sends when making a request to the LLM provider.
@@ -340,22 +339,22 @@ type AIPromptGuard struct {
 //
 // Note: The `field` values correspond to keys in the JSON request body, not fields in this CRD.
 type FieldDefault struct {
-	// The name of the field.
+	// Name of the field.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
 
-	// The field default value, which can be any JSON Data Type.
+	// Default value for the field. This can be any JSON data type.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +required
 	Value apiextensionsv1.JSON `json:"value"`
 }
 
-// FieldTransformation maps a request JSON field to a CEL expression string.
+// Maps a request JSON field to a CEL expression.
 // The expression is evaluated against the current request body and its result
 // is assigned to the configured field.
 type FieldTransformation struct {
-	// The name of the field to set.
+	// Name of the field to set.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
@@ -365,7 +364,7 @@ type FieldTransformation struct {
 	Expression shared.CELExpression `json:"expression"`
 }
 
-// PromptCachingConfig configures automatic prompt caching for supported LLM providers.
+// Automatic prompt caching for supported LLM providers.
 // Currently only AWS Bedrock supports this feature (Claude 3+ and Nova models).
 //
 // When enabled, the gateway automatically inserts cache points at strategic locations
@@ -382,25 +381,25 @@ type FieldTransformation struct {
 // - Without caching: 10,000 tokens × $3/MTok = $0.03
 // - With caching (90% cached): 1,000 × $3/MTok + 9,000 × $0.30/MTok = $0.0057 (81% savings)
 type PromptCachingConfig struct {
-	// CacheSystem enables caching for system prompts.
+	// Enables caching for system prompts.
 	// Inserts a cache point after all system messages.
 	// +optional
 	// +kubebuilder:default=true
 	CacheSystem bool `json:"cacheSystem,omitempty"`
 
-	// CacheMessages enables caching for conversation messages.
+	// Enables caching for conversation messages.
 	// Caches all messages in the conversation for cost savings.
 	// +optional
 	// +kubebuilder:default=true
 	CacheMessages bool `json:"cacheMessages,omitempty"`
 
-	// CacheTools enables caching for tool definitions.
+	// Enables caching for tool definitions.
 	// Inserts a cache point after all tool specifications.
 	// +optional
 	// +kubebuilder:default=false
 	CacheTools bool `json:"cacheTools,omitempty"`
 
-	// MinTokens specifies the minimum estimated token count
+	// Minimum estimated token count
 	// before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
 	// Bedrock requires at least 1,024 tokens for caching to be effective.
 	// +optional
@@ -408,7 +407,7 @@ type PromptCachingConfig struct {
 	// +kubebuilder:default=1024
 	MinTokens int `json:"minTokens,omitempty"`
 
-	// CacheMessageOffset shifts the message cache point further back in the
+	// Shifts the message cache point further back in the
 	// conversation. 0 (default) places it at the second-to-last message.
 	// Higher values move it N additional messages towards the start, clamped
 	// to bounds.

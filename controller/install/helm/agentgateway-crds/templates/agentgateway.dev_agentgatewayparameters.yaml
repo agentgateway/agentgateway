@@ -30,8 +30,8 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          AgentgatewayParameters are configuration that is used to dynamically
-          provision the agentgateway data plane. Labels and annotations that apply to
+          Configures dynamic provisioning for the agentgateway data plane.
+          Labels and annotations that apply to
           all resources may be specified at a higher level; see
           https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#gatewayinfrastructure
         properties:
@@ -53,11 +53,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of AgentgatewayParameters.
+            description: Desired data plane provisioning settings.
             properties:
               deployment:
                 description: |-
-                  `deployment` allows specifying overrides for the generated
+                  Overrides for the generated
                   `Deployment` resource.
                 properties:
                   metadata:
@@ -142,9 +142,9 @@ spec:
                 type: object
               env:
                 description: |-
-                  The container environment variables. These override any existing
+                  Container environment variables. These override any existing
                   values. If you want to delete an environment variable entirely, use
-                  `$patch: delete` with `AgentgatewayParametersOverlays` instead. Note that
+                  `$patch: delete` with an overlay instead. Note that
                   [variable
                   expansion](https://kubernetes.io/docs/tasks/inject-data-application/define-interdependent-environment-variables/)
                   does apply, but is highly discouraged -- to set dependent environment
@@ -311,7 +311,7 @@ spec:
                 type: array
               horizontalPodAutoscaler:
                 description: |-
-                  `horizontalPodAutoscaler` allows creating a `HorizontalPodAutoscaler`
+                  Creates a `HorizontalPodAutoscaler`
                   for the agentgateway proxy. If absent, no HPA is created. If present, an
                   HPA is created with its `scaleTargetRef` automatically configured to
                   target the agentgateway proxy `Deployment`. The `metadata` and `spec`
@@ -405,27 +405,27 @@ spec:
                   which depend on the tag>"
                 properties:
                   digest:
-                    description: The hash digest of the image, e.g. `sha256:12345...`
+                    description: Image digest, such as `sha256:12345...`.
                     type: string
                   pullPolicy:
                     description: |-
-                      The image pull policy for the container. See
+                      Image pull policy for the container. See
                       https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy
                       for details.
                     type: string
                   registry:
-                    description: The image registry.
+                    description: Image registry.
                     type: string
                   repository:
-                    description: The image repository (name).
+                    description: Image repository.
                     type: string
                   tag:
-                    description: The image tag.
+                    description: Image tag.
                     type: string
                 type: object
               istio:
-                description: Configure Istio integration. If enabled, Agentgateway
-                  can natively connect to Istio enabled pods with mTLS.
+                description: Istio integration settings. If enabled, agentgateway
+                  can natively connect to Istio-enabled pods with mTLS.
                 properties:
                   additionalTrustDomains:
                     description: |-
@@ -435,34 +435,33 @@ spec:
                       type: string
                     type: array
                   caAddress:
-                    description: The address of the Istio CA. If unset, defaults to
-                      `https://istiod.istio-system.svc:15012`.
+                    description: Address of the Istio CA. If unset, defaults to `https://istiod.istio-system.svc:15012`.
                     type: string
                   clusterId:
-                    description: The ID of the cluster this gateway runs in. If unset,
+                    description: ID of the cluster this gateway runs in. If unset,
                       defaults to `Kubernetes`.
                     type: string
                   enabled:
-                    description: Enabled explicitly turns Istio integration on or
-                      off for this gateway.
+                    description: Explicitly turns Istio integration on or off for
+                      this gateway.
                     type: boolean
                   network:
-                    description: The Istio network this gateway runs in. If unset,
-                      defaults to the empty network.
+                    description: Istio network this gateway runs in. If unset, defaults
+                      to the empty network.
                     type: string
                   trustDomain:
                     description: |-
-                      The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+                      Istio trust domain. If not set, defaults to `cluster.local`, or the default
                       trust domain for the control plane's istio revision.
                     type: string
                 type: object
               logging:
                 description: |-
-                  `logging` configuration for Agentgateway. By default, all logs are set to
+                  Logging configuration. By default, all logs are set to
                   `info` level.
                 properties:
                   format:
-                    description: The default logging format is text.
+                    description: Logging output format.
                     enum:
                     - json
                     - text
@@ -476,7 +475,7 @@ spec:
                 type: object
               podDisruptionBudget:
                 description: |-
-                  `podDisruptionBudget` allows creating a `PodDisruptionBudget` for the
+                  Creates a `PodDisruptionBudget` for the
                   agentgateway proxy. If absent, no PDB is created. If present, a PDB is
                   created with its selector automatically configured to target the
                   agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
@@ -563,10 +562,8 @@ spec:
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
               rawConfig:
-                description: "`rawConfig` provides an opaque mechanism to configure
-                  the `agentgateway`\nconfig file. The `agentgateway` binary has a
-                  `-f` option to specify a\nconfig file, and this field supplies that
-                  file. This will be merged with\nconfiguration derived from typed
+                description: "Raw agentgateway configuration to merge into the generated
+                  config file.\nThis is merged with\nconfiguration derived from typed
                   fields like `logging.format`, and those\ntyped fields will take
                   precedence.\n\nExample:\n\n\trawConfig:\n\t  binds:\n\t  - port:
                   3000\n\t    listeners:\n\t    - routes:\n\t      - policies:\n\t
@@ -580,7 +577,7 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
               resources:
                 description: |-
-                  The compute resources required by this container. See
+                  Compute resources required by this container. See
                   https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                   for details.
                 properties:
@@ -642,7 +639,7 @@ spec:
                 type: object
               service:
                 description: |-
-                  `service` allows specifying overrides for the generated `Service`
+                  Overrides for the generated `Service`
                   resource.
                 properties:
                   metadata:
@@ -727,7 +724,7 @@ spec:
                 type: object
               serviceAccount:
                 description: |-
-                  `serviceAccount` allows specifying overrides for the generated
+                  Overrides for the generated
                   `ServiceAccount` resource.
                 properties:
                   metadata:
@@ -846,7 +843,7 @@ spec:
                   rule: self.min <= self.max
             type: object
           status:
-            description: status defines the current state of AgentgatewayParameters.
+            description: Current status for these provisioning settings.
             type: object
         required:
         - spec

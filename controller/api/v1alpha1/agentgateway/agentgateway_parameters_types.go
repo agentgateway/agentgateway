@@ -11,8 +11,8 @@ import (
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewayparameters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewayparameters/status,verbs=get;update;patch
 
-// AgentgatewayParameters are configuration that is used to dynamically
-// provision the agentgateway data plane. Labels and annotations that apply to
+// Configures dynamic provisioning for the agentgateway data plane.
+// Labels and annotations that apply to
 // all resources may be specified at a higher level; see
 // https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#gatewayinfrastructure
 //
@@ -30,16 +30,16 @@ type AgentgatewayParameters struct {
 	// +optional
 	metav1.ObjectMeta `json:"metadata"`
 
-	// spec defines the desired state of AgentgatewayParameters.
+	// Desired data plane provisioning settings.
 	// +required
 	Spec AgentgatewayParametersSpec `json:"spec"`
 
-	// status defines the current state of AgentgatewayParameters.
+	// Current status for these provisioning settings.
 	// +optional
 	Status AgentgatewayParametersStatus `json:"status"`
 }
 
-// The current conditions of the AgentgatewayParameters. This is not currently implemented.
+// Current status for these provisioning settings.
 type AgentgatewayParametersStatus struct{}
 
 // +kubebuilder:object:root=true
@@ -69,19 +69,19 @@ type AgentgatewayParametersLogging struct {
 	// `rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn`.
 	// +optional
 	Level string `json:"level,omitempty"`
+	// Logging output format.
 	// +optional
 	Format AgentgatewayParametersLoggingFormat `json:"format,omitempty"`
 }
 
 type AgentgatewayParametersConfigs struct {
-	// `logging` configuration for Agentgateway. By default, all logs are set to
+	// Logging configuration. By default, all logs are set to
 	// `info` level.
 	// +optional
 	Logging *AgentgatewayParametersLogging `json:"logging,omitempty"`
 
-	// `rawConfig` provides an opaque mechanism to configure the `agentgateway`
-	// config file. The `agentgateway` binary has a `-f` option to specify a
-	// config file, and this field supplies that file. This will be merged with
+	// Raw agentgateway configuration to merge into the generated config file.
+	// This is merged with
 	// configuration derived from typed fields like `logging.format`, and those
 	// typed fields will take precedence.
 	//
@@ -127,9 +127,9 @@ type AgentgatewayParametersConfigs struct {
 	// +optional
 	Image *Image `json:"image,omitempty"`
 
-	// The container environment variables. These override any existing
+	// Container environment variables. These override any existing
 	// values. If you want to delete an environment variable entirely, use
-	// `$patch: delete` with `AgentgatewayParametersOverlays` instead. Note that
+	// `$patch: delete` with an overlay instead. Note that
 	// [variable
 	// expansion](https://kubernetes.io/docs/tasks/inject-data-application/define-interdependent-environment-variables/)
 	// does apply, but is highly discouraged -- to set dependent environment
@@ -143,7 +143,7 @@ type AgentgatewayParametersConfigs struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// The compute resources required by this container. See
+	// Compute resources required by this container. See
 	// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
 	// for details.
 	//
@@ -159,22 +159,22 @@ type AgentgatewayParametersConfigs struct {
 	// +optional
 	Shutdown *ShutdownSpec `json:"shutdown,omitempty"`
 
-	// Configure Istio integration. If enabled, Agentgateway can natively connect to Istio enabled pods with mTLS.
+	// Istio integration settings. If enabled, agentgateway can natively connect to Istio-enabled pods with mTLS.
 	//
 	// +optional
 	Istio *IstioSpec `json:"istio,omitempty"`
 }
 
 type IstioSpec struct {
-	// Enabled explicitly turns Istio integration on or off for this gateway.
+	// Explicitly turns Istio integration on or off for this gateway.
 	//
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
-	// The address of the Istio CA. If unset, defaults to `https://istiod.istio-system.svc:15012`.
+	// Address of the Istio CA. If unset, defaults to `https://istiod.istio-system.svc:15012`.
 	//
 	// +optional
 	CaAddress string `json:"caAddress,omitempty"`
-	// The Istio trust domain. If not set, defaults to `cluster.local`, or the default
+	// Istio trust domain. If not set, defaults to `cluster.local`, or the default
 	// trust domain for the control plane's istio revision.
 	//
 	// +optional
@@ -184,11 +184,11 @@ type IstioSpec struct {
 	//
 	// +optional
 	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
-	// The ID of the cluster this gateway runs in. If unset, defaults to `Kubernetes`.
+	// ID of the cluster this gateway runs in. If unset, defaults to `Kubernetes`.
 	//
 	// +optional
 	ClusterId string `json:"clusterId,omitempty"`
-	// The Istio network this gateway runs in. If unset, defaults to the empty network.
+	// Istio network this gateway runs in. If unset, defaults to the empty network.
 	//
 	// +optional
 	Network string `json:"network,omitempty"`
@@ -216,22 +216,22 @@ type ShutdownSpec struct {
 }
 
 type AgentgatewayParametersOverlays struct {
-	// `deployment` allows specifying overrides for the generated
+	// Overrides for the generated
 	// `Deployment` resource.
 	// +optional
 	Deployment *shared.KubernetesResourceOverlay `json:"deployment,omitempty"`
 
-	// `service` allows specifying overrides for the generated `Service`
+	// Overrides for the generated `Service`
 	// resource.
 	// +optional
 	Service *shared.KubernetesResourceOverlay `json:"service,omitempty"`
 
-	// `serviceAccount` allows specifying overrides for the generated
+	// Overrides for the generated
 	// `ServiceAccount` resource.
 	// +optional
 	ServiceAccount *shared.KubernetesResourceOverlay `json:"serviceAccount,omitempty"`
 
-	// `podDisruptionBudget` allows creating a `PodDisruptionBudget` for the
+	// Creates a `PodDisruptionBudget` for the
 	// agentgateway proxy. If absent, no PDB is created. If present, a PDB is
 	// created with its selector automatically configured to target the
 	// agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
@@ -239,7 +239,7 @@ type AgentgatewayParametersOverlays struct {
 	// +optional
 	PodDisruptionBudget *shared.KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
 
-	// `horizontalPodAutoscaler` allows creating a `HorizontalPodAutoscaler`
+	// Creates a `HorizontalPodAutoscaler`
 	// for the agentgateway proxy. If absent, no HPA is created. If present, an
 	// HPA is created with its `scaleTargetRef` automatically configured to
 	// target the agentgateway proxy `Deployment`. The `metadata` and `spec`
@@ -248,30 +248,30 @@ type AgentgatewayParametersOverlays struct {
 	HorizontalPodAutoscaler *shared.KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`
 }
 
-// A container image. See https://kubernetes.io/docs/concepts/containers/images
+// Container image settings. See https://kubernetes.io/docs/concepts/containers/images
 // for details.
 type Image struct {
-	// The image registry.
+	// Image registry.
 	//
 	// +optional
 	Registry *string `json:"registry,omitempty"`
 
-	// The image repository (name).
+	// Image repository.
 	//
 	// +optional
 	Repository *string `json:"repository,omitempty"`
 
-	// The image tag.
+	// Image tag.
 	//
 	// +optional
 	Tag *string `json:"tag,omitempty"`
 
-	// The hash digest of the image, e.g. `sha256:12345...`
+	// Image digest, such as `sha256:12345...`.
 	//
 	// +optional
 	Digest *string `json:"digest,omitempty"`
 
-	// The image pull policy for the container. See
+	// Image pull policy for the container. See
 	// https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy
 	// for details.
 	//
