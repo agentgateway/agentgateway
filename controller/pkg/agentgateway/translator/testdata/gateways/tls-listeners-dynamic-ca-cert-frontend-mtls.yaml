@@ -97,9 +97,11 @@ status:
     attachedListenerSets: 0
     conditions:
     - lastTransitionTime: fake
-      message: 'Some listeners are not programmed: https: Bad TLS configuration'
+      message: 'Some listeners are not accepted: https: GatewayTLSConfig validation
+        caCertificateRefs cannot be configured with DYNAMIC_CA TLS certificate source;
+        https: Bad TLS configuration'
       reason: ListenersNotValid
-      status: "True"
+      status: "False"
       type: Accepted
     - lastTransitionTime: fake
       message: Successfully programmed Gateway

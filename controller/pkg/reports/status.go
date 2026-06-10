@@ -44,6 +44,8 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	finalListeners := make([]gwv1.ListenerStatus, 0, len(gw.Spec.Listeners))
 	var invalidListeners []string
 	var invalidMessages []string
+	invalidListenerNames := map[string]struct{}{}
+	acceptedListeners := 0
 	var resolvedRefsReason gwv1.GatewayConditionReason
 	var resolvedRefsMessage string
 
@@ -67,9 +69,26 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 			}
 			meta.SetStatusCondition(&finalConditions, lisCondition)
 
+			if lisCondition.Type == string(gwv1.ListenerConditionAccepted) {
+				if lisCondition.Status == metav1.ConditionTrue {
+					acceptedListeners++
+				} else if lisCondition.Status == metav1.ConditionFalse {
+					if _, alreadyInvalid := invalidListenerNames[string(lis.Name)]; !alreadyInvalid {
+						invalidListenerNames[string(lis.Name)] = struct{}{}
+						invalidListeners = append(invalidListeners, string(lis.Name))
+					}
+					if lisCondition.Message != "" {
+						invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
+					}
+				}
+			}
+
 			// Check if this is the Programmed condition and it's False
 			if lisCondition.Type == string(gwv1.ListenerConditionProgrammed) && lisCondition.Status == metav1.ConditionFalse {
-				invalidListeners = append(invalidListeners, string(lis.Name))
+				if _, alreadyInvalid := invalidListenerNames[string(lis.Name)]; !alreadyInvalid {
+					invalidListenerNames[string(lis.Name)] = struct{}{}
+					invalidListeners = append(invalidListeners, string(lis.Name))
+				}
 				if lisCondition.Message != "" {
 					invalidMessages = append(invalidMessages, fmt.Sprintf("%s: %s", lis.Name, lisCondition.Message))
 				}
@@ -88,16 +107,21 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 		finalListeners = append(finalListeners, lisReport.Status)
 	}
 
-	// If any listeners have Programmed=False, set Gateway Accepted=True with ListenersNotValid reason
+	// If any listeners are invalid, Gateway Accepted depends on whether at least one
+	// listener remains accepted.
 	if len(invalidListeners) > 0 {
-		message := fmt.Sprintf("Some listeners are not programmed: %s", strings.Join(invalidMessages, "; "))
+		message := fmt.Sprintf("Some listeners are not accepted: %s", strings.Join(invalidMessages, "; "))
 		if len(invalidMessages) == 0 {
-			message = fmt.Sprintf("Some listeners are not programmed: %s", strings.Join(invalidListeners, ", "))
+			message = fmt.Sprintf("Some listeners are not accepted: %s", strings.Join(invalidListeners, ", "))
+		}
+		status := metav1.ConditionFalse
+		if acceptedListeners > 0 {
+			status = metav1.ConditionTrue
 		}
 
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionAccepted,
-			Status:  metav1.ConditionTrue,
+			Status:  status,
 			Reason:  gwv1.GatewayReasonListenersNotValid,
 			Message: message,
 		})
