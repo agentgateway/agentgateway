@@ -8,6 +8,7 @@ IMAGE_TAG ?= $(VERSION)
 IMAGE_FULL_NAME ?= $(DOCKER_REGISTRY)/$(DOCKER_REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 DOCKER_BUILDER ?= docker
 DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION) --build-arg GIT_REVISION=$(GIT_REVISION)
+DOCKERFILE_S390X ?= Dockerfile.s390x
 export PATH := ./tools:$(PATH)
 
 # docker
@@ -30,6 +31,13 @@ endif
 .PHONY: docker-musl
 docker-musl:
 	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -t $(IMAGE_FULL_NAME)-musl --build-arg=BUILDER=musl . --progress=plain
+
+# Build the s390x image from the standalone example Dockerfile.
+# NOTE: s390x is NOT an officially supported build architecture; this builds the
+# unsupported $(DOCKERFILE_S390X) reference and must be run natively on s390x.
+.PHONY: docker-s390x
+docker-s390x:
+	$(DOCKER_BUILDER) build $(DOCKER_BUILD_ARGS) -f $(DOCKERFILE_S390X) -t $(IMAGE_FULL_NAME)-s390x . --progress=plain
 
 CARGO_BUILD_ARGS ?=
 

@@ -145,11 +145,14 @@ pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
 pprof-alloc = "0.4"
+# NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's
+# frame-pointer unwinder only supports x86_64/aarch64/riscv64/loongarch64, and
+# its call site is not arch-gated, so enabling it breaks the build on other
+# arches (e.g. s390x). Consumers add "frame-pointer" per-target where supported.
 pprof = { version = "0.15", features = [
     "protobuf",
     "protobuf-codec",
     "criterion",
-    "frame-pointer"
 ] }
 pretty_env_logger = "0.5"
 prometheus-client = "0.25"
@@ -210,7 +213,7 @@ subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken-rs = "0.12"
-tokio = { version = "1.52", features = ["full", "macros", "sync"] }
+tokio = { version = "1.53", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-test = "0.4"
