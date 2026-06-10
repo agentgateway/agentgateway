@@ -63,6 +63,7 @@ fn setup_socket() -> (DuplexStream, RewindSocket) {
 			peer_addr: "127.0.0.1:12345".parse().unwrap(),
 			local_addr: "127.0.0.1:80".parse().unwrap(),
 			start: Instant::now(),
+			original_dst: None,
 			raw_peer_addr: None,
 		},
 	);

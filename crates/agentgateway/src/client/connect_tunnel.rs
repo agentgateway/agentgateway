@@ -83,6 +83,7 @@ mod tests {
 				peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1234),
 				local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4321),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		)

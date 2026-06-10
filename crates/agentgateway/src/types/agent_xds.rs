@@ -2542,6 +2542,7 @@ fn frontend_policy_from_proto(
 				};
 			FrontendPolicy::Connect(frontend::Connect { mode })
 		},
+		Some(fps::Kind::OriginalDst(_)) => FrontendPolicy::OriginalDst(frontend::OriginalDst {}),
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
 				.fields

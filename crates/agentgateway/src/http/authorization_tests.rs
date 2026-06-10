@@ -192,7 +192,7 @@ fn test_network_authorization_allows_source_cidr() {
 		unverified_workload: None,
 	};
 
-	assert_matches!(network_authz.apply(&source), Ok(()));
+	assert_matches!(network_authz.apply(&source, None), Ok(()));
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn test_network_authorization_deny_takes_precedence() {
 		unverified_workload: None,
 	};
 
-	assert_matches!(network_authz.apply(&source), Err(_));
+	assert_matches!(network_authz.apply(&source, None), Err(_));
 }
 
 #[test]

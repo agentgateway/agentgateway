@@ -104,11 +104,16 @@ impl TCPProxy {
 			connection
 		};
 		if let Some(authz) = frontend_policies.network_authorization.as_ref() {
+			let tcp = connection
+				.ext::<TCPConnectionInfo>()
+				.expect("tcp connection must be set");
+			let original_dst = crate::cel::OriginalDstContext::from_tcp_connection(tcp);
 			authz.apply(
 				log
 					.source_context
 					.as_ref()
 					.expect("expected source context"),
+				original_dst.as_ref(),
 			)?;
 		}
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();

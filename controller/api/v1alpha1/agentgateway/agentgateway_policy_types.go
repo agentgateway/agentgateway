@@ -493,6 +493,17 @@ type Frontend struct {
 	// +optional
 	Connect *FrontendConnect `json:"connect,omitempty"`
 
+	// originalDst enables transparent proxy original-destination recovery for
+	// redirected downstream TCP connections.
+	//
+	// When enabled, agentgateway reads the pre-redirect destination from Linux
+	// socket metadata, exposes it to CEL as `originalDst.address` and
+	// `originalDst.port`, and uses it as the connection target address for
+	// routing. Connections fail closed if the original destination cannot be
+	// recovered.
+	// +optional
+	OriginalDst *FrontendOriginalDst `json:"originalDst,omitempty"`
+
 	// `accessLog` contains access logging configuration.
 	// +optional
 	AccessLog *AccessLog `json:"accessLog,omitempty"`
@@ -507,6 +518,8 @@ type Frontend struct {
 	// +optional
 	Metrics *MetricLabels `json:"metrics,omitempty"`
 }
+
+type FrontendOriginalDst struct{}
 
 // +k8s:enum
 type ProxyProtocolVersion string

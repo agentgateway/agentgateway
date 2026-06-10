@@ -6141,6 +6141,7 @@
 |`frontendPolicies.proxyProtocol.mode`|enum|Possible values: `strict`, `optional`.|
 |`frontendPolicies.connect`|object|Enable or disable downstream HTTP CONNECT handling.|
 |`frontendPolicies.connect.mode`|enum|Possible values: `deny`, `route`, `tunnel`.|
+|`frontendPolicies.originalDst`|object|Recover the pre-redirect destination from Linux socket metadata.|
 |`frontendPolicies.accessLog`|object|Settings for request access logs.|
 |`frontendPolicies.accessLog.filter`|string||
 |`frontendPolicies.accessLog.add`|object||

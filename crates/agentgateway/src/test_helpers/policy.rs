@@ -43,6 +43,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
 		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
 		start: start.as_instant(),
+		original_dst: None,
 		raw_peer_addr: None,
 	};
 	RequestLog::new(cel, metrics, start, tcp_info)

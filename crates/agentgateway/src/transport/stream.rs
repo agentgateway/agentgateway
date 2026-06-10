@@ -2,6 +2,10 @@ use std::fmt::Display;
 use std::io;
 use std::io::{Error, IoSlice};
 use std::net::SocketAddr;
+#[cfg(target_os = "linux")]
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -28,6 +32,8 @@ pub struct TCPConnectionInfo {
 	pub peer_addr: SocketAddr,
 	pub local_addr: SocketAddr,
 	pub start: Instant,
+	/// Original destination before local transparent-proxy redirect.
+	pub original_dst: Option<SocketAddr>,
 	/// Original TCP peer address before PROXY protocol parsing.
 	/// For PROXY protocol connections, this is ztunnel's address (useful for debugging).
 	/// For regular connections, this is None.
@@ -197,6 +203,7 @@ impl Socket {
 			peer_addr: to_canonical(stream.peer_addr()?),
 			local_addr: to_canonical(stream.local_addr()?),
 			start: Instant::now(),
+			original_dst: None,
 			raw_peer_addr: None,
 		});
 		Ok(Socket {
@@ -379,6 +386,104 @@ impl Socket {
 			tracing::trace!("set keepalive: {:?}", res);
 		}
 	}
+
+	pub fn recover_original_dst(&mut self) -> io::Result<SocketAddr> {
+		let SocketType::Tcp(tcp) = &self.inner else {
+			return Err(io::Error::new(
+				io::ErrorKind::Unsupported,
+				"original destination lookup requires a TCP socket",
+			));
+		};
+		let original_dst = socket_original_dst(tcp)?;
+		if let Some(info) = self.ext.get::<TCPConnectionInfo>().cloned() {
+			self.ext.insert(TCPConnectionInfo {
+				local_addr: original_dst,
+				original_dst: Some(original_dst),
+				..info
+			});
+		}
+		Ok(original_dst)
+	}
+}
+
+#[cfg(target_os = "linux")]
+fn socket_original_dst(tcp: &TcpStream) -> io::Result<SocketAddr> {
+	get_original_dst_v4(tcp).or_else(|v4_err| match get_original_dst_v6(tcp) {
+		Ok(addr) => Ok(addr),
+		Err(v6_err) => Err(io::Error::new(
+			v4_err.kind(),
+			format!("SO_ORIGINAL_DST failed: ipv4={v4_err}; ipv6={v6_err}"),
+		)),
+	})
+}
+
+#[cfg(not(target_os = "linux"))]
+fn socket_original_dst(_tcp: &TcpStream) -> io::Result<SocketAddr> {
+	Err(io::Error::new(
+		io::ErrorKind::Unsupported,
+		"original destination lookup is only supported on Linux",
+	))
+}
+
+#[cfg(target_os = "linux")]
+fn get_original_dst_v4(tcp: &TcpStream) -> io::Result<SocketAddr> {
+	const SO_ORIGINAL_DST: libc::c_int = 80;
+	let mut addr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+	let mut len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+	let rc = unsafe {
+		libc::getsockopt(
+			tcp.as_raw_fd(),
+			libc::SOL_IP,
+			SO_ORIGINAL_DST,
+			&mut addr as *mut _ as *mut libc::c_void,
+			&mut len,
+		)
+	};
+	if rc != 0 {
+		return Err(io::Error::last_os_error());
+	}
+	if addr.sin_family as libc::c_int != libc::AF_INET {
+		return Err(io::Error::new(
+			io::ErrorKind::InvalidData,
+			format!("unexpected SO_ORIGINAL_DST family {}", addr.sin_family),
+		));
+	}
+	Ok(SocketAddr::new(
+		IpAddr::V4(Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr))),
+		u16::from_be(addr.sin_port),
+	))
+}
+
+#[cfg(target_os = "linux")]
+fn get_original_dst_v6(tcp: &TcpStream) -> io::Result<SocketAddr> {
+	const IP6T_SO_ORIGINAL_DST: libc::c_int = 80;
+	let mut addr: libc::sockaddr_in6 = unsafe { std::mem::zeroed() };
+	let mut len = std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t;
+	let rc = unsafe {
+		libc::getsockopt(
+			tcp.as_raw_fd(),
+			libc::SOL_IPV6,
+			IP6T_SO_ORIGINAL_DST,
+			&mut addr as *mut _ as *mut libc::c_void,
+			&mut len,
+		)
+	};
+	if rc != 0 {
+		return Err(io::Error::last_os_error());
+	}
+	if addr.sin6_family as libc::c_int != libc::AF_INET6 {
+		return Err(io::Error::new(
+			io::ErrorKind::InvalidData,
+			format!(
+				"unexpected IP6T_SO_ORIGINAL_DST family {}",
+				addr.sin6_family
+			),
+		));
+	}
+	Ok(SocketAddr::new(
+		IpAddr::V6(Ipv6Addr::from(addr.sin6_addr.s6_addr)),
+		u16::from_be(addr.sin6_port),
+	))
 }
 
 pub enum SocketType {

@@ -202,6 +202,9 @@ pub struct Connect {
 }
 
 #[apply(schema!)]
+pub struct OriginalDst {}
+
+#[apply(schema!)]
 pub struct NetworkAuthorization(pub crate::http::authorization::RuleSet);
 
 #[derive(Debug, Clone, serde::Serialize)]

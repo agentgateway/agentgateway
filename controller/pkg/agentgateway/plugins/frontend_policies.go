@@ -20,6 +20,7 @@ const (
 	frontendHttpPolicySuffix    = ":frontend-http"
 	frontendProxyPolicySuffix   = ":frontend-proxy"
 	frontendConnectPolicySuffix = ":frontend-connect"
+	frontendOriginalDstSuffix   = ":frontend-original-dst"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
 	frontendMetricsPolicySuffix = ":frontend-metrics"
@@ -60,6 +61,10 @@ func translateFrontendPolicyToAgw(
 
 	if s := frontend.Connect; s != nil {
 		appendPolicy("connect")(translateFrontendConnect(policy, policyName), nil)
+	}
+
+	if s := frontend.OriginalDst; s != nil {
+		appendPolicy("originalDst")(translateFrontendOriginalDst(policy, policyName), nil)
 	}
 
 	if s := frontend.TLS; s != nil {
@@ -366,6 +371,26 @@ func translateFrontendConnect(policy *agentgateway.AgentgatewayPolicy, name stri
 		"agentgateway_policy", connectPolicy.Name)
 
 	return connectPolicy
+}
+
+func translateFrontendOriginalDst(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	originalDstPolicy := &api.Policy{
+		Key:  name + frontendOriginalDstSuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_OriginalDst_{
+					OriginalDst: &api.FrontendPolicySpec_OriginalDst{},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated frontend original dst policy",
+		"policy", policy.Name,
+		"agentgateway_policy", originalDstPolicy.Name)
+
+	return originalDstPolicy
 }
 
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {

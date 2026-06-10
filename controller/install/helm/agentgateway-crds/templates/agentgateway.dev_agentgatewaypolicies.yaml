@@ -5969,6 +5969,17 @@ spec:
                     required:
                     - policy
                     type: object
+                  originalDst:
+                    description: |-
+                      originalDst enables transparent proxy original-destination recovery for
+                      redirected downstream TCP connections.
+
+                      When enabled, agentgateway reads the pre-redirect destination from Linux
+                      socket metadata, exposes it to CEL as `originalDst.address` and
+                      `originalDst.port`, and uses it as the connection target address for
+                      routing. Connections fail closed if the original destination cannot be
+                      recovered.
+                    type: object
                   proxyProtocol:
                     description: |-
                       proxyProtocol defines settings for downstream PROXY protocol handling.
@@ -6306,8 +6317,9 @@ spec:
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [accessLog connect http metrics
-                    networkAuthorization proxyProtocol tcp tls tracing] must be set
-                  rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
+                    networkAuthorization originalDst proxyProtocol tcp tls tracing]
+                    must be set
+                  rule: '[has(self.accessLog),has(self.connect),has(self.http),has(self.metrics),has(self.networkAuthorization),has(self.originalDst),has(self.proxyProtocol),has(self.tcp),has(self.tls),has(self.tracing)].filter(x,x==true).size()
                     >= 1'
               strategy:
                 description: |-

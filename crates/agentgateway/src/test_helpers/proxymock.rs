@@ -417,6 +417,7 @@ impl tower::Service<Uri> for MemoryConnector {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		);
@@ -1031,6 +1032,7 @@ impl TestBind {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: SocketAddr::new("127.0.0.1".parse().unwrap(), dst_port),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		);
@@ -1060,6 +1062,7 @@ impl TestBind {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		);
@@ -1087,6 +1090,7 @@ impl TestBind {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
 				local_addr: "127.0.0.1:80".parse().unwrap(),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		);

@@ -418,7 +418,7 @@ impl CelLogging {
 		} = self;
 		let executor = if inputs.req.is_none() && inputs.source_context.is_some() {
 			// TCP case: use new_tcp_logger
-			cel::Executor::new_tcp_logger(inputs.source_context, inputs.end_time)
+			cel::Executor::new_tcp_logger(inputs.source_context, inputs.original_dst, inputs.end_time)
 		} else {
 			// HTTP case: use new_logger
 			cel::Executor::new_logger(
@@ -447,6 +447,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
+	pub original_dst: Option<&'a cel::OriginalDstContext>,
 }
 
 #[derive(Debug)]
@@ -748,6 +749,7 @@ impl RequestLog {
 	) {
 		let cel_end_time = cel::RequestTime(end_time.as_datetime());
 		let proxy_timing = proxy_context(self);
+		let original_dst = cel::OriginalDstContext::from_tcp_connection(&self.tcp_info);
 		let cel_exec = self.cel.build(CelLoggingBuildInputs {
 			req: self.request_snapshot.as_deref(),
 			resp: response_snapshot,
@@ -755,6 +757,7 @@ impl RequestLog {
 			mcp: mcp.filter(|m| !m.is_empty()),
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
+			original_dst: original_dst.as_ref(),
 			proxy: Some(&proxy_timing),
 		});
 		let Some(rh) = self.request_handle.take() else {
@@ -910,6 +913,7 @@ impl Drop for DropOnLog {
 			if let Some(resp) = log.response_snapshot.as_mut() {
 				resp.proxy = Some(proxy_timing.clone());
 			}
+			let original_dst = cel::OriginalDstContext::from_tcp_connection(&log.tcp_info);
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
@@ -918,6 +922,7 @@ impl Drop for DropOnLog {
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
+				original_dst: original_dst.as_ref(),
 			});
 			if let Some(rh) = request_handle {
 				log.finish_request_handle(rh, end_time, &cel_exec);
@@ -1077,6 +1082,10 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"original_dst",
+					log.tcp_info.original_dst.as_ref().map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),
@@ -1786,6 +1795,7 @@ mod tests {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
 				local_addr: "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: None,
 			},
 		)

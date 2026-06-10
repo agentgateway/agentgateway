@@ -516,6 +516,7 @@ impl HTTPProxy {
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
+		connection.copy::<cel::OriginalDstContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
 		req
 			.extensions_mut()

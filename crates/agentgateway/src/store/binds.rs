@@ -140,6 +140,7 @@ pub struct FrontendPolices {
 	pub network_authorization: Option<NetworkAuthorizationSet>,
 	pub proxy: Option<frontend::Proxy>,
 	pub connect: Option<frontend::Connect>,
+	pub original_dst: bool,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
@@ -170,6 +171,9 @@ impl FrontendPolices {
 			},
 			FrontendPolicy::Connect(p) => {
 				self.connect.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::OriginalDst(_) => {
+				self.original_dst = true;
 			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
@@ -2498,38 +2502,47 @@ mod tests {
 
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "10.1.2.3".parse().unwrap(),
-					port: 12345,
-					raw_address: "10.1.2.3".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-				})
+				.apply(
+					&crate::cel::SourceContext {
+						address: "10.1.2.3".parse().unwrap(),
+						port: 12345,
+						raw_address: "10.1.2.3".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+					},
+					None
+				)
 				.is_ok()
 		);
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "192.168.1.2".parse().unwrap(),
-					port: 12345,
-					raw_address: "192.168.1.2".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-				})
+				.apply(
+					&crate::cel::SourceContext {
+						address: "192.168.1.2".parse().unwrap(),
+						port: 12345,
+						raw_address: "192.168.1.2".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+					},
+					None
+				)
 				.is_ok()
 		);
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "172.16.0.1".parse().unwrap(),
-					port: 12345,
-					raw_address: "172.16.0.1".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-				})
+				.apply(
+					&crate::cel::SourceContext {
+						address: "172.16.0.1".parse().unwrap(),
+						port: 12345,
+						raw_address: "172.16.0.1".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+					},
+					None
+				)
 				.is_err()
 		);
 	}

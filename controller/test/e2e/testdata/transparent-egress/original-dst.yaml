@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agw-odst
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: original-dst-egress
+  namespace: agw-odst
+spec:
+  deployment:
+    spec:
+      template:
+        spec:
+          initContainers:
+            - name: redirect
+              image: nicolaka/netshoot:latest
+              securityContext:
+                privileged: true
+                capabilities:
+                  add:
+                    - NET_ADMIN
+              command:
+                - sh
+                - -c
+                - |
+                  set -eux
+                  iptables -t nat -A OUTPUT -p tcp --dport 80 -m owner ! --uid-owner 10101 -j REDIRECT --to-ports 15001
+                  iptables -t nat -S OUTPUT
+          containers:
+            - name: testbox
+              image: ghcr.io/agentgateway/testbox:0.0.1
+              imagePullPolicy: IfNotPresent
+              command:
+                - /usr/local/bin/testbox
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: egress
+  namespace: agw-odst
+spec:
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: original-dst-egress
+  gatewayClassName: agentgateway
+  listeners:
+    - name: egress-http
+      port: 15001
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: original-dst-frontend
+  namespace: agw-odst
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: egress
+  frontend:
+    originalDst: {}
+    networkAuthorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - |
+            originalDst.port == 80 &&
+            cidr("93.184.216.0/24").containsIP(originalDst.address)
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: original-dst-ok
+  namespace: agw-odst
+spec:
+  parentRefs:
+    - name: egress
+      sectionName: egress-http
+  rules:
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+              - name: x-original-dst-test
+                value: ok
+      backendRefs:
+        - name: dummy
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: original-dst-direct-response
+  namespace: agw-odst
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: original-dst-ok
+  traffic:
+    directResponse:
+      status: 200
+      body: original-dst-ok

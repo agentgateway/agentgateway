@@ -48,6 +48,9 @@ pub struct Executor<'a> {
 
 	pub source: ExtensionOrDirect<'a, SourceContext>,
 
+	#[dynamic(rename = "originalDst")]
+	pub original_dst: ExtensionOrDirect<'a, OriginalDstContext>,
+
 	pub jwt: ExtensionOrDirect<'a, jwt::Claims>,
 
 	#[dynamic(rename = "apiKey")]
@@ -264,6 +267,26 @@ impl SourceContext {
 	}
 }
 
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct OriginalDstContext {
+	#[serde(default = "dummy_address")]
+	/// The original destination IP address before transparent redirect.
+	pub address: IpAddr,
+	#[serde(default)]
+	/// The original destination port before transparent redirect.
+	pub port: u16,
+}
+
+impl OriginalDstContext {
+	pub fn from_tcp_connection(tcp: &crate::transport::stream::TCPConnectionInfo) -> Option<Self> {
+		tcp.original_dst.map(|original_dst| Self {
+			address: original_dst.ip(),
+			port: original_dst.port(),
+		})
+	}
+}
+
 impl WorkloadContext {
 	/// Resolve the source workload from the discovery store by IP address.
 	pub fn from_stores(
@@ -451,6 +474,7 @@ impl<'a> Executor<'a> {
 		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
+		self.original_dst = ExtensionOrDirect::Extension(ext);
 	}
 	fn set_request_snapshot(&mut self, req: &'a RequestSnapshot) {
 		self.request = Some(req.into());
@@ -463,6 +487,7 @@ impl<'a> Executor<'a> {
 		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
+		self.original_dst = ExtensionOrDirect::Direct(req.original_dst.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
@@ -547,11 +572,13 @@ impl<'a> Executor<'a> {
 	}
 	pub fn new_tcp_logger(
 		source_context: Option<&'a SourceContext>,
+		original_dst: Option<&'a OriginalDstContext>,
 		end_time: &'a RequestTime,
 	) -> Self {
 		let mut this = Self::new_empty();
 		// For TCP connections, set the source context directly
 		this.source = ExtensionOrDirect::Direct(source_context);
+		this.original_dst = ExtensionOrDirect::Direct(original_dst);
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = Some(end_time);
 		}
@@ -560,6 +587,14 @@ impl<'a> Executor<'a> {
 	pub fn new_source(source_context: &'a SourceContext) -> Self {
 		let mut this = Self::new_empty();
 		this.source = ExtensionOrDirect::Direct(Some(source_context));
+		this
+	}
+	pub fn new_network(
+		source_context: &'a SourceContext,
+		original_dst: Option<&'a OriginalDstContext>,
+	) -> Self {
+		let mut this = Self::new_source(source_context);
+		this.original_dst = ExtensionOrDirect::Direct(original_dst);
 		this
 	}
 	pub fn new_request(req: &'a crate::http::Request) -> Self {
@@ -688,6 +723,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		basic_auth: ext::<basicauth::Claims>(req, clear),
 		backend: ext::<BackendContext>(req, clear),
 		source: ext::<SourceContext>(req, clear),
+		original_dst: ext::<OriginalDstContext>(req, clear),
 		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
 		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
 		metadata: ext::<TransformationMetadata>(req, clear),
@@ -736,6 +772,8 @@ pub struct RequestSnapshot {
 	pub backend: Option<BackendContext>,
 
 	pub source: Option<SourceContext>,
+
+	pub original_dst: Option<OriginalDstContext>,
 
 	pub start_time: Option<RequestTime>,
 

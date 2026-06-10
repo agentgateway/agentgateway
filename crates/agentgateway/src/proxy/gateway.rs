@@ -597,6 +597,17 @@ impl Gateway {
 		if let Some(tcp) = policies.tcp.as_ref() {
 			raw_stream.apply_tcp_settings(tcp)
 		}
+		if policies.original_dst {
+			match raw_stream.recover_original_dst() {
+				Ok(original_dst) => {
+					debug!(bind=%bind_name, %original_dst, "recovered original destination");
+				},
+				Err(e) => {
+					warn!(bind=%bind_name, "original destination lookup failed: {e}");
+					return;
+				},
+			}
+		}
 		// Tunnel protocol can come from the bind or policies; policies override.
 		let tunnel_protocol = if policies
 			.connect
@@ -794,10 +805,14 @@ impl Gateway {
 			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
 		);
+		let original_dst = crate::cel::OriginalDstContext::from_tcp_connection(tcp);
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
-			&& let Err(e) = network_authorization.apply(&src)
+			&& let Err(e) = network_authorization.apply(&src, original_dst.as_ref())
 		{
 			anyhow::bail!("network authorization denied: {e}");
+		}
+		if let Some(original_dst) = original_dst {
+			stream.ext_mut().insert(original_dst);
 		}
 		stream.ext_mut().insert(src);
 
@@ -1080,6 +1095,7 @@ impl Gateway {
 				peer_addr: src_addr,
 				local_addr: dst_addr,
 				start: Instant::now(),
+				original_dst: None,
 				raw_peer_addr: Some(raw_peer_addr),
 			});
 		}
