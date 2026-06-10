@@ -1159,7 +1159,7 @@ func buildExtAuthSpec(
 		errs = append(errs, fmt.Errorf("failed to build extAuth: backendRef is required"))
 	} else {
 		var err error
-		be, err = buildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
+		be, err = BuildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
 		}
@@ -1247,7 +1247,7 @@ func processExtProcTraffic(
 		backendErr = fmt.Errorf("failed to build extProc: backendRef is required")
 	} else {
 		var err error
-		be, err = buildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
+		be, err = BuildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
 		if err != nil {
 			backendErr = fmt.Errorf("failed to build extProc: %v", err)
 		}
@@ -1581,7 +1581,7 @@ func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPha
 
 func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLimit, policy types.NamespacedName) (*api.Policy_Traffic, error) {
 	var errs []error
-	be, err := buildBackendRef(ctx, grl.BackendRef, policy.Namespace)
+	be, err := BuildBackendRef(ctx, grl.BackendRef, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to build global rate limit: %v", err))
 	}
@@ -1689,10 +1689,6 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		return nil, err
 	}
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
-}
-
-func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
-	return BuildBackendRef(ctx, ref, defaultNS)
 }
 
 func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {

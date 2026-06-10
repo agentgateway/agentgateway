@@ -92,7 +92,7 @@ func translateFrontendPolicyToAgw(
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
 	var errs []error
-	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
+	provider, err := BuildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
 	}
@@ -210,7 +210,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
-		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
+		provider, err := BuildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
 		}

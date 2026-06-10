@@ -22,7 +22,7 @@ listener_routes:
               set:
                 Content-Type: application/json
           - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
+              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiIqIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtNy1tYXgiLCJvYmplY3QiOiJtb2RlbCIsImNyZWF0ZWQiOjAsIm93bmVkX2J5Ijoib3BlbmFpIn0seyJpZCI6ImdwdC0zLjUtdHVyYm8iLCJvYmplY3QiOiJtb2RlbCIsImNyZWF0ZWQiOjAsIm93bmVkX2J5Ijoib3BlbmFpIn1dLCJvYmplY3QiOiJsaXN0In0=
               status: 200
           - cors:
               allowCredentials: false
@@ -73,7 +73,7 @@ listener_routes:
         name: "model:claude-3-haiku"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gemini-0.5-pro:1"
+          - backend: "/llm:model:gpt-3.5-turbo:1"
             weight: 1
         inlinePolicies:
           - ai:
@@ -94,15 +94,15 @@ listener_routes:
               allowOrigins:
                 - "http://localhost:15000"
               maxAge: ~
-        key: "llm:model:000001:gemini-0.5-pro"
+        key: "llm:model:000001:gpt-3.5-turbo"
         matches:
           - headers:
               - name: x-gateway-model-name
                 value:
-                  exact: gemini-0.5-pro
+                  exact: gpt-3.5-turbo
             path:
               pathPrefix: /
-        name: "model:gemini-0.5-pro"
+        name: "model:gpt-3.5-turbo"
         namespace: internal
       - backends:
           - backend: "/llm:model:gpt-7-max:2"
@@ -137,7 +137,7 @@ listener_routes:
         name: "model:gpt-7-max"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gpt-3.5-turbo:3"
+          - backend: "/llm:model:*:3"
             weight: 1
         inlinePolicies:
           - ai:
@@ -158,15 +158,15 @@ listener_routes:
               allowOrigins:
                 - "http://localhost:15000"
               maxAge: ~
-        key: "llm:model:000003:gpt-3.5-turbo"
+        key: "llm:model:000003:*"
         matches:
           - headers:
               - name: x-gateway-model-name
                 value:
-                  exact: gpt-3.5-turbo
+                  regex: ".*"
             path:
               pathPrefix: /
-        name: "model:gpt-3.5-turbo"
+        name: "model:*"
         namespace: internal
       - inlinePolicies:
           - responseHeaderModifier:
@@ -323,27 +323,20 @@ backends:
             cacheMessageOffset: 0
   - backend:
       ai:
-        name: "llm:model:gemini-0.5-pro:1"
+        name: "llm:model:gpt-3.5-turbo:1"
         namespace: ""
         target:
           providers:
             - active:
-                gemini-0.5-pro:
+                gpt-3.5-turbo:
                   endpoint:
-                    name: gemini-0.5-pro
+                    name: gpt-3.5-turbo
                     provider:
-                      vertex:
-                        model: claude-haiku-4-5-20251001
-                        region: global
-                        projectId: my-vertex-project
+                      openAI: {}
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
-                    inlinePolicies:
-                      - backendAuth:
-                          key:
-                            value: "<redacted>"
                   info:
                     health: 1
                     requestLatency: 0
@@ -396,20 +389,27 @@ backends:
       - ai: {}
   - backend:
       ai:
-        name: "llm:model:gpt-3.5-turbo:3"
+        name: "llm:model:*:3"
         namespace: ""
         target:
           providers:
             - active:
-                gpt-3.5-turbo:
+                "*":
                   endpoint:
-                    name: gpt-3.5-turbo
+                    name: "*"
                     provider:
-                      openAI: {}
+                      vertex:
+                        model: claude-haiku-4-5-20251001
+                        region: global
+                        projectId: my-vertex-project
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
                   info:
                     health: 1
                     requestLatency: 0

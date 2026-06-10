@@ -222,7 +222,7 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 			// ExactlyOneOf guards this at admission; skip defensively.
 			continue
 		}
-		be, err := buildBackendRef(ctx, p.Remote.BackendRef, policy.Namespace)
+		be, err := BuildBackendRef(ctx, p.Remote.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
 		}
@@ -506,7 +506,7 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
 
-	proxy, err := buildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
+	proxy, err := BuildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
 
 	tunnelPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix,

@@ -24,8 +24,18 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+// BackendTLSTargetBuilder builds an agentgateway policy target for an extension
+// kind supported by BackendTLSPolicy.
+type BackendTLSTargetBuilder func(namespace string, target gwv1.LocalPolicyTargetReferenceWithSectionName) *api.PolicyTarget
+
 // NewBackendTLSPlugin creates a new BackendTLSPolicy plugin
 func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
+	return NewBackendTLSPluginWithTargetBuilders(agw, nil)
+}
+
+// NewBackendTLSPluginWithTargetBuilders creates a BackendTLSPolicy plugin with
+// additional supported target kinds.
+func NewBackendTLSPluginWithTargetBuilders(agw *AgwCollections, targetBuilders map[schema.GroupKind]BackendTLSTargetBuilder) AgwPlugin {
 	backendTLSTargetIndex := krt.NewIndex(agw.BackendTLSPolicies, "ancestors", func(o *gwv1.BackendTLSPolicy) []utils.TypedNamespacedName {
 		return slices.Map(o.Spec.TargetRefs, func(e gwv1.LocalPolicyTargetReferenceWithSectionName) utils.TypedNamespacedName {
 			return utils.TypedNamespacedName{
@@ -43,7 +53,7 @@ func NewBackendTLSPlugin(agw *AgwCollections) AgwPlugin {
 			wellknown.BackendTLSPolicyGVK.GroupKind(): {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					st, o := krt.NewStatusManyCollection(agw.BackendTLSPolicies, func(krtctx krt.HandlerContext, btls *gwv1.BackendTLSPolicy) (*gwv1.PolicyStatus, []AgwPolicy) {
-						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.Secrets, agw.Services, backendTLSTarget, agw.Gateways, btls)
+						return translatePoliciesForBackendTLS(krtctx, agw.ControllerName, input.References, agw.ConfigMaps, agw.Secrets, agw.Services, targetBuilders, backendTLSTarget, agw.Gateways, btls)
 					}, agw.KrtOpts.ToOptions("policies/BackendTLS")...)
 					return ConvertStatusCollection(st, agw.KrtOpts.ToOptions, "policies/BackendTLS"), o
 				},
@@ -60,6 +70,7 @@ func translatePoliciesForBackendTLS(
 	cfgmaps krt.Collection[*corev1.ConfigMap],
 	secrets krt.Collection[*corev1.Secret],
 	svcs krt.Collection[*corev1.Service],
+	targetBuilders map[schema.GroupKind]BackendTLSTargetBuilder,
 	targetIndex krt.IndexCollection[utils.TypedNamespacedName, *gwv1.BackendTLSPolicy],
 	gateways krt.Collection[*gwv1.Gateway],
 	btls *gwv1.BackendTLSPolicy,
@@ -129,12 +140,13 @@ func translatePoliciesForBackendTLS(
 			continue
 		}
 
-		switch string(target.Kind) {
-		case wellknown.AgentgatewayBackendGVK.Kind:
+		targetGK := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
+		switch targetGK {
+		case wellknown.AgentgatewayBackendGVK.GroupKind():
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.BackendTarget(btls.Namespace, string(target.Name), target.SectionName),
 			}
-		case wellknown.ServiceKind:
+		case schema.GroupKind{Kind: wellknown.ServiceKind}:
 			// BackendTLSPolicy supports named port sectionName (unfortunately)
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.ServiceTarget(btls.Namespace, string(target.Name), (*string)(target.SectionName)),
@@ -156,13 +168,20 @@ func translatePoliciesForBackendTLS(
 					}
 				}
 			}
-		case wellknown.InferencePoolKind:
+		case wellknown.InferencePoolGVK.GroupKind():
 			policyTarget = &api.PolicyTarget{
 				Kind: utils.InferencePoolTarget(btls.Namespace, string(target.Name), (*string)(target.SectionName)),
 			}
 		default:
-			logger.Warn("unsupported target kind", "kind", target.Kind, "policy", btls.Name)
-			continue
+			builder := targetBuilders[targetGK]
+			if builder == nil {
+				logger.Warn("unsupported target kind", "group", target.Group, "kind", target.Kind, "policy", btls.Name)
+				continue
+			}
+			policyTarget = builder(btls.Namespace, target)
+			if policyTarget == nil {
+				continue
+			}
 		}
 
 		baseTLS := &api.BackendPolicySpec_BackendTLS{

@@ -118,7 +118,7 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		return nil, nil
 	}
 
-	be, err := buildBackendRef(ctx, webhook.BackendRef, namespace)
+	be, err := BuildBackendRef(ctx, webhook.BackendRef, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build webhook: %v", err)
 	}
