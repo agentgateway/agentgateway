@@ -318,6 +318,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.okta`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.provider.descope`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -8070,6 +8071,7 @@
 |`policies[].policy.mcpAuthentication.provider.auth0`|object||
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
 |`policies[].policy.mcpAuthentication.provider.okta`|object||
+|`policies[].policy.mcpAuthentication.provider.descope`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
 |`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
@@ -14668,6 +14670,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.auth0`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.okta`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.provider.descope`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
@@ -24474,6 +24477,7 @@
 |`mcp.policies.mcpAuthentication.provider.auth0`|object||
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
 |`mcp.policies.mcpAuthentication.provider.okta`|object||
+|`mcp.policies.mcpAuthentication.provider.descope`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object|Protected resource metadata returned to MCP clients.|
 |`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.mcpAuthentication.jwks.file`|string||

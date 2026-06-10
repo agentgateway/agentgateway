@@ -2703,6 +2703,32 @@ impl LocalMcpAuthentication {
 						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
 							format!("{}/.well-known/jwks.json", self.issuer).parse()?
 						},
+						Some(McpIDP::Descope {}) => {
+							// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
+							// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
+							let parsed: url::Url = self.issuer.parse()?;
+							let segments: Vec<&str> = parsed
+								.path()
+								.trim_start_matches('/')
+								.split('/')
+								.collect();
+							if segments.len() >= 5
+								&& segments[0] == "v1"
+								&& segments[1] == "apps"
+								&& segments[2] == "agentic"
+							{
+								let project_id = segments[3];
+								let base = format!(
+									"{}://{}/{}",
+									parsed.scheme(),
+									parsed.host_str().unwrap_or_default(),
+									project_id
+								);
+								format!("{base}/.well-known/jwks.json").parse()?
+							} else {
+								format!("{}/.well-known/jwks.json", self.issuer).parse()?
+							}
+						},
 						Some(McpIDP::Keycloak { .. }) => {
 							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
 						},
@@ -2746,6 +2772,7 @@ pub enum McpIDP {
 	Auth0 {},
 	Keycloak {},
 	Okta {},
+	Descope {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

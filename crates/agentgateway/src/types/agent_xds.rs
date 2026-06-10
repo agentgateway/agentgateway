@@ -490,6 +490,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Auth0 as i32 => Some(McpIDP::Auth0 {}),
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
+		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
 		_ => None,
 	}
 }

@@ -1874,6 +1874,7 @@ const (
 	BackendPolicySpec_McpAuthentication_AUTH0       BackendPolicySpec_McpAuthentication_McpIDP = 1
 	BackendPolicySpec_McpAuthentication_KEYCLOAK    BackendPolicySpec_McpAuthentication_McpIDP = 2
 	BackendPolicySpec_McpAuthentication_OKTA        BackendPolicySpec_McpAuthentication_McpIDP = 3
+	BackendPolicySpec_McpAuthentication_DESCOPE     BackendPolicySpec_McpAuthentication_McpIDP = 4
 )
 
 // Enum value maps for BackendPolicySpec_McpAuthentication_McpIDP.
@@ -1883,12 +1884,14 @@ var (
 		1: "AUTH0",
 		2: "KEYCLOAK",
 		3: "OKTA",
+		4: "DESCOPE",
 	}
 	BackendPolicySpec_McpAuthentication_McpIDP_value = map[string]int32{
 		"UNSPECIFIED": 0,
 		"AUTH0":       1,
 		"KEYCLOAK":    2,
 		"OKTA":        3,
+		"DESCOPE":     4,
 	}
 )
 
@@ -15771,12 +15774,13 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"ExtraEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"<\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"I\n" +
 	"\x06McpIDP\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\t\n" +
 	"\x05AUTH0\x10\x01\x12\f\n" +
 	"\bKEYCLOAK\x10\x02\x12\b\n" +
-	"\x04OKTA\x10\x03\"0\n" +
+	"\x04OKTA\x10\x03\x12\v\n" +
+	"\x07DESCOPE\x10\x04\"0\n" +
 	"\x04Mode\x12\f\n" +
 	"\bOPTIONAL\x10\x00\x12\n" +
 	"\n" +
