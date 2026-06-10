@@ -2,6 +2,9 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
+# s390x taskdump support (tokio-rs/tokio#8192, merged). Drop this patch once a
+# tokio release containing the change is published and bump the version instead.
+tokio = { git = "https://github.com/tokio-rs/tokio", rev = "21e4a2a282b00c23498c9eedc372e87b00b5482f" }
 
 [workspace]
 resolver = "2"
