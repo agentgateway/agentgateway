@@ -266,6 +266,10 @@ const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const COHERE: &str = "cohere";
+const BEDROCK_MODEL_FROM_REQUEST: &str = "bedrock-model-from-request";
+const BEDROCK_OPUS_48_PROVIDER: &str = "bedrock-opus-4-8-provider";
+const BEDROCK_VIA_COMPLETIONS_MODEL_FROM_REQUEST: &str =
+	"bedrock-via-completions-model-from-request";
 
 mod requests {
 	use super::*;
@@ -276,6 +280,11 @@ mod requests {
 		("tool-call", &[ANTHROPIC, BEDROCK]),
 		("parallel-tool-call", &[BEDROCK]),
 		("reasoning", &[ANTHROPIC, BEDROCK]),
+		("reasoning-opus-48", &[BEDROCK_MODEL_FROM_REQUEST]),
+		(
+			"reasoning-opus-48-provider-model",
+			&[BEDROCK_OPUS_48_PROVIDER],
+		),
 		("reasoning_max", &[ANTHROPIC]),
 		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
 		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
@@ -287,6 +296,14 @@ mod requests {
 		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"reasoning-opus-48-adaptive",
+			&[
+				BEDROCK_MODEL_FROM_REQUEST,
+				BEDROCK_VIA_COMPLETIONS_MODEL_FROM_REQUEST,
+			],
+		),
+		("reasoning-opus-48-enabled", &[BEDROCK_MODEL_FROM_REQUEST]),
 		// Replaying a prior assistant `thinking` block to Bedrock Converse must preserve its
 		// cryptographic `signature` (mapped to reasoningContent.reasoningText.signature) so
 		// Bedrock can validate the replayed thinking.
@@ -297,6 +314,7 @@ mod requests {
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
+		("reasoning-opus-48", &[BEDROCK_MODEL_FROM_REQUEST]),
 	];
 	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -311,19 +329,36 @@ mod requests {
 		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
 	];
 
-	#[test]
-	fn from_completions() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+	fn make_bedrock_provider(model: Option<&str>) -> bedrock::Provider {
+		bedrock::Provider {
+			model: model.map(strng::new),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
-		};
+		}
+	}
+
+	#[test]
+	fn from_completions() {
+		let bedrock_provider = make_bedrock_provider(Some("anthropic.claude-3-5-sonnet-20241022-v2:0"));
+		let bedrock_model_from_request_provider = make_bedrock_provider(None);
+		let bedrock_opus_48_provider = make_bedrock_provider(Some("us.anthropic.claude-opus-4-8-v1"));
 
 		let bedrock =
 			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
+		let bedrock_model_from_request = |i| {
+			conversion::bedrock::from_completions::translate(
+				&i,
+				&bedrock_model_from_request_provider,
+				None,
+				None,
+			)
+		};
+		let bedrock_opus_48_provider_model = |i| {
+			conversion::bedrock::from_completions::translate(&i, &bedrock_opus_48_provider, None, None)
+		};
 		let anthropic = |i| conversion::messages::from_completions::translate(&i);
 
 		for (name, providers) in COMPLETION_REQUESTS {
@@ -333,6 +368,16 @@ mod requests {
 						BEDROCK,
 						&format!("requests/completions/{name}.json"),
 						bedrock,
+					),
+					BEDROCK_MODEL_FROM_REQUEST => test_request(
+						BEDROCK_MODEL_FROM_REQUEST,
+						&format!("requests/completions/{name}.json"),
+						bedrock_model_from_request,
+					),
+					BEDROCK_OPUS_48_PROVIDER => test_request(
+						BEDROCK_OPUS_48_PROVIDER,
+						&format!("requests/completions/{name}.json"),
+						bedrock_opus_48_provider_model,
 					),
 					ANTHROPIC => test_request(
 						ANTHROPIC,
@@ -347,14 +392,8 @@ mod requests {
 
 	#[test]
 	fn from_messages() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
+		let bedrock_provider = make_bedrock_provider(Some("anthropic.claude-3-5-sonnet-20241022-v2:0"));
+		let bedrock_model_from_request_provider = make_bedrock_provider(None);
 		let vertex_provider = vertex::Provider {
 			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
 			region: Some(strng::new("us-central1")),
@@ -363,6 +402,21 @@ mod requests {
 
 		let bedrock_request =
 			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		let bedrock_model_from_request = |i| {
+			conversion::bedrock::from_messages::translate(&i, &bedrock_model_from_request_provider, None)
+		};
+		let bedrock_via_completions_model_from_request =
+			|input: types::messages::Request| -> Result<Vec<u8>, AIError> {
+				let completions_body = conversion::completions::from_messages::translate(&input)?;
+				let completions_req: types::completions::Request =
+					serde_json::from_slice(&completions_body).map_err(AIError::RequestParsing)?;
+				conversion::bedrock::from_completions::translate(
+					&completions_req,
+					&bedrock_model_from_request_provider,
+					None,
+					None,
+				)
+			};
 		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
 			vertex_provider.prepare_anthropic_message_body(anthropic_body)
@@ -373,6 +427,14 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, bedrock_request),
+					BEDROCK_MODEL_FROM_REQUEST => {
+						test_request(BEDROCK_MODEL_FROM_REQUEST, test, bedrock_model_from_request)
+					},
+					BEDROCK_VIA_COMPLETIONS_MODEL_FROM_REQUEST => test_request(
+						BEDROCK_VIA_COMPLETIONS_MODEL_FROM_REQUEST,
+						test,
+						bedrock_via_completions_model_from_request,
+					),
 					COMPLETIONS => test_request(COMPLETIONS, test, completions_request),
 					VERTEX => test_request(VERTEX, test, vertex_request),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
@@ -383,14 +445,8 @@ mod requests {
 
 	#[test]
 	fn from_responses() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
+		let bedrock_provider = make_bedrock_provider(Some("anthropic.claude-3-5-sonnet-20241022-v2:0"));
+		let bedrock_model_from_request_provider = make_bedrock_provider(None);
 
 		for (name, providers) in RESPONSES_REQUESTS {
 			let test = &format!("requests/responses/{name}.json");
@@ -398,6 +454,14 @@ mod requests {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, |req| {
 						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
+					}),
+					BEDROCK_MODEL_FROM_REQUEST => test_request(BEDROCK_MODEL_FROM_REQUEST, test, |req| {
+						conversion::bedrock::from_responses::translate(
+							&req,
+							&bedrock_model_from_request_provider,
+							None,
+							None,
+						)
 					}),
 					GEMINI => test_request(GEMINI, test, |req| {
 						conversion::openai_compat::from_responses::translate(&req)

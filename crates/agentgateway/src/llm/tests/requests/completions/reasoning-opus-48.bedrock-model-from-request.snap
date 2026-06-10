@@ -1,0 +1,35 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/reasoning-opus-48.json
+info:
+  model: us.anthropic.claude-opus-4-8-v1
+  messages:
+    - role: user
+      content: Deeply analyze this topic.
+  max_completion_tokens: 64
+  reasoning_effort: high
+---
+{
+  "modelId": "us.anthropic.claude-opus-4-8-v1",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Deeply analyze this topic."
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 64
+  },
+  "additionalModelRequestFields": {
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "high"
+    }
+  }
+}
