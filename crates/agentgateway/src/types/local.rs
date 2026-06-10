@@ -2159,19 +2159,16 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	});
 
 	// Create model list route
-	let model_list_body = serde_json::json!({
-		"data": models
+	let model_list_entries = Arc::new(
+		models
 			.iter()
-			.map(|m| serde_json::json!({
-				"id": m.name,
-				"object": "model",
-				"created": startup_timestamp,
-				"owned_by": "openai"
-			}))
+			.map(|model| filters::AuthorizationFilteredModelListEntry {
+				id: model.name.clone(),
+				created: startup_timestamp,
+				authorization: model.authorization.clone(),
+			})
 			.collect::<Vec<_>>(),
-		"object": "list"
-	})
-	.to_string();
+	);
 
 	let model_list_inline_policies = vec![
 		TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(
@@ -2182,10 +2179,13 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			},
 		)),
 		TrafficPolicy::DirectResponse(RequestPolicy::single(filters::DirectResponse {
-			body: Bytes::copy_from_slice(model_list_body.as_bytes()),
+			body: Bytes::new(),
 			body_expression: None,
 			headers: Vec::new(),
 			status: ::http::StatusCode::OK,
+			authorization_filtered_model_list: Some(filters::AuthorizationFilteredModelList {
+				entries: model_list_entries,
+			}),
 		})),
 	];
 	let model_list_route = Route {
@@ -2510,6 +2510,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			)?)),
 			headers: Vec::new(),
 			status: ::http::StatusCode::NOT_FOUND,
+			authorization_filtered_model_list: None,
 		})),
 	];
 	routes.push(Route {

@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 184
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -23,8 +22,21 @@ listener_routes:
               set:
                 Content-Type: application/json
           - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiIqIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtNy1tYXgiLCJvYmplY3QiOiJtb2RlbCIsImNyZWF0ZWQiOjAsIm93bmVkX2J5Ijoib3BlbmFpIn0seyJpZCI6ImdwdC0zLjUtdHVyYm8iLCJvYmplY3QiOiJtb2RlbCIsImNyZWF0ZWQiOjAsIm93bmVkX2J5Ijoib3BlbmFpIn1dLCJvYmplY3QiOiJsaXN0In0=
               status: 200
+              authorizationFilteredModelList:
+                entries:
+                  - id: claude-3-haiku
+                    created: 0
+                    authorization: ~
+                  - id: "*"
+                    created: 0
+                    authorization: ~
+                  - id: gpt-7-max
+                    created: 0
+                    authorization: ~
+                  - id: gpt-3.5-turbo
+                    created: 0
+                    authorization: ~
         key: "llm:admin:model-list"
         matches:
           - path:
