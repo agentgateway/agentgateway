@@ -1548,12 +1548,12 @@ type BackendMCP struct {
 	// +optional
 	Authentication *MCPAuthentication `json:"authentication,omitempty"`
 
-	// `extMcp` routes selected JSON-RPC methods through a remote policy server.
+	// `guardrails` routes selected JSON-RPC methods through a remote policy server.
 	// +optional
-	ExtMcp *ExtMcp `json:"extMcp,omitempty"`
+	Guardrails *MCPGuardrails `json:"guardrails,omitempty"`
 }
 
-// MCPMethodPhase controls when an MCP method is run through the extMcp pipeline.
+// MCPMethodPhase controls when an MCP method is run through the guardrails pipeline.
 // +k8s:enum
 type MCPMethodPhase string
 
@@ -1564,24 +1564,24 @@ const (
 	MCPMethodPhaseFull     MCPMethodPhase = "Full"
 )
 
-// ExtMcp is the MCP-layer analog of Envoy ext_authz: an ordered chain of
+// MCPGuardrails is the MCP-layer analog of Envoy ext_authz: an ordered chain of
 // policy processors invoked per JSON-RPC method.
-type ExtMcp struct {
+type MCPGuardrails struct {
 	// `processors` is the ordered list of policy processors applied to matched
 	// methods. Processors run in the order listed; the first to reject a request
 	// short-circuits the chain.
 	// +required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	Processors []ExtMcpProcessor `json:"processors"`
+	Processors []MCPGuardrailsProcessor `json:"processors"`
 }
 
-// ExtMcpProcessor selects a single policy processor. Exactly one variant must be set.
+// MCPGuardrailsProcessor selects a single policy processor. Exactly one variant must be set.
 // +kubebuilder:validation:ExactlyOneOf=remote
-type ExtMcpProcessor struct {
+type MCPGuardrailsProcessor struct {
 	// `remote` configures a gRPC policy server.
 	// +optional
-	Remote *ExtMcpRemote `json:"remote,omitempty"`
+	Remote *MCPGuardrailsRemote `json:"remote,omitempty"`
 
 	// `methods` is the allowlist of JSON-RPC methods (e.g. `tools/call`,
 	// `tools/list`) routed through this processor, keyed by method name with the
@@ -1595,8 +1595,8 @@ type ExtMcpProcessor struct {
 	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 
-type ExtMcpRemote struct {
-	// `backendRef` references the remote ExtMcp policy server.
+type MCPGuardrailsRemote struct {
+	// `backendRef` references the remote guardrails policy server.
 	// Supported types: `Service` and `Backend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`

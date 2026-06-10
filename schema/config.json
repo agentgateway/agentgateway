@@ -1173,11 +1173,11 @@
           ],
           "default": null
         },
-        "extMcp": {
+        "mcpGuardrails": {
           "description": "External MCP policy processors.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtMcp"
+              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"
@@ -1867,7 +1867,7 @@
         "rules"
       ]
     },
-    "ExtMcp": {
+    "McpGuardrails": {
       "type": "object",
       "properties": {
         "processors": {
@@ -5883,11 +5883,11 @@
           ],
           "default": null
         },
-        "extMcp": {
+        "mcpGuardrails": {
           "description": "External MCP policy processors.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtMcp"
+              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"
@@ -6447,11 +6447,11 @@
           ],
           "default": null
         },
-        "extMcp": {
+        "mcpGuardrails": {
           "description": "External MCP policy processors.",
           "anyOf": [
             {
-              "$ref": "#/$defs/ExtMcp"
+              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"

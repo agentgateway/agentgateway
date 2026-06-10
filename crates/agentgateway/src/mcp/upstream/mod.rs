@@ -113,8 +113,8 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
-	#[error("extMcp rejected: {}", .0.message)]
-	ExtMcp(rmcp::ErrorData),
+	#[error("mcpGuardrails rejected: {}", .0.message)]
+	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]

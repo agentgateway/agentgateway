@@ -266,7 +266,7 @@ async fn apply_backend_policies(
 		// Applied elsewhere
 		mcp_authentication: _,
 		// Applied elsewhere (in mcp/handler.rs + mcp/session.rs)
-		ext_mcp: _,
+		mcp_guardrails: _,
 		// Applied elsewhere
 		inference_routing: _,
 		ext_authz,

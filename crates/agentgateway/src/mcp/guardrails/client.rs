@@ -10,11 +10,13 @@ use tracing::{debug, warn};
 use crate::cel;
 use crate::http::envoy_proto_common::{json_to_prost_value, json_to_struct};
 use crate::http::ext_proc::GrpcReferenceChannel;
-use crate::mcp::extmcp::wire::ext_mcp_client::ExtMcpClient;
-use crate::mcp::extmcp::wire::{
+use crate::mcp::guardrails::wire::ext_mcp_client::ExtMcpClient;
+use crate::mcp::guardrails::wire::{
 	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
 };
-use crate::mcp::extmcp::{ExtMcpDynamicMetadata, FailureMode, HeaderFilter, Outcome, Remote};
+use crate::mcp::guardrails::{
+	FailureMode, HeaderFilter, McpGuardrailsDynamicMetadata, Outcome, Remote,
+};
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -30,7 +32,7 @@ pub(crate) async fn check_request(
 	let mcp_request = match serialize_body(body.as_deref()) {
 		Ok(b) => b,
 		Err(e) => {
-			warn!(method, ?backends, error = %e, "extMcp: failed to encode request body as Struct");
+			warn!(method, ?backends, error = %e, "mcpGuardrails: failed to encode request body as Struct");
 			return fail_outcome(remote);
 		},
 	};
@@ -74,7 +76,7 @@ pub(crate) async fn check_request(
 						debug!(
 							method,
 							?backends,
-							"extMcp: ignoring mutation on request without body"
+							"mcpGuardrails: ignoring mutation on request without body"
 						);
 						Outcome::Pass
 					},
@@ -120,14 +122,14 @@ fn apply_header_mutation(
 		let name = match HeaderName::from_bytes(h.key.as_bytes()) {
 			Ok(n) => n,
 			Err(_) => {
-				warn!(method, ?backends, key = %h.key, "extMcp: header_mutation.set: invalid header name");
+				warn!(method, ?backends, key = %h.key, "mcpGuardrails: header_mutation.set: invalid header name");
 				continue;
 			},
 		};
 		let v = match ::http::HeaderValue::from_maybe_shared(h.value) {
 			Ok(v) => v,
 			Err(_) => {
-				warn!(method, ?backends, key = %name, "extMcp: header_mutation.set: invalid header value");
+				warn!(method, ?backends, key = %name, "mcpGuardrails: header_mutation.set: invalid header value");
 				continue;
 			},
 		};
@@ -143,7 +145,7 @@ fn apply_header_mutation(
 				headers.remove(&n);
 			},
 			Err(_) => {
-				warn!(method, ?backends, key = %name, "extMcp: header_mutation.remove: invalid header name");
+				warn!(method, ?backends, key = %name, "mcpGuardrails: header_mutation.remove: invalid header name");
 			},
 		}
 	}
@@ -155,14 +157,16 @@ fn merge_metadata_into_extensions(
 	s: &Struct,
 	ext: &mut ::http::Extensions,
 ) {
-	let mut acc = ext.remove::<ExtMcpDynamicMetadata>().unwrap_or_default();
+	let mut acc = ext
+		.remove::<McpGuardrailsDynamicMetadata>()
+		.unwrap_or_default();
 	for (k, v) in &s.fields {
 		match serde_json::to_value(v) {
 			Ok(j) => {
 				acc.0.insert(k.clone(), j);
 			},
 			Err(e) => {
-				warn!(method, ?backends, key = %k, error = %e, "extMcp: metadata: failed to convert value");
+				warn!(method, ?backends, key = %k, error = %e, "mcpGuardrails: metadata: failed to convert value");
 			},
 		}
 	}
@@ -182,7 +186,7 @@ pub(crate) async fn check_response(
 	let mcp_response = match serialize_body(Some(&*body)) {
 		Ok(b) => b,
 		Err(e) => {
-			warn!(method, ?backends, error = %e, "extMcp: failed to encode response body as Struct");
+			warn!(method, ?backends, error = %e, "mcpGuardrails: failed to encode response body as Struct");
 			return fail_outcome(remote);
 		},
 	};
@@ -209,13 +213,17 @@ pub(crate) async fn check_response(
 				Outcome::Mutated
 			},
 			Err(e) => {
-				warn!(method, ?backends, error = %e, "extMcp: response mutated decode failed");
+				warn!(method, ?backends, error = %e, "mcpGuardrails: response mutated decode failed");
 				fail_outcome(remote)
 			},
 		},
 		Some(mcp_response_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
 		None => {
-			warn!(method, ?backends, "extMcp: response missing result oneof");
+			warn!(
+				method,
+				?backends,
+				"mcpGuardrails: response missing result oneof"
+			);
 			fail_outcome(remote)
 		},
 	}
@@ -234,7 +242,7 @@ fn build_metadata(
 		.filter_map(|(k, expr)| match eval_to_value(&exec, expr) {
 			Ok(v) => Some((k.clone(), v)),
 			Err(e) => {
-				debug!(key = %k, error = %e, "extMcp: metadata CEL expression failed; skipping");
+				debug!(key = %k, error = %e, "mcpGuardrails: metadata CEL expression failed; skipping");
 				None
 			},
 		})
@@ -294,7 +302,7 @@ fn struct_to_json(s: &Struct) -> Result<Value, serde_json::Error> {
 	serde_json::to_value(s)
 }
 
-// extMcp authorization outcomes that have no standard JSON-RPC/MCP code map to
+// mcpGuardrails authorization outcomes that have no standard JSON-RPC/MCP code map to
 // application-defined codes in the server-error range (-32000..=-32099).
 // -32002 is intentionally skipped: rmcp assigns it to RESOURCE_NOT_FOUND.
 const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
@@ -322,12 +330,12 @@ fn on_grpc_error(
 	rpc: &str,
 	status: tonic::Status,
 ) -> Outcome {
-	debug!(method, ?backends, rpc, code = ?status.code(), message = %status.message(), "extMcp: gRPC error");
+	debug!(method, ?backends, rpc, code = ?status.code(), message = %status.message(), "mcpGuardrails: gRPC error");
 	match remote.failure_mode {
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("extMcp {rpc} failed: {}", status.message()),
+			format!("mcpGuardrails {rpc} failed: {}", status.message()),
 			None,
 		)),
 	}
@@ -339,12 +347,17 @@ fn on_protocol_violation(
 	backends: &[String],
 	reason: &str,
 ) -> Outcome {
-	warn!(method, ?backends, reason, "extMcp: protocol violation");
+	warn!(
+		method,
+		?backends,
+		reason,
+		"mcpGuardrails: protocol violation"
+	);
 	match remote.failure_mode {
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			format!("extMcp protocol violation: {reason}"),
+			format!("mcpGuardrails protocol violation: {reason}"),
 			None,
 		)),
 	}
@@ -355,7 +368,7 @@ fn fail_outcome(remote: &Remote) -> Outcome {
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
-			"extMcp internal error".to_string(),
+			"mcpGuardrails internal error".to_string(),
 			None,
 		)),
 	}
@@ -366,7 +379,7 @@ mod tests {
 	use prost_wkt_types::Struct as ProtoStruct;
 
 	use super::*;
-	use crate::mcp::extmcp::{ExtMcpDynamicMetadata, wire};
+	use crate::mcp::guardrails::{McpGuardrailsDynamicMetadata, wire};
 
 	fn struct_from_json(v: serde_json::Value) -> ProtoStruct {
 		serde_json::from_value(v).unwrap()
@@ -494,7 +507,7 @@ mod tests {
 		let second = struct_from_json(serde_json::json!({ "tier": "platinum", "extra": 1 }));
 		merge_metadata_into_extensions("tools/call", &["be".to_string()], &second, &mut ext);
 		let acc = ext
-			.get::<ExtMcpDynamicMetadata>()
+			.get::<McpGuardrailsDynamicMetadata>()
 			.expect("extension created");
 		assert_eq!(acc.0.get("tenant").unwrap(), &serde_json::json!("acme"));
 		assert_eq!(acc.0.get("tier").unwrap(), &serde_json::json!("platinum"));

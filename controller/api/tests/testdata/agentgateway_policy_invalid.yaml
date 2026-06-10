@@ -836,7 +836,7 @@ _err: 'backend.mcp may not be used with a Service target'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: backend-extmcp-on-service
+  name: backend-guardrails-on-service
 spec:
   targetRefs:
     - group: ""
@@ -844,11 +844,11 @@ spec:
       name: f1
   backend:
     mcp:
-      extMcp:
+      guardrails:
         processors:
         - remote:
             backendRef:
-              name: extmcp-srv
+              name: guardrails-srv
               port: 4317
           methods:
             tools/call: Full
@@ -857,7 +857,7 @@ _err: 'backendRef: Required'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: backend-extmcp-no-backend-ref
+  name: backend-guardrails-no-backend-ref
 spec:
   targetRefs:
     - kind: Gateway
@@ -865,7 +865,7 @@ spec:
       group: gateway.networking.k8s.io
   backend:
     mcp:
-      extMcp:
+      guardrails:
         processors:
         - remote:
             failureMode: FailClosed

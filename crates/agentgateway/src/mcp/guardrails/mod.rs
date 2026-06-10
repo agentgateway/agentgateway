@@ -1,4 +1,4 @@
-//! External MCP policy hooks (extMcp).
+//! External MCP policy hooks (mcpGuardrails).
 //!
 //! Single-target methods (`tools/call`, ...) fire server-facing in the upstream's
 //! native namespace — processors see unmuxed names (`echo`, not `serverA_echo`) and the
@@ -19,15 +19,15 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::*;
 
-/// Per-request bag of values that `extMcp` request-phase processors attach via
+/// Per-request bag of values that `mcpGuardrails` request-phase processors attach via
 /// `McpRequestResult.metadata`. Merged into the request extensions and exposed
-/// to CEL as `extMcp.<key>` for backend request filters (e.g. `transformation`).
+/// to CEL as `mcpGuardrails.<key>` for backend request filters (e.g. `transformation`).
 /// Multiple processors merge into the same map; later writes win on key collisions.
 #[apply(schema!)]
 #[derive(Default, ::cel::DynamicType)]
-pub struct ExtMcpDynamicMetadata(serde_json::Map<String, serde_json::Value>);
+pub struct McpGuardrailsDynamicMetadata(serde_json::Map<String, serde_json::Value>);
 
-impl ExtMcpDynamicMetadata {
+impl McpGuardrailsDynamicMetadata {
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
@@ -52,7 +52,7 @@ pub mod wire {
 
 #[apply(schema!)]
 #[derive(Default)]
-pub struct ExtMcp {
+pub struct McpGuardrails {
 	/// Ordered list of policy processors applied to matched methods; the first
 	/// to reject a request short-circuits the chain. Processors may run on the
 	/// request or response side, or both; see `Processor.methods`.
@@ -81,7 +81,7 @@ pub enum ProcessorKind {
 	Remote(Remote),
 }
 
-impl ExtMcp {
+impl McpGuardrails {
 	/// Whether any processor runs the request side for `method`.
 	pub fn runs_request(&self, method: &str) -> bool {
 		self.processors.iter().any(|d| d.runs_request(method))
@@ -98,7 +98,7 @@ impl ExtMcp {
 		for m in methods::REQUEST_PHASE_UNSUPPORTED {
 			if self.runs_request(m) {
 				out.push(format!(
-					"extMcp: methods match {m:?} with a request phase, but only the response phase runs for this method"
+					"mcpGuardrails: methods match {m:?} with a request phase, but only the response phase runs for this method"
 				));
 			}
 		}
@@ -109,7 +109,7 @@ impl ExtMcp {
 			.filter(|p| !phase::pattern_is_matchable(p))
 			.map(|p| {
 				format!(
-					"extMcp: methods key {p:?} can never match; use an exact method, 'prefix/*', '*/suffix', or '*'"
+					"mcpGuardrails: methods key {p:?} can never match; use an exact method, 'prefix/*', '*/suffix', or '*'"
 				)
 			})
 			.collect();
@@ -238,7 +238,7 @@ impl Processor {
 /// partially-mutated state earlier processors produced. When `ctx.params` is `None`
 /// (e.g. `*/list`) mutations are discarded — list filtering belongs in the response phase.
 pub async fn run_call_request(
-	ext: &ExtMcp,
+	ext: &McpGuardrails,
 	ctx: &mut CallRequestCtx<'_>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
@@ -259,7 +259,7 @@ pub async fn run_call_request(
 
 /// Processors fire in order; first `Reject` short-circuits.
 pub async fn run_response(
-	ext: &ExtMcp,
+	ext: &McpGuardrails,
 	method: &str,
 	backends: &[String],
 	body: &mut Value,
@@ -304,7 +304,7 @@ processors:
     methods: { "tools/call": full }
     backend: my-backend
 "#;
-		let ext: ExtMcp = serde_yaml::from_str(cfg).expect("deser ExtMcp");
+		let ext: McpGuardrails = serde_yaml::from_str(cfg).expect("deser McpGuardrails");
 		assert_eq!(ext.processors.len(), 2);
 
 		let d0 = &ext.processors[0];
@@ -332,8 +332,8 @@ processors:
 		assert_eq!(r1.failure_mode, FailureMode::FailClosed);
 	}
 
-	fn ext_with_methods(pairs: &[(&str, Phase)]) -> ExtMcp {
-		ExtMcp {
+	fn ext_with_methods(pairs: &[(&str, Phase)]) -> McpGuardrails {
+		McpGuardrails {
 			processors: vec![Processor {
 				methods: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
 				kind: ProcessorKind::Remote(Remote {

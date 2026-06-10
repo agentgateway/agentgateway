@@ -42,7 +42,7 @@ spec:
       name: extmcp-backend
   backend:
     mcp:
-      extMcp:
+      guardrails:
         processors:
         - remote:
             backendRef:

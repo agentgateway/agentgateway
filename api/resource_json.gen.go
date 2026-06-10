@@ -1469,36 +1469,36 @@ func (this *BackendPolicySpec_McpAuthentication_ResourceMetadata) UnmarshalJSON(
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BackendPolicySpec_ExtMcp
-func (this *BackendPolicySpec_ExtMcp) MarshalJSON() ([]byte, error) {
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpGuardrails
+func (this *BackendPolicySpec_McpGuardrails) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
 	return []byte(str), err
 }
 
-// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_ExtMcp
-func (this *BackendPolicySpec_ExtMcp) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpGuardrails
+func (this *BackendPolicySpec_McpGuardrails) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BackendPolicySpec_ExtMcp_Remote
-func (this *BackendPolicySpec_ExtMcp_Remote) MarshalJSON() ([]byte, error) {
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpGuardrails_Remote
+func (this *BackendPolicySpec_McpGuardrails_Remote) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
 	return []byte(str), err
 }
 
-// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_ExtMcp_Remote
-func (this *BackendPolicySpec_ExtMcp_Remote) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpGuardrails_Remote
+func (this *BackendPolicySpec_McpGuardrails_Remote) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BackendPolicySpec_ExtMcp_Processor
-func (this *BackendPolicySpec_ExtMcp_Processor) MarshalJSON() ([]byte, error) {
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpGuardrails_Processor
+func (this *BackendPolicySpec_McpGuardrails_Processor) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
 	return []byte(str), err
 }
 
-// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_ExtMcp_Processor
-func (this *BackendPolicySpec_ExtMcp_Processor) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpGuardrails_Processor
+func (this *BackendPolicySpec_McpGuardrails_Processor) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

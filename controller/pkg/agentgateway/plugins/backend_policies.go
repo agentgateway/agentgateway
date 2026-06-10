@@ -35,7 +35,7 @@ const (
 	backendHttpPolicySuffix       = ":backend-http"
 	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
-	extMcpPolicySuffix            = ":mcp-extmcp"
+	mcpGuardrailsPolicySuffix     = ":mcp-guardrails"
 	healthPolicySuffix            = ":health"
 )
 
@@ -176,8 +176,8 @@ func translateBackendPolicyToAgw(
 			appendPolicy("backendMCPAuthentication")(translateBackendMCPAuthentication(ctx, policy))
 		}
 
-		if backend.MCP.ExtMcp != nil {
-			appendPolicy("backendExtMcp")(translateBackendExtMcp(ctx, policy))
+		if backend.MCP.Guardrails != nil {
+			appendPolicy("backendMCPGuardrails")(translateBackendMCPGuardrails(ctx, policy))
 		}
 	}
 
@@ -211,11 +211,11 @@ func translateBackendExtAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPol
 	}, err
 }
 
-func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	var errs []error
-	em := policy.Spec.Backend.MCP.ExtMcp
+	em := policy.Spec.Backend.MCP.Guardrails
 
-	processors := make([]*api.BackendPolicySpec_ExtMcp_Processor, 0, len(em.Processors))
+	processors := make([]*api.BackendPolicySpec_McpGuardrails_Processor, 0, len(em.Processors))
 	for i := range em.Processors {
 		p := &em.Processors[i]
 		if p.Remote == nil {
@@ -224,21 +224,21 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		}
 		be, err := BuildBackendRef(ctx, p.Remote.BackendRef, policy.Namespace)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to build extMcp: %v", err))
+			errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
 		}
 		metadata := castCELMap(p.Remote.Metadata, func(key string, expr shared.CELExpression) {
-			errs = append(errs, fmt.Errorf("extMcp metadata %q is not a valid CEL expression: %s", key, expr))
+			errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
 		})
-		methods := make(map[string]api.BackendPolicySpec_ExtMcp_Phase, len(p.Methods))
+		methods := make(map[string]api.BackendPolicySpec_McpGuardrails_Phase, len(p.Methods))
 		for name, phase := range p.Methods {
 			methods[name] = mcpMethodPhase(phase)
 		}
 		headerName := func(h agentgateway.HeaderName) string { return string(h) }
-		processors = append(processors, &api.BackendPolicySpec_ExtMcp_Processor{
-			Kind: &api.BackendPolicySpec_ExtMcp_Processor_Remote{
-				Remote: &api.BackendPolicySpec_ExtMcp_Remote{
+		processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
+			Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
+				Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
 					Target:                   be,
-					FailureMode:              extMcpFailureMode(p.Remote.FailureMode),
+					FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
 					Metadata:                 metadata,
 					AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
 					DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
@@ -248,36 +248,36 @@ func translateBackendExtMcp(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 		})
 	}
 
-	spec := &api.BackendPolicySpec_ExtMcp{Processors: processors}
+	spec := &api.BackendPolicySpec_McpGuardrails{Processors: processors}
 
 	return &api.Policy{
-		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + extMcpPolicySuffix,
+		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + mcpGuardrailsPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, config.NamespacedName(policy)),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
-				Kind: &api.BackendPolicySpec_ExtMcp_{ExtMcp: spec},
+				Kind: &api.BackendPolicySpec_McpGuardrails_{McpGuardrails: spec},
 			},
 		},
 	}, errors.Join(errs...)
 }
 
-func extMcpFailureMode(m agentgateway.FailureMode) api.BackendPolicySpec_ExtMcp_FailureMode {
+func mcpGuardrailsFailureMode(m agentgateway.FailureMode) api.BackendPolicySpec_McpGuardrails_FailureMode {
 	if m == agentgateway.FailOpen {
-		return api.BackendPolicySpec_ExtMcp_ALLOW
+		return api.BackendPolicySpec_McpGuardrails_ALLOW
 	}
-	return api.BackendPolicySpec_ExtMcp_DENY
+	return api.BackendPolicySpec_McpGuardrails_DENY
 }
 
-func mcpMethodPhase(p agentgateway.MCPMethodPhase) api.BackendPolicySpec_ExtMcp_Phase {
+func mcpMethodPhase(p agentgateway.MCPMethodPhase) api.BackendPolicySpec_McpGuardrails_Phase {
 	switch p {
 	case agentgateway.MCPMethodPhaseRequest:
-		return api.BackendPolicySpec_ExtMcp_REQUEST
+		return api.BackendPolicySpec_McpGuardrails_REQUEST
 	case agentgateway.MCPMethodPhaseResponse:
-		return api.BackendPolicySpec_ExtMcp_RESPONSE
+		return api.BackendPolicySpec_McpGuardrails_RESPONSE
 	case agentgateway.MCPMethodPhaseFull:
-		return api.BackendPolicySpec_ExtMcp_FULL
+		return api.BackendPolicySpec_McpGuardrails_FULL
 	default:
-		return api.BackendPolicySpec_ExtMcp_OFF
+		return api.BackendPolicySpec_McpGuardrails_OFF
 	}
 }
 

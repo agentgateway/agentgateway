@@ -683,7 +683,7 @@ impl TestBind {
 	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
 	// opaque backend behind the MCP target. Those flow into the target's resolved
 	// backend policies and run on the upstream leg (e.g. a transformation reading
-	// extMcp metadata).
+	// mcpGuardrails metadata).
 	pub fn with_mcp_backend_and_target_policies(
 		self,
 		b: SocketAddr,

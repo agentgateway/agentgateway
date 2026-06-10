@@ -223,7 +223,7 @@ pub struct BackendPolicies {
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
-	pub ext_mcp: Option<Arc<crate::mcp::extmcp::ExtMcp>>,
+	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
@@ -257,7 +257,7 @@ impl BackendPolicies {
 			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
-			ext_mcp: other.ext_mcp.or(self.ext_mcp),
+			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
 			ext_authz: other.ext_authz.or(self.ext_authz),
 			http: other.http.or(self.http),
@@ -1129,8 +1129,8 @@ impl Store {
 				BackendTrafficPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
 				},
-				BackendTrafficPolicy::ExtMcp(p) => {
-					pol.ext_mcp.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::McpGuardrails(p) => {
+					pol.mcp_guardrails.get_or_insert_with(|| p.clone());
 				},
 			}
 		}

@@ -1380,12 +1380,12 @@ message BackendPolicySpec {
     optional string client_id = 9;
   }
 
-  // ExtMcp is a backend-phase policy for MCP traffic: an ordered chain of
+  // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
   // policy processors. Today only the `remote` processor is defined — a custom
-  // gRPC policy server modeled on Envoy ext_authz.
-  message ExtMcp {
+  // gRPC policy server (the ExtMcp service) modeled on Envoy ext_authz.
+  message McpGuardrails {
     // Phase controls whether the request side, response side, or both of a
-    // method are run through the extMcp pipeline.
+    // method are run through the guardrails pipeline.
     enum Phase {
       OFF = 0;
       REQUEST = 1;
@@ -1458,7 +1458,7 @@ message BackendPolicySpec {
     Health health = 15;
     BackendTunnel backend_tunnel = 16;
     TrafficPolicySpec.ExternalAuth ext_authz = 17;
-    ExtMcp ext_mcp = 18;
+    McpGuardrails mcp_guardrails = 18;
   }
 }
 

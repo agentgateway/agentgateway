@@ -1,7 +1,7 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: extmcp
+  name: guardrails-invalid-cel
   namespace: default
 spec:
   targetRefs:
@@ -10,29 +10,21 @@ spec:
       group: gateway.networking.k8s.io
   backend:
     mcp:
-      extMcp:
+      guardrails:
         processors:
         - remote:
             backendRef:
-              name: extmcp-srv
+              name: guardrails-srv
               port: 4317
-            failureMode: FailClosed
             metadata:
-              tenant: 'jwt.sub'
-            allowedRequestHeaders:
-              - x-tenant
-              - ':authority'
-              - authorization
-            disallowedRequestHeaders:
-              - authorization
+              tenant: 'foolen_{{jwt.sub}}'
           methods:
             tools/call: Full
-            tools/list: Request
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: extmcp-srv
+  name: guardrails-srv
   namespace: default
 spec:
   ports:
@@ -47,29 +39,22 @@ output:
   resource:
     policy:
       backend:
-        extMcp:
+        mcpGuardrails:
           processors:
           - methods:
               tools/call: FULL
-              tools/list: REQUEST
             remote:
-              allowedRequestHeaders:
-              - x-tenant
-              - :authority
-              - authorization
-              disallowedRequestHeaders:
-              - authorization
               metadata:
-                tenant: jwt.sub
+                tenant: foolen_{{jwt.sub}}
               target:
                 port: 4317
                 service:
-                  hostname: extmcp-srv.default.svc.cluster.local
+                  hostname: guardrails-srv.default.svc.cluster.local
                   namespace: default
-      key: backend/default/extmcp:mcp-extmcp:default/test
+      key: backend/default/guardrails-invalid-cel:mcp-guardrails:default/test
       name:
         kind: AgentgatewayPolicy
-        name: extmcp
+        name: guardrails-invalid-cel
         namespace: default
       target:
         gateway:
@@ -79,7 +64,7 @@ status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:
-    name: extmcp
+    name: guardrails-invalid-cel
     namespace: default
   spec: null
   status:
@@ -91,13 +76,8 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: Policy accepted
-        reason: Valid
+        message: 'mcpGuardrails metadata "tenant" is not a valid CEL expression: foolen_{{jwt.sub}}'
+        reason: PartiallyValid
         status: "True"
         type: Accepted
-      - lastTransitionTime: fake
-        message: Attached to all targets
-        reason: Attached
-        status: "True"
-        type: Attached
       controllerName: agentgateway.dev/agentgateway

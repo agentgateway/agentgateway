@@ -48,7 +48,7 @@ type LocalExtProcPolicy = LocalExplicitOrConditional<crate::http::ext_proc::ExtP
 type LocalRemoteRateLimitPolicy =
 	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
 type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
-type LocalExtMcp = crate::mcp::extmcp::ExtMcp;
+type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -961,7 +961,7 @@ impl LocalBackend {
 			.map(|p| LocalBackendPolicies {
 				simple: p.simple,
 				mcp_authorization: p.mcp_authorization,
-				ext_mcp: p.ext_mcp,
+				mcp_guardrails: p.mcp_guardrails,
 				a2a: None,
 				inference_routing: None,
 				ai: None,
@@ -1528,8 +1528,8 @@ pub struct MCPLocalBackendPolicies {
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
 	/// External MCP policy processors.
-	#[serde(default, rename = "extMcp")]
-	pub ext_mcp: Option<LocalExtMcp>,
+	#[serde(default)]
+	pub mcp_guardrails: Option<LocalMcpGuardrails>,
 }
 
 #[apply(schema_de!)]
@@ -1558,8 +1558,8 @@ pub struct LocalBackendPolicies {
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
 	/// External MCP policy processors.
-	#[serde(default, rename = "extMcp")]
-	pub ext_mcp: Option<LocalExtMcp>,
+	#[serde(default)]
+	pub mcp_guardrails: Option<LocalMcpGuardrails>,
 	/// Mark this traffic as A2A to enable A2A processing and telemetry.
 	#[serde(default)]
 	pub a2a: Option<A2aPolicy>,
@@ -1615,7 +1615,7 @@ impl LocalBackendPolicies {
 					backend_tunnel,
 				},
 			mcp_authorization,
-			ext_mcp,
+			mcp_guardrails,
 			a2a,
 			inference_routing,
 			ai,
@@ -1649,11 +1649,11 @@ impl LocalBackendPolicies {
 		if let Some(p) = mcp_authorization {
 			pols.push(BackendTrafficPolicy::McpAuthorization(p))
 		}
-		if let Some(p) = ext_mcp {
+		if let Some(p) = mcp_guardrails {
 			for w in p.load_warnings() {
 				tracing::warn!("{w}");
 			}
-			pols.push(BackendTrafficPolicy::ExtMcp(Arc::new(p)))
+			pols.push(BackendTrafficPolicy::McpGuardrails(Arc::new(p)))
 		}
 		if let Some(p) = a2a {
 			pols.push(BackendTrafficPolicy::A2a(p))
@@ -1779,8 +1779,8 @@ pub struct FilterOrPolicy {
 	#[serde(default)]
 	mcp_authorization: Option<McpAuthorization>,
 	/// External MCP policy processors.
-	#[serde(default, rename = "extMcp")]
-	ext_mcp: Option<LocalExtMcp>,
+	#[serde(default)]
+	mcp_guardrails: Option<LocalMcpGuardrails>,
 	/// Authorization policies for HTTP access.
 	#[serde(default)]
 	authorization: Option<Authorization>,
@@ -3067,7 +3067,7 @@ pub(crate) async fn split_policies(
 		direct_response,
 		cors,
 		mcp_authorization,
-		ext_mcp,
+		mcp_guardrails,
 		mcp_authentication,
 		a2a,
 		ai,
@@ -3121,11 +3121,11 @@ pub(crate) async fn split_policies(
 	if let Some(p) = mcp_authorization {
 		backend_policies.push(BackendTrafficPolicy::McpAuthorization(p))
 	}
-	if let Some(p) = ext_mcp {
+	if let Some(p) = mcp_guardrails {
 		for w in p.load_warnings() {
 			tracing::warn!("{w}");
 		}
-		backend_policies.push(BackendTrafficPolicy::ExtMcp(Arc::new(p)))
+		backend_policies.push(BackendTrafficPolicy::McpGuardrails(Arc::new(p)))
 	}
 	if let Some(p) = mcp_authentication {
 		let authn: McpAuthentication = p.translate(client.clone()).await?;

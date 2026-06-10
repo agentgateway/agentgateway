@@ -1869,25 +1869,25 @@ func (BackendPolicySpec_McpAuthentication_Mode) EnumDescriptor() ([]byte, []int)
 }
 
 // Phase controls whether the request side, response side, or both of a
-// method are run through the extMcp pipeline.
-type BackendPolicySpec_ExtMcp_Phase int32
+// method are run through the guardrails pipeline.
+type BackendPolicySpec_McpGuardrails_Phase int32
 
 const (
-	BackendPolicySpec_ExtMcp_OFF      BackendPolicySpec_ExtMcp_Phase = 0
-	BackendPolicySpec_ExtMcp_REQUEST  BackendPolicySpec_ExtMcp_Phase = 1
-	BackendPolicySpec_ExtMcp_RESPONSE BackendPolicySpec_ExtMcp_Phase = 2
-	BackendPolicySpec_ExtMcp_FULL     BackendPolicySpec_ExtMcp_Phase = 3
+	BackendPolicySpec_McpGuardrails_OFF      BackendPolicySpec_McpGuardrails_Phase = 0
+	BackendPolicySpec_McpGuardrails_REQUEST  BackendPolicySpec_McpGuardrails_Phase = 1
+	BackendPolicySpec_McpGuardrails_RESPONSE BackendPolicySpec_McpGuardrails_Phase = 2
+	BackendPolicySpec_McpGuardrails_FULL     BackendPolicySpec_McpGuardrails_Phase = 3
 )
 
-// Enum value maps for BackendPolicySpec_ExtMcp_Phase.
+// Enum value maps for BackendPolicySpec_McpGuardrails_Phase.
 var (
-	BackendPolicySpec_ExtMcp_Phase_name = map[int32]string{
+	BackendPolicySpec_McpGuardrails_Phase_name = map[int32]string{
 		0: "OFF",
 		1: "REQUEST",
 		2: "RESPONSE",
 		3: "FULL",
 	}
-	BackendPolicySpec_ExtMcp_Phase_value = map[string]int32{
+	BackendPolicySpec_McpGuardrails_Phase_value = map[string]int32{
 		"OFF":      0,
 		"REQUEST":  1,
 		"RESPONSE": 2,
@@ -1895,76 +1895,76 @@ var (
 	}
 )
 
-func (x BackendPolicySpec_ExtMcp_Phase) Enum() *BackendPolicySpec_ExtMcp_Phase {
-	p := new(BackendPolicySpec_ExtMcp_Phase)
+func (x BackendPolicySpec_McpGuardrails_Phase) Enum() *BackendPolicySpec_McpGuardrails_Phase {
+	p := new(BackendPolicySpec_McpGuardrails_Phase)
 	*p = x
 	return p
 }
 
-func (x BackendPolicySpec_ExtMcp_Phase) String() string {
+func (x BackendPolicySpec_McpGuardrails_Phase) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (BackendPolicySpec_ExtMcp_Phase) Descriptor() protoreflect.EnumDescriptor {
+func (BackendPolicySpec_McpGuardrails_Phase) Descriptor() protoreflect.EnumDescriptor {
 	return file_resource_proto_enumTypes[36].Descriptor()
 }
 
-func (BackendPolicySpec_ExtMcp_Phase) Type() protoreflect.EnumType {
+func (BackendPolicySpec_McpGuardrails_Phase) Type() protoreflect.EnumType {
 	return &file_resource_proto_enumTypes[36]
 }
 
-func (x BackendPolicySpec_ExtMcp_Phase) Number() protoreflect.EnumNumber {
+func (x BackendPolicySpec_McpGuardrails_Phase) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use BackendPolicySpec_ExtMcp_Phase.Descriptor instead.
-func (BackendPolicySpec_ExtMcp_Phase) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use BackendPolicySpec_McpGuardrails_Phase.Descriptor instead.
+func (BackendPolicySpec_McpGuardrails_Phase) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{54, 11, 0}
 }
 
-type BackendPolicySpec_ExtMcp_FailureMode int32
+type BackendPolicySpec_McpGuardrails_FailureMode int32
 
 const (
-	BackendPolicySpec_ExtMcp_DENY  BackendPolicySpec_ExtMcp_FailureMode = 0
-	BackendPolicySpec_ExtMcp_ALLOW BackendPolicySpec_ExtMcp_FailureMode = 1
+	BackendPolicySpec_McpGuardrails_DENY  BackendPolicySpec_McpGuardrails_FailureMode = 0
+	BackendPolicySpec_McpGuardrails_ALLOW BackendPolicySpec_McpGuardrails_FailureMode = 1
 )
 
-// Enum value maps for BackendPolicySpec_ExtMcp_FailureMode.
+// Enum value maps for BackendPolicySpec_McpGuardrails_FailureMode.
 var (
-	BackendPolicySpec_ExtMcp_FailureMode_name = map[int32]string{
+	BackendPolicySpec_McpGuardrails_FailureMode_name = map[int32]string{
 		0: "DENY",
 		1: "ALLOW",
 	}
-	BackendPolicySpec_ExtMcp_FailureMode_value = map[string]int32{
+	BackendPolicySpec_McpGuardrails_FailureMode_value = map[string]int32{
 		"DENY":  0,
 		"ALLOW": 1,
 	}
 )
 
-func (x BackendPolicySpec_ExtMcp_FailureMode) Enum() *BackendPolicySpec_ExtMcp_FailureMode {
-	p := new(BackendPolicySpec_ExtMcp_FailureMode)
+func (x BackendPolicySpec_McpGuardrails_FailureMode) Enum() *BackendPolicySpec_McpGuardrails_FailureMode {
+	p := new(BackendPolicySpec_McpGuardrails_FailureMode)
 	*p = x
 	return p
 }
 
-func (x BackendPolicySpec_ExtMcp_FailureMode) String() string {
+func (x BackendPolicySpec_McpGuardrails_FailureMode) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (BackendPolicySpec_ExtMcp_FailureMode) Descriptor() protoreflect.EnumDescriptor {
+func (BackendPolicySpec_McpGuardrails_FailureMode) Descriptor() protoreflect.EnumDescriptor {
 	return file_resource_proto_enumTypes[37].Descriptor()
 }
 
-func (BackendPolicySpec_ExtMcp_FailureMode) Type() protoreflect.EnumType {
+func (BackendPolicySpec_McpGuardrails_FailureMode) Type() protoreflect.EnumType {
 	return &file_resource_proto_enumTypes[37]
 }
 
-func (x BackendPolicySpec_ExtMcp_FailureMode) Number() protoreflect.EnumNumber {
+func (x BackendPolicySpec_McpGuardrails_FailureMode) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use BackendPolicySpec_ExtMcp_FailureMode.Descriptor instead.
-func (BackendPolicySpec_ExtMcp_FailureMode) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use BackendPolicySpec_McpGuardrails_FailureMode.Descriptor instead.
+func (BackendPolicySpec_McpGuardrails_FailureMode) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{54, 11, 1}
 }
 
@@ -6873,7 +6873,7 @@ type BackendPolicySpec struct {
 	//	*BackendPolicySpec_Health_
 	//	*BackendPolicySpec_BackendTunnel_
 	//	*BackendPolicySpec_ExtAuthz
-	//	*BackendPolicySpec_ExtMcp_
+	//	*BackendPolicySpec_McpGuardrails_
 	Kind          isBackendPolicySpec_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7069,10 +7069,10 @@ func (x *BackendPolicySpec) GetExtAuthz() *TrafficPolicySpec_ExternalAuth {
 	return nil
 }
 
-func (x *BackendPolicySpec) GetExtMcp() *BackendPolicySpec_ExtMcp {
+func (x *BackendPolicySpec) GetMcpGuardrails() *BackendPolicySpec_McpGuardrails {
 	if x != nil {
-		if x, ok := x.Kind.(*BackendPolicySpec_ExtMcp_); ok {
-			return x.ExtMcp
+		if x, ok := x.Kind.(*BackendPolicySpec_McpGuardrails_); ok {
+			return x.McpGuardrails
 		}
 	}
 	return nil
@@ -7150,8 +7150,8 @@ type BackendPolicySpec_ExtAuthz struct {
 	ExtAuthz *TrafficPolicySpec_ExternalAuth `protobuf:"bytes,17,opt,name=ext_authz,json=extAuthz,proto3,oneof"`
 }
 
-type BackendPolicySpec_ExtMcp_ struct {
-	ExtMcp *BackendPolicySpec_ExtMcp `protobuf:"bytes,18,opt,name=ext_mcp,json=extMcp,proto3,oneof"`
+type BackendPolicySpec_McpGuardrails_ struct {
+	McpGuardrails *BackendPolicySpec_McpGuardrails `protobuf:"bytes,18,opt,name=mcp_guardrails,json=mcpGuardrails,proto3,oneof"`
 }
 
 func (*BackendPolicySpec_A2A_) isBackendPolicySpec_Kind() {}
@@ -7188,7 +7188,7 @@ func (*BackendPolicySpec_BackendTunnel_) isBackendPolicySpec_Kind() {}
 
 func (*BackendPolicySpec_ExtAuthz) isBackendPolicySpec_Kind() {}
 
-func (*BackendPolicySpec_ExtMcp_) isBackendPolicySpec_Kind() {}
+func (*BackendPolicySpec_McpGuardrails_) isBackendPolicySpec_Kind() {}
 
 type StaticBackend struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -11799,32 +11799,32 @@ func (x *BackendPolicySpec_McpAuthentication) GetClientId() string {
 	return ""
 }
 
-// ExtMcp is a backend-phase policy for MCP traffic: an ordered chain of
+// McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
 // policy processors. Today only the `remote` processor is defined — a custom
-// gRPC policy server modeled on Envoy ext_authz.
-type BackendPolicySpec_ExtMcp struct {
+// gRPC policy server (the ExtMcp service) modeled on Envoy ext_authz.
+type BackendPolicySpec_McpGuardrails struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Ordered list of processors applied to matched methods. Processors run in
 	// the order listed; the first to reject a request short-circuits the chain.
-	Processors    []*BackendPolicySpec_ExtMcp_Processor `protobuf:"bytes,3,rep,name=processors,proto3" json:"processors,omitempty"`
+	Processors    []*BackendPolicySpec_McpGuardrails_Processor `protobuf:"bytes,3,rep,name=processors,proto3" json:"processors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *BackendPolicySpec_ExtMcp) Reset() {
-	*x = BackendPolicySpec_ExtMcp{}
+func (x *BackendPolicySpec_McpGuardrails) Reset() {
+	*x = BackendPolicySpec_McpGuardrails{}
 	mi := &file_resource_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BackendPolicySpec_ExtMcp) String() string {
+func (x *BackendPolicySpec_McpGuardrails) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BackendPolicySpec_ExtMcp) ProtoMessage() {}
+func (*BackendPolicySpec_McpGuardrails) ProtoMessage() {}
 
-func (x *BackendPolicySpec_ExtMcp) ProtoReflect() protoreflect.Message {
+func (x *BackendPolicySpec_McpGuardrails) ProtoReflect() protoreflect.Message {
 	mi := &file_resource_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -11836,12 +11836,12 @@ func (x *BackendPolicySpec_ExtMcp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BackendPolicySpec_ExtMcp.ProtoReflect.Descriptor instead.
-func (*BackendPolicySpec_ExtMcp) Descriptor() ([]byte, []int) {
+// Deprecated: Use BackendPolicySpec_McpGuardrails.ProtoReflect.Descriptor instead.
+func (*BackendPolicySpec_McpGuardrails) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{54, 11}
 }
 
-func (x *BackendPolicySpec_ExtMcp) GetProcessors() []*BackendPolicySpec_ExtMcp_Processor {
+func (x *BackendPolicySpec_McpGuardrails) GetProcessors() []*BackendPolicySpec_McpGuardrails_Processor {
 	if x != nil {
 		return x.Processors
 	}
@@ -12960,10 +12960,10 @@ func (x *BackendPolicySpec_McpAuthentication_ResourceMetadata) GetExtra() map[st
 // Configuration for the custom gRPC policy server. TLS, retries, and
 // load balancing to the policy server come from the backend referenced
 // by `target` (same pattern as TrafficPolicySpec.ExternalAuth).
-type BackendPolicySpec_ExtMcp_Remote struct {
-	state       protoimpl.MessageState               `protogen:"open.v1"`
-	Target      *BackendReference                    `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	FailureMode BackendPolicySpec_ExtMcp_FailureMode `protobuf:"varint,2,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_FailureMode" json:"failure_mode,omitempty"`
+type BackendPolicySpec_McpGuardrails_Remote struct {
+	state       protoimpl.MessageState                      `protogen:"open.v1"`
+	Target      *BackendReference                           `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	FailureMode BackendPolicySpec_McpGuardrails_FailureMode `protobuf:"varint,2,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_McpGuardrails_FailureMode" json:"failure_mode,omitempty"`
 	// Static or CEL-evaluated context, surfaced to the policy server as
 	// fields of the `metadata_context` google.protobuf.Struct, keyed by
 	// config key.
@@ -12980,20 +12980,20 @@ type BackendPolicySpec_ExtMcp_Remote struct {
 	sizeCache                protoimpl.SizeCache
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) Reset() {
-	*x = BackendPolicySpec_ExtMcp_Remote{}
+func (x *BackendPolicySpec_McpGuardrails_Remote) Reset() {
+	*x = BackendPolicySpec_McpGuardrails_Remote{}
 	mi := &file_resource_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) String() string {
+func (x *BackendPolicySpec_McpGuardrails_Remote) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BackendPolicySpec_ExtMcp_Remote) ProtoMessage() {}
+func (*BackendPolicySpec_McpGuardrails_Remote) ProtoMessage() {}
 
-func (x *BackendPolicySpec_ExtMcp_Remote) ProtoReflect() protoreflect.Message {
+func (x *BackendPolicySpec_McpGuardrails_Remote) ProtoReflect() protoreflect.Message {
 	mi := &file_resource_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -13005,40 +13005,40 @@ func (x *BackendPolicySpec_ExtMcp_Remote) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BackendPolicySpec_ExtMcp_Remote.ProtoReflect.Descriptor instead.
-func (*BackendPolicySpec_ExtMcp_Remote) Descriptor() ([]byte, []int) {
+// Deprecated: Use BackendPolicySpec_McpGuardrails_Remote.ProtoReflect.Descriptor instead.
+func (*BackendPolicySpec_McpGuardrails_Remote) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{54, 11, 0}
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) GetTarget() *BackendReference {
+func (x *BackendPolicySpec_McpGuardrails_Remote) GetTarget() *BackendReference {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) GetFailureMode() BackendPolicySpec_ExtMcp_FailureMode {
+func (x *BackendPolicySpec_McpGuardrails_Remote) GetFailureMode() BackendPolicySpec_McpGuardrails_FailureMode {
 	if x != nil {
 		return x.FailureMode
 	}
-	return BackendPolicySpec_ExtMcp_DENY
+	return BackendPolicySpec_McpGuardrails_DENY
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) GetMetadata() map[string]string {
+func (x *BackendPolicySpec_McpGuardrails_Remote) GetMetadata() map[string]string {
 	if x != nil {
 		return x.Metadata
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) GetAllowedRequestHeaders() []string {
+func (x *BackendPolicySpec_McpGuardrails_Remote) GetAllowedRequestHeaders() []string {
 	if x != nil {
 		return x.AllowedRequestHeaders
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_ExtMcp_Remote) GetDisallowedRequestHeaders() []string {
+func (x *BackendPolicySpec_McpGuardrails_Remote) GetDisallowedRequestHeaders() []string {
 	if x != nil {
 		return x.DisallowedRequestHeaders
 	}
@@ -13046,36 +13046,36 @@ func (x *BackendPolicySpec_ExtMcp_Remote) GetDisallowedRequestHeaders() []string
 }
 
 // Processor is a single policy processor. Today only `remote` is defined.
-type BackendPolicySpec_ExtMcp_Processor struct {
+type BackendPolicySpec_McpGuardrails_Processor struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
 	//
-	//	*BackendPolicySpec_ExtMcp_Processor_Remote
-	Kind isBackendPolicySpec_ExtMcp_Processor_Kind `protobuf_oneof:"kind"`
+	//	*BackendPolicySpec_McpGuardrails_Processor_Remote
+	Kind isBackendPolicySpec_McpGuardrails_Processor_Kind `protobuf_oneof:"kind"`
 	// Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
 	// through this processor, keyed by method name with the phase it runs in.
 	// Keys may be exact, prefix ("tools/*") or suffix ("*/list") wildcards, or
 	// "*" for all methods; the most specific match wins when a method would match
 	// multiple entries.
-	Methods       map[string]BackendPolicySpec_ExtMcp_Phase `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_ExtMcp_Phase"`
+	Methods       map[string]BackendPolicySpec_McpGuardrails_Phase `protobuf:"bytes,2,rep,name=methods,proto3" json:"methods,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value,enum=agentgateway.dev.resource.BackendPolicySpec_McpGuardrails_Phase"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *BackendPolicySpec_ExtMcp_Processor) Reset() {
-	*x = BackendPolicySpec_ExtMcp_Processor{}
+func (x *BackendPolicySpec_McpGuardrails_Processor) Reset() {
+	*x = BackendPolicySpec_McpGuardrails_Processor{}
 	mi := &file_resource_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BackendPolicySpec_ExtMcp_Processor) String() string {
+func (x *BackendPolicySpec_McpGuardrails_Processor) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BackendPolicySpec_ExtMcp_Processor) ProtoMessage() {}
+func (*BackendPolicySpec_McpGuardrails_Processor) ProtoMessage() {}
 
-func (x *BackendPolicySpec_ExtMcp_Processor) ProtoReflect() protoreflect.Message {
+func (x *BackendPolicySpec_McpGuardrails_Processor) ProtoReflect() protoreflect.Message {
 	mi := &file_resource_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -13087,43 +13087,44 @@ func (x *BackendPolicySpec_ExtMcp_Processor) ProtoReflect() protoreflect.Message
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BackendPolicySpec_ExtMcp_Processor.ProtoReflect.Descriptor instead.
-func (*BackendPolicySpec_ExtMcp_Processor) Descriptor() ([]byte, []int) {
+// Deprecated: Use BackendPolicySpec_McpGuardrails_Processor.ProtoReflect.Descriptor instead.
+func (*BackendPolicySpec_McpGuardrails_Processor) Descriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{54, 11, 1}
 }
 
-func (x *BackendPolicySpec_ExtMcp_Processor) GetKind() isBackendPolicySpec_ExtMcp_Processor_Kind {
+func (x *BackendPolicySpec_McpGuardrails_Processor) GetKind() isBackendPolicySpec_McpGuardrails_Processor_Kind {
 	if x != nil {
 		return x.Kind
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_ExtMcp_Processor) GetRemote() *BackendPolicySpec_ExtMcp_Remote {
+func (x *BackendPolicySpec_McpGuardrails_Processor) GetRemote() *BackendPolicySpec_McpGuardrails_Remote {
 	if x != nil {
-		if x, ok := x.Kind.(*BackendPolicySpec_ExtMcp_Processor_Remote); ok {
+		if x, ok := x.Kind.(*BackendPolicySpec_McpGuardrails_Processor_Remote); ok {
 			return x.Remote
 		}
 	}
 	return nil
 }
 
-func (x *BackendPolicySpec_ExtMcp_Processor) GetMethods() map[string]BackendPolicySpec_ExtMcp_Phase {
+func (x *BackendPolicySpec_McpGuardrails_Processor) GetMethods() map[string]BackendPolicySpec_McpGuardrails_Phase {
 	if x != nil {
 		return x.Methods
 	}
 	return nil
 }
 
-type isBackendPolicySpec_ExtMcp_Processor_Kind interface {
-	isBackendPolicySpec_ExtMcp_Processor_Kind()
+type isBackendPolicySpec_McpGuardrails_Processor_Kind interface {
+	isBackendPolicySpec_McpGuardrails_Processor_Kind()
 }
 
-type BackendPolicySpec_ExtMcp_Processor_Remote struct {
-	Remote *BackendPolicySpec_ExtMcp_Remote `protobuf:"bytes,1,opt,name=remote,proto3,oneof"`
+type BackendPolicySpec_McpGuardrails_Processor_Remote struct {
+	Remote *BackendPolicySpec_McpGuardrails_Remote `protobuf:"bytes,1,opt,name=remote,proto3,oneof"`
 }
 
-func (*BackendPolicySpec_ExtMcp_Processor_Remote) isBackendPolicySpec_ExtMcp_Processor_Kind() {}
+func (*BackendPolicySpec_McpGuardrails_Processor_Remote) isBackendPolicySpec_McpGuardrails_Processor_Kind() {
+}
 
 type AIBackend_HostOverride struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -14753,7 +14754,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xbfT\n" +
+	"\x04kind\"\x85U\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -14774,8 +14775,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x0etransformation\x18\x0e \x01(\v2A.agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicyH\x00R\x0etransformation\x12M\n" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
-	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12N\n" +
-	"\aext_mcp\x18\x12 \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.ExtMcpH\x00R\x06extMcp\x1a\xf0(\n" +
+	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
+	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xf0(\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -14997,26 +14998,26 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"PERMISSIVE\x10\x02B\f\n" +
 	"\n" +
-	"_client_id\x1a\xf5\a\n" +
-	"\x06ExtMcp\x12]\n" +
+	"_client_id\x1a\xa6\b\n" +
+	"\rMcpGuardrails\x12d\n" +
 	"\n" +
-	"processors\x18\x03 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.ProcessorR\n" +
-	"processors\x1a\xca\x03\n" +
+	"processors\x18\x03 \x03(\v2D.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.ProcessorR\n" +
+	"processors\x1a\xd8\x03\n" +
 	"\x06Remote\x12C\n" +
-	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12b\n" +
-	"\ffailure_mode\x18\x02 \x01(\x0e2?.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureModeR\vfailureMode\x12d\n" +
-	"\bmetadata\x18\x03 \x03(\v2H.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntryR\bmetadata\x126\n" +
+	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12i\n" +
+	"\ffailure_mode\x18\x02 \x01(\x0e2F.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.FailureModeR\vfailureMode\x12k\n" +
+	"\bmetadata\x18\x03 \x03(\v2O.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.MetadataEntryR\bmetadata\x126\n" +
 	"\x17allowed_request_headers\x18\x04 \x03(\tR\x15allowedRequestHeaders\x12<\n" +
 	"\x1adisallowed_request_headers\x18\x05 \x03(\tR\x18disallowedRequestHeaders\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xc6\x02\n" +
-	"\tProcessor\x12T\n" +
-	"\x06remote\x18\x01 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.RemoteH\x00R\x06remote\x12d\n" +
-	"\amethods\x18\x02 \x03(\v2J.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntryR\amethods\x1au\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xdb\x02\n" +
+	"\tProcessor\x12[\n" +
+	"\x06remote\x18\x01 \x01(\v2A.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.RemoteH\x00R\x06remote\x12k\n" +
+	"\amethods\x18\x02 \x03(\v2Q.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntryR\amethods\x1a|\n" +
 	"\fMethodsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12O\n" +
-	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.ExtMcp.PhaseR\x05value:\x028\x01B\x06\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12V\n" +
+	"\x05value\x18\x02 \x01(\x0e2@.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.PhaseR\x05value:\x028\x01B\x06\n" +
 	"\x04kind\"5\n" +
 	"\x05Phase\x12\a\n" +
 	"\x03OFF\x10\x00\x12\v\n" +
@@ -15228,8 +15229,8 @@ var file_resource_proto_goTypes = []any{
 	(BackendPolicySpec_BackendHTTP_HttpVersion)(0),              // 33: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
 	(BackendPolicySpec_McpAuthentication_McpIDP)(0),             // 34: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
 	(BackendPolicySpec_McpAuthentication_Mode)(0),               // 35: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
-	(BackendPolicySpec_ExtMcp_Phase)(0),                         // 36: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Phase
-	(BackendPolicySpec_ExtMcp_FailureMode)(0),                   // 37: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureMode
+	(BackendPolicySpec_McpGuardrails_Phase)(0),                  // 36: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Phase
+	(BackendPolicySpec_McpGuardrails_FailureMode)(0),            // 37: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.FailureMode
 	(AIBackend_AzureResourceType)(0),                            // 38: agentgateway.dev.resource.AIBackend.AzureResourceType
 	(AIBackend_ProviderFormat)(0),                               // 39: agentgateway.dev.resource.AIBackend.ProviderFormat
 	(MCPBackend_StatefulMode)(0),                                // 40: agentgateway.dev.resource.MCPBackend.StatefulMode
@@ -15372,7 +15373,7 @@ var file_resource_proto_goTypes = []any{
 	(*BackendPolicySpec_BackendTCP)(nil),            // 177: agentgateway.dev.resource.BackendPolicySpec.BackendTCP
 	(*BackendPolicySpec_McpAuthorization)(nil),      // 178: agentgateway.dev.resource.BackendPolicySpec.McpAuthorization
 	(*BackendPolicySpec_McpAuthentication)(nil),     // 179: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication
-	(*BackendPolicySpec_ExtMcp)(nil),                // 180: agentgateway.dev.resource.BackendPolicySpec.ExtMcp
+	(*BackendPolicySpec_McpGuardrails)(nil),         // 180: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails
 	(*BackendPolicySpec_Ai_Message)(nil),            // 181: agentgateway.dev.resource.BackendPolicySpec.Ai.Message
 	(*BackendPolicySpec_Ai_PromptEnrichment)(nil),   // 182: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
 	(*BackendPolicySpec_Ai_RegexRule)(nil),          // 183: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule
@@ -15393,11 +15394,11 @@ var file_resource_proto_goTypes = []any{
 	nil, // 198: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
 	nil, // 199: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
 	(*BackendPolicySpec_McpAuthentication_ResourceMetadata)(nil), // 200: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	nil,                                     // 201: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	(*BackendPolicySpec_ExtMcp_Remote)(nil), // 202: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote
-	(*BackendPolicySpec_ExtMcp_Processor)(nil), // 203: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor
-	nil,                                    // 204: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
-	nil,                                    // 205: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry
+	nil, // 201: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
+	(*BackendPolicySpec_McpGuardrails_Remote)(nil),    // 202: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote
+	(*BackendPolicySpec_McpGuardrails_Processor)(nil), // 203: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor
+	nil,                                    // 204: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.MetadataEntry
+	nil,                                    // 205: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntry
 	(*AIBackend_HostOverride)(nil),         // 206: agentgateway.dev.resource.AIBackend.HostOverride
 	(*AIBackend_OpenAI)(nil),               // 207: agentgateway.dev.resource.AIBackend.OpenAI
 	(*AIBackend_Gemini)(nil),               // 208: agentgateway.dev.resource.AIBackend.Gemini
@@ -15557,7 +15558,7 @@ var file_resource_proto_depIdxs = []int32{
 	173, // 135: agentgateway.dev.resource.BackendPolicySpec.health:type_name -> agentgateway.dev.resource.BackendPolicySpec.Health
 	176, // 136: agentgateway.dev.resource.BackendPolicySpec.backend_tunnel:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTunnel
 	137, // 137: agentgateway.dev.resource.BackendPolicySpec.ext_authz:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth
-	180, // 138: agentgateway.dev.resource.BackendPolicySpec.ext_mcp:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp
+	180, // 138: agentgateway.dev.resource.BackendPolicySpec.mcp_guardrails:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails
 	102, // 139: agentgateway.dev.resource.AwsBackend.agent_core:type_name -> agentgateway.dev.resource.AwsAgentCoreBackend
 	217, // 140: agentgateway.dev.resource.AIBackend.provider_groups:type_name -> agentgateway.dev.resource.AIBackend.ProviderGroup
 	105, // 141: agentgateway.dev.resource.MCPBackend.targets:type_name -> agentgateway.dev.resource.MCPTarget
@@ -15671,7 +15672,7 @@ var file_resource_proto_depIdxs = []int32{
 	35,  // 249: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
 	96,  // 250: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.jwt_validation_options:type_name -> agentgateway.dev.resource.JWTValidationOptions
 	62,  // 251: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.authorization_location:type_name -> agentgateway.dev.resource.AuthorizationLocation
-	203, // 252: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.processors:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor
+	203, // 252: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.processors:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor
 	181, // 253: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.append:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
 	181, // 254: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment.prepend:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.Message
 	27,  // 255: agentgateway.dev.resource.BackendPolicySpec.Ai.RegexRule.builtin:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
@@ -15702,12 +15703,12 @@ var file_resource_proto_depIdxs = []int32{
 	29,  // 280: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
 	201, // 281: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
 	224, // 282: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
-	106, // 283: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.target:type_name -> agentgateway.dev.resource.BackendReference
-	37,  // 284: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.FailureMode
-	204, // 285: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote.MetadataEntry
-	202, // 286: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.remote:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Remote
-	205, // 287: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.methods:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry
-	36,  // 288: agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Processor.MethodsEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.ExtMcp.Phase
+	106, // 283: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.target:type_name -> agentgateway.dev.resource.BackendReference
+	37,  // 284: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.FailureMode
+	204, // 285: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.MetadataEntry
+	202, // 286: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.remote:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote
+	205, // 287: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.methods:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntry
+	36,  // 288: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Processor.MethodsEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Phase
 	38,  // 289: agentgateway.dev.resource.AIBackend.Azure.resource_type:type_name -> agentgateway.dev.resource.AIBackend.AzureResourceType
 	39,  // 290: agentgateway.dev.resource.AIBackend.ProviderFormatConfig.format:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormat
 	214, // 291: agentgateway.dev.resource.AIBackend.Custom.formats:type_name -> agentgateway.dev.resource.AIBackend.ProviderFormatConfig
@@ -15882,7 +15883,7 @@ func file_resource_proto_init() {
 		(*BackendPolicySpec_Health_)(nil),
 		(*BackendPolicySpec_BackendTunnel_)(nil),
 		(*BackendPolicySpec_ExtAuthz)(nil),
-		(*BackendPolicySpec_ExtMcp_)(nil),
+		(*BackendPolicySpec_McpGuardrails_)(nil),
 	}
 	file_resource_proto_msgTypes[57].OneofWrappers = []any{
 		(*AwsBackend_AgentCore)(nil),
@@ -15947,7 +15948,7 @@ func file_resource_proto_init() {
 	}
 	file_resource_proto_msgTypes[150].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[159].OneofWrappers = []any{
-		(*BackendPolicySpec_ExtMcp_Processor_Remote)(nil),
+		(*BackendPolicySpec_McpGuardrails_Processor_Remote)(nil),
 	}
 	file_resource_proto_msgTypes[163].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[164].OneofWrappers = []any{}

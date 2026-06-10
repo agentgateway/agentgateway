@@ -12215,9 +12215,9 @@ spec:
                         required:
                         - policy
                         type: object
-                      extMcp:
-                        description: '`extMcp` routes selected JSON-RPC methods through
-                          a remote policy server.'
+                      guardrails:
+                        description: '`guardrails` routes selected JSON-RPC methods
+                          through a remote policy server.'
                         properties:
                           processors:
                             description: |-
@@ -12225,13 +12225,13 @@ spec:
                               methods. Processors run in the order listed; the first to reject a request
                               short-circuits the chain.
                             items:
-                              description: ExtMcpProcessor selects a single policy
-                                processor. Exactly one variant must be set.
+                              description: MCPGuardrailsProcessor selects a single
+                                policy processor. Exactly one variant must be set.
                               properties:
                                 methods:
                                   additionalProperties:
                                     description: MCPMethodPhase controls when an MCP
-                                      method is run through the extMcp pipeline.
+                                      method is run through the guardrails pipeline.
                                     enum:
                                     - Full
                                     - "Off"
@@ -12280,7 +12280,7 @@ spec:
                                       x-kubernetes-list-type: set
                                     backendRef:
                                       description: |-
-                                        `backendRef` references the remote ExtMcp policy server.
+                                        `backendRef` references the remote guardrails policy server.
                                         Supported types: `Service` and `Backend`.
                                       properties:
                                         group:
@@ -12412,8 +12412,8 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [authentication authorization
-                        extMcp] must be set
-                      rule: '[has(self.authentication),has(self.authorization),has(self.extMcp)].filter(x,x==true).size()
+                        guardrails] must be set
+                      rule: '[has(self.authentication),has(self.authorization),has(self.guardrails)].filter(x,x==true).size()
                         >= 1'
                   tcp:
                     description: tcp defines settings for managing TCP connections

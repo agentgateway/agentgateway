@@ -76,14 +76,14 @@ fn rewrite_resource_update_message(
 pub struct Relay {
 	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
-	pub(crate) ext_mcp: Option<Arc<crate::mcp::extmcp::ExtMcp>>,
+	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub(crate) policy_client: PolicyClient,
 }
 
 pub struct RelayInputs {
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
-	pub ext_mcp: Option<Arc<crate::mcp::extmcp::ExtMcp>>,
+	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub client: PolicyClient,
 }
 
@@ -91,7 +91,7 @@ impl RelayInputs {
 	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
 		let r = Relay::new(self.backend, self.policies, self.client)?;
 		Ok(Relay {
-			ext_mcp: self.ext_mcp,
+			mcp_guardrails: self.mcp_guardrails,
 			..r
 		})
 	}
@@ -106,7 +106,7 @@ impl Relay {
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
-			ext_mcp: None,
+			mcp_guardrails: None,
 			policy_client: client,
 		})
 	}
@@ -114,7 +114,7 @@ impl Relay {
 		Self {
 			upstreams: self.upstreams.clone(),
 			policies,
-			ext_mcp: self.ext_mcp.clone(),
+			mcp_guardrails: self.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
 		}
 	}
@@ -223,19 +223,19 @@ impl Relay {
 		self.upstreams.is_multiplexing
 	}
 
-	fn build_extmcp_ctx(
+	fn build_guardrails_ctx(
 		&self,
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 		backends: Vec<String>,
-	) -> Option<ExtMcpCtx> {
-		let ext = self.ext_mcp.as_ref()?;
+	) -> Option<GuardrailsCtx> {
+		let ext = self.mcp_guardrails.as_ref()?;
 		let method = r.request.method().to_string();
 		if !ext.runs_response(&method) {
-			// we only need an ExtMcpCtx for response-phase extmcp hooks
+			// we only need an GuardrailsCtx for response-phase guardrails hooks
 			return None;
 		}
-		Some(ExtMcpCtx {
+		Some(GuardrailsCtx {
 			ext: ext.clone(),
 			method,
 			backends,
@@ -244,20 +244,20 @@ impl Relay {
 		})
 	}
 
-	pub(crate) async fn run_extmcp_call_request(
+	pub(crate) async fn run_guardrails_call_request(
 		&self,
-		ext_ctx: &mut crate::mcp::extmcp::CallRequestCtx<'_>,
+		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
 		ctx: &mut IncomingRequestContext,
 	) -> Result<bool, UpstreamError> {
-		use crate::mcp::extmcp::Outcome;
-		let Some(ext) = self.ext_mcp.as_ref() else {
+		use crate::mcp::guardrails::Outcome;
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(false);
 		};
 		let method = ext_ctx.method;
-		match crate::mcp::extmcp::run_call_request(ext, ext_ctx, ctx, &self.policy_client).await {
+		match crate::mcp::guardrails::run_call_request(ext, ext_ctx, ctx, &self.policy_client).await {
 			Outcome::Pass => Ok(false),
 			Outcome::Mutated => {
-				tracing::debug!(method, "extMcp: request mutated");
+				tracing::debug!(method, "mcpGuardrails: request mutated");
 				Ok(true)
 			},
 			Outcome::Reject(rej) => {
@@ -265,14 +265,14 @@ impl Relay {
 					method,
 					code = rej.code.0,
 					message = %rej.message,
-					"extMcp: request rejected",
+					"mcpGuardrails: request rejected",
 				);
-				Err(UpstreamError::ExtMcp(rej))
+				Err(UpstreamError::McpGuardrails(rej))
 			},
 		}
 	}
 
-	pub(crate) async fn maybe_run_extmcp_call_request<P>(
+	pub(crate) async fn maybe_run_guardrails_call_request<P>(
 		&self,
 		backend: &str,
 		method: &str,
@@ -282,7 +282,7 @@ impl Relay {
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
 	{
-		let Some(ext) = self.ext_mcp.as_ref() else {
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(());
 		};
 		// Skip the (potentially expensive) params serialization when this method
@@ -294,8 +294,8 @@ impl Relay {
 			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
 		let backends = [backend.to_string()];
 		let mutated = self
-			.run_extmcp_call_request(
-				&mut crate::mcp::extmcp::CallRequestCtx {
+			.run_guardrails_call_request(
+				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: &backends,
 					method,
 					params: Some(&mut params_v),
@@ -535,12 +535,14 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let extmcp = self.build_extmcp_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let stream =
 			self.rewrite_outbound_server_messages(service_name, us.generic_stream(r, &ctx).await?);
 
-		match extmcp {
-			Some(extmcp) => messages_to_response(id, wrap_with_extmcp(stream, extmcp), mcp_log),
+		match guardrails {
+			Some(guardrails) => {
+				messages_to_response(id, wrap_with_guardrails(stream, guardrails), mcp_log)
+			},
 			None => messages_to_response(id, stream, mcp_log),
 		}
 	}
@@ -643,9 +645,9 @@ impl Relay {
 		let method = r.request.method().to_string();
 		let method = method.as_str();
 
-		// service_names for the single fanout-wide extMcp hook: every backend this call
+		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
 		// fans out to (just the one name when there is a single backend).
-		let service_names = self.ext_mcp.as_ref().map(|_| {
+		let service_names = self.mcp_guardrails.as_ref().map(|_| {
 			self
 				.upstreams
 				.iter_named()
@@ -656,10 +658,10 @@ impl Relay {
 		// Request-phase hook runs once for the whole client call. params is None for
 		// fanout (no body to rewrite); header/metadata side effects apply to the single
 		// shared ctx forwarded to every upstream. A reject fails the whole call.
-		if let Some(ext) = self.ext_mcp.as_ref() {
-			let outcome = crate::mcp::extmcp::run_call_request(
+		if let Some(ext) = self.mcp_guardrails.as_ref() {
+			let outcome = crate::mcp::guardrails::run_call_request(
 				ext,
-				&mut crate::mcp::extmcp::CallRequestCtx {
+				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: service_names.as_deref().unwrap_or_default(),
 					method,
 					params: None,
@@ -668,8 +670,8 @@ impl Relay {
 				&self.policy_client,
 			)
 			.await;
-			if let crate::mcp::extmcp::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::ExtMcp(rej));
+			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
+				return Err(UpstreamError::McpGuardrails(rej));
 			}
 		}
 
@@ -717,8 +719,8 @@ impl Relay {
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match service_names.and_then(|sn| self.build_extmcp_ctx(&r, &ctx, sn)) {
-			Some(extmcp) => messages_to_response(id, wrap_with_extmcp(ms, extmcp), None),
+		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
+			Some(guardrails) => messages_to_response(id, wrap_with_guardrails(ms, guardrails), None),
 			None => messages_to_response(id, ms, None),
 		}
 	}
@@ -833,8 +835,8 @@ pub fn setup_request_log(
 	(_span, log, cel)
 }
 
-pub(crate) struct ExtMcpCtx {
-	pub ext: Arc<crate::mcp::extmcp::ExtMcp>,
+pub(crate) struct GuardrailsCtx {
+	pub ext: Arc<crate::mcp::guardrails::McpGuardrails>,
 	pub method: String,
 	pub backends: Vec<String>,
 	pub client: PolicyClient,
@@ -852,18 +854,18 @@ fn messages_to_response(
 	))
 }
 
-fn wrap_with_extmcp(
+fn wrap_with_guardrails(
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
-	extmcp: ExtMcpCtx,
+	guardrails: GuardrailsCtx,
 ) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
 	use futures_util::StreamExt;
-	let extmcp = Arc::new(extmcp);
+	let guardrails = Arc::new(guardrails);
 	stream.then(move |rpc| {
-		let ctx = extmcp.clone();
+		let ctx = guardrails.clone();
 		async move {
 			match rpc {
 				Ok(mut rpc) => {
-					if let Some(scrubbed) = apply_extmcp_response_intercept(&ctx, &rpc).await {
+					if let Some(scrubbed) = apply_guardrails_response_intercept(&ctx, &rpc).await {
 						rpc = scrubbed;
 					}
 					Ok(rpc)
@@ -902,11 +904,11 @@ fn into_sse_stream(
 	})
 }
 
-async fn apply_extmcp_response_intercept(
-	ctx: &ExtMcpCtx,
+async fn apply_guardrails_response_intercept(
+	ctx: &GuardrailsCtx,
 	msg: &ServerJsonRpcMessage,
 ) -> Option<ServerJsonRpcMessage> {
-	use crate::mcp::extmcp::Outcome;
+	use crate::mcp::guardrails::Outcome;
 	// The stream is request-scoped, so the only Response on it is the terminal.
 	let ServerJsonRpcMessage::Response(resp) = msg else {
 		return None;
@@ -914,11 +916,11 @@ async fn apply_extmcp_response_intercept(
 	let mut json = match serde_json::to_value(&resp.result) {
 		Ok(v) => v,
 		Err(e) => {
-			tracing::warn!(error = %e, "extMcp: failed to serialize result for inspection; passing through");
+			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection; passing through");
 			return None;
 		},
 	};
-	match crate::mcp::extmcp::run_response(
+	match crate::mcp::guardrails::run_response(
 		&ctx.ext,
 		&ctx.method,
 		&ctx.backends,
@@ -934,9 +936,12 @@ async fn apply_extmcp_response_intercept(
 				Ok(v) => v,
 				Err(e) => {
 					// Fail closed: passing through would leak content the operator asked us to scrub.
-					tracing::warn!(error = %e, "extMcp: failed to deserialize mutated result");
+					tracing::warn!(error = %e, "mcpGuardrails: failed to deserialize mutated result");
 					return Some(ServerJsonRpcMessage::error(
-						ErrorData::internal_error(format!("extMcp produced an invalid response: {e}"), None),
+						ErrorData::internal_error(
+							format!("mcpGuardrails produced an invalid response: {e}"),
+							None,
+						),
 						resp.id.clone(),
 					));
 				},

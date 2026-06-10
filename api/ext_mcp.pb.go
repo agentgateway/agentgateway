@@ -161,7 +161,9 @@ func (x *McpRequest) GetHeaders() []*McpHeader {
 
 type McpResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Same semantics as McpRequest.service_names.
+	// Backend names this call targets, in their native (unmuxed) namespace.
+	// Exactly one entry for single-target methods (`tools/call`, ...); one entry
+	// per backend for fanout methods (e.g. `*/list`, ...).
 	ServiceNames    []string         `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	Method          string           `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`

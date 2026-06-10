@@ -208,10 +208,10 @@ impl Session {
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
 	{
-		// run extmcp before other policies, as it may add context to CEL
+		// run guardrails before other policies, as it may add context to CEL
 		self
 			.relay
-			.maybe_run_extmcp_call_request(backend, method, params, ctx)
+			.maybe_run_guardrails_call_request(backend, method, params, ctx)
 			.await?;
 		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		if self.relay.policies.validate(&res, &cel) {
@@ -312,8 +312,8 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
-			Err(UpstreamError::ExtMcp(rej)) if req_id.is_some() => {
-				Err(mcp::Error::ExtMcp(req_id.unwrap(), rej).into())
+			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
+				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
 			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
@@ -464,7 +464,7 @@ impl Session {
 						self
 							.authorize_with_ctx(
 								service_name,
-								mcp::extmcp::methods::TOOLS_CALL,
+								mcp::guardrails::methods::TOOLS_CALL,
 								&mut ctr.params,
 								&mut ctx,
 								rbac::ResourceType::Tool(rbac::ResourceId::new(
@@ -491,7 +491,7 @@ impl Session {
 						self
 							.authorize_with_ctx(
 								service_name,
-								mcp::extmcp::methods::PROMPTS_GET,
+								mcp::guardrails::methods::PROMPTS_GET,
 								&mut gpr.params,
 								&mut ctx,
 								rbac::ResourceType::Prompt(rbac::ResourceId::new(
@@ -515,7 +515,7 @@ impl Session {
 						self
 							.authorize_with_ctx(
 								service_name,
-								mcp::extmcp::methods::RESOURCES_READ,
+								mcp::guardrails::methods::RESOURCES_READ,
 								&mut rrr.params,
 								&mut ctx,
 								rbac::ResourceType::Resource(rbac::ResourceId::new(

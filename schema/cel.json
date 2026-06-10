@@ -781,8 +781,8 @@
       ],
       "additionalProperties": true
     },
-    "extMcp": {
-      "description": "`extMcp` contains dynamic metadata returned by extMcp policy processors.",
+    "mcpGuardrails": {
+      "description": "`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.",
       "type": [
         "object",
         "null"
