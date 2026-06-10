@@ -575,7 +575,7 @@ CLUSTER_NAME ?= kind
 INSTALL_NAMESPACE ?= agentgateway-system
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
-# This version should stay in sync with (controller)`test/setup/setup-kind-ci.sh`.
+# This version should stay in sync with the default node version in (controller)`test/setup/setup-kind-ci.sh`.
 CLUSTER_NODE_VERSION ?= v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
 
 .PHONY: kind-create
