@@ -150,7 +150,6 @@ pub mod from_completions {
 			safety_settings,
 			cached_content,
 			labels,
-			rest: Value::Null,
 		})
 	}
 
@@ -391,7 +390,6 @@ pub mod from_completions {
 					.and_then(Value::as_str)
 					.map(str::to_string),
 				parameters: f.get("parameters").map(normalize_gemini_schema),
-				rest: Value::Null,
 			})
 			.collect();
 		if decls.is_empty() {
@@ -399,7 +397,6 @@ pub mod from_completions {
 		} else {
 			vec![vg::Tool {
 				function_declarations: decls,
-				rest: Value::Null,
 			}]
 		}
 	}
@@ -429,14 +426,12 @@ pub mod from_completions {
 				vg::FunctionCallingConfig {
 					mode: Some("ANY".into()),
 					allowed_function_names: name.map(|n| vec![n.to_string()]).unwrap_or_default(),
-					rest: Value::Null,
 				}
 			},
 			_ => return None,
 		};
 		Some(vg::ToolConfig {
 			function_calling_config: Some(cfg),
-			rest: Value::Null,
 		})
 	}
 
@@ -474,7 +469,6 @@ pub mod from_completions {
 			response_mime_type,
 			response_schema,
 			thinking_config,
-			rest: Value::Null,
 		};
 
 		if cfg == vg::GenerationConfig::default() {
@@ -825,7 +819,6 @@ pub mod from_completions {
 				thinking_level: Some(level.to_string()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
-				rest: Value::Null,
 			})
 		} else {
 			// Gemini 2.5: map to a conservative integer budget valid for Flash and Pro.
@@ -840,7 +833,6 @@ pub mod from_completions {
 				thinking_level: None,
 				thinking_budget: Some(budget),
 				include_thoughts: Some(true),
-				rest: Value::Null,
 			})
 		}
 	}

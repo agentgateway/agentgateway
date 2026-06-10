@@ -1,9 +1,13 @@
 //! Wire DTOs for the Vertex native Gemini API (`:generateContent` /
-//! `:streamGenerateContent?alt=sse`).
+//! `:streamGenerateContent`).
 //!
-//! Every struct flattens unknown fields into `rest: serde_json::Value` so fields Google
-//! adds later round-trip instead of being dropped. For the same reason, do not add
-//! `deny_unknown_fields` to these types.
+//! References:
+//! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference>
+//! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/generateContent>
+//! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/streamGenerateContent>
+//!
+//! Deserialized types tolerate unknown fields (flattened into `rest`, no `deny_unknown_fields`)
+//! so Google's additive changes don't break parsing.
 
 use serde::{Deserialize, Serialize};
 
@@ -28,8 +32,6 @@ pub struct GenerateContentRequest {
 	pub cached_content: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub labels: Option<serde_json::Map<String, serde_json::Value>>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -178,8 +180,6 @@ pub struct FileData {
 pub struct Tool {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub function_declarations: Vec<FunctionDeclaration>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,8 +189,6 @@ pub struct FunctionDeclaration {
 	pub description: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub parameters: Option<serde_json::Value>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -198,8 +196,6 @@ pub struct FunctionDeclaration {
 pub struct ToolConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub function_calling_config: Option<FunctionCallingConfig>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -210,8 +206,6 @@ pub struct FunctionCallingConfig {
 	pub mode: Option<String>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub allowed_function_names: Vec<String>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 // ---------- GenerationConfig and thinking ----------
@@ -243,8 +237,6 @@ pub struct GenerationConfig {
 	pub response_schema: Option<serde_json::Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thinking_config: Option<ThinkingConfig>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -258,8 +250,6 @@ pub struct ThinkingConfig {
 	pub thinking_budget: Option<i32>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_thoughts: Option<bool>,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -267,8 +257,6 @@ pub struct ThinkingConfig {
 pub struct SafetySetting {
 	pub category: String,
 	pub threshold: String,
-	#[serde(flatten, default)]
-	pub rest: serde_json::Value,
 }
 
 // ---------- Response ----------
@@ -514,17 +502,6 @@ mod tests {
 	}
 
 	#[test]
-	fn request_with_top_level_rest_round_trips() {
-		let raw = json!({
-			"contents": [],
-			"someFutureKnob": { "x": 1 }
-		});
-		let req: GenerateContentRequest = serde_json::from_value(raw).unwrap();
-		let out = serde_json::to_value(&req).unwrap();
-		assert_eq!(out["someFutureKnob"]["x"], 1);
-	}
-
-	#[test]
 	fn response_with_block_reason_parses() {
 		let raw = json!({
 			"promptFeedback": { "blockReason": "SAFETY" },
@@ -576,9 +553,7 @@ mod tests {
 			function_calling_config: Some(FunctionCallingConfig {
 				mode: Some("ANY".into()),
 				allowed_function_names: vec!["get_weather".into()],
-				rest: serde_json::Value::Null,
 			}),
-			rest: serde_json::Value::Null,
 		};
 		let s = serde_json::to_string(&cfg).unwrap();
 		assert!(s.contains("\"functionCallingConfig\""));
