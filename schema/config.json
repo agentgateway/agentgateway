@@ -8065,6 +8065,17 @@
             }
           ]
         },
+        "authorization": {
+          "description": "authorization configures HTTP authorization rules for requests to this model.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "defaults": {
           "description": "defaults allows setting default values for the request. If these are not present in the request body, they will be set.\nTo override even when set, use `overrides`.",
           "type": [

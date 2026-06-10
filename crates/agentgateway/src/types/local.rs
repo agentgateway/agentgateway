@@ -501,6 +501,9 @@ pub struct LocalLLMModels {
 	/// In this mode, requests must be sent in the native format of the provider.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	passthrough: Option<LocalLLMPassthrough>,
+	/// authorization configures HTTP authorization rules for requests to this model.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	authorization: Option<Authorization>,
 
 	// Policies
 	/// defaults allows setting default values for the request. If these are not present in the request body, they will be set.
@@ -2446,10 +2449,13 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			})
 			.collect::<anyhow::Result<Vec<_>>>()?;
 
-		let model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
 			routes: llm_routes.into_iter().collect(),
 			..Default::default()
 		}))];
+		if let Some(p) = model_config.authorization.clone() {
+			model_route_inline_policies.push(TrafficPolicy::Authorization(p));
+		}
 
 		let model_route = Route {
 			key: route_key.clone(),
