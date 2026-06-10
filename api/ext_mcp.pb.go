@@ -76,8 +76,10 @@ func (AuthorizationError_Code) EnumDescriptor() ([]byte, []int) {
 
 type McpRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Backend name in its native (unmuxed) namespace.
-	ServiceName string `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	// Backend names this call targets, in their native (unmuxed) namespace.
+	// Exactly one entry for single-target methods (`tools/call`, ...); one entry
+	// per backend for fanout methods (e.g. `*/list`, ...).
+	ServiceNames []string `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	// JSON-RPC method (e.g. "tools/call", "tools/list").
 	Method string `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	// CEL-evaluated context from gateway config, one field per config key.
@@ -122,11 +124,11 @@ func (*McpRequest) Descriptor() ([]byte, []int) {
 	return file_ext_mcp_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *McpRequest) GetServiceName() string {
+func (x *McpRequest) GetServiceNames() []string {
 	if x != nil {
-		return x.ServiceName
+		return x.ServiceNames
 	}
-	return ""
+	return nil
 }
 
 func (x *McpRequest) GetMethod() string {
@@ -158,10 +160,11 @@ func (x *McpRequest) GetHeaders() []*McpHeader {
 }
 
 type McpResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ServiceName     string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
-	Method          string                 `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
-	MetadataContext *structpb.Struct       `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Same semantics as McpRequest.service_names.
+	ServiceNames    []string         `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
+	Method          string           `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
 	// JSON-RPC `result` from upstream. Error responses don't reach this hook.
 	McpResponse   *structpb.Struct `protobuf:"bytes,4,opt,name=mcp_response,json=mcpResponse,proto3" json:"mcp_response,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -198,11 +201,11 @@ func (*McpResponse) Descriptor() ([]byte, []int) {
 	return file_ext_mcp_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *McpResponse) GetServiceName() string {
+func (x *McpResponse) GetServiceNames() []string {
 	if x != nil {
-		return x.ServiceName
+		return x.ServiceNames
 	}
-	return ""
+	return nil
 }
 
 func (x *McpResponse) GetMethod() string {
@@ -654,17 +657,17 @@ var File_ext_mcp_proto protoreflect.FileDescriptor
 
 const file_ext_mcp_proto_rawDesc = "" +
 	"\n" +
-	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x84\x02\n" +
+	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x86\x02\n" +
 	"\n" +
-	"McpRequest\x12!\n" +
-	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x16\n" +
+	"McpRequest\x12#\n" +
+	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
 	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x128\n" +
 	"\vmcp_request\x18\x04 \x01(\v2\x17.google.protobuf.StructR\n" +
 	"mcpRequest\x12=\n" +
-	"\aheaders\x18\x05 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\aheaders\"\xc8\x01\n" +
-	"\vMcpResponse\x12!\n" +
-	"\fservice_name\x18\x01 \x01(\tR\vserviceName\x12\x16\n" +
+	"\aheaders\x18\x05 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\aheaders\"\xca\x01\n" +
+	"\vMcpResponse\x12#\n" +
+	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
 	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x12:\n" +
 	"\fmcp_response\x18\x04 \x01(\v2\x17.google.protobuf.StructR\vmcpResponse\"\xd5\x02\n" +

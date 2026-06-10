@@ -35,7 +35,7 @@ func startExtMcpServer() (shutdownFunc, error) {
 }
 
 func (s *extMcpServer) CheckRequest(_ context.Context, req *api.McpRequest) (*api.McpRequestResult, error) {
-	log.Printf("[ext-mcp][request] method=%q service=%q", req.GetMethod(), req.GetServiceName())
+	log.Printf("[ext-mcp][request] method=%q services=%q", req.GetMethod(), req.GetServiceNames())
 
 	if req.GetMethod() == "tools/call" {
 		if name, ok := stringField(req.GetMcpRequest(), "name"); ok && strings.Contains(name, "forbidden") {
@@ -54,7 +54,7 @@ func (s *extMcpServer) CheckRequest(_ context.Context, req *api.McpRequest) (*ap
 }
 
 func (s *extMcpServer) CheckResponse(_ context.Context, resp *api.McpResponse) (*api.McpResponseResult, error) {
-	log.Printf("[ext-mcp][response] method=%q service=%q", resp.GetMethod(), resp.GetServiceName())
+	log.Printf("[ext-mcp][response] method=%q services=%q", resp.GetMethod(), resp.GetServiceNames())
 
 	if resp.GetMethod() != "tools/list" {
 		return &api.McpResponseResult{Result: &api.McpResponseResult_Pass{Pass: &api.Pass{}}}, nil

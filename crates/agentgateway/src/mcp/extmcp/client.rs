@@ -22,7 +22,7 @@ use crate::proxy::httpproxy::PolicyClient;
 pub(crate) async fn check_request(
 	remote: &Remote,
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	body: Option<&mut Value>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
@@ -30,7 +30,7 @@ pub(crate) async fn check_request(
 	let mcp_request = match serialize_body(body.as_deref()) {
 		Ok(b) => b,
 		Err(e) => {
-			warn!(method, backend, error = %e, "extMcp: failed to encode request body as Struct");
+			warn!(method, ?backends, error = %e, "extMcp: failed to encode request body as Struct");
 			return fail_outcome(remote);
 		},
 	};
@@ -38,7 +38,7 @@ pub(crate) async fn check_request(
 	let metadata_context = build_metadata(&remote.metadata, &http_req);
 	let headers = collect_headers(&remote.request_headers, &http_req);
 	let req = McpRequest {
-		service_name: backend.to_string(),
+		service_names: backends.to_vec(),
 		method: method.to_string(),
 		metadata_context,
 		mcp_request,
@@ -48,7 +48,7 @@ pub(crate) async fn check_request(
 	let tonic_req = tonic::Request::new(req);
 	let resp = match grpc.check_request(tonic_req).await {
 		Ok(resp) => resp.into_inner(),
-		Err(status) => return on_grpc_error(remote, method, backend, "checkRequest", status),
+		Err(status) => return on_grpc_error(remote, method, backends, "checkRequest", status),
 	};
 	let wire::McpRequestResult {
 		result,
@@ -57,12 +57,12 @@ pub(crate) async fn check_request(
 	} = resp;
 	match result {
 		Some(mcp_request_result::Result::Pass(_)) => {
-			apply_request_side(method, backend, header_mutation, metadata, req_ctx);
+			apply_request_side(method, backends, header_mutation, metadata, req_ctx);
 			Outcome::Pass
 		},
 		Some(mcp_request_result::Result::Mutated(s)) => match struct_to_json(&s) {
 			Ok(v) => {
-				apply_request_side(method, backend, header_mutation, metadata, req_ctx);
+				apply_request_side(method, backends, header_mutation, metadata, req_ctx);
 				match body {
 					Some(b) => {
 						*b = v;
@@ -73,16 +73,17 @@ pub(crate) async fn check_request(
 					None => {
 						debug!(
 							method,
-							backend, "extMcp: ignoring mutation on request without body"
+							?backends,
+							"extMcp: ignoring mutation on request without body"
 						);
 						Outcome::Pass
 					},
 				}
 			},
-			Err(e) => on_protocol_violation(remote, method, backend, &format!("mutated decode: {e}")),
+			Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
 		},
 		Some(mcp_request_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
-		None => on_protocol_violation(remote, method, backend, "missing result oneof"),
+		None => on_protocol_violation(remote, method, backends, "missing result oneof"),
 	}
 }
 
@@ -91,22 +92,22 @@ pub(crate) async fn check_request(
 // effects on a denied request would surprise.
 fn apply_request_side(
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	header_mutation: Option<wire::HeaderMutation>,
 	metadata: Option<Struct>,
 	req_ctx: &mut IncomingRequestContext,
 ) {
 	if let Some(hm) = header_mutation {
-		apply_header_mutation(method, backend, hm, req_ctx.headers_mut());
+		apply_header_mutation(method, backends, hm, req_ctx.headers_mut());
 	}
 	if let Some(m) = metadata {
-		merge_metadata_into_extensions(method, backend, &m, req_ctx.extensions_mut());
+		merge_metadata_into_extensions(method, backends, &m, req_ctx.extensions_mut());
 	}
 }
 
 fn apply_header_mutation(
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	hm: wire::HeaderMutation,
 	headers: &mut ::http::HeaderMap,
 ) {
@@ -119,14 +120,14 @@ fn apply_header_mutation(
 		let name = match HeaderName::from_bytes(h.key.as_bytes()) {
 			Ok(n) => n,
 			Err(_) => {
-				warn!(method, backend, key = %h.key, "extMcp: header_mutation.set: invalid header name");
+				warn!(method, ?backends, key = %h.key, "extMcp: header_mutation.set: invalid header name");
 				continue;
 			},
 		};
 		let v = match ::http::HeaderValue::from_maybe_shared(h.value) {
 			Ok(v) => v,
 			Err(_) => {
-				warn!(method, backend, key = %name, "extMcp: header_mutation.set: invalid header value");
+				warn!(method, ?backends, key = %name, "extMcp: header_mutation.set: invalid header value");
 				continue;
 			},
 		};
@@ -142,7 +143,7 @@ fn apply_header_mutation(
 				headers.remove(&n);
 			},
 			Err(_) => {
-				warn!(method, backend, key = %name, "extMcp: header_mutation.remove: invalid header name");
+				warn!(method, ?backends, key = %name, "extMcp: header_mutation.remove: invalid header name");
 			},
 		}
 	}
@@ -150,7 +151,7 @@ fn apply_header_mutation(
 
 fn merge_metadata_into_extensions(
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	s: &Struct,
 	ext: &mut ::http::Extensions,
 ) {
@@ -161,7 +162,7 @@ fn merge_metadata_into_extensions(
 				acc.0.insert(k.clone(), j);
 			},
 			Err(e) => {
-				warn!(method, backend, key = %k, error = %e, "extMcp: metadata: failed to convert value");
+				warn!(method, ?backends, key = %k, error = %e, "extMcp: metadata: failed to convert value");
 			},
 		}
 	}
@@ -173,7 +174,7 @@ fn merge_metadata_into_extensions(
 pub(crate) async fn check_response(
 	remote: &Remote,
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	body: &mut Value,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
@@ -181,7 +182,7 @@ pub(crate) async fn check_response(
 	let mcp_response = match serialize_body(Some(&*body)) {
 		Ok(b) => b,
 		Err(e) => {
-			warn!(method, backend, error = %e, "extMcp: failed to encode response body as Struct");
+			warn!(method, ?backends, error = %e, "extMcp: failed to encode response body as Struct");
 			return fail_outcome(remote);
 		},
 	};
@@ -189,7 +190,7 @@ pub(crate) async fn check_response(
 		.then(|| build_metadata(&remote.metadata, &req_ctx.as_request()))
 		.flatten();
 	let req = McpResponse {
-		service_name: backend.to_string(),
+		service_names: backends.to_vec(),
 		method: method.to_string(),
 		metadata_context,
 		mcp_response,
@@ -198,7 +199,7 @@ pub(crate) async fn check_response(
 	let tonic_req = tonic::Request::new(req);
 	let result = match grpc.check_response(tonic_req).await {
 		Ok(resp) => resp.into_inner().result,
-		Err(status) => return on_grpc_error(remote, method, backend, "checkResponse", status),
+		Err(status) => return on_grpc_error(remote, method, backends, "checkResponse", status),
 	};
 	match result {
 		Some(mcp_response_result::Result::Pass(_)) => Outcome::Pass,
@@ -208,13 +209,13 @@ pub(crate) async fn check_response(
 				Outcome::Mutated
 			},
 			Err(e) => {
-				warn!(method, backend, error = %e, "extMcp: response mutated decode failed");
+				warn!(method, ?backends, error = %e, "extMcp: response mutated decode failed");
 				fail_outcome(remote)
 			},
 		},
 		Some(mcp_response_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
 		None => {
-			warn!(method, backend, "extMcp: response missing result oneof");
+			warn!(method, ?backends, "extMcp: response missing result oneof");
 			fail_outcome(remote)
 		},
 	}
@@ -317,11 +318,11 @@ fn translate_error(e: AuthorizationError) -> ErrorData {
 fn on_grpc_error(
 	remote: &Remote,
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	rpc: &str,
 	status: tonic::Status,
 ) -> Outcome {
-	debug!(method, backend, rpc, code = ?status.code(), message = %status.message(), "extMcp: gRPC error");
+	debug!(method, ?backends, rpc, code = ?status.code(), message = %status.message(), "extMcp: gRPC error");
 	match remote.failure_mode {
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
@@ -332,8 +333,13 @@ fn on_grpc_error(
 	}
 }
 
-fn on_protocol_violation(remote: &Remote, method: &str, backend: &str, reason: &str) -> Outcome {
-	warn!(method, backend, reason, "extMcp: protocol violation");
+fn on_protocol_violation(
+	remote: &Remote,
+	method: &str,
+	backends: &[String],
+	reason: &str,
+) -> Outcome {
+	warn!(method, ?backends, reason, "extMcp: protocol violation");
 	match remote.failure_mode {
 		FailureMode::FailOpen => Outcome::Pass,
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
@@ -383,7 +389,7 @@ mod tests {
 			],
 			remove: vec!["bad name".into()],
 		};
-		apply_header_mutation("tools/call", "be", hm, &mut headers);
+		apply_header_mutation("tools/call", &["be".to_string()], hm, &mut headers);
 		assert!(headers.contains_key("x-keep"));
 		assert!(!headers.contains_key("x-ok"));
 		assert_eq!(headers.len(), 1);
@@ -407,7 +413,7 @@ mod tests {
 			],
 			remove: vec![],
 		};
-		apply_header_mutation("tools/call", "be", hm, &mut headers);
+		apply_header_mutation("tools/call", &["be".to_string()], hm, &mut headers);
 		let got: Vec<_> = headers.get_all("x-multi").iter().collect();
 		assert_eq!(got, vec!["new1", "new2"]);
 	}
@@ -484,9 +490,9 @@ mod tests {
 	fn metadata_merge_creates_extension_and_accumulates() {
 		let mut ext = ::http::Extensions::new();
 		let first = struct_from_json(serde_json::json!({ "tenant": "acme", "tier": "gold" }));
-		merge_metadata_into_extensions("tools/call", "be", &first, &mut ext);
+		merge_metadata_into_extensions("tools/call", &["be".to_string()], &first, &mut ext);
 		let second = struct_from_json(serde_json::json!({ "tier": "platinum", "extra": 1 }));
-		merge_metadata_into_extensions("tools/call", "be", &second, &mut ext);
+		merge_metadata_into_extensions("tools/call", &["be".to_string()], &second, &mut ext);
 		let acc = ext
 			.get::<ExtMcpDynamicMetadata>()
 			.expect("extension created");

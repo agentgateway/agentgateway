@@ -227,7 +227,7 @@ impl Relay {
 		&self,
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
-		backend: &str,
+		backends: Vec<String>,
 	) -> Option<ExtMcpCtx> {
 		let ext = self.ext_mcp.as_ref()?;
 		let method = r.request.method().to_string();
@@ -238,7 +238,7 @@ impl Relay {
 		Some(ExtMcpCtx {
 			ext: ext.clone(),
 			method,
-			backend: backend.to_string(),
+			backends,
 			client: self.policy_client.clone(),
 			req_ctx: Arc::new(ctx.clone()),
 		})
@@ -292,10 +292,11 @@ impl Relay {
 		}
 		let mut params_v = serde_json::to_value(&*params)
 			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
+		let backends = [backend.to_string()];
 		let mutated = self
 			.run_extmcp_call_request(
 				&mut crate::mcp::extmcp::CallRequestCtx {
-					backend,
+					backends: &backends,
 					method,
 					params: Some(&mut params_v),
 				},
@@ -534,7 +535,7 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let extmcp = self.build_extmcp_ctx(&r, &ctx, service_name);
+		let extmcp = self.build_extmcp_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let stream =
 			self.rewrite_outbound_server_messages(service_name, us.generic_stream(r, &ctx).await?);
 
@@ -642,16 +643,14 @@ impl Relay {
 		let method = r.request.method().to_string();
 		let method = method.as_str();
 
-		// service_name for the single fanout-wide extMcp hook: every backend name joined,
-		// matching the merged result the processor sees (just the one name when there is a
-		// single backend).
-		// TODO: better aggregate service_name than concatenating every backend name.
-		let service_name = self.ext_mcp.as_ref().map(|_| {
+		// service_names for the single fanout-wide extMcp hook: every backend this call
+		// fans out to (just the one name when there is a single backend).
+		let service_names = self.ext_mcp.as_ref().map(|_| {
 			self
 				.upstreams
 				.iter_named()
 				.map(|(n, _)| n.to_string())
-				.join(DELIMITER)
+				.collect::<Vec<_>>()
 		});
 
 		// Request-phase hook runs once for the whole client call. params is None for
@@ -661,7 +660,7 @@ impl Relay {
 			let outcome = crate::mcp::extmcp::run_call_request(
 				ext,
 				&mut crate::mcp::extmcp::CallRequestCtx {
-					backend: service_name.as_deref().unwrap_or_default(),
+					backends: service_names.as_deref().unwrap_or_default(),
 					method,
 					params: None,
 				},
@@ -718,10 +717,7 @@ impl Relay {
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match service_name
-			.as_deref()
-			.and_then(|sn| self.build_extmcp_ctx(&r, &ctx, sn))
-		{
+		match service_names.and_then(|sn| self.build_extmcp_ctx(&r, &ctx, sn)) {
 			Some(extmcp) => messages_to_response(id, wrap_with_extmcp(ms, extmcp), None),
 			None => messages_to_response(id, ms, None),
 		}
@@ -840,7 +836,7 @@ pub fn setup_request_log(
 pub(crate) struct ExtMcpCtx {
 	pub ext: Arc<crate::mcp::extmcp::ExtMcp>,
 	pub method: String,
-	pub backend: String,
+	pub backends: Vec<String>,
 	pub client: PolicyClient,
 	pub req_ctx: Arc<IncomingRequestContext>,
 }
@@ -925,7 +921,7 @@ async fn apply_extmcp_response_intercept(
 	match crate::mcp::extmcp::run_response(
 		&ctx.ext,
 		&ctx.method,
-		&ctx.backend,
+		&ctx.backends,
 		&mut json,
 		&ctx.req_ctx,
 		&ctx.client,

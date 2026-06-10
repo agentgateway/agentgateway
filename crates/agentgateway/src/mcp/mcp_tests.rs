@@ -3588,7 +3588,7 @@ async fn mcp_extmcp_filtered_list_via_response_mutation() {
 
 // Fanout (multi-backend) runs the response hook ONCE on the merged, muxed result
 // rather than once per upstream: the processor sees a single checkResponse carrying
-// the prefixed (`a_echo`, `b_echo`) tools and an aggregate service_name.
+// the prefixed (`a_echo`, `b_echo`) tools and every backend in service_names.
 #[tokio::test]
 async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 	use std::sync::atomic::{AtomicUsize, Ordering};
@@ -3598,7 +3598,7 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 
 	use crate::test_helpers::extmcpmock::{closure_mock, mutated_response_json, pass_request};
 
-	type Captured = Arc<Mutex<Option<(String, Vec<String>)>>>;
+	type Captured = Arc<Mutex<Option<(Vec<String>, Vec<String>)>>>;
 
 	let resp_count = Arc::new(AtomicUsize::new(0));
 	let captured: Captured = Arc::new(Mutex::new(None));
@@ -3624,7 +3624,7 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 					})
 				})
 				.unwrap_or_default();
-			*cap.lock().unwrap() = Some((req.service_name.clone(), names));
+			*cap.lock().unwrap() = Some((req.service_names.clone(), names));
 			// Mutating the merged list proves the hook operates on the aggregate.
 			mutated_response_json(serde_json::json!({
 				"tools": [{
@@ -3666,13 +3666,13 @@ async fn mcp_extmcp_fanout_runs_once_on_merged_muxed_result() {
 		"response hook should run exactly once for the merged fanout result"
 	);
 
-	let (service_name, seen) = captured
+	let (service_names, seen) = captured
 		.lock()
 		.unwrap()
 		.clone()
 		.expect("processor saw tools/list");
-	// Aggregate identity = all backend names concatenated.
-	assert_eq!(service_name, "a_b");
+	// Aggregate identity = every fanned-out backend.
+	assert_eq!(service_names, vec!["a".to_string(), "b".to_string()]);
 	// The processor saw the merged, muxed list (prefixed names from both backends).
 	assert!(
 		seen.iter().any(|n| n == "a_echo") && seen.iter().any(|n| n == "b_echo"),

@@ -15,8 +15,10 @@ service ExtMcp {
 }
 
 message McpRequest {
-  // Backend name in its native (unmuxed) namespace.
-  string service_name = 1;
+  // Backend names this call targets, in their native (unmuxed) namespace.
+  // Exactly one entry for single-target methods (`tools/call`, ...); one entry
+  // per backend for fanout methods (e.g. `*/list`, ...).
+  repeated string service_names = 1;
   // JSON-RPC method (e.g. "tools/call", "tools/list").
   string method = 2;
   // CEL-evaluated context from gateway config, one field per config key.
@@ -30,7 +32,10 @@ message McpRequest {
 }
 
 message McpResponse {
-  string service_name = 1;
+  // Backend names this call targets, in their native (unmuxed) namespace.
+  // Exactly one entry for single-target methods (`tools/call`, ...); one entry
+  // per backend for fanout methods (e.g. `*/list`, ...).
+  repeated string service_names = 1;
   string method = 2;
   google.protobuf.Struct metadata_context = 3;
   // JSON-RPC `result` from upstream. Error responses don't reach this hook.

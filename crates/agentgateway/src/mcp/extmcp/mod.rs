@@ -2,12 +2,12 @@
 //!
 //! Single-target methods (`tools/call`, ...) fire server-facing in the upstream's
 //! native namespace — processors see unmuxed names (`echo`, not `serverA_echo`) and the
-//! backend name as `service_name`. Fanout methods (`*/list`, ...) run the hook once
-//! for the whole client call (request hook before fanout, response hook on the merged
-//! result). Names and `service_name` there match the client-facing view, which tracks
-//! the multiplexing config rather than the method: muxed names and all backend names
-//! joined when multiplexing, but a single backend's unmuxed names and lone name when
-//! there is just one (the usual single-backend case).
+//! lone backend name in `service_names`. Fanout methods (`*/list`, ...) run the hook
+//! once for the whole client call (request hook before fanout, response hook on the
+//! merged result). Names there match the client-facing view, which tracks the
+//! multiplexing config rather than the method: muxed names when multiplexing, a single
+//! backend's unmuxed names when there is just one (the usual single-backend case).
+//! `service_names` lists every fanned-out backend either way.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -183,7 +183,7 @@ pub enum FailureMode {
 /// `params` is `None` for methods with no per-request body (e.g. `*/list`);
 /// any `Mutated` outcome there is logged and discarded.
 pub struct CallRequestCtx<'a> {
-	pub backend: &'a str,
+	pub backends: &'a [String],
 	pub method: &'a str,
 	pub params: Option<&'a mut Value>,
 }
@@ -208,7 +208,7 @@ impl Processor {
 				client::check_request(
 					remote,
 					ctx.method,
-					ctx.backend,
+					ctx.backends,
 					ctx.params.as_deref_mut(),
 					req_ctx,
 					client,
@@ -221,14 +221,14 @@ impl Processor {
 	async fn response(
 		&self,
 		method: &str,
-		backend: &str,
+		backends: &[String],
 		body: &mut Value,
 		req_ctx: &IncomingRequestContext,
 		client: &PolicyClient,
 	) -> Outcome {
 		match &self.kind {
 			ProcessorKind::Remote(remote) => {
-				client::check_response(remote, method, backend, body, req_ctx, client).await
+				client::check_response(remote, method, backends, body, req_ctx, client).await
 			},
 		}
 	}
@@ -261,7 +261,7 @@ pub async fn run_call_request(
 pub async fn run_response(
 	ext: &ExtMcp,
 	method: &str,
-	backend: &str,
+	backends: &[String],
 	body: &mut Value,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
@@ -272,7 +272,7 @@ pub async fn run_response(
 			continue;
 		}
 		match processor
-			.response(method, backend, body, req_ctx, client)
+			.response(method, backends, body, req_ctx, client)
 			.await
 		{
 			Outcome::Pass => {},
