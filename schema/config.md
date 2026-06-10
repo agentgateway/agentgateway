@@ -1944,19 +1944,21 @@
 |`binds[].listeners[].routes[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
 |`binds[].listeners[].routes[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`binds[].listeners[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
-|`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|[]string||
-|`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
-|`binds[].listeners[].routes[].policies.buffer.request`|object||
-|`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer||
-|`binds[].listeners[].routes[].policies.buffer.response`|object||
-|`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer||
-|`binds[].listeners[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
-|`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string||
-|`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string||
-|`binds[].listeners[].routes[].policies.retry`|object|Retry matching requests.|
-|`binds[].listeners[].routes[].policies.retry.attempts`|integer||
-|`binds[].listeners[].routes[].policies.retry.backoff`|string||
-|`binds[].listeners[].routes[].policies.retry.codes`|[]integer||
+|`binds[].listeners[].routes[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies.|
+|`binds[].listeners[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
+|`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
+|`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
+|`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`binds[].listeners[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
+|`binds[].listeners[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
+|`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`binds[].listeners[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`binds[].listeners[].routes[].backends`|[]object||
 |`binds[].listeners[].routes[].backends[].service`|object||
 |`binds[].listeners[].routes[].backends[].service.name`|object||
@@ -8252,19 +8254,21 @@
 |`policies[].policy.transformations.response.body`|string|CEL expression that computes a replacement body.|
 |`policies[].policy.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`policies[].policy.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
-|`policies[].policy.csrf.additionalOrigins`|[]string||
-|`policies[].policy.buffer`|object|Buffer request and response bodies before forwarding.|
-|`policies[].policy.buffer.request`|object||
-|`policies[].policy.buffer.request.maxBytes`|integer||
-|`policies[].policy.buffer.response`|object||
-|`policies[].policy.buffer.response.maxBytes`|integer||
-|`policies[].policy.timeout`|object|Timeout requests that exceed the configured duration.|
-|`policies[].policy.timeout.requestTimeout`|string||
-|`policies[].policy.timeout.backendRequestTimeout`|string||
-|`policies[].policy.retry`|object|Retry matching requests.|
-|`policies[].policy.retry.attempts`|integer||
-|`policies[].policy.retry.backoff`|string||
-|`policies[].policy.retry.codes`|[]integer||
+|`policies[].policy.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`policies[].policy.buffer`|object|Buffer request and response bodies.|
+|`policies[].policy.buffer.request`|object|Buffer incoming request bodies before forwarding.|
+|`policies[].policy.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
+|`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.timeout`|object|Set request timeout limits.|
+|`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`policies[].policy.retry`|object|Retry matching failed upstream requests.|
+|`policies[].policy.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
+|`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`policies[].policy.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`workloads`|any||
 |`services`|any||
 |`backends`|[]object||
@@ -13621,19 +13625,21 @@
 |`routeGroups[].routes[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
 |`routeGroups[].routes[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`routeGroups[].routes[].policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
-|`routeGroups[].routes[].policies.csrf.additionalOrigins`|[]string||
-|`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies before forwarding.|
-|`routeGroups[].routes[].policies.buffer.request`|object||
-|`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer||
-|`routeGroups[].routes[].policies.buffer.response`|object||
-|`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer||
-|`routeGroups[].routes[].policies.timeout`|object|Timeout requests that exceed the configured duration.|
-|`routeGroups[].routes[].policies.timeout.requestTimeout`|string||
-|`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string||
-|`routeGroups[].routes[].policies.retry`|object|Retry matching requests.|
-|`routeGroups[].routes[].policies.retry.attempts`|integer||
-|`routeGroups[].routes[].policies.retry.backoff`|string||
-|`routeGroups[].routes[].policies.retry.codes`|[]integer||
+|`routeGroups[].routes[].policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies.|
+|`routeGroups[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
+|`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
+|`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
+|`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`routeGroups[].routes[].policies.retry`|object|Retry matching failed upstream requests.|
+|`routeGroups[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
+|`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`routeGroups[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`routeGroups[].routes[].backends`|[]object||
 |`routeGroups[].routes[].backends[].service`|object||
 |`routeGroups[].routes[].backends[].service.name`|object||
@@ -20793,16 +20799,18 @@
 |`mcp.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
 |`mcp.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
 |`mcp.policies.csrf`|object|Handle CSRF protection by validating request origins against configured allowed origins.|
-|`mcp.policies.csrf.additionalOrigins`|[]string||
-|`mcp.policies.buffer`|object|Buffer request and response bodies before forwarding.|
-|`mcp.policies.buffer.request`|object||
-|`mcp.policies.buffer.request.maxBytes`|integer||
-|`mcp.policies.buffer.response`|object||
-|`mcp.policies.buffer.response.maxBytes`|integer||
-|`mcp.policies.timeout`|object|Timeout requests that exceed the configured duration.|
-|`mcp.policies.timeout.requestTimeout`|string||
-|`mcp.policies.timeout.backendRequestTimeout`|string||
-|`mcp.policies.retry`|object|Retry matching requests.|
-|`mcp.policies.retry.attempts`|integer||
-|`mcp.policies.retry.backoff`|string||
-|`mcp.policies.retry.codes`|[]integer||
+|`mcp.policies.csrf.additionalOrigins`|[]string|Additional trusted origins allowed to send state-changing requests.|
+|`mcp.policies.buffer`|object|Buffer request and response bodies.|
+|`mcp.policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
+|`mcp.policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
+|`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.timeout`|object|Set request timeout limits.|
+|`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
+|`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
+|`mcp.policies.retry`|object|Retry matching failed upstream requests.|
+|`mcp.policies.retry.attempts`|integer|Total number of attempts, including the original request.|
+|`mcp.policies.retry.backoff`|string|Delay between retry attempts.|
+|`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
+|`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`mcp.policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
