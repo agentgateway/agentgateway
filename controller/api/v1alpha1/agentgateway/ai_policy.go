@@ -3,8 +3,6 @@ package agentgateway
 import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // Enriches requests sent to the LLM provider by appending and prepending system prompts.
@@ -361,7 +359,7 @@ type FieldTransformation struct {
 
 	// CEL expression used to compute the field value.
 	// +required
-	Expression shared.CELExpression `json:"expression"`
+	Expression CELExpression `json:"expression"`
 }
 
 // Automatic prompt caching for supported LLM providers.

@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
 
@@ -40,7 +40,7 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	t.Send("foo.com", base.Expect(http.StatusMovedPermanently))
 
 	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
-		Type:               string(shared.PolicyConditionAccepted),
+		Type:               string(agentgateway.PolicyConditionAccepted),
 		Status:             metav1.ConditionTrue,
 		Reason:             string(gwv1.PolicyReasonAccepted),
 		ObservedGeneration: backendTLSPolicy.Generation,

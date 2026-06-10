@@ -28,7 +28,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
@@ -140,7 +139,7 @@ func (ctx PolicyCtx) PolicySourceGVK() schema.GroupVersionKind {
 }
 
 // ResolveCredentialRef applies the context's credential resolver.
-func (ctx PolicyCtx) ResolveCredentialRef(ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
+func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
 	if ctx.CredentialResolver == nil {
 		return nil, errors.New("secret credential resolver is not configured")
 	}
@@ -298,35 +297,35 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonPartiallyValid),
+				Reason:  string(agentgateway.PolicyReasonPartiallyValid),
 				Message: err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
-			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonInvalid),
+				Reason:  string(agentgateway.PolicyReasonInvalid),
 				Message: err.Error(),
 			}
-			conds[string(shared.PolicyConditionAttached)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
+				Reason:  string(agentgateway.PolicyReasonPending),
 				Message: "Policy is not attached due to invalid status",
 			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		conds[string(shared.PolicyConditionAccepted)] = &Condition{
+		conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonValid),
+			Reason:  string(agentgateway.PolicyReasonValid),
 			Message: reporter.PolicyAcceptedMsg,
 		}
-		conds[string(shared.PolicyConditionAttached)] = &Condition{
+		conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonAttached),
+			Reason:  string(agentgateway.PolicyReasonAttached),
 			Message: reporter.PolicyAttachedMsg,
 		}
 	}
@@ -335,9 +334,9 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 
 func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {
 	conds := maps.Clone(baseConds)
-	conds[string(shared.PolicyConditionAttached)] = &Condition{
+	conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 		Status:  metav1.ConditionFalse,
-		Reason:  string(shared.PolicyReasonPending),
+		Reason:  string(agentgateway.PolicyReasonPending),
 		Message: strings.Join(attachmentErrors, "\n"),
 	}
 	return conds
@@ -977,7 +976,7 @@ func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicy
 	return p
 }
 
-func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePolicyName string, policy types.NamespacedName) []*api.Policy {
+func processHeaderModifierPolicy(headerModifier *agentgateway.HeaderModifiers, basePolicyName string, policy types.NamespacedName) []*api.Policy {
 	var policies []*api.Policy
 
 	var headerModifierPolicyRequest, headerModifierPolicyResponse *api.Policy
@@ -1171,7 +1170,7 @@ func buildExtAuthSpec(
 		FailureMode: extAuthFailureMode(extAuth.FailureMode),
 	}
 	if g := extAuth.GRPC; g != nil {
-		metadata := castCELMap(g.RequestMetadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(g.RequestMetadata, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth grpc requestMetadata %q is not a valid CEL expression: %s", key, expr))
 		})
 		p := &api.TrafficPolicySpec_ExternalAuth_GRPCProtocol{
@@ -1182,16 +1181,16 @@ func buildExtAuthSpec(
 			Grpc: p,
 		}
 	} else if h := extAuth.HTTP; h != nil {
-		path := castCELPtr(h.Path, func(expr shared.CELExpression) {
+		path := castCELPtr(h.Path, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http path is not a valid CEL expression: %s", expr))
 		})
-		redirect := castCELPtr(h.Redirect, func(expr shared.CELExpression) {
+		redirect := castCELPtr(h.Redirect, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http redirect is not a valid CEL expression: %s", expr))
 		})
-		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr shared.CELExpression) {
+		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http addRequestHeaders %q is not a valid CEL expression: %s", key, expr))
 		})
-		metadata := castCELMap(h.ResponseMetadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(h.ResponseMetadata, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http responseMetadata %q is not a valid CEL expression: %s", key, expr))
 		})
 		p := &api.TrafficPolicySpec_ExternalAuth_HTTPProtocol{
@@ -1220,10 +1219,10 @@ func buildExtAuthSpec(
 		}
 	}
 	if cache := extAuth.Cache; cache != nil {
-		key := castCELSlice(cache.Key, func(expr shared.CELExpression) {
+		key := castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
-		ttl := castExtAuthCacheTTL(cache.TTL, func(expr shared.CELExpression) {
+		ttl := castExtAuthCacheTTL(cache.TTL, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
 		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
@@ -1348,7 +1347,7 @@ func cast[T ~string](items []T) []string {
 	})
 }
 
-func castCELSlice(items []shared.CELExpression, invalid func(shared.CELExpression)) []string {
+func castCELSlice(items []agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) []string {
 	if items == nil {
 		return nil
 	}
@@ -1362,7 +1361,7 @@ func castCELSlice(items []shared.CELExpression, invalid func(shared.CELExpressio
 	return res
 }
 
-func castCELMap(items map[string]shared.CELExpression, invalid func(string, shared.CELExpression)) map[string]string {
+func castCELMap(items map[string]agentgateway.CELExpression, invalid func(string, agentgateway.CELExpression)) map[string]string {
 	if items == nil {
 		return nil
 	}
@@ -1376,7 +1375,7 @@ func castCELMap(items map[string]shared.CELExpression, invalid func(string, shar
 	return res
 }
 
-func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) *string {
+func castCELPtr(item *agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) *string {
 	if item == nil {
 		return nil
 	}
@@ -1387,14 +1386,14 @@ func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) 
 	return res
 }
 
-func castCEL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
 	if !isCEL(item) {
 		invalid(item)
 	}
 	return string(item)
 }
 
-func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
 	raw := string(item)
 	if _, err := time.ParseDuration(raw); err == nil {
 		return "duration(" + strconv.Quote(raw) + ")"
@@ -1404,18 +1403,18 @@ func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpre
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
-	auth *shared.Authorization,
+	auth *agentgateway.Authorization,
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
-	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr shared.CELExpression) {
+	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr agentgateway.CELExpression) {
 		errs = append(errs, fmt.Errorf("authorization matchExpression is not a valid CEL expression: %s", expr))
 	})
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, policies...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, policies...)
 	} else {
 		allowPolicies = append(allowPolicies, policies...)
@@ -1857,7 +1856,7 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 }
 
 // Checks if the expression is a valid CEL expression
-func isCEL(expr shared.CELExpression) bool {
+func isCEL(expr agentgateway.CELExpression) bool {
 	_, iss := celEnv.Parse(string(expr))
 	return iss.Err() == nil
 }

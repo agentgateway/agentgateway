@@ -1,4 +1,4 @@
-package shared
+package agentgateway
 
 // Configures CEL-based authorization.
 type Authorization struct {

@@ -4,8 +4,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewayparameters,verbs=get;list;watch
@@ -219,17 +217,17 @@ type AgentgatewayParametersOverlays struct {
 	// Overrides for the generated
 	// `Deployment` resource.
 	// +optional
-	Deployment *shared.KubernetesResourceOverlay `json:"deployment,omitempty"`
+	Deployment *KubernetesResourceOverlay `json:"deployment,omitempty"`
 
 	// Overrides for the generated `Service`
 	// resource.
 	// +optional
-	Service *shared.KubernetesResourceOverlay `json:"service,omitempty"`
+	Service *KubernetesResourceOverlay `json:"service,omitempty"`
 
 	// Overrides for the generated
 	// `ServiceAccount` resource.
 	// +optional
-	ServiceAccount *shared.KubernetesResourceOverlay `json:"serviceAccount,omitempty"`
+	ServiceAccount *KubernetesResourceOverlay `json:"serviceAccount,omitempty"`
 
 	// Creates a `PodDisruptionBudget` for the
 	// agentgateway proxy. If absent, no PDB is created. If present, a PDB is
@@ -237,7 +235,7 @@ type AgentgatewayParametersOverlays struct {
 	// agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
 	// this overlay are applied to the generated PDB.
 	// +optional
-	PodDisruptionBudget *shared.KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
+	PodDisruptionBudget *KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
 
 	// Creates a `HorizontalPodAutoscaler`
 	// for the agentgateway proxy. If absent, no HPA is created. If present, an
@@ -245,7 +243,7 @@ type AgentgatewayParametersOverlays struct {
 	// target the agentgateway proxy `Deployment`. The `metadata` and `spec`
 	// fields from this overlay are applied to the generated HPA.
 	// +optional
-	HorizontalPodAutoscaler *shared.KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`
+	HorizontalPodAutoscaler *KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`
 }
 
 // Container image settings. See https://kubernetes.io/docs/concepts/containers/images

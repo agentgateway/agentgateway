@@ -10,8 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewaypolicies,verbs=get;list;watch
@@ -75,7 +73,7 @@ type AgentgatewayPolicySpec struct {
 	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool' && r.group == 'inference.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, AgentgatewayBackend, or InferencePool resources"
 	// +kubebuilder:validation:XValidation:message="Only one Kind of targetRef can be set on one policy",rule="self.all(l1, !self.exists(l2, l1.kind != l2.kind))"
 	// +optional
-	TargetRefs []shared.LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
+	TargetRefs []LocalPolicyTargetReferenceWithSectionName `json:"targetRefs,omitempty"`
 
 	// Target selectors used to select resources to attach the policy to.
 	// +kubebuilder:validation:MinItems=1
@@ -83,7 +81,7 @@ type AgentgatewayPolicySpec struct {
 	// +kubebuilder:validation:XValidation:rule="self.all(r, (r.kind == 'Service' && r.group == '') || (r.kind == 'AgentgatewayBackend' && r.group == 'agentgateway.dev') || (r.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute'] && r.group == 'gateway.networking.k8s.io') || (r.kind == 'ListenerSet' && r.group == 'gateway.networking.k8s.io') || (r.kind == 'InferencePool' && r.group == 'inference.networking.k8s.io'))",message="targetRefs may only reference Gateway, HTTPRoute, GRPCRoute, ListenerSet, Service, AgentgatewayBackend, or InferencePool resources"
 	// +kubebuilder:validation:XValidation:message="Only one Kind of targetRef can be set on one policy",rule="self.all(l1, !self.exists(l2, l1.kind != l2.kind))"
 	// +optional
-	TargetSelectors []shared.LocalPolicyTargetSelectorWithSectionName `json:"targetSelectors,omitempty"`
+	TargetSelectors []LocalPolicyTargetSelectorWithSectionName `json:"targetSelectors,omitempty"`
 
 	// Policy merge and conflict resolution strategy.
 	//
@@ -209,7 +207,7 @@ type Health struct {
 	// This default lowers the backend's health score but does not trigger eviction on its own.
 	//
 	// +optional
-	UnhealthyCondition *shared.CELExpression `json:"unhealthyCondition,omitempty"`
+	UnhealthyCondition *CELExpression `json:"unhealthyCondition,omitempty"`
 
 	// Settings for evicting unhealthy backends.
 	// +optional
@@ -406,7 +404,7 @@ type BackendTLS struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []shared.LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
 	// CA certificate `ConfigMap` to use to
 	// verify the server certificate.
 	// If unset, the system's trusted certificates are used.
@@ -470,7 +468,7 @@ type Frontend struct {
 	// This runs before protocol handling and is intended for L4 access control,
 	// for example using `source.address` with `cidr(...).containsIP(...)`.
 	// +optional
-	NetworkAuthorization *shared.Authorization `json:"networkAuthorization,omitempty"`
+	NetworkAuthorization *Authorization `json:"networkAuthorization,omitempty"`
 	// Settings for managing incoming TLS connections.
 	// +optional
 	TLS *FrontendTLS `json:"tls,omitempty"`
@@ -815,7 +813,7 @@ type Traffic struct {
 
 	// Request and response header modification policy.
 	// +optional
-	HeaderModifiers *shared.HeaderModifiers `json:"headerModifiers,omitempty"`
+	HeaderModifiers *HeaderModifiers `json:"headerModifiers,omitempty"`
 
 	// How to rewrite the `Host` header for requests.
 	//
@@ -839,7 +837,7 @@ type Traffic struct {
 	// If multiple authorization rules are applied across different policies, at the same or different attachment points,
 	// all rules are merged.
 	// +optional
-	Authorization *shared.Authorization `json:"authorization,omitempty"`
+	Authorization *Authorization `json:"authorization,omitempty"`
 
 	// Authenticates users based on JWT tokens.
 	// +optional
@@ -894,7 +892,7 @@ type DirectResponse struct {
 	// If this field is omitted, no expression body is included in the response.
 	//
 	// +optional
-	BodyExpression *shared.CELExpression `json:"bodyExpression,omitempty"`
+	BodyExpression *CELExpression `json:"bodyExpression,omitempty"`
 
 	// Response headers to set on the direct response.
 	//
@@ -909,7 +907,7 @@ type DirectResponse struct {
 type DirectResponseConditional struct {
 	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
-	Condition shared.CELExpression `json:"condition,omitempty"`
+	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.status)",message="status is required"
@@ -979,7 +977,7 @@ type AuthorizationExtractionLocation struct {
 
 	// CEL expression that extracts the credential from the request.
 	// +optional
-	Expression *shared.CELExpression `json:"expression,omitempty"`
+	Expression *CELExpression `json:"expression,omitempty"`
 }
 
 type AuthorizationHeaderLocation struct {
@@ -1164,7 +1162,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// Where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
@@ -1223,7 +1221,7 @@ type APIKeyAuthentication struct {
 	//	    }
 	//	  client2: "k-456"
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// Selects multiple Kubernetes `Secret` resources
 	// containing API keys. It is Secret-only; use `secretRef` for other
@@ -1309,7 +1307,7 @@ type BackendAuth struct {
 	// the default Secret resolver, this must be stored in the `Authorization`
 	// key.
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// Passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
@@ -1366,7 +1364,7 @@ type GcpAuth struct {
 	// key. When omitted, ambient credentials are used.
 	//
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 	// Explicit `aud` value for the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.
@@ -1384,7 +1382,7 @@ type AwsAuth struct {
 	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
 	// optionally `sessionToken`.
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// AWS STS AssumeRole settings to use before signing backend requests.
 	// Ambient AWS credentials are used as the source credentials for STS.
@@ -1417,7 +1415,7 @@ type AzureAuth struct {
 	// `clientSecret`.
 	//
 	// +optional
-	SecretRef *shared.LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
 	// Managed identity authentication settings.
 	//
@@ -1541,7 +1539,7 @@ type BackendMCP struct {
 	// Get or call operations, such as `call_tool`, will evaluate the specific
 	// item and reject requests that do not meet the rule.
 	// +optional
-	Authorization *shared.Authorization `json:"authorization,omitempty"`
+	Authorization *Authorization `json:"authorization,omitempty"`
 	// MCP backend-specific authentication rules.
 	//
 	// This field is deprecated; prefer to use traffic policy `jwtAuthentication.mcp`, which ensures authentication runs before
@@ -1664,7 +1662,7 @@ type Transformation struct {
 type TransformationConditional struct {
 	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
-	Condition shared.CELExpression `json:"condition,omitempty"`
+	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
 	Policy Transformation `json:"policy"`
@@ -1738,7 +1736,7 @@ type Transform struct {
 
 	// HTTP body transformation.
 	// +optional
-	Body *shared.CELExpression `json:"body,omitempty"`
+	Body *CELExpression `json:"body,omitempty"`
 
 	// Stores CEL-evaluated values under the `metadata` CEL variable
 	// for subsequent policy evaluations. `metadata` is evaluated before header
@@ -1747,7 +1745,7 @@ type Transform struct {
 	// +kubebuilder:validation:MinProperties=1
 	// +kubebuilder:validation:MaxProperties=16
 	// +optional
-	Metadata map[string]shared.CELExpression `json:"metadata,omitempty"`
+	Metadata map[string]CELExpression `json:"metadata,omitempty"`
 }
 
 // HTTP header name.
@@ -1774,7 +1772,7 @@ type DirectResponseHeader struct {
 	// CEL expression that generates the output value for
 	// the header.
 	// +required
-	Value shared.CELExpression `json:"value"`
+	Value CELExpression `json:"value"`
 }
 
 type HeaderTransformation struct {
@@ -1784,7 +1782,7 @@ type HeaderTransformation struct {
 	// CEL expression that generates the output value for
 	// the header.
 	// +required
-	Value shared.CELExpression `json:"value"`
+	Value CELExpression `json:"value"`
 }
 
 // How HTTP bodies are delivered to the external processor.
@@ -1888,7 +1886,7 @@ type ExtProc struct {
 type ExtProcConditional struct {
 	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
-	Condition shared.CELExpression `json:"condition,omitempty"`
+	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
@@ -1926,7 +1924,7 @@ func (e *ExtProcOrConditional) ConditionalPolicy() (*ExtProc, iter.Seq[Condition
 // +k8s:deepcopy-gen=false
 // nolint: kubeapilinter
 type ConditionalPolicyEntry[T any] struct {
-	Condition shared.CELExpression
+	Condition CELExpression
 	Policy    T
 }
 
@@ -1939,7 +1937,7 @@ type ConditionalPolicy[T any] interface {
 type ExtAuthConditional struct {
 	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
-	Condition shared.CELExpression `json:"condition,omitempty"`
+	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
 	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
@@ -2040,7 +2038,7 @@ type ExtAuthCache struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +required
-	Key []shared.CELExpression `json:"key"`
+	Key []CELExpression `json:"key"`
 
 	// Duration string, such as `5m`, or a CEL expression that
 	// returns the duration that cached authorization results may be reused, or a
@@ -2048,7 +2046,7 @@ type ExtAuthCache struct {
 	// evaluated after the authorization response has been applied to the request.
 	//
 	// +required
-	TTL shared.CELExpression `json:"ttl"`
+	TTL CELExpression `json:"ttl"`
 
 	// Maximum number of authorization results to keep in
 	// the cache. If unset, this defaults to 10000.
@@ -2065,13 +2063,13 @@ type AgentExtAuthHTTP struct {
 	// incoming request. For example, to add a prefix, use
 	// `"/prefix/" + request.path`.
 	// +optional
-	Path *shared.CELExpression `json:"path,omitempty"`
+	Path *CELExpression `json:"path,omitempty"`
 
 	// Optional expression that determines a path to
 	// redirect to on authorization failure. This is useful to redirect to a
 	// sign-in page.
 	// +optional
-	Redirect *shared.CELExpression `json:"redirect,omitempty"`
+	Redirect *CELExpression `json:"redirect,omitempty"`
 
 	// Additional headers from the client request that
 	// will be sent to the authorization server.
@@ -2089,7 +2087,7 @@ type AgentExtAuthHTTP struct {
 	//
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
-	AddRequestHeaders map[string]shared.CELExpression `json:"addRequestHeaders,omitempty"`
+	AddRequestHeaders map[string]CELExpression `json:"addRequestHeaders,omitempty"`
 
 	// Headers from the authorization response that
 	// will be copied into the request to the backend.
@@ -2106,7 +2104,7 @@ type AgentExtAuthHTTP struct {
 	//
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
-	ResponseMetadata map[string]shared.CELExpression `json:"responseMetadata,omitempty"`
+	ResponseMetadata map[string]CELExpression `json:"responseMetadata,omitempty"`
 }
 
 type AgentExtAuthGRPC struct {
@@ -2124,7 +2122,7 @@ type AgentExtAuthGRPC struct {
 	//
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
-	RequestMetadata map[string]shared.CELExpression `json:"requestMetadata,omitempty"`
+	RequestMetadata map[string]CELExpression `json:"requestMetadata,omitempty"`
 }
 
 type ExtAuthBody struct {
@@ -2152,7 +2150,7 @@ type RateLimits struct {
 type RateLimitsConditional struct {
 	// CEL expression that must evaluate to true for this policy to execute.
 	// +optional
-	Condition shared.CELExpression `json:"condition,omitempty"`
+	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
 	Policy RateLimits `json:"policy"`
@@ -2252,7 +2250,7 @@ type RateLimitDescriptor struct {
 	//
 	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
 	// +optional
-	Cost *shared.CELExpression `json:"cost,omitempty"`
+	Cost *CELExpression `json:"cost,omitempty"`
 }
 
 // Entry in a rate limit descriptor.
@@ -2267,7 +2265,7 @@ type RateLimitDescriptorEntry struct {
 	//
 	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
 	// +required
-	Expression shared.CELExpression `json:"expression"`
+	Expression CELExpression `json:"expression"`
 }
 
 // +k8s:enum
@@ -2363,7 +2361,7 @@ type AccessLog struct {
 	// CEL expression used to filter logs. A log
 	// will only be emitted if the expression evaluates to `true`.
 	// +optional
-	Filter *shared.CELExpression `json:"filter,omitempty"`
+	Filter *CELExpression `json:"filter,omitempty"`
 	// Customizations to the key-value pairs that are
 	// logged.
 	// +optional
@@ -2417,7 +2415,7 @@ type AttributeAdd struct {
 	// +required
 	Name ShortString `json:"name"`
 	// +required
-	Expression shared.CELExpression `json:"expression"`
+	Expression CELExpression `json:"expression"`
 }
 
 // Custom labels to add to Prometheus metrics.
@@ -2488,19 +2486,19 @@ type Tracing struct {
 	// a float between `0.0` and `1.0`, or a boolean (`true` or `false`). If
 	// unspecified, random sampling is disabled.
 	// +optional
-	RandomSampling *shared.CELExpression `json:"randomSampling,omitempty"`
+	RandomSampling *CELExpression `json:"randomSampling,omitempty"`
 	// Expression that determines the amount of client
 	// sampling. Client sampling determines whether to initiate a new trace
 	// span if the incoming request does have a trace already. This should
 	// evaluate to a float between `0.0` and `1.0`, or a boolean (`true` or
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
-	ClientSampling *shared.CELExpression `json:"clientSampling,omitempty"`
+	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
 }
 
 type ResourceAdd struct {
 	// +required
 	Name ShortString `json:"name"`
 	// +required
-	Expression shared.CELExpression `json:"expression"`
+	Expression CELExpression `json:"expression"`
 }
