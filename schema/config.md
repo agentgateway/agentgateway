@@ -1956,6 +1956,8 @@
 |`binds[].listeners[].routes[].policies.retry.attempts`|integer||
 |`binds[].listeners[].routes[].policies.retry.backoff`|string||
 |`binds[].listeners[].routes[].policies.retry.codes`|[]integer||
+|`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`binds[].listeners[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`binds[].listeners[].routes[].backends`|[]object||
 |`binds[].listeners[].routes[].backends[].service`|object||
 |`binds[].listeners[].routes[].backends[].service.name`|object||
@@ -8257,6 +8259,8 @@
 |`policies[].policy.retry.attempts`|integer||
 |`policies[].policy.retry.backoff`|string||
 |`policies[].policy.retry.codes`|[]integer||
+|`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`policies[].policy.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`workloads`|any||
 |`services`|any||
 |`backends`|[]object||
@@ -13626,6 +13630,8 @@
 |`routeGroups[].routes[].policies.retry.attempts`|integer||
 |`routeGroups[].routes[].policies.retry.backoff`|string||
 |`routeGroups[].routes[].policies.retry.codes`|[]integer||
+|`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`routeGroups[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`routeGroups[].routes[].backends`|[]object||
 |`routeGroups[].routes[].backends[].service`|object||
 |`routeGroups[].routes[].backends[].service.name`|object||
@@ -20797,3 +20803,5 @@
 |`mcp.policies.retry.attempts`|integer||
 |`mcp.policies.retry.backoff`|string||
 |`mcp.policies.retry.codes`|[]integer||
+|`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
+|`mcp.policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|

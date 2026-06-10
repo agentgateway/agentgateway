@@ -5243,6 +5243,28 @@
             "minimum": 1,
             "maximum": 65535
           }
+        },
+        "precondition": {
+          "description": "CEL expression evaluated against the request *before* any attempt is made.\nWhen it evaluates to `false`, retries are disabled entirely (only the initial\nattempt is made).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "postcondition": {
+          "description": "CEL expression evaluated against each response to decide whether to retry. A response\nis retried when its status code is in `codes` *or* this expression evaluates to `true`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,

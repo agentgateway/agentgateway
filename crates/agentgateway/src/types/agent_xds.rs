@@ -1715,10 +1715,30 @@ fn traffic_policy_from_proto(
 				.iter()
 				.map(|c| StatusCode::from_u16(*c as u16).map_err(|e| ProtoError::Generic(e.to_string())))
 				.collect::<Result<Vec<_>, _>>()?;
+			let precondition = if r.precondition.is_empty() {
+				None
+			} else {
+				Some(permissive_cel_expression_arc(
+					diagnostics,
+					"retry.precondition",
+					&r.precondition,
+				))
+			};
+			let postcondition = if r.postcondition.is_empty() {
+				None
+			} else {
+				Some(permissive_cel_expression_arc(
+					diagnostics,
+					"retry.postcondition",
+					&r.postcondition,
+				))
+			};
 			TrafficPolicy::Retry(http::retry::Policy {
 				attempts,
 				backoff,
 				codes: codes.into_boxed_slice(),
+				precondition,
+				postcondition,
 			})
 		},
 		Some(tps::Kind::LocalRateLimit(lrl)) => {

@@ -3643,8 +3643,14 @@ type Retry struct {
 	RetryStatusCodes []int32                `protobuf:"varint,1,rep,packed,name=retry_status_codes,json=retryStatusCodes,proto3" json:"retry_status_codes,omitempty"`
 	Attempts         int32                  `protobuf:"varint,2,opt,name=attempts,proto3" json:"attempts,omitempty"`
 	Backoff          *durationpb.Duration   `protobuf:"bytes,3,opt,name=backoff,proto3" json:"backoff,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// CEL expression evaluated against the request before any attempt. When it evaluates
+	// to false, retries are disabled (only the initial attempt is made).
+	Precondition string `protobuf:"bytes,4,opt,name=precondition,proto3" json:"precondition,omitempty"`
+	// CEL expression evaluated against each response. A response is retried when its status
+	// code is in retry_status_codes or this expression evaluates to true.
+	Postcondition string `protobuf:"bytes,5,opt,name=postcondition,proto3" json:"postcondition,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Retry) Reset() {
@@ -3696,6 +3702,20 @@ func (x *Retry) GetBackoff() *durationpb.Duration {
 		return x.Backoff
 	}
 	return nil
+}
+
+func (x *Retry) GetPrecondition() string {
+	if x != nil {
+		return x.Precondition
+	}
+	return ""
+}
+
+func (x *Retry) GetPostcondition() string {
+	if x != nil {
+		return x.Postcondition
+	}
+	return ""
 }
 
 type BackendAuthPolicy struct {
@@ -13856,11 +13876,13 @@ const file_resource_proto_rawDesc = "" +
 	"\f_max_version\"\x82\x01\n" +
 	"\aTimeout\x123\n" +
 	"\arequest\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\arequest\x12B\n" +
-	"\x0fbackend_request\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0ebackendRequest\"\x86\x01\n" +
+	"\x0fbackend_request\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\x0ebackendRequest\"\xd0\x01\n" +
 	"\x05Retry\x12,\n" +
 	"\x12retry_status_codes\x18\x01 \x03(\x05R\x10retryStatusCodes\x12\x1a\n" +
 	"\battempts\x18\x02 \x01(\x05R\battempts\x123\n" +
-	"\abackoff\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\abackoff\"\xbd\x02\n" +
+	"\abackoff\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\abackoff\x12\"\n" +
+	"\fprecondition\x18\x04 \x01(\tR\fprecondition\x12$\n" +
+	"\rpostcondition\x18\x05 \x01(\tR\rpostcondition\"\xbd\x02\n" +
 	"\x11BackendAuthPolicy\x12J\n" +
 	"\vpassthrough\x18\x01 \x01(\v2&.agentgateway.dev.resource.PassthroughH\x00R\vpassthrough\x122\n" +
 	"\x03key\x18\x02 \x01(\v2\x1e.agentgateway.dev.resource.KeyH\x00R\x03key\x122\n" +

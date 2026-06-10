@@ -2357,6 +2357,18 @@ type Timeouts struct {
 // Retry defines the retry policy.
 type Retry struct {
 	*gwv1.HTTPRouteRetry `json:",inline"`
+
+	// `precondition` is a CEL expression evaluated against the request before any
+	// attempt is made. When it evaluates to `false`, retries are disabled and only
+	// the initial attempt is made.
+	// +optional
+	Precondition *shared.CELExpression `json:"precondition,omitempty"`
+
+	// `postcondition` is a CEL expression evaluated against each response to decide
+	// whether to retry. A response is retried when its status code is in `codes` or
+	// this expression evaluates to `true`.
+	// +optional
+	Postcondition *shared.CELExpression `json:"postcondition,omitempty"`
 }
 
 // AccessLog specifies how per-request access logs are emitted.

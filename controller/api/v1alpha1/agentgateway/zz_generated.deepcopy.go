@@ -8,7 +8,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	apisv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
@@ -3407,6 +3407,16 @@ func (in *Retry) DeepCopyInto(out *Retry) {
 		in, out := &in.HTTPRouteRetry, &out.HTTPRouteRetry
 		*out = new(apisv1.HTTPRouteRetry)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.Precondition != nil {
+		in, out := &in.Precondition, &out.Precondition
+		*out = new(shared.CELExpression)
+		**out = **in
+	}
+	if in.Postcondition != nil {
+		in, out := &in.Postcondition, &out.Postcondition
+		*out = new(shared.CELExpression)
+		**out = **in
 	}
 }
 

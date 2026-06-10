@@ -775,8 +775,18 @@ impl HTTPProxy {
 			.route_policies(&route_path, &route_inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		let route_retry = route_policies.retry.select("retry", &req);
+		let mut route_retry = route_policies.retry.select("retry", &req);
 		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
+		// Evaluate the retry precondition (if any) against the request before it is consumed.
+		if let Some(retry) = route_retry.as_ref()
+			&& let Some(pre) = retry.precondition.as_ref()
+		{
+			let exec = cel::Executor::new_request(&req);
+			if !exec.eval_bool(pre.as_ref()) {
+				debug!("retry precondition not met, disabling retries");
+				route_retry = None;
+			}
+		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
@@ -942,7 +952,12 @@ impl HTTPProxy {
 					req,
 				)
 				.await;
-			if last || !should_retry(&res, retries.as_ref().unwrap()) {
+			if last
+				|| !should_retry(
+					&res,
+					retries.as_ref().unwrap(),
+					log.request_snapshot.as_deref(),
+				) {
 				if !last {
 					debug!("response not retry-able");
 				}
@@ -2778,9 +2793,24 @@ fn finalize_attempt_for_retry(
 	);
 }
 
-fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
+fn should_retry(
+	res: &Result<Response, SnapshottedProxyResponse>,
+	pol: &retry::Policy,
+	req_snapshot: Option<&cel::RequestSnapshot>,
+) -> bool {
 	match res {
-		Ok(resp) => pol.codes.contains(&resp.status()),
+		Ok(resp) => {
+			if pol.codes.contains(&resp.status()) {
+				return true;
+			}
+			// A postcondition can match responses that status codes alone cannot, e.g. APIs that
+			// return a 200 but signal failure via a header.
+			if let Some(post) = pol.postcondition.as_ref() {
+				let exec = cel::Executor::new_response(req_snapshot, resp);
+				return exec.eval_bool(post.as_ref());
+			}
+			false
+		},
 		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
 	}
@@ -2805,6 +2835,56 @@ mod tests {
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
+
+	fn retry_policy(codes: &[u16], postcondition: Option<&str>) -> crate::http::retry::Policy {
+		crate::http::retry::Policy {
+			attempts: std::num::NonZeroU8::new(2).unwrap(),
+			backoff: None,
+			codes: codes
+				.iter()
+				.map(|c| ::http::StatusCode::from_u16(*c).unwrap())
+				.collect(),
+			precondition: None,
+			postcondition: postcondition
+				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
+		}
+	}
+
+	#[test]
+	fn should_retry_matches_status_codes() {
+		let pol = retry_policy(&[503], None);
+		let resp = ::http::Response::builder()
+			.status(503)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(super::should_retry(&Ok(resp), &pol, None));
+
+		let pol = retry_policy(&[503], None);
+		let resp = ::http::Response::builder()
+			.status(200)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(!super::should_retry(&Ok(resp), &pol, None));
+	}
+
+	#[test]
+	fn should_retry_postcondition_matches_on_200() {
+		// Simulate an API that returns 200 but signals failure via a header.
+		let pol = retry_policy(&[], Some(r#"response.headers["x-req-failed"] == "true""#));
+		let failed = ::http::Response::builder()
+			.status(200)
+			.header("x-req-failed", "true")
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(super::should_retry(&Ok(failed), &pol, None));
+
+		let pol = retry_policy(&[], Some(r#"response.headers["x-req-failed"] == "true""#));
+		let ok = ::http::Response::builder()
+			.status(200)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(!super::should_retry(&Ok(ok), &pol, None));
+	}
 
 	#[test]
 	fn apply_auto_hostname_rewrites_authority_when_enabled() {

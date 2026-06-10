@@ -9406,6 +9406,25 @@ spec:
                           type: integer
                         type: array
                         x-kubernetes-list-type: atomic
+                      postcondition:
+                        description: |-
+                          `postcondition` is a CEL expression evaluated against each response to decide
+                          whether to retry. A response is retried when its status code is in `codes` or
+                          this expression evaluates to `true`. This is more powerful than status codes
+                          alone, for example for APIs that signal failure on a `200` response via a
+                          header: `response.headers["x-req-failed"] != ""`.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                      precondition:
+                        description: |-
+                          `precondition` is a CEL expression evaluated against the request before any
+                          attempt is made. When it evaluates to `false`, retries are disabled and only
+                          the initial attempt is made. This is useful to avoid buffering requests that
+                          must not be replayed, for example `request.method == "GET"`.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                     type: object
                   timeouts:
                     description: |-

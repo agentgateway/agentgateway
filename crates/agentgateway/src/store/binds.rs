@@ -378,6 +378,7 @@ impl RoutePolicies {
 			&self.csrf as &dyn PolicyExpressions,
 			&self.direct_response as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.retry as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
