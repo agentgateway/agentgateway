@@ -219,12 +219,15 @@ function mapToMatches(matchesData: any): Match[] {
     }
 
     if (matchData.path) {
-      if (matchData.path.exact) {
-        match.path.exact = matchData.path.exact;
-      } else if (matchData.path.prefix) {
-        match.path.pathPrefix = matchData.path.prefix;
-      } else if (matchData.path.regex) {
-        match.path.regex = matchData.path.regex;
+      const pathData = matchData.path;
+      if (typeof pathData.exact === "string") {
+        match.path.exact = pathData.exact;
+      } else if (typeof pathData.pathPrefix === "string") {
+        match.path.pathPrefix = pathData.pathPrefix;
+      } else if (typeof pathData.prefix === "string") {
+        match.path.pathPrefix = pathData.prefix;
+      } else if (typeof pathData.regex === "string") {
+        match.path.regex = pathData.regex;
       }
     }
 
