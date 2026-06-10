@@ -223,7 +223,7 @@ impl ProxyError {
 	pub fn is_retryable(&self) -> bool {
 		match self {
 			ProxyError::UpstreamCallFailed(_) => true,
-			ProxyError::RequestTimeout => true,
+			ProxyError::UpstreamCallTimeout => true,
 			ProxyError::DnsResolution => true,
 			_ => false,
 		}
