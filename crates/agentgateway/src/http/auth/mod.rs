@@ -2,6 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub mod idjag;
 
 use std::borrow::Cow;
 
@@ -45,6 +46,8 @@ pub enum BackendAuth {
 	Azure(azure::AzureAuth),
 	#[serde(rename = "copilot")]
 	Copilot,
+	#[serde(rename = "identityAssertion")]
+	IdentityAssertion(Box<idjag::IdentityAssertion>),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -149,6 +152,41 @@ pub async fn apply_backend_auth(
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
+		BackendAuth::IdentityAssertion(cfg) => {
+			// Extract the inbound identity synchronously so the async call below never holds a
+			// borrow of the (non-Sync) request across an await point.
+			let (subject_token, subject) = {
+				let claims = req.extensions().get::<Claims>().ok_or_else(|| {
+					ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
+						"identityAssertion requires an authenticated request (no JWT found)"
+					))
+				})?;
+				// A missing/empty `sub` would collapse distinct users onto the same cache key, so
+				// reject it rather than defaulting to an empty subject.
+				let subject = claims
+					.inner
+					.get("sub")
+					.and_then(|v| v.as_str())
+					.unwrap_or_default();
+				if subject.is_empty() {
+					return Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
+						"identityAssertion requires a non-empty `sub` claim in the inbound JWT"
+					)));
+				}
+				// Keep the token wrapped in SecretString; expose_secret() is deferred to the form body.
+				(claims.jwt.clone(), subject.to_string())
+			};
+			let token = idjag::get_token(
+				&backend_info.inputs.upstream,
+				cfg.as_ref(),
+				&backend_info.call_target,
+				&subject_token,
+				&subject,
+			)
+			.await
+			.map_err(ProxyError::BackendAuthenticationFailed)?;
+			req.headers_mut().insert(http::header::AUTHORIZATION, token);
+		},
 	}
 	Ok(())
 }
@@ -171,6 +209,7 @@ pub async fn apply_late_backend_auth(
 		},
 		BackendAuth::Azure(_) => {},
 		BackendAuth::Copilot => {},
+		BackendAuth::IdentityAssertion(_) => {},
 	};
 	Ok(())
 }

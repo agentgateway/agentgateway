@@ -23,6 +23,10 @@ The oidc example shows the built-in `oidc` flow using a local Keycloak issuer.
 
 The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` deployment. Most new browser-auth setups should prefer the built-in `oidc` flow instead.
 
+### [Identity Assertion (ID-JAG / Cross App Access)](identity-assertion/README.md)
+
+The `identity-assertion` example shows how to use the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token, so the gateway can call a downstream API as the user.
+
 ### [TLS](tls/README.md)
 
 The tls example shows how to use agentgateway to terminate TLS connections.
