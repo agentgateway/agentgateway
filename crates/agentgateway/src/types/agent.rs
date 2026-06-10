@@ -1068,24 +1068,33 @@ pub enum PathMatch {
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum HostRedirect {
+	/// Replace the full authority, including host and optional port.
 	Full(Strng),
+	/// Replace only the host and preserve the effective port.
 	Host(Strng),
+	/// Replace only the port.
 	Port(NonZeroU16),
+	/// Use the selected backend host when possible.
 	Auto,
+	/// Leave the authority unchanged.
 	None,
 }
 
 #[apply(schema!)]
 #[derive(Eq, PartialEq, Copy)]
 pub enum HostRedirectOverride {
+	/// Use the selected backend host when possible.
 	Auto,
+	/// Leave the authority unchanged.
 	None,
 }
 
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum PathRedirect {
+	/// Replace the full request path.
 	Full(Strng),
+	/// Replace only the matched path prefix.
 	Prefix(Strng),
 }
 
@@ -2079,9 +2088,10 @@ impl PolicyInheritance {
 /// Configuration for dynamic tracing policy
 #[apply(schema!)]
 pub struct TracingConfig {
+	/// Backend that receives exported traces.
 	#[serde(flatten)]
 	pub provider_backend: SimpleBackendReference,
-	/// Policies to connect to the backend
+	/// Backend policies used when exporting traces.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -2110,10 +2120,10 @@ pub struct TracingConfig {
 	/// requests that use this frontend policy.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
 	pub client_sampling: Option<Arc<cel::Expression>>,
-	// OTLP path. Default is /v1/traces
+	/// OTLP HTTP path used to export traces.
 	#[serde(default = "default_otlp_path")]
 	pub path: String,
-	// protocol specifies the OTLP protocol variant to use. Default is HTTP
+	/// OTLP protocol used to export traces. Defaults to HTTP.
 	#[serde(default)]
 	pub protocol: TracingProtocol,
 }
@@ -2580,17 +2590,26 @@ impl From<McpAuthenticationMode> for crate::http::jwt::Mode {
 // Non-xds config for MCP authentication
 #[apply(schema_de!)]
 pub struct LocalMcpAuthentication {
+	/// Expected token issuer, matched against the JWT `iss` claim.
 	pub issuer: String,
+	/// Accepted token audiences, matched against the JWT `aud` claim.
 	pub audiences: Vec<String>,
+	/// Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
 	pub provider: Option<McpIDP>,
+	/// Protected resource metadata returned to MCP clients.
 	pub resource_metadata: ResourceMetadata,
+	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
 	pub jwks: FileInlineOrRemote,
+	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
+	/// Where to read the JWT from in incoming MCP requests.
 	#[serde(default)]
 	pub authorization_location: http::auth::AuthorizationLocation,
+	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
+	/// OAuth client ID advertised to MCP clients when needed.
 	pub client_id: Option<String>,
 }
 

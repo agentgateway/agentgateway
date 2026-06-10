@@ -323,7 +323,7 @@ struct LocalConditionalPolicy<T> {
 	/// condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
 	#[serde(default)]
 	condition: Option<Arc<crate::cel::Expression>>,
-	/// policy definition.
+	/// Policy settings for this conditional entry.
 	#[serde(flatten)]
 	policy: T,
 }
@@ -1370,16 +1370,16 @@ impl SimpleLocalBackend {
 
 #[apply(schema_de!)]
 struct LocalPolicy {
+	/// Policy name used when attaching this policy to a target.
 	pub name: ResourceName,
+	/// Gateway, listener, route, or backend that this policy attaches to.
 	pub target: PolicyTarget,
 
-	/// phase defines at what level the policy runs at. Gateway policies run pre-routing, while
-	/// Route policies apply post-routing.
-	/// Only a subset of policies are eligible as Gateway policies.
-	/// In general, normal (route level) policies should be used, except you need the policy to influence
-	/// routing.
+	/// When the policy runs. Gateway policies run before route selection, while route policies run after route selection.
+	/// Use route policies by default unless the policy needs to affect route selection.
 	#[serde(default)]
 	pub phase: PolicyPhase,
+	/// Policy settings to apply to the selected target.
 	pub policy: FilterOrPolicy,
 }
 
@@ -1425,13 +1425,13 @@ where
 struct LocalLLMPolicy {
 	#[serde(flatten)]
 	gateway: LocalGatewayPolicy,
-	/// Authorization policies for HTTP access.
+	/// Authorization rules for incoming HTTP requests.
 	#[serde(default)]
 	authorization: Option<Authorization>,
-	/// Rate limit incoming requests. State is kept local.
+	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
-	/// Rate limit incoming requests. State is managed by a remote server.
+	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
 }
@@ -1439,32 +1439,32 @@ struct LocalLLMPolicy {
 #[apply(schema_de!)]
 #[derive(Default)]
 struct LocalGatewayPolicy {
-	/// Authenticate incoming browser requests with OIDC authorization code flow.
+	/// Authenticate browser requests with OIDC authorization code flow.
 	#[serde(default)]
 	oidc: Option<crate::http::oidc::LocalOidcConfig>,
-	/// Authenticate incoming JWT requests.
+	/// Authenticate incoming requests with JWT bearer tokens.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
-	/// Authenticate incoming requests by calling an external authorization server.
+	/// Authorize incoming requests by calling an external authorization service.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthzPolicy>,
-	/// Extend agentgateway with an external processor
+	/// Send request and response data to an external processing service.
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
 	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
 	#[serde(default)]
 	cors: Option<http::cors::Cors>,
-	/// Modify requests and responses
+	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<LocalTransformationPolicy>")
 	)]
 	transformations: Option<LocalTransformationPolicy>,
-	/// Authenticate incoming requests using Basic Authentication with htpasswd.
+	/// Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
 	#[serde(default)]
 	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
-	/// Authenticate incoming requests using API Keys
+	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
 }
@@ -1499,11 +1499,11 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 #[derive(Default)]
 pub struct SimpleLocalBackendPolicies {
 	// Filters. Keep in sync with RouteFilter
-	/// Headers to be modified in the request.
+	/// Modify request headers before forwarding to this backend.
 	#[serde(default)]
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 
-	/// Modify requests and responses sent to and from the backend.
+	/// Modify request and response data for this backend.
 	#[serde(default)]
 	#[serde(deserialize_with = "de_transform")]
 	#[cfg_attr(
@@ -1512,21 +1512,21 @@ pub struct SimpleLocalBackendPolicies {
 	)]
 	pub transformations: Option<crate::http::transformation_cel::Transformation>,
 
-	/// Send TLS to the backend.
+	/// TLS settings used when connecting to this backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
-	/// Authenticate to the backend.
+	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	pub backend_auth: Option<BackendAuth>,
 
-	/// Specify HTTP settings for the backend
+	/// HTTP protocol settings for this backend.
 	#[serde(default)]
 	pub http: Option<backend::HTTP>,
-	/// Specify TCP settings for the backend
+	/// TCP protocol settings for this backend.
 	#[serde(default)]
 	pub tcp: Option<backend::TCP>,
 
-	/// Specify a tunnel to use when connecting to the backend
+	/// Tunnel settings used when connecting to this backend.
 	#[serde(default)]
 	pub backend_tunnel: Option<backend::Tunnel>,
 }
@@ -1536,7 +1536,7 @@ pub struct SimpleLocalBackendPolicies {
 pub struct MCPLocalBackendPolicies {
 	#[serde(flatten)]
 	simple: SimpleLocalBackendPolicies,
-	/// Authorization policies for MCP access.
+	/// Authorization rules for MCP requests.
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
 }
@@ -1547,29 +1547,29 @@ pub struct LocalBackendPolicies {
 	#[serde(flatten)]
 	simple: SimpleLocalBackendPolicies,
 
-	/// Headers to be modified in the response.
+	/// Modify response headers returned from this backend.
 	#[serde(default)]
 	pub response_header_modifier: Option<filters::HeaderModifier>,
 
-	/// Directly respond to the request with a redirect.
+	/// Return a redirect response instead of forwarding to this backend.
 	#[serde(default)]
 	pub request_redirect: Option<filters::RequestRedirect>,
 
-	/// Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
+	/// Detect unhealthy backend responses and temporarily remove unhealthy endpoints.
 	#[serde(default)]
 	pub health: Option<health::LocalHealthPolicy>,
 
-	/// Authenticate incoming requests by calling an external authorization server after this backend is selected.
+	/// Authorize incoming requests by calling an external authorization service after this backend is selected.
 	#[serde(default)]
 	pub ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
 
-	/// Authorization policies for MCP access.
+	/// Authorization rules for MCP requests.
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
 	/// Mark this traffic as A2A to enable A2A processing and telemetry.
 	#[serde(default)]
 	pub a2a: Option<A2aPolicy>,
-	/// Route requests through an endpoint picker before forwarding to the selected backend.
+	/// Route requests through an endpoint picker before forwarding to this backend.
 	#[serde(default)]
 	pub inference_routing: Option<crate::http::ext_proc::InferenceRouting>,
 	/// Mark this as LLM traffic to enable LLM processing.
@@ -1687,10 +1687,10 @@ impl LocalBackendPolicies {
 #[apply(schema_de!)]
 #[derive(Default)]
 pub struct LocalTCPBackendPolicies {
-	/// Send TLS to the backend.
+	/// TLS settings used when connecting to this backend.
 	#[serde(rename = "backendTLS", default)]
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
-	/// Tunnel to the backend.
+	/// Tunnel settings used when connecting to this backend.
 	#[serde(default)]
 	pub backend_tunnel: Option<backend::Tunnel>,
 }
@@ -1737,6 +1737,7 @@ struct LocalFrontendPolicies {
 	/// Settings for request access logs.
 	#[serde(default, alias = "logging")]
 	pub access_log: Option<frontend::LoggingPolicy>,
+	/// Settings for exporting request traces.
 	#[serde(default)]
 	pub tracing: Option<TracingConfig>,
 }
@@ -1745,27 +1746,27 @@ struct LocalFrontendPolicies {
 #[derive(Default)]
 pub struct FilterOrPolicy {
 	// Filters. Keep in sync with RouteFilter
-	/// Headers to be modified in the request.
+	/// Modify request headers before forwarding.
 	#[serde(default)]
 	request_header_modifier: Option<filters::HeaderModifier>,
 
-	/// Headers to be modified in the response.
+	/// Modify response headers before returning to the client.
 	#[serde(default)]
 	response_header_modifier: Option<filters::HeaderModifier>,
 
-	/// Directly respond to the request with a redirect.
+	/// Return a redirect response instead of forwarding the request.
 	#[serde(default)]
 	request_redirect: Option<filters::RequestRedirect>,
 
-	/// Modify the URL path or authority.
+	/// Rewrite the request path or authority before forwarding.
 	#[serde(default)]
 	url_rewrite: Option<filters::UrlRewrite>,
 
-	/// Mirror incoming requests to another destination.
+	/// Send a copy of matching requests to another backend.
 	#[serde(default)]
 	request_mirror: Option<filters::RequestMirror>,
 
-	/// Directly respond to the request with a static response.
+	/// Return a configured response instead of forwarding the request.
 	#[serde(default)]
 	direct_response: Option<LocalDirectResponsePolicy>,
 
@@ -1774,13 +1775,13 @@ pub struct FilterOrPolicy {
 	cors: Option<http::cors::Cors>,
 
 	// Policy
-	/// Authorization policies for MCP access.
+	/// Authorization rules for MCP requests.
 	#[serde(default)]
 	mcp_authorization: Option<McpAuthorization>,
-	/// Authorization policies for HTTP access.
+	/// Authorization rules for incoming HTTP requests.
 	#[serde(default)]
 	authorization: Option<Authorization>,
-	/// Authentication for MCP clients.
+	/// Authenticate MCP clients.
 	#[serde(default)]
 	mcp_authentication: Option<LocalMcpAuthentication>,
 	/// Mark this traffic as A2A to enable A2A processing and telemetry.
@@ -1789,40 +1790,40 @@ pub struct FilterOrPolicy {
 	/// Mark this as LLM traffic to enable LLM processing.
 	#[serde(default)]
 	ai: Option<llm::Policy>,
-	/// Send TLS to the backend.
+	/// TLS settings used when connecting to the backend.
 	#[serde(rename = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
-	/// Tunnel to the backend.
+	/// Tunnel settings used when connecting to the backend.
 	#[serde(rename = "backendTunnel", default)]
 	backend_tunnel: Option<backend::Tunnel>,
-	/// Authenticate to the backend.
+	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	backend_auth: Option<BackendAuth>,
-	/// Rate limit incoming requests. State is kept local.
+	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
-	/// Rate limit incoming requests. State is managed by a remote server.
+	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<LocalRemoteRateLimitPolicy>,
-	/// Authenticate incoming JWT requests.
+	/// Authenticate incoming requests with JWT bearer tokens.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
-	/// Authenticate incoming browser requests with OIDC authorization code flow.
+	/// Authenticate browser requests with OIDC authorization code flow.
 	#[serde(default)]
 	oidc: Option<crate::http::oidc::LocalOidcConfig>,
-	/// Authenticate incoming requests using Basic Authentication with htpasswd.
+	/// Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
 	#[serde(default)]
 	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
-	/// Authenticate incoming requests using API Keys
+	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
-	/// Authenticate incoming requests by calling an external authorization server.
+	/// Authorize incoming requests by calling an external authorization service.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthzPolicy>,
-	/// Extend agentgateway with an external processor
+	/// Send request and response data to an external processing service.
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
-	/// Modify requests and responses
+	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
@@ -1835,13 +1836,13 @@ pub struct FilterOrPolicy {
 	csrf: Option<http::csrf::Csrf>,
 
 	// TrafficPolicy
-	/// Buffer request and response bodies before forwarding.
+	/// Buffer request and response bodies.
 	#[serde(default)]
 	buffer: Option<http::buffer::Buffer>,
-	/// Timeout requests that exceed the configured duration.
+	/// Set request timeout limits.
 	#[serde(default)]
 	timeout: Option<timeout::Policy>,
-	/// Retry matching requests.
+	/// Retry matching failed upstream requests.
 	#[serde(default)]
 	retry: Option<retry::Policy>,
 }

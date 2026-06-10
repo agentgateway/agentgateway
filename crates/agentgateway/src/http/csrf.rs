@@ -7,6 +7,7 @@ use crate::*;
 
 #[apply(schema)]
 pub struct Csrf {
+	/// Additional trusted origins allowed to send state-changing requests.
 	#[serde(default)]
 	additional_origins: HashSet<String>,
 }

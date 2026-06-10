@@ -74,6 +74,7 @@ impl NetworkAuthorizationSet {
 
 #[apply(schema!)]
 pub struct RuleSet {
+	/// CEL authorization rules to evaluate for a request.
 	#[serde(serialize_with = "se_policies", deserialize_with = "de_policies")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
 	pub rules: PolicySet,
@@ -105,8 +106,11 @@ enum RuleSerde {
 
 #[apply(schema!)]
 enum RuleTypeSerde {
+	/// Allow the request when this CEL expression is true.
 	Allow(String),
+	/// Deny the request when this CEL expression is true.
 	Deny(String),
+	/// Require this CEL expression to be true.
 	Require(String),
 }
 

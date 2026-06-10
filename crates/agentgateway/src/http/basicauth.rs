@@ -21,15 +21,15 @@ pub enum Error {
 	InvalidCredentials { realm: String },
 }
 
-/// Validation mode for basic authentication
+/// Validation mode for Basic Auth.
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
-	/// A valid username/password must be present.
+	/// Require a valid username and password.
 	Strict,
-	/// If credentials exist, validate them.
+	/// Validate credentials when present.
 	/// This is the default option.
-	/// Warning: this allows requests without credentials!
+	/// Warning: this allows requests without Basic Auth credentials.
 	#[default]
 	Optional,
 }
@@ -182,17 +182,18 @@ impl std::fmt::Debug for BasicAuthentication {
 }
 #[apply(schema_de!)]
 pub struct LocalBasicAuth {
-	/// .htpasswd file contents/reference
+	/// User database in htpasswd format. Can be inline or loaded from a file.
 	pub htpasswd: FileOrInline,
 
-	/// Realm name for the WWW-Authenticate header
+	/// Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.
 	#[serde(default)]
 	pub realm: Option<String>,
 
-	/// Validation mode for basic authentication
+	/// Controls whether requests must include valid Basic Auth credentials.
 	#[serde(default)]
 	pub mode: Mode,
 
+	/// Where to read the Basic Auth credentials from in incoming requests.
 	#[serde(default = "default_authorization_location")]
 	pub authorization_location: AuthorizationLocation,
 }

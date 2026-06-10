@@ -14,8 +14,10 @@ use crate::{cel, *};
 #[derive(Default)]
 #[apply(schema_de!)]
 pub struct LocalTransformationConfig {
+	/// Transform the request before it is forwarded.
 	#[serde(default)]
 	pub request: Option<LocalTransform>,
+	/// Transform the response before it is returned.
 	#[serde(default)]
 	pub response: Option<LocalTransform>,
 }
@@ -23,16 +25,21 @@ pub struct LocalTransformationConfig {
 #[derive(Default)]
 #[apply(schema_de!)]
 pub struct LocalTransform {
+	/// Headers to append using CEL expressions for values.
 	#[serde(default)]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub add: Vec<(Strng, Strng)>,
+	/// Headers to set using CEL expressions for values.
 	#[serde(default)]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub set: Vec<(Strng, Strng)>,
+	/// Header names to remove.
 	#[serde(default)]
 	pub remove: Vec<Strng>,
+	/// CEL expression that computes a replacement body.
 	#[serde(default)]
 	pub body: Option<Strng>,
+	/// Metadata values to add using CEL expressions.
 	#[serde(default)]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub metadata: Vec<(Strng, Strng)>,
