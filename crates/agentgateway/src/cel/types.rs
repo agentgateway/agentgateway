@@ -73,7 +73,7 @@ pub struct Executor<'a> {
 }
 
 #[apply(schema!)]
-#[derive(cel::DynamicType)]
+#[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct ProxyContext {
 	/// The bind that accepted the request.
@@ -103,6 +103,16 @@ pub struct ProxyContext {
 }
 
 impl ProxyContext {
+	pub fn mutate<B>(req: &mut ::http::Request<B>, f: impl FnOnce(&mut Self)) {
+		if req.extensions().get::<Self>().is_none() {
+			req.extensions_mut().insert(Self::default());
+		}
+		f(req
+			.extensions_mut()
+			.get_mut::<Self>()
+			.expect("proxy context must be present"));
+	}
+
 	pub fn from_std_durations(
 		request_processing_duration: Option<std::time::Duration>,
 		upstream_duration: Option<std::time::Duration>,

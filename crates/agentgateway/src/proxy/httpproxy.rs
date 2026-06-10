@@ -629,7 +629,9 @@ impl HTTPProxy {
 			return Err(ProxyResponse::Error(ProxyError::BindNotFound)).snapshot_on_err(log, &mut req);
 		};
 		log.bind_name = Some(bind_name.clone());
-		set_proxy_cel_context(&mut req, log);
+		cel::ProxyContext::mutate(&mut req, |ctx| {
+			ctx.bind = Some(bind_name.clone());
+		});
 
 		sensitive_headers(&mut req);
 		normalize_uri(log.tls_info.as_ref(), &mut req)
@@ -669,7 +671,15 @@ impl HTTPProxy {
 			Ok(l) => {
 				debug!(bind=%bind_name, listener=%l.key, "selected listener");
 				log.listener_name = Some(l.name.clone());
-				set_proxy_cel_context(&mut req, log);
+				cel::ProxyContext::mutate(&mut req, |ctx| {
+					ctx.gateway = Some(cel::ProxyGatewayContext {
+						namespace: l.name.gateway_namespace.clone(),
+						name: l.name.gateway_name.clone(),
+					});
+					ctx.listener = Some(cel::ProxyListenerContext {
+						name: l.name.listener_name.clone(),
+					});
+				});
 				let frontend_policies = inputs.stores.read_binds().listener_frontend_policies(
 					&l.name,
 					Some(bind.address.port()),
@@ -756,7 +766,14 @@ impl HTTPProxy {
 			PathMatch::Regex(r) => r.as_str().into(),
 			PathMatch::Invalid => strng::literal!("<invalid>"),
 		});
-		set_proxy_cel_context(&mut req, log);
+		cel::ProxyContext::mutate(&mut req, |ctx| {
+			ctx.route = Some(cel::ProxyRouteContext {
+				namespace: selected_route.name.namespace.clone(),
+				name: selected_route.name.name.clone(),
+				kind: selected_route.name.kind.clone(),
+				rule: selected_route.name.rule_name.clone(),
+			});
+		});
 		req.extensions_mut().insert(path_match);
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
@@ -2362,34 +2379,6 @@ fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog
 			protocol: bp,
 		});
 	}
-}
-
-fn set_proxy_cel_context(req: &mut http::Request, log: &RequestLog) {
-	req.extensions_mut().insert(cel::ProxyContext {
-		bind: log.bind_name.clone(),
-		gateway: log
-			.listener_name
-			.as_ref()
-			.map(|l| cel::ProxyGatewayContext {
-				namespace: l.gateway_namespace.clone(),
-				name: l.gateway_name.clone(),
-			}),
-		listener: log
-			.listener_name
-			.as_ref()
-			.map(|l| cel::ProxyListenerContext {
-				name: l.listener_name.clone(),
-			}),
-		route: log.route_name.as_ref().map(|r| cel::ProxyRouteContext {
-			namespace: r.namespace.clone(),
-			name: r.name.clone(),
-			kind: r.kind.clone(),
-			rule: r.rule_name.clone(),
-		}),
-		request_processing_duration: None,
-		upstream_duration: None,
-		response_processing_duration: None,
-	});
 }
 
 fn connect_authority_target(req: &Request) -> Result<Target, ProxyError> {
