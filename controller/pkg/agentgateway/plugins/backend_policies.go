@@ -225,7 +225,7 @@ func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.Agentgate
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
 		}
-		metadata := castCELMap(p.Remote.Metadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(p.Remote.Metadata, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
 		})
 		methods := make(map[string]api.BackendPolicySpec_McpGuardrails_Phase, len(p.Methods))
