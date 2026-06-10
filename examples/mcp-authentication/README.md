@@ -118,7 +118,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, three providers are supported: Keycloak, Auth0, and Okta.
+Currently, four providers are supported: Keycloak, Auth0, Okta, and Descope.
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -165,6 +165,7 @@ What setting a provider does (high level):
   - Auth0 → `<issuer>/.well-known/jwks.json`
   - Keycloak → `<issuer>/protocol/openid-connect/certs`
   - Okta → `<issuer>/.well-known/jwks.json`
+  - Descope → `https://api.descope.com/{project-id}/.well-known/jwks.json` (derived from agentic issuer path)
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -176,8 +177,14 @@ Keycloak-specific notes:
 Okta-specific notes:
 - Okta supports RFC 8414 (like Auth0), so the gateway uses standard AS metadata discovery.
 - No RFC 8707 support; gateway appends `?audience=...` to the authorization endpoint (same workaround as Auth0).
-- Client registration is proxied by the gateway at `.../client-registration` to forward to Okta's `oauth2/v1/clients`.
+- Client registration is proxied by the gateway at `.../client-registration` to forward to Okta’s `oauth2/v1/clients`.
 - Okta DCR requires an SSWS API token; the gateway proxies the request and the MCP client must provide the token.
+
+Descope-specific notes:
+- Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414.
+- Supports RFC 8707 resource indicators — no audience workaround needed.
+- DCR requires a management key belonging to the server operator (not the MCP client). **Prefer setting `clientId` in config to skip DCR entirely.**
+- Client registration is proxied by the gateway at `.../client-registration` to forward to Descope’s management DCR endpoint.
 
 Notes:
 - Omit the `provider` block for spec-compliant servers. Use it only when adaptation is needed.

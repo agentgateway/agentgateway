@@ -1716,6 +1716,7 @@ const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
 	Okta     McpIDP = "Okta"
+	Descope  McpIDP = "Descope"
 )
 
 type BackendTunnel struct {
