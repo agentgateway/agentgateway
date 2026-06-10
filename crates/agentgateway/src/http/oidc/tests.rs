@@ -122,6 +122,7 @@ fn test_policy() -> OidcPolicy {
 			issuer: TEST_ISSUER.into(),
 			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
 			token_endpoint: provider_endpoint("https://issuer.example.com/token"),
+			token_backend_ref: None,
 			id_token_validator: test_id_token_validator(),
 		}),
 		client: ClientConfig {
@@ -141,6 +142,7 @@ fn test_callback_policy(token_endpoint: ProviderEndpoint) -> OidcPolicy {
 		issuer: TEST_ISSUER.into(),
 		authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
 		token_endpoint,
+		token_backend_ref: None,
 		id_token_validator: test_id_token_validator(),
 	});
 	policy
@@ -241,6 +243,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		jwks: Some(test_jwks_inline()),
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
+		provider_backend: None,
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
 	}
@@ -255,7 +258,27 @@ async fn compile_local_policy(
 	policy_id: PolicyId,
 ) -> Result<OidcPolicy, Error> {
 	config
-		.compile(test_client(), policy_id, &test_oidc_cookie_encoder())
+		.compile(test_client(), policy_id, &test_oidc_cookie_encoder(), None)
+		.await
+}
+
+async fn compile_local_policy_with_backend(
+	config: LocalOidcConfig,
+	policy_id: PolicyId,
+	backend: crate::types::agent::Target,
+) -> Result<OidcPolicy, Error> {
+	config
+		.compile(
+			test_client(),
+			policy_id,
+			&test_oidc_cookie_encoder(),
+			Some(RemoteBackendResolver::new(move |_| {
+				Ok(ResolvedRemoteBackend {
+					target: backend.clone(),
+					tls: None,
+				})
+			})),
+		)
 		.await
 }
 
@@ -481,6 +504,7 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 			issuer: TEST_ISSUER.into(),
 			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
 			token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+			token_backend_ref: None,
 			id_token_validator: test_id_token_validator(),
 		};
 		let client_config = ClientConfig {
@@ -572,6 +596,7 @@ async fn token_exchange_bounds_transport_failures() {
 			issuer: TEST_ISSUER.into(),
 			authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
 			token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+			token_backend_ref: None,
 			id_token_validator: test_id_token_validator(),
 		};
 		let client_config = ClientConfig {
@@ -920,6 +945,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
 				client_secret: SecretString::new("client-secret".into()),
+				provider_backend: None,
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -974,6 +1000,72 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 }
 
 #[tokio::test]
+async fn local_oidc_config_provider_backend_fetches_discovery_and_jwks() {
+	let mock = MockServer::start().await;
+	Mock::given(method("GET"))
+		.and(path("/.well-known/openid-configuration"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"issuer": TEST_ISSUER,
+			"authorization_endpoint": "https://issuer.example.com/authorize",
+			"token_endpoint": "https://issuer.example.com/token",
+			"jwks_uri": "https://issuer.example.com/jwks",
+			"token_endpoint_auth_methods_supported": ["client_secret_post"]
+		})))
+		.mount(&mock)
+		.await;
+	Mock::given(method("GET"))
+		.and(path("/jwks"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(test_jwks()))
+		.mount(&mock)
+		.await;
+
+	let backend = crate::types::agent::Target::from(("127.0.0.1", mock.address().port()));
+	let policy = compile_local_policy_with_backend(
+		LocalOidcConfig {
+			issuer: TEST_ISSUER.into(),
+			discovery: None,
+			authorization_endpoint: None,
+			token_endpoint: None,
+			token_endpoint_auth: None,
+			jwks: None,
+			client_id: TEST_CLIENT_ID.into(),
+			client_secret: SecretString::new("client-secret".into()),
+			provider_backend: Some(crate::types::local::SimpleLocalBackend::Opaque(
+				backend.clone(),
+			)),
+			redirect_uri: "http://localhost:3000/oauth/callback".into(),
+			scopes: vec![],
+		},
+		translated_policy_id("provider-backend-discovery"),
+		backend,
+	)
+	.await
+	.expect("provider backend discovery");
+
+	assert_eq!(
+		policy.provider.token_backend_ref,
+		Some(crate::types::agent::SimpleBackendReference::InlineBackend(
+			crate::types::agent::Target::from(("127.0.0.1", mock.address().port())),
+		))
+	);
+
+	let requests = mock.received_requests().await.expect("requests");
+	assert_eq!(requests.len(), 2);
+	assert_eq!(requests[0].url.path(), "/.well-known/openid-configuration");
+	assert_eq!(requests[1].url.path(), "/jwks");
+	for request in requests {
+		assert_eq!(
+			request
+				.headers
+				.get("host")
+				.and_then(|value| value.to_str().ok())
+				.map(str::to_owned),
+			Some("issuer.example.com".to_string())
+		);
+	}
+}
+
+#[tokio::test]
 async fn discovery_rejects_relative_provider_endpoints() {
 	let mock = MockServer::start().await;
 	Mock::given(method("GET"))
@@ -997,6 +1089,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		jwks: None,
 		client_id: TEST_CLIENT_ID.into(),
 		client_secret: SecretString::new("client-secret".into()),
+		provider_backend: None,
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	};
@@ -1021,6 +1114,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				jwks: Some(test_jwks_inline()),
 				client_id: TEST_CLIENT_ID.into(),
 				client_secret: SecretString::new("client-secret".into()),
+				provider_backend: None,
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -1049,6 +1143,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
 				client_secret: SecretString::new("client-secret".into()),
+				provider_backend: None,
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},

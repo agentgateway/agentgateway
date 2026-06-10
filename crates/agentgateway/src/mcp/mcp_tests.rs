@@ -1045,6 +1045,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 		resource_metadata: crate::types::agent::ResourceMetadata {
 			extra: Default::default(),
 		},
+		provider_backend: None,
 		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
 			vec![],
 			crate::http::jwt::Mode::Strict,

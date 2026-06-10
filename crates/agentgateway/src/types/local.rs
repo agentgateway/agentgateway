@@ -17,6 +17,7 @@ use crate::client::Client;
 use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::filters::HeaderModifier;
+use crate::http::oidc::{Error as OidcError, RemoteBackendResolver, ResolvedRemoteBackend};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
@@ -289,6 +290,99 @@ pub struct LocalConfig {
 	llm: Option<LocalLLMConfig>,
 	#[serde(default)]
 	mcp: Option<LocalSimpleMcpConfig>,
+}
+
+#[derive(Clone)]
+pub(crate) struct StandaloneAuthBackendResolver {
+	services: HashMap<NamespacedHostname, Service>,
+	backends: HashMap<BackendKey, FullLocalBackend>,
+}
+
+impl StandaloneAuthBackendResolver {
+	fn new(local: &LocalConfig) -> Self {
+		Self {
+			services: local
+				.services
+				.iter()
+				.cloned()
+				.map(|svc| (svc.namespaced_hostname(), svc))
+				.collect(),
+			backends: local
+				.backends
+				.iter()
+				.cloned()
+				.map(|backend| (backend.name.clone(), backend))
+				.collect(),
+		}
+	}
+
+	fn oidc_backend_resolver(&self) -> RemoteBackendResolver {
+		let this = self.clone();
+		RemoteBackendResolver::new(move |backend_ref| this.resolve(backend_ref))
+	}
+
+	fn resolve(
+		&self,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<ResolvedRemoteBackend, OidcError> {
+		match backend_ref {
+			SimpleBackendReference::Service { name, port } => {
+				let Some(service) = self.services.get(name) else {
+					return Err(OidcError::Config(format!(
+						"oidc providerBackend service {} was not found",
+						name
+					)));
+				};
+				Ok(ResolvedRemoteBackend {
+					target: Target::Hostname(service.hostname.clone(), *port),
+					tls: None,
+				})
+			},
+			SimpleBackendReference::Backend(name) => {
+				let Some(backend) = self.backends.get(name) else {
+					return Err(OidcError::Config(format!(
+						"oidc providerBackend backend {name} was not found"
+					)));
+				};
+				let target = match &backend.spec {
+					FullLocalBackendSpec::Opaque(target) => target.clone(),
+					_ => {
+						return Err(OidcError::Config(format!(
+							"oidc providerBackend backend {name} must be a static host backend"
+						)));
+					},
+				};
+				Ok(ResolvedRemoteBackend {
+					target,
+					tls: backend
+						.policies
+						.as_ref()
+						.and_then(local_backend_tls_from_policies)
+						.map(|tls| tls.base_config()),
+				})
+			},
+			SimpleBackendReference::InlineBackend(target) => Ok(ResolvedRemoteBackend {
+				target: target.clone(),
+				tls: None,
+			}),
+			SimpleBackendReference::Invalid => {
+				Err(OidcError::Config("oidc providerBackend is invalid".into()))
+			},
+		}
+	}
+}
+
+fn local_backend_tls_from_policies(
+	policies: &LocalBackendPolicies,
+) -> Option<crate::http::backendtls::BackendTLS> {
+	policies
+		.simple
+		.backend_tls
+		.clone()
+		.map(crate::http::backendtls::LocalBackendTLS::try_into)
+		.transpose()
+		.ok()
+		.flatten()
 }
 
 #[apply(schema_de!)]
@@ -1356,6 +1450,18 @@ impl SimpleLocalBackend {
 	}
 }
 
+pub fn simple_backend_reference_from_local(backend: &SimpleLocalBackend) -> SimpleBackendReference {
+	match backend {
+		SimpleLocalBackend::Service { name, port } => SimpleBackendReference::Service {
+			name: name.clone(),
+			port: *port,
+		},
+		SimpleLocalBackend::Opaque(target) => SimpleBackendReference::InlineBackend(target.clone()),
+		SimpleLocalBackend::Backend(name) => SimpleBackendReference::Backend(name.clone()),
+		SimpleLocalBackend::Invalid => SimpleBackendReference::Invalid,
+	}
+}
+
 #[apply(schema_de!)]
 struct LocalPolicy {
 	pub name: ResourceName,
@@ -1845,6 +1951,7 @@ async fn convert(
 	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
+	let auth_backend_resolver = StandaloneAuthBackendResolver::new(&i);
 	let LocalConfig {
 		config: _,
 		mut frontend_policies,
@@ -1870,6 +1977,7 @@ async fn convert(
 			let (l, routes, tcp_routes, pol, backends) = convert_listener(
 				client.clone(),
 				config,
+				&auth_backend_resolver,
 				idx,
 				l,
 				bind_name.clone(),
@@ -1905,6 +2013,7 @@ async fn convert(
 			client.clone(),
 			p.policy,
 			config.as_policy_context(&policy_key),
+			Some(&auth_backend_resolver),
 		)
 		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
@@ -1963,8 +2072,14 @@ async fn convert(
 
 	// Convert llm config if present
 	if let Some(llm_config) = llm {
-		let (llm_bind, llm_routes, llm_policies, llm_backends) =
-			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+		let (llm_bind, llm_routes, llm_policies, llm_backends) = convert_llm_config(
+			client.clone(),
+			config,
+			gateway.clone(),
+			&auth_backend_resolver,
+			llm_config,
+		)
+		.await?;
 		all_listener_routes.push((strng::new("llm"), llm_routes));
 		all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
 		all_binds.push(llm_bind);
@@ -1972,8 +2087,14 @@ async fn convert(
 		all_backends.extend_from_slice(&llm_backends);
 	}
 	if let Some(mcp_config) = mcp {
-		let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
-			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
+		let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = convert_mcp_config(
+			client.clone(),
+			config,
+			gateway.clone(),
+			&auth_backend_resolver,
+			mcp_config,
+		)
+		.await?;
 		all_listener_routes.push((strng::new("mcp"), mcp_routes));
 		all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
 		all_binds.push(mcp_bind);
@@ -1988,8 +2109,15 @@ async fn convert(
 		let mut routes = vec![];
 		for (idx, lr) in rg.routes.into_iter().enumerate() {
 			let route_group_listener_key: ListenerKey = strng::format!("routegroup/{rg_key}");
-			let (route, backends) =
-				convert_route(client.clone(), config, lr, idx, route_group_listener_key).await?;
+			let (route, backends) = convert_route(
+				client.clone(),
+				config,
+				Some(&auth_backend_resolver),
+				lr,
+				idx,
+				route_group_listener_key,
+			)
+			.await?;
 			all_backends.extend_from_slice(&backends);
 			routes.push(route);
 		}
@@ -2058,6 +2186,7 @@ async fn convert_llm_config(
 	client: client::Client,
 	config: &crate::Config,
 	gateway: ListenerTarget,
+	auth_backend_resolver: &StandaloneAuthBackendResolver,
 	llm_config: LocalLLMConfig,
 ) -> anyhow::Result<(
 	Bind,
@@ -2096,6 +2225,7 @@ async fn convert_llm_config(
 				..Default::default()
 			},
 			None,
+			Some(auth_backend_resolver),
 		)
 		.await?;
 		let gateway_policies: FilterOrPolicy = gateway.into();
@@ -2103,6 +2233,7 @@ async fn convert_llm_config(
 			client.clone(),
 			gateway_policies,
 			config.as_policy_context("listener/llm"),
+			Some(auth_backend_resolver),
 		)
 		.await?;
 		(
@@ -2614,6 +2745,7 @@ async fn convert_mcp_config(
 	client: client::Client,
 	config: &crate::Config,
 	gateway: ListenerTarget,
+	auth_backend_resolver: &StandaloneAuthBackendResolver,
 	mcp_config: LocalSimpleMcpConfig,
 ) -> anyhow::Result<(
 	Bind,
@@ -2631,7 +2763,13 @@ async fn convert_mcp_config(
 	let route_key = strng::new("mcp:default");
 
 	let resolved_policies = if let Some(pol) = policies {
-		split_policies(client.clone(), pol, config.as_policy_context(&route_key)).await?
+		split_policies(
+			client.clone(),
+			pol,
+			config.as_policy_context(&route_key),
+			Some(auth_backend_resolver),
+		)
+		.await?
 	} else {
 		ResolvedPolicies::default()
 	};
@@ -2725,6 +2863,7 @@ fn detect_bind_protocol(listeners: &ListenerSet) -> BindProtocol {
 async fn convert_listener(
 	client: client::Client,
 	config: &crate::Config,
+	auth_backend_resolver: &StandaloneAuthBackendResolver,
 	idx: usize,
 	l: LocalListener,
 	bind_key: Strng,
@@ -2806,7 +2945,15 @@ async fn convert_listener(
 
 	let mut rs = Vec::new();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, backends) = convert_route(client.clone(), config, l, idx, key.clone()).await?;
+		let (route, backends) = convert_route(
+			client.clone(),
+			config,
+			Some(auth_backend_resolver),
+			l,
+			idx,
+			key.clone(),
+		)
+		.await?;
 		all_backends.extend_from_slice(&backends);
 		rs.push(route)
 	}
@@ -2825,6 +2972,7 @@ async fn convert_listener(
 			client.clone(),
 			pol.into(),
 			config.as_policy_context(listener_policy_id),
+			Some(auth_backend_resolver),
 		)
 		.await?;
 		let target = PolicyTarget::Gateway(name.clone().into());
@@ -2849,9 +2997,10 @@ async fn convert_listener(
 	Ok((l, rs, trs, all_policies, all_backends))
 }
 
-pub async fn convert_route(
+pub(crate) async fn convert_route(
 	client: client::Client,
 	config: &crate::Config,
+	auth_backend_resolver: Option<&StandaloneAuthBackendResolver>,
 	lr: LocalRoute,
 	idx: usize,
 	listener_key: ListenerKey,
@@ -2922,6 +3071,7 @@ pub async fn convert_route(
 				oidc_policy_id: crate::http::oidc::PolicyId::route(&key),
 				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
 			}),
+			auth_backend_resolver,
 		)
 		.await?
 	} else {
@@ -3034,6 +3184,7 @@ pub(crate) async fn split_policies(
 	client: Client,
 	pol: FilterOrPolicy,
 	attached: Option<AttachedPolicyContext<'_>>,
+	auth_backend_resolver: Option<&StandaloneAuthBackendResolver>,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
@@ -3152,7 +3303,12 @@ pub(crate) async fn split_policies(
 		};
 		Some(TrafficPolicy::Oidc(RequestPolicy::single(
 			oidc
-				.compile(client.clone(), oidc_policy_id, oidc_cookie_encoder)
+				.compile(
+					client.clone(),
+					oidc_policy_id,
+					oidc_cookie_encoder,
+					auth_backend_resolver.map(|resolver| resolver.oidc_backend_resolver()),
+				)
 				.await?,
 		)))
 	} else {

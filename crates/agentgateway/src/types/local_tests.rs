@@ -57,6 +57,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			jwks: Some(FileInlineOrRemote::Inline(TEST_OIDC_JWKS.to_string())),
 			client_id: "client-id".into(),
 			client_secret: SecretString::new("client-secret".into()),
+			provider_backend: None,
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
 		}),

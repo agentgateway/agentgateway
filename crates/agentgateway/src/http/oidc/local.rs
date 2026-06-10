@@ -8,12 +8,15 @@ use super::{
 	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider, ProviderEndpoint,
 	RedirectUri, SameSiteMode, SessionConfig, dedupe_scopes, session,
 };
-use crate::client::Client;
+use crate::client::{ApplicationTransport, Call, Client};
+use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
 use crate::schema_de;
 use crate::serdes::FileInlineOrRemote;
+use crate::types::agent::{SimpleBackendReference, Target};
+use crate::types::local::{SimpleLocalBackend, simple_backend_reference_from_local};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {
@@ -29,6 +32,7 @@ struct PreparedOidcProvider {
 	issuer: String,
 	authorization_endpoint: ProviderEndpoint,
 	token_endpoint: ProviderEndpoint,
+	token_backend_ref: Option<SimpleBackendReference>,
 	token_endpoint_auth: TokenEndpointAuth,
 	id_token_jwks: JwkSet,
 }
@@ -85,6 +89,13 @@ pub struct LocalOidcConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub client_secret: SecretString,
 
+	/// Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.
+	///
+	/// When set, outbound calls connect to the referenced backend and reuse its backend TLS
+	/// configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.
+	#[serde(default)]
+	pub provider_backend: Option<SimpleLocalBackend>,
+
 	/// Absolute callback URI handled by the gateway.
 	/// This policy always redirects unauthenticated non-callback requests back through this login
 	/// flow.
@@ -103,20 +114,63 @@ struct DiscoveredProviderMetadata {
 	jwks: FileInlineOrRemote,
 }
 
+type ResolveRemoteBackendFn =
+	dyn Fn(&SimpleBackendReference) -> Result<ResolvedRemoteBackend, Error> + Send + Sync;
+
+struct ExplicitProviderConfig {
+	issuer: String,
+	authorization_endpoint: ProviderEndpoint,
+	token_endpoint: ProviderEndpoint,
+	token_endpoint_auth: TokenEndpointAuth,
+	jwks: FileInlineOrRemote,
+	token_backend_ref: Option<SimpleBackendReference>,
+}
+
+#[derive(Clone)]
+pub struct RemoteBackendResolver {
+	resolve: Arc<ResolveRemoteBackendFn>,
+}
+
+impl RemoteBackendResolver {
+	pub fn new<F>(resolve: F) -> Self
+	where
+		F: Fn(&SimpleBackendReference) -> Result<ResolvedRemoteBackend, Error> + Send + Sync + 'static,
+	{
+		Self {
+			resolve: Arc::new(resolve),
+		}
+	}
+
+	fn resolve(&self, backend_ref: &SimpleBackendReference) -> Result<ResolvedRemoteBackend, Error> {
+		(self.resolve)(backend_ref)
+	}
+}
+
+#[derive(Clone)]
+pub struct ResolvedRemoteBackend {
+	pub target: Target,
+	pub tls: Option<VersionedBackendTLS>,
+}
+
 impl LocalOidcConfig {
 	pub(crate) async fn compile(
 		self,
 		client: Client,
 		policy_id: PolicyId,
 		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
+		backend_resolver: Option<RemoteBackendResolver>,
 	) -> Result<OidcPolicy, Error> {
 		self
-			.resolve(client)
+			.resolve(client, backend_resolver)
 			.await?
 			.compile(policy_id, oidc_cookie_encoder)
 	}
 
-	async fn resolve(self, client: Client) -> Result<PreparedOidcPolicy, Error> {
+	async fn resolve(
+		self,
+		client: Client,
+		backend_resolver: Option<RemoteBackendResolver>,
+	) -> Result<PreparedOidcPolicy, Error> {
 		let LocalOidcConfig {
 			issuer,
 			discovery,
@@ -126,9 +180,13 @@ impl LocalOidcConfig {
 			jwks,
 			client_id,
 			client_secret,
+			provider_backend,
 			redirect_uri,
 			scopes,
 		} = self;
+		let provider_backend_ref = provider_backend
+			.as_ref()
+			.map(simple_backend_reference_from_local);
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let explicit_field_count = usize::from(authorization_endpoint.is_some())
 			+ usize::from(token_endpoint.is_some())
@@ -146,13 +204,28 @@ impl LocalOidcConfig {
 						url: default_discovery_url(&issuer)?,
 					},
 				};
-				let discovered = discover_provider_metadata(client.clone(), &issuer, discovery).await?;
-				let id_token_jwks = load_jwks(client, discovered.jwks, "discovered jwks source").await?;
+				let discovered = discover_provider_metadata(
+					client.clone(),
+					&issuer,
+					discovery,
+					provider_backend_ref.as_ref(),
+					backend_resolver.as_ref(),
+				)
+				.await?;
+				let id_token_jwks = load_jwks(
+					client,
+					discovered.jwks,
+					"discovered jwks source",
+					provider_backend_ref.as_ref(),
+					backend_resolver.as_ref(),
+				)
+				.await?;
 
 				PreparedOidcProvider {
 					issuer,
 					authorization_endpoint: discovered.authorization_endpoint,
 					token_endpoint: discovered.token_endpoint,
+					token_backend_ref: provider_backend_ref,
 					token_endpoint_auth: discovered.token_endpoint_auth,
 					id_token_jwks,
 				}
@@ -165,11 +238,15 @@ impl LocalOidcConfig {
 				}
 				resolve_explicit_provider(
 					client,
-					issuer,
-					authorization_endpoint.expect("checked above"),
-					token_endpoint.expect("checked above"),
-					token_endpoint_auth.unwrap_or_default(),
-					jwks.expect("checked above"),
+					ExplicitProviderConfig {
+						issuer,
+						authorization_endpoint: authorization_endpoint.expect("checked above"),
+						token_endpoint: token_endpoint.expect("checked above"),
+						token_endpoint_auth: token_endpoint_auth.unwrap_or_default(),
+						jwks: jwks.expect("checked above"),
+						token_backend_ref: provider_backend_ref,
+					},
+					backend_resolver.as_ref(),
 				)
 				.await?
 			},
@@ -195,16 +272,18 @@ async fn discover_provider_metadata(
 	client: Client,
 	issuer: &str,
 	discovery: FileInlineOrRemote,
+	backend_ref: Option<&SimpleBackendReference>,
+	backend_resolver: Option<&RemoteBackendResolver>,
 ) -> Result<DiscoveredProviderMetadata, Error> {
-	let document = discovery
-		.load::<OidcDiscoveryDocument>(client)
-		.await
-		.map_err(|e| {
-			Error::Config(format!(
-				"failed to decode oidc discovery response from {}: {e}",
-				describe_file_inline_or_remote(&discovery)
-			))
-		})?;
+	let document =
+		load_remote_json::<OidcDiscoveryDocument>(client, &discovery, backend_ref, backend_resolver)
+			.await
+			.map_err(|e| {
+				Error::Config(format!(
+					"failed to decode oidc discovery response from {}: {e}",
+					describe_file_inline_or_remote(&discovery)
+				))
+			})?;
 	if document.issuer != issuer {
 		return Err(Error::Config(format!(
 			"oidc discovery issuer mismatch: expected {issuer}, got {}",
@@ -237,18 +316,31 @@ async fn discover_provider_metadata(
 
 async fn resolve_explicit_provider(
 	client: Client,
-	issuer: String,
-	authorization_endpoint: ProviderEndpoint,
-	token_endpoint: ProviderEndpoint,
-	token_endpoint_auth: TokenEndpointAuth,
-	jwks: FileInlineOrRemote,
+	config: ExplicitProviderConfig,
+	backend_resolver: Option<&RemoteBackendResolver>,
 ) -> Result<PreparedOidcProvider, Error> {
-	let id_token_jwks = load_jwks(client, jwks, "explicit jwks source").await?;
+	let ExplicitProviderConfig {
+		issuer,
+		authorization_endpoint,
+		token_endpoint,
+		token_endpoint_auth,
+		jwks,
+		token_backend_ref,
+	} = config;
+	let id_token_jwks = load_jwks(
+		client,
+		jwks,
+		"explicit jwks source",
+		token_backend_ref.as_ref(),
+		backend_resolver,
+	)
+	.await?;
 
 	Ok(PreparedOidcProvider {
 		issuer,
 		authorization_endpoint,
 		token_endpoint,
+		token_backend_ref,
 		token_endpoint_auth,
 		id_token_jwks,
 	})
@@ -268,15 +360,75 @@ async fn load_jwks(
 	client: Client,
 	jwks: FileInlineOrRemote,
 	source: &'static str,
+	backend_ref: Option<&SimpleBackendReference>,
+	backend_resolver: Option<&RemoteBackendResolver>,
 ) -> Result<JwkSet, Error> {
-	let jwks = jwks.load::<JwkSet>(client).await.map_err(|e| {
-		Error::Config(format!(
-			"failed to load oidc jwks from {} {}: {e}",
-			source,
-			describe_file_inline_or_remote(&jwks)
-		))
-	})?;
+	let jwks = load_remote_json::<JwkSet>(client, &jwks, backend_ref, backend_resolver)
+		.await
+		.map_err(|e| {
+			Error::Config(format!(
+				"failed to load oidc jwks from {} {}: {e}",
+				source,
+				describe_file_inline_or_remote(&jwks)
+			))
+		})?;
 	Ok(jwks)
+}
+
+async fn load_remote_json<T: serde::de::DeserializeOwned>(
+	client: Client,
+	source: &FileInlineOrRemote,
+	backend_ref: Option<&SimpleBackendReference>,
+	backend_resolver: Option<&RemoteBackendResolver>,
+) -> anyhow::Result<T> {
+	match (source, backend_ref, backend_resolver) {
+		(FileInlineOrRemote::Remote { url }, Some(backend_ref), Some(resolver)) => {
+			let resolved = resolver.resolve(backend_ref)?;
+			let uri = backend_request_uri(url, &resolved.target)?;
+			let mut req = ::http::Request::builder()
+				.uri(uri)
+				.body(crate::http::Body::empty())?;
+			if let Some(authority) = url.authority() {
+				req.headers_mut().insert(
+					::http::header::HOST,
+					::http::HeaderValue::from_str(authority.as_str())?,
+				);
+			}
+			let resp = client
+				.call(Call {
+					req,
+					target: resolved.target,
+					transport: ApplicationTransport::from(resolved.tls).into(),
+				})
+				.await
+				.map_err(|e| anyhow::anyhow!(e.to_string()))?;
+			crate::json::from_response_body::<T>(resp)
+				.await
+				.map_err(Into::into)
+		},
+		_ => source.load::<T>(client).await,
+	}
+}
+
+fn backend_request_uri(
+	url: &http::Uri,
+	target: &crate::types::agent::Target,
+) -> anyhow::Result<http::Uri> {
+	let mut path = url.path().to_string();
+	if path.is_empty() {
+		path.push('/');
+	}
+	if let Some(query) = url.query() {
+		path.push('?');
+		path.push_str(query);
+	}
+	Ok(
+		http::Uri::builder()
+			.scheme("http")
+			.authority(target.hostport())
+			.path_and_query(path)
+			.build()?,
+	)
 }
 
 impl PreparedOidcProvider {
@@ -293,6 +445,7 @@ impl PreparedOidcProvider {
 			issuer: self.issuer,
 			authorization_endpoint: self.authorization_endpoint,
 			token_endpoint: self.token_endpoint,
+			token_backend_ref: self.token_backend_ref,
 			id_token_validator: crate::http::jwt::Jwt::from_providers(
 				vec![provider],
 				crate::http::jwt::Mode::Strict,

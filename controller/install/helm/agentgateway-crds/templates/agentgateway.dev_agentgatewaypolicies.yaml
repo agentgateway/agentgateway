@@ -4821,6 +4821,8 @@ spec:
                             description: |-
                               `issuer` identifies the IdP that issued the JWT. This corresponds to the
                               `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
+                              Use this form when gateway-initiated MCP authentication calls should connect
+                              directly to the issuer URL.
                             maxLength: 256
                             minLength: 1
                             type: string
@@ -4939,6 +4941,104 @@ spec:
                             - Keycloak
                             - Okta
                             type: string
+                          providerEndpoint:
+                            description: |-
+                              `providerEndpoint` configures how gateway-initiated MCP authentication calls
+                              such as OAuth metadata and client registration reach the provider when they
+                              should go through a referenced backend instead of connecting directly to
+                              `issuer`.
+
+                              Use this form when the provider should be reached through a referenced
+                              backend with its own transport configuration, such as custom backend TLS.
+                            properties:
+                              backendRef:
+                                description: |-
+                                  `backendRef` references the remote OAuth/OIDC provider endpoint to reach.
+                                  Supported types are `Service` and static `Backend`. An `AgentgatewayPolicy`
+                                  containing backend TLS config can then be attached to the referenced object
+                                  to configure TLS options for the connection.
+                                properties:
+                                  group:
+                                    default: ""
+                                    description: |-
+                                      Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                      When unspecified or empty string, core API group is inferred.
+                                    maxLength: 253
+                                    pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                    type: string
+                                  kind:
+                                    default: Service
+                                    description: |-
+                                      Kind is the Kubernetes resource kind of the referent. For example
+                                      "Service".
+
+                                      Defaults to "Service" when not specified.
+
+                                      ExternalName services can refer to CNAME DNS records that may live
+                                      outside of the cluster and as such are difficult to reason about in
+                                      terms of conformance. They also may not be safe to forward to (see
+                                      CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                      support ExternalName Services.
+
+                                      Support: Core (Services with a type other than ExternalName)
+
+                                      Support: Implementation-specific (Services with type ExternalName)
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                    type: string
+                                  name:
+                                    description: Name is the name of the referent.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  namespace:
+                                    description: |-
+                                      Namespace is the namespace of the backend. When unspecified, the local
+                                      namespace is inferred.
+
+                                      Note that when a namespace different than the local namespace is specified,
+                                      a ReferenceGrant object is required in the referent namespace to allow that
+                                      namespace's owner to accept the reference. See the ReferenceGrant
+                                      documentation for details.
+
+                                      Support: Core
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                    type: string
+                                  port:
+                                    description: |-
+                                      Port specifies the destination port number to use for this resource.
+                                      Port is required when the referent is a Kubernetes Service. In this
+                                      case, the port number is the service port number, not the target port.
+                                      For other resources, destination port might be derived from the referent
+                                      resource or this field.
+                                    format: int32
+                                    maximum: 65535
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                - name
+                                type: object
+                                x-kubernetes-validations:
+                                - message: Must have port for Service reference
+                                  rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                    ? has(self.port) : true'
+                              identityIssuer:
+                                description: |-
+                                  `identityIssuer` identifies the IdP that issued the JWT. This corresponds to the
+                                  `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
+                                  It is only used as the logical identity for token validation and provider
+                                  protocol semantics. It does not control how the gateway connects to the
+                                  provider.
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                            required:
+                            - backendRef
+                            - identityIssuer
+                            type: object
                           resourceMetadata:
                             additionalProperties:
                               x-kubernetes-preserve-unknown-fields: true
@@ -4948,6 +5048,11 @@ spec:
                         required:
                         - jwks
                         type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [issuer providerEndpoint]
+                            must be set
+                          rule: '[has(self.issuer),has(self.providerEndpoint)].filter(x,x==true).size()
+                            == 1'
                       authorization:
                         description: |-
                           authorization defines MCPBackend level authorization. Unlike authorization at the HTTP level, which will reject

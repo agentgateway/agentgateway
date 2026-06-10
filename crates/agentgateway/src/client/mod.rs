@@ -505,6 +505,14 @@ impl Client {
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
+		self.simple_call_with_transport(req, None).await
+	}
+
+	pub async fn simple_call_with_transport(
+		&self,
+		req: http::Request,
+		transport: Option<ApplicationTransport>,
+	) -> Result<http::Response, ProxyError> {
 		let host = req
 			.uri()
 			.host()
@@ -518,17 +526,19 @@ impl Client {
 			.port()
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
-		let transport = if scheme == &Scheme::HTTPS {
-			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config()).into()
-		} else {
-			ApplicationTransport::Plaintext.into()
-		};
+		let transport = transport.unwrap_or_else(|| {
+			if scheme == &Scheme::HTTPS {
+				ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
+			} else {
+				ApplicationTransport::Plaintext
+			}
+		});
 		let target = Target::from((host, port));
 		self
 			.call(Call {
 				req,
 				target,
-				transport,
+				transport: transport.into(),
 			})
 			.await
 	}

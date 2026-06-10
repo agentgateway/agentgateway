@@ -421,15 +421,18 @@ fn mcp_authentication_from_proto(
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
 	);
-	Ok(build_mcp_authentication(
-		m.issuer.clone(),
-		m.audiences.clone(),
-		m.provider,
-		convert_mcp_resource_metadata(m.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
-		std::sync::Arc::new(jwt_validator),
+	Ok(build_mcp_authentication(McpAuthenticationConfig {
+		issuer: m.issuer.clone(),
+		audiences: m.audiences.clone(),
+		provider: m.provider,
+		resource_metadata: convert_mcp_resource_metadata(
+			m.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+		),
+		provider_backend: resolve_simple_reference(m.provider_backend.as_ref()),
+		jwt_validator: std::sync::Arc::new(jwt_validator),
 		mode,
-		m.client_id.clone(),
-	))
+		client_id: m.client_id.clone(),
+	}))
 }
 
 fn jwt_provider_from_inline_jwks_or_warn(
@@ -490,20 +493,36 @@ where
 	ResourceMetadata { extra }
 }
 
-fn build_mcp_authentication(
+struct McpAuthenticationConfig {
 	issuer: String,
 	audiences: Vec<String>,
 	provider: i32,
 	resource_metadata: ResourceMetadata,
+	provider_backend: SimpleBackendReference,
 	jwt_validator: Arc<http::jwt::Jwt>,
 	mode: McpAuthenticationMode,
 	client_id: Option<String>,
-) -> McpAuthentication {
+}
+
+fn build_mcp_authentication(config: McpAuthenticationConfig) -> McpAuthentication {
+	let McpAuthenticationConfig {
+		issuer,
+		audiences,
+		provider,
+		resource_metadata,
+		provider_backend,
+		jwt_validator,
+		mode,
+		client_id,
+	} = config;
+
 	McpAuthentication {
 		issuer,
 		audiences,
 		provider: convert_mcp_provider(provider),
 		resource_metadata,
+		provider_backend: (provider_backend != SimpleBackendReference::Invalid)
+			.then_some(provider_backend),
 		jwt_validator,
 		mode,
 		client_id,
@@ -1813,21 +1832,24 @@ fn traffic_policy_from_proto(
 						)));
 					}
 					let provider = &jwt.providers[0];
-					Some(build_mcp_authentication(
-						provider.issuer.clone(),
-						provider.audiences.clone(),
-						mcp.provider,
-						convert_mcp_resource_metadata(mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
-						Arc::new(jwt_auth.clone()),
-						match tps::jwt::Mode::try_from(jwt.mode)
+					Some(build_mcp_authentication(McpAuthenticationConfig {
+						issuer: provider.issuer.clone(),
+						audiences: provider.audiences.clone(),
+						provider: mcp.provider,
+						resource_metadata: convert_mcp_resource_metadata(
+							mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+						),
+						provider_backend: SimpleBackendReference::Invalid,
+						jwt_validator: Arc::new(jwt_auth.clone()),
+						mode: match tps::jwt::Mode::try_from(jwt.mode)
 							.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
 						{
 							tps::jwt::Mode::Optional => McpAuthenticationMode::Optional,
 							tps::jwt::Mode::Strict => McpAuthenticationMode::Strict,
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
-						mcp.client_id.clone(),
-					))
+						client_id: mcp.client_id.clone(),
+					}))
 				},
 				None => None,
 			};

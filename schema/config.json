@@ -1883,6 +1883,16 @@
         "resourceMetadata": {
           "$ref": "#/$defs/ResourceMetadata"
         },
+        "providerBackend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "jwks": {
           "$ref": "#/$defs/FileInlineOrRemote"
         },
@@ -4124,6 +4134,17 @@
         "clientSecret": {
           "description": "OAuth2 client secret used for token exchange.",
           "type": "string"
+        },
+        "providerBackend": {
+          "description": "Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.\n\nWhen set, outbound calls connect to the referenced backend and reuse its backend TLS\nconfiguration, while retaining the configured issuer and endpoint URLs for protocol semantics.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackend"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "redirectURI": {
           "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",

@@ -801,6 +801,7 @@ impl TestBind {
 		let (route, backends) = local::convert_route(
 			self.pi.upstream.clone(),
 			&self.pi.cfg,
+			None,
 			pol,
 			self.routes,
 			LISTENER_KEY,
@@ -829,6 +830,7 @@ impl TestBind {
 			self.pi.upstream.clone(),
 			pol,
 			self.pi.cfg.as_policy_context(oidc_key),
+			None,
 		)
 		.await
 		.unwrap();
@@ -857,6 +859,7 @@ impl TestBind {
 			self.pi.upstream.clone(),
 			pol,
 			self.pi.cfg.as_policy_context(&oidc_key),
+			None,
 		)
 		.await
 		.unwrap();
@@ -885,6 +888,7 @@ impl TestBind {
 			self.pi.upstream.clone(),
 			pol,
 			self.pi.cfg.as_policy_context(oidc_key),
+			None,
 		)
 		.await
 		.unwrap();
@@ -927,7 +931,7 @@ impl TestBind {
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol, None)
+		let pols = local::split_policies(self.pi.upstream.clone(), pol, None, None)
 			.await
 			.unwrap();
 		for v in pols.backend_policies.into_iter() {

@@ -1549,6 +1549,7 @@ type BackendMCP struct {
 	Authentication *MCPAuthentication `json:"authentication,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=issuer;providerEndpoint
 type MCPAuthentication struct {
 	// ResourceMetadata defines the metadata to use for MCP resources.
 	// +optional
@@ -1561,8 +1562,10 @@ type MCPAuthentication struct {
 
 	// `issuer` identifies the IdP that issued the JWT. This corresponds to the
 	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
+	// Use this form when gateway-initiated MCP authentication calls should connect
+	// directly to the issuer URL.
 	// +optional
-	Issuer ShortString `json:"issuer,omitempty"`
+	Issuer *ShortString `json:"issuer,omitempty"`
 
 	// `audiences` specifies the list of allowed audiences that are allowed
 	// access. This corresponds to the `aud` claim
@@ -1578,6 +1581,16 @@ type MCPAuthentication struct {
 	// +required
 	JWKS RemoteJWKS `json:"jwks"`
 
+	// `providerEndpoint` configures how gateway-initiated MCP authentication calls
+	// such as OAuth metadata and client registration reach the provider when they
+	// should go through a referenced backend instead of connecting directly to
+	// `issuer`.
+	//
+	// Use this form when the provider should be reached through a referenced
+	// backend with its own transport configuration, such as custom backend TLS.
+	// +optional
+	ProviderEndpoint *MCPProviderEndpoint `json:"providerEndpoint,omitempty"`
+
 	// `mode` is the validation mode for JWT authentication.
 	// +kubebuilder:default=Strict
 	// +optional
@@ -1587,6 +1600,23 @@ type MCPAuthentication struct {
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+}
+
+type MCPProviderEndpoint struct {
+	// `identityIssuer` identifies the IdP that issued the JWT. This corresponds to the
+	// `iss` claim ([RFC 7519 §4.1.1](https://tools.ietf.org/html/rfc7519#section-4.1.1)).
+	// It is only used as the logical identity for token validation and provider
+	// protocol semantics. It does not control how the gateway connects to the
+	// provider.
+	// +required
+	IdentityIssuer ShortString `json:"identityIssuer"`
+
+	// `backendRef` references the remote OAuth/OIDC provider endpoint to reach.
+	// Supported types are `Service` and static `Backend`. An `AgentgatewayPolicy`
+	// containing backend TLS config can then be attached to the referenced object
+	// to configure TLS options for the connection.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 }
 
 // +k8s:enum

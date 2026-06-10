@@ -231,7 +231,7 @@ pub(super) async fn authorization_server_metadata(
 		_ => authorization_server_metadata_url(&auth.issuer),
 	};
 	let ureq = ::http::Request::builder()
-		.uri(metadata_uri)
+		.uri(&metadata_uri)
 		.body(Body::empty())?;
 	let upstream = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
@@ -340,14 +340,11 @@ pub(super) async fn client_registration(
 		_ => format!("{issuer}/clients-registrations/openid-connect"),
 	};
 	let ureq = ::http::Request::builder()
-		.uri(registration_uri)
+		.uri(&registration_uri)
 		.method(Method::POST)
 		.body(body)?;
 
-	let mut upstream = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
-		.simple_call(ureq)
-		.await?;
+	let mut upstream = call_auth_backend(client, auth, registration_uri, ureq).await?;
 
 	// Add CORS headers to the response
 	let headers = upstream.headers_mut();
@@ -362,6 +359,24 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+async fn call_auth_backend(
+	client: PolicyClient,
+	auth: &McpAuthentication,
+	uri: String,
+	mut req: Request,
+) -> Result<Response, ProxyError> {
+	*req.uri_mut() = uri
+		.parse()
+		.map_err(|e| ProxyError::ProcessingString(format!("invalid auth provider URL: {e}")))?;
+
+	let client = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc);
+	if let Some(provider_backend) = &auth.provider_backend {
+		client.call_reference(req, provider_backend).await
+	} else {
+		client.simple_call(req).await
+	}
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -411,7 +426,15 @@ async fn build_mock_dcr_response(
 mod tests {
 	use std::sync::Arc;
 
+	use wiremock::matchers::{header, method, path};
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
 	use super::*;
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::{
+		McpAuthentication, McpAuthenticationMode, ResourceMetadata, SimpleBackendReference, Target,
+	};
 
 	#[test]
 	fn request_uri_for_oauth_metadata_uses_x_forwarded_proto() {
@@ -473,6 +496,7 @@ mod tests {
 						),
 					)]),
 				},
+				provider_backend: None,
 				jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
 					Vec::new(),
 					crate::http::jwt::Mode::Strict,
@@ -506,6 +530,7 @@ mod tests {
 			resource_metadata: crate::types::agent::ResourceMetadata {
 				extra: Default::default(),
 			},
+			provider_backend: None,
 			jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
 				vec![],
 				crate::http::jwt::Mode::Strict,
@@ -637,5 +662,62 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	fn policy_client() -> PolicyClient {
+		let proxy = setup_proxy_test("{}").expect("proxy test harness");
+		PolicyClient {
+			inputs: proxy.inputs(),
+			outbound: None,
+		}
+	}
+
+	#[tokio::test]
+	async fn call_auth_backend_uses_provider_backend_reference() {
+		let mock = MockServer::start().await;
+		Mock::given(method("GET"))
+			.and(path("/.well-known/oauth-protected-resource/mcp"))
+			.and(header("host", "issuer.example.com"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"issuer": "https://issuer.example.com"
+			})))
+			.mount(&mock)
+			.await;
+
+		let auth = McpAuthentication {
+			issuer: "https://issuer.example.com".into(),
+			audiences: vec!["mcp".into()],
+			provider: None,
+			resource_metadata: ResourceMetadata {
+				extra: Default::default(),
+			},
+			provider_backend: Some(SimpleBackendReference::InlineBackend(Target::from((
+				"127.0.0.1",
+				mock.address().port(),
+			)))),
+			jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+				vec![],
+				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
+			)),
+			mode: McpAuthenticationMode::Strict,
+			client_id: None,
+		};
+
+		let req = ::http::Request::builder()
+			.uri("http://proxy.invalid/.well-known/oauth-protected-resource/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let response = call_auth_backend(
+			policy_client(),
+			&auth,
+			"https://issuer.example.com/.well-known/oauth-protected-resource/mcp".to_string(),
+			req,
+		)
+		.await
+		.expect("provider backend call should succeed");
+
+		assert_eq!(response.status(), ::http::StatusCode::OK);
 	}
 }

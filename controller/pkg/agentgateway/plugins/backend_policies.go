@@ -554,10 +554,28 @@ func translateMCPAuthenticationSpec(
 		errs = append(errs, metadataErr)
 	}
 
+	var issuer string
+	switch {
+	case authnPolicy.Issuer != nil:
+		issuer = string(*authnPolicy.Issuer)
+	case authnPolicy.ProviderEndpoint != nil:
+		issuer = string(authnPolicy.ProviderEndpoint.IdentityIssuer)
+	}
+
+	var providerBackend *api.BackendReference
+	if authnPolicy.ProviderEndpoint != nil {
+		var providerErr error
+		providerBackend, providerErr = buildBackendRef(ctx, authnPolicy.ProviderEndpoint.BackendRef, policy.Namespace)
+		if providerErr != nil {
+			errs = append(errs, fmt.Errorf("failed to translate mcpAuthentication providerEndpoint.backendRef: %v", providerErr))
+		}
+	}
+
 	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
-		Issuer:    authnPolicy.Issuer,
-		Audiences: authnPolicy.Audiences,
-		Provider:  idp,
+		Issuer:          issuer,
+		Audiences:       authnPolicy.Audiences,
+		Provider:        idp,
+		ProviderBackend: providerBackend,
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},

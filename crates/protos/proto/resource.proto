@@ -1378,6 +1378,7 @@ message BackendPolicySpec {
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
     optional string client_id = 9;
+    BackendReference provider_backend = 10;
   }
 
   oneof kind {

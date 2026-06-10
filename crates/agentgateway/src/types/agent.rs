@@ -2480,6 +2480,7 @@ pub struct McpAuthentication {
 	pub audiences: Vec<String>,
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
+	pub provider_backend: Option<SimpleBackendReference>,
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
 	pub client_id: Option<String>,
@@ -2519,6 +2520,8 @@ pub struct LocalMcpAuthentication {
 	pub audiences: Vec<String>,
 	pub provider: Option<McpIDP>,
 	pub resource_metadata: ResourceMetadata,
+	#[serde(default)]
+	pub provider_backend: Option<crate::types::local::SimpleLocalBackend>,
 	pub jwks: FileInlineOrRemote,
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -2571,6 +2574,10 @@ impl LocalMcpAuthentication {
 			audiences: self.audiences.clone(),
 			provider: self.provider.clone(),
 			resource_metadata: self.resource_metadata.clone(),
+			provider_backend: self
+				.provider_backend
+				.as_ref()
+				.map(crate::types::local::simple_backend_reference_from_local),
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
 			client_id: self.client_id.clone(),

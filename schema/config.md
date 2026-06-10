@@ -169,6 +169,14 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.service`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.service.name`|object||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.service.port`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string||
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
@@ -1375,6 +1383,14 @@
 |`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].routes[].policies.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.service`|object||
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.service.name`|object||
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.service.name.namespace`|string||
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.service.name.hostname`|string||
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.service.port`|integer||
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -5513,6 +5529,14 @@
 |`binds[].listeners[].policies.oidc.jwks.url`|string||
 |`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`binds[].listeners[].policies.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`binds[].listeners[].policies.oidc.providerBackend.service`|object||
+|`binds[].listeners[].policies.oidc.providerBackend.service.name`|object||
+|`binds[].listeners[].policies.oidc.providerBackend.service.name.namespace`|string||
+|`binds[].listeners[].policies.oidc.providerBackend.service.name.hostname`|string||
+|`binds[].listeners[].policies.oidc.providerBackend.service.port`|integer||
+|`binds[].listeners[].policies.oidc.providerBackend.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`binds[].listeners[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming JWT requests.|
@@ -6470,6 +6494,14 @@
 |`policies[].policy.mcpAuthentication.provider.keycloak`|object||
 |`policies[].policy.mcpAuthentication.provider.okta`|object||
 |`policies[].policy.mcpAuthentication.resourceMetadata`|object||
+|`policies[].policy.mcpAuthentication.providerBackend`|object||
+|`policies[].policy.mcpAuthentication.providerBackend.service`|object||
+|`policies[].policy.mcpAuthentication.providerBackend.service.name`|object||
+|`policies[].policy.mcpAuthentication.providerBackend.service.name.namespace`|string||
+|`policies[].policy.mcpAuthentication.providerBackend.service.name.hostname`|string||
+|`policies[].policy.mcpAuthentication.providerBackend.service.port`|integer||
+|`policies[].policy.mcpAuthentication.providerBackend.host`|string|Hostname or IP address|
+|`policies[].policy.mcpAuthentication.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.mcpAuthentication.jwks`|object||
 |`policies[].policy.mcpAuthentication.jwks.file`|string||
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
@@ -7676,6 +7708,14 @@
 |`policies[].policy.oidc.jwks.url`|string||
 |`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`policies[].policy.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`policies[].policy.oidc.providerBackend.service`|object||
+|`policies[].policy.oidc.providerBackend.service.name`|object||
+|`policies[].policy.oidc.providerBackend.service.name.namespace`|string||
+|`policies[].policy.oidc.providerBackend.service.name.hostname`|string||
+|`policies[].policy.oidc.providerBackend.service.port`|integer||
+|`policies[].policy.oidc.providerBackend.host`|string|Hostname or IP address|
+|`policies[].policy.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`policies[].policy.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -11839,6 +11879,14 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.keycloak`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.provider.okta`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.resourceMetadata`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.service`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.service.name`|object||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.service.port`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.mcpAuthentication.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string||
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
@@ -13045,6 +13093,14 @@
 |`routeGroups[].routes[].policies.oidc.jwks.url`|string||
 |`routeGroups[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`routeGroups[].routes[].policies.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`routeGroups[].routes[].policies.oidc.providerBackend.service`|object||
+|`routeGroups[].routes[].policies.oidc.providerBackend.service.name`|object||
+|`routeGroups[].routes[].policies.oidc.providerBackend.service.name.namespace`|string||
+|`routeGroups[].routes[].policies.oidc.providerBackend.service.name.hostname`|string||
+|`routeGroups[].routes[].policies.oidc.providerBackend.service.port`|integer||
+|`routeGroups[].routes[].policies.oidc.providerBackend.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`routeGroups[].routes[].policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|
@@ -18082,6 +18138,14 @@
 |`llm.policies.oidc.jwks.url`|string||
 |`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`llm.policies.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`llm.policies.oidc.providerBackend.service`|object||
+|`llm.policies.oidc.providerBackend.service.name`|object||
+|`llm.policies.oidc.providerBackend.service.name.namespace`|string||
+|`llm.policies.oidc.providerBackend.service.name.hostname`|string||
+|`llm.policies.oidc.providerBackend.service.port`|integer||
+|`llm.policies.oidc.providerBackend.host`|string|Hostname or IP address|
+|`llm.policies.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`llm.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming JWT requests.|
@@ -19010,6 +19074,14 @@
 |`mcp.policies.mcpAuthentication.provider.keycloak`|object||
 |`mcp.policies.mcpAuthentication.provider.okta`|object||
 |`mcp.policies.mcpAuthentication.resourceMetadata`|object||
+|`mcp.policies.mcpAuthentication.providerBackend`|object||
+|`mcp.policies.mcpAuthentication.providerBackend.service`|object||
+|`mcp.policies.mcpAuthentication.providerBackend.service.name`|object||
+|`mcp.policies.mcpAuthentication.providerBackend.service.name.namespace`|string||
+|`mcp.policies.mcpAuthentication.providerBackend.service.name.hostname`|string||
+|`mcp.policies.mcpAuthentication.providerBackend.service.port`|integer||
+|`mcp.policies.mcpAuthentication.providerBackend.host`|string|Hostname or IP address|
+|`mcp.policies.mcpAuthentication.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.mcpAuthentication.jwks`|object||
 |`mcp.policies.mcpAuthentication.jwks.file`|string||
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
@@ -20216,6 +20288,14 @@
 |`mcp.policies.oidc.jwks.url`|string||
 |`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
+|`mcp.policies.oidc.providerBackend`|object|Optional backend reference used for OIDC discovery, JWKS fetches, and token exchange.<br><br>When set, outbound calls connect to the referenced backend and reuse its backend TLS<br>configuration, while retaining the configured issuer and endpoint URLs for protocol semantics.|
+|`mcp.policies.oidc.providerBackend.service`|object||
+|`mcp.policies.oidc.providerBackend.service.name`|object||
+|`mcp.policies.oidc.providerBackend.service.name.namespace`|string||
+|`mcp.policies.oidc.providerBackend.service.name.hostname`|string||
+|`mcp.policies.oidc.providerBackend.service.port`|integer||
+|`mcp.policies.oidc.providerBackend.host`|string|Hostname or IP address|
+|`mcp.policies.oidc.providerBackend.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
 |`mcp.policies.oidc.scopes`|[]string|Additional OAuth2 scopes to request. `openid` is always included.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests using Basic Authentication with htpasswd.|

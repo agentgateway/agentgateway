@@ -12,6 +12,7 @@ use tracing::debug;
 use crate::http::{Body, PolicyResponse, Request, Response, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
+use crate::types::agent::SimpleBackendReference;
 
 mod callback;
 mod local;
@@ -22,7 +23,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use local::LocalOidcConfig;
+pub use local::{LocalOidcConfig, RemoteBackendResolver, ResolvedRemoteBackend};
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
@@ -139,6 +140,8 @@ pub struct Provider {
 	pub issuer: String,
 	pub authorization_endpoint: ProviderEndpoint,
 	pub token_endpoint: ProviderEndpoint,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub token_backend_ref: Option<SimpleBackendReference>,
 	pub id_token_validator: jwt::Jwt,
 }
 
