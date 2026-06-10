@@ -22,14 +22,14 @@ Send requests through the gateway:
 curl http://localhost:3000/
 ```
 
-The `localRateLimit` policy allows 10 requests per minute:
+The `localRateLimit` policy allows 50 requests per second:
 
 ```yaml
 policies:
   localRateLimit:
-  - maxTokens: 10
-    tokensPerFill: 1
-    fillInterval: 60s
+  - type: requests
+    limit: 50
+    unit: seconds
 ```
 
-Increase `maxTokens`, `tokensPerFill`, or shorten `fillInterval` in `config.yaml` to change the allowed request rate.
+Change `limit` or `unit` in `config.yaml` to adjust the allowed request rate.

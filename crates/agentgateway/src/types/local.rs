@@ -700,10 +700,28 @@ impl LocalExplicitOrConditional<LocalTransformationConfig> {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+#[cfg_attr(feature = "schema", schemars(with = "LocalRateLimitPolicySchema"))]
 enum LocalRateLimitPolicy {
 	Conditional(LocalConditionalPolicies<crate::http::localratelimit::RateLimit>),
 	Explicit(Vec<crate::http::localratelimit::RateLimit>),
+}
+
+#[cfg(feature = "schema")]
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+#[schemars(untagged, deny_unknown_fields)]
+enum LocalRateLimitPolicySchema {
+	Conditional(LocalConditionalRateLimitPoliciesSchema),
+	Explicit(Vec<crate::http::localratelimit::RateLimit>),
+}
+
+#[cfg(feature = "schema")]
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+#[schemars(deny_unknown_fields)]
+struct LocalConditionalRateLimitPoliciesSchema {
+	/// conditional policy entries. An entry without a condition must be the final fallback.
+	conditional: Vec<crate::http::localratelimit::ConditionalRateLimitConfig>,
 }
 
 impl LocalRateLimitPolicy {
@@ -2232,7 +2250,7 @@ struct LocalLLMPolicy {
 	/// Guardrails to apply to every configured model.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	guardrails: Option<PromptGuard>,
-	/// Local rate limits for incoming requests.
+	/// Local rate limits for incoming requests. Each entry must use either the simplified `limit`/`unit`/`burst` fields or the explicit `maxTokens`/`tokensPerFill`/`fillInterval` fields; the two forms cannot be mixed.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
 	/// Remote rate limit checks for incoming requests.
@@ -2712,7 +2730,7 @@ pub struct FilterOrPolicy {
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	backend_auth: Option<BackendAuth>,
-	/// Local rate limits for incoming requests.
+	/// Local rate limits for incoming requests. Each entry must use either the simplified `limit`/`unit`/`burst` fields or the explicit `maxTokens`/`tokensPerFill`/`fillInterval` fields; the two forms cannot be mixed.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
 	/// Remote rate limit checks for incoming requests.

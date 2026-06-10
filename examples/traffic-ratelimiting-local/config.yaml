@@ -10,8 +10,8 @@ binds:
     routes:
     - policies:
         localRateLimit:
-        - maxTokens: 10
-          tokensPerFill: 1
-          fillInterval: 60s
+        - type: requests
+          limit: 50
+          unit: seconds
       backends:
       - host: localhost:8080
