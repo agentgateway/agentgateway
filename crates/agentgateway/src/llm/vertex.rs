@@ -7,6 +7,11 @@ use crate::*;
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
 
+/// Host for the Discovery Engine ranking endpoint used by rerank. Distinct from the `aiplatform`
+/// host used for chat/embeddings; defined once so the request authority/Host header and the actual
+/// TCP/TLS connection target stay in sync.
+pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.googleapis.com");
+
 #[apply(schema!)]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,6 +89,13 @@ impl Provider {
 					location
 				)
 			},
+			(RouteType::Rerank, _) => {
+				strng::format!(
+					"/v1/projects/{}/locations/{}/rankingConfigs/default_ranking_config:rank",
+					self.project_id,
+					location
+				)
+			},
 			(RouteType::Embeddings, _) => {
 				let model = self.configured_model(request_model).unwrap_or_default();
 				strng::format!(
@@ -116,7 +128,12 @@ impl Provider {
 		}
 	}
 
-	pub fn get_host(&self, _request_model: Option<&str>) -> Strng {
+	pub fn get_host(&self, route_type: RouteType) -> Strng {
+		// Rerank is served by the Discovery Engine ranking endpoint, not the aiplatform host. Deciding
+		// it here keeps the request authority (Host header) and the TCP/TLS connection target in sync.
+		if route_type == RouteType::Rerank {
+			return DISCOVERY_ENGINE_HOST;
+		}
 		match &self.region {
 			None => strng::literal!("aiplatform.googleapis.com"),
 			Some(region) if region == "global" => strng::literal!("aiplatform.googleapis.com"),
@@ -241,7 +258,7 @@ mod tests {
 			model: None,
 			region: region.map(strng::new),
 		};
-		assert_eq!(p.get_host(None).as_str(), expected);
+		assert_eq!(p.get_host(RouteType::Completions).as_str(), expected);
 	}
 
 	#[test]

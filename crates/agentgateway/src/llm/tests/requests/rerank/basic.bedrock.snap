@@ -1,0 +1,60 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/rerank/basic.json
+info:
+  model: rerank-v3.5
+  query: What is the capital of the United States?
+  documents:
+    - Carson City is the capital city of the American state of Nevada.
+    - text: "Washington, D.C. is the capital of the United States."
+    - Capital punishment has existed in the United States since colonial times.
+  top_n: 2
+---
+{
+  "queries": [
+    {
+      "type": "TEXT",
+      "textQuery": {
+        "text": "What is the capital of the United States?"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "type": "INLINE",
+      "inlineDocumentSource": {
+        "type": "TEXT",
+        "textDocument": {
+          "text": "Carson City is the capital city of the American state of Nevada."
+        }
+      }
+    },
+    {
+      "type": "INLINE",
+      "inlineDocumentSource": {
+        "type": "TEXT",
+        "textDocument": {
+          "text": "Washington, D.C. is the capital of the United States."
+        }
+      }
+    },
+    {
+      "type": "INLINE",
+      "inlineDocumentSource": {
+        "type": "TEXT",
+        "textDocument": {
+          "text": "Capital punishment has existed in the United States since colonial times."
+        }
+      }
+    }
+  ],
+  "rerankingConfiguration": {
+    "type": "BEDROCK_RERANKING_MODEL",
+    "bedrockRerankingConfiguration": {
+      "modelConfiguration": {
+        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0"
+      },
+      "numberOfResults": 2
+    }
+  }
+}

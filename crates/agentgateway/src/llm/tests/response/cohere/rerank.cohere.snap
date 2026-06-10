@@ -1,0 +1,45 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/cohere/rerank.json
+info:
+  id: abc123
+  results:
+    - index: 2
+      relevance_score: 0.91
+    - index: 0
+      relevance_score: 0.42
+  meta:
+    billed_units:
+      search_units: 1
+    tokens:
+      input_tokens: 214
+      output_tokens: 2
+---
+{
+  "response": {
+    "id": "[id]",
+    "results": [
+      {
+        "index": 2,
+        "relevance_score": 0.91
+      },
+      {
+        "index": 0,
+        "relevance_score": 0.42
+      }
+    ],
+    "meta": {
+      "billed_units": {
+        "search_units": 1
+      },
+      "tokens": {
+        "input_tokens": 214.0,
+        "output_tokens": 2.0
+      }
+    }
+  },
+  "parsed": {
+    "input_tokens": 214,
+    "total_tokens": 214
+  }
+}

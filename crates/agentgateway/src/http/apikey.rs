@@ -25,19 +25,19 @@ pub enum Error {
 	InvalidCredentials,
 }
 
-/// Validation mode for API Key authentication
+/// Validation mode for API key authentication.
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
-	/// A valid API Key must be present.
+	/// Require a valid API key.
 	Strict,
-	/// If credentials exist, validate them.
+	/// Validate the API key when present.
 	/// This is the default option.
-	/// Warning: this allows requests without credentials!
+	/// Warning: this allows requests without an API key.
 	#[default]
 	Optional,
-	/// Requests are never rejected for missing or invalid API keys.
-	/// Warning: this allows requests without a valid API key!
+	/// Decode valid API keys for later policy use.
+	/// Warning: this allows requests with missing or invalid API keys.
 	Permissive,
 }
 
@@ -188,20 +188,23 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 
 #[apply(schema_de!)]
 pub struct LocalAPIKeys {
-	/// List of API keys
+	/// API keys that are accepted by this policy.
 	pub keys: Vec<LocalAPIKey>,
 
-	/// Validation mode for API keys
+	/// Controls whether requests must include a valid API key.
 	#[serde(default)]
 	pub mode: Mode,
 
+	/// Where to read the API key from in incoming requests.
 	#[serde(default)]
 	pub location: AuthorizationLocation,
 }
 
 #[apply(schema_de!)]
 pub struct LocalAPIKey {
+	/// API key value to accept.
 	pub key: APIKey,
+	/// Optional metadata attached to requests authenticated with this key.
 	pub metadata: Option<UserMetadata>,
 }
 

@@ -27,13 +27,17 @@ impl<'de> serde::Deserialize<'de> for RateLimit {
 
 #[apply(schema!)]
 pub struct RateLimitSpec {
+	/// Maximum number of tokens that can accumulate in the local bucket.
 	#[serde(default)]
 	pub max_tokens: u64,
+	/// Number of tokens added to the local bucket each fill interval.
 	#[serde(default)]
 	pub tokens_per_fill: u64,
+	/// How often the local bucket is refilled.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub fill_interval: Duration,
+	/// Whether this limit counts requests or LLM tokens.
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
@@ -42,9 +46,11 @@ pub struct RateLimitSpec {
 #[apply(schema!)]
 #[derive(Default, Eq, PartialEq)]
 pub enum RateLimitType {
+	/// Count each request as one unit.
 	#[serde(rename = "requests")]
 	#[default]
 	Requests,
+	/// Count LLM token usage.
 	#[serde(rename = "tokens")]
 	Tokens,
 }

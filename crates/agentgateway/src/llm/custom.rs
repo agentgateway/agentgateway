@@ -27,6 +27,7 @@ impl Provider {
 			InputFormat::Embeddings => &[ProviderFormat::Embeddings],
 			InputFormat::CountTokens => &[ProviderFormat::AnthropicTokenCount],
 			InputFormat::Realtime => &[ProviderFormat::Realtime],
+			InputFormat::Rerank => &[ProviderFormat::Rerank],
 			InputFormat::Detect => return None,
 		};
 		preferences
@@ -64,6 +65,7 @@ pub enum ProviderFormat {
 	Embeddings,
 	AnthropicTokenCount,
 	Realtime,
+	Rerank,
 }
 
 impl ProviderFormat {
@@ -75,6 +77,7 @@ impl ProviderFormat {
 			Self::Embeddings => InputFormat::Embeddings,
 			Self::AnthropicTokenCount => InputFormat::CountTokens,
 			Self::Realtime => InputFormat::Realtime,
+			Self::Rerank => InputFormat::Rerank,
 		}
 	}
 
@@ -86,6 +89,7 @@ impl ProviderFormat {
 			Self::Embeddings => RouteType::Embeddings,
 			Self::AnthropicTokenCount => RouteType::AnthropicTokenCount,
 			Self::Realtime => RouteType::Realtime,
+			Self::Rerank => RouteType::Rerank,
 		}
 	}
 }

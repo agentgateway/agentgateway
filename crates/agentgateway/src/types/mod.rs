@@ -2,6 +2,7 @@ pub mod agent;
 pub(crate) mod agent_xds;
 pub mod backend;
 pub mod discovery;
+pub(crate) mod dynamic_ca_cert;
 pub mod frontend;
 pub mod loadbalancer;
 pub mod local;

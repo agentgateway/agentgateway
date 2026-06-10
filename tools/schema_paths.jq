@@ -175,11 +175,29 @@ def simple_type:
     "any"
   end;
 
+def preserve_union_branch_description:
+  (.description? // "") as $branch_description |
+  if $branch_description != "" and .properties and ((.properties | keys_unsorted | length) == 1) then
+    .properties |= with_entries(
+      (.value.description? // "") as $property_description |
+      .value.description =
+        if $property_description == "" then
+          $branch_description
+        elif $property_description == $branch_description then
+          $property_description
+        else
+          $branch_description + "\n" + $property_description
+        end
+    )
+  else
+    .
+  end;
+
 def schema_paths(prefix):
   (if .oneOf then
-    .oneOf[] | schema_paths(prefix)
+    .oneOf[] | preserve_union_branch_description | schema_paths(prefix)
   elif .anyOf then
-    .anyOf[] | schema_paths(prefix)
+    .anyOf[] | preserve_union_branch_description | schema_paths(prefix)
   elif .allOf then
     .allOf[] | schema_paths(prefix)
   else

@@ -190,6 +190,10 @@ macro_rules! provider_env_model_test {
 	};
 }
 
+// Pins the Discovery Engine location to `global` in `llm_config` (ranking is not served from the
+// Vertex AI regions used for chat/embeddings).
+const VERTEX_RERANK_MODEL: &str = "semantic-ranker-default@latest";
+
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
 	let policies = if provider == "azure" {
 		r#"
@@ -214,18 +218,29 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 		r#"
               region: us-west-2
               "#
+		.to_string()
 	} else if provider == "vertex" {
-		r#"
+		// Discovery Engine ranking (rerank) is only served from `global`/`us`/`eu`, not the Vertex AI
+		// regions used for chat/embeddings, so the rerank model pins the location to `global`.
+		let region = if model == VERTEX_RERANK_MODEL {
+			"global"
+		} else {
+			"us-east5"
+		};
+		format!(
+			r#"
               projectId: $VERTEX_PROJECT
-              region: us-east5
+              region: {region}
               "#
+		)
 	} else if provider == "azure" {
 		r#"
               resourceName: $AZURE_RESOURCE_NAME
               resourceType: $AZURE_RESOURCE_TYPE
               "#
+		.to_string()
 	} else {
-		""
+		String::new()
 	};
 	format!(
 		r#"
@@ -257,6 +272,7 @@ binds:
                 /v1/messages/count_tokens: anthropicTokenCount
                 /v1/responses: responses
                 /v1/embeddings: embeddings
+                /v1/rerank: rerank
                 "*": passthrough
           provider:
             {provider}:
@@ -304,6 +320,7 @@ mod bedrock {
 	const MODEL_NOVA_PRO: &str = "us.amazon.nova-pro-v1:0";
 	const MODEL_TITAN_EMBED: &str = "amazon.titan-embed-text-v2:0";
 	const MODEL_COHERE_EMBED: &str = "cohere.embed-english-v3";
+	const MODEL_COHERE_RERANK: &str = "cohere.rerank-v3-5:0";
 	const MODEL_HAIKU_45_PROFILE: &str = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 	const MODEL_HAIKU_45_BASE: &str = "anthropic.claude-haiku-4-5-20251001-v1:0";
 	const MODEL_OPUS_46_PROFILE: &str = "us.anthropic.claude-opus-4-6-v1";
@@ -380,6 +397,7 @@ mod bedrock {
 		send_embeddings,
 		Some(1024)
 	);
+	provider_model_test!(rerank, "bedrock", "", MODEL_COHERE_RERANK, send_rerank);
 	provider_model_test!(
 		messages_count_tokens,
 		"bedrock",
@@ -635,6 +653,7 @@ mod vertex {
 		send_embeddings,
 		None
 	);
+	provider_model_test!(rerank, "vertex", "", VERTEX_RERANK_MODEL, send_rerank);
 	provider_env_model_test!(
 		messages_count_tokens,
 		"vertex",
@@ -1353,6 +1372,57 @@ async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) 
 		prompt_tokens,
 	)
 	.await;
+}
+
+// The query has exactly one correct answer (document index 2), so a working rerank ranks it first.
+async fn send_rerank(gw: &AgentGateway) {
+	use http_body_util::BodyExt;
+
+	let resp = gw
+		.send_request_json(
+			"http://localhost/v1/rerank",
+			json!({
+				"query": "what is the capital of the United States?",
+				"documents": [
+					"Paris is the capital of France.",
+					"The sky is blue on a clear day.",
+					"Washington, D.C. is the capital of the United States."
+				],
+				"top_n": 2
+			}),
+		)
+		.await;
+
+	let status = resp.status();
+	let body = resp.into_body().collect().await.expect("collect body");
+	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	assert_eq!(status, StatusCode::OK, "response: {body}");
+
+	let results = body["results"].as_array().expect("results array");
+	assert!(!results.is_empty(), "expected at least one result: {body}");
+	assert!(results.len() <= 2, "top_n=2 must cap results: {body}");
+
+	for r in results {
+		let index = r["index"].as_u64().expect("result index");
+		assert!(index < 3, "index out of document range: {r}");
+		assert!(
+			r["relevance_score"].as_f64().is_some(),
+			"missing relevance_score: {r}"
+		);
+	}
+
+	assert_eq!(
+		results[0]["index"], 2,
+		"best document must rank first: {body}"
+	);
+	let scores: Vec<f64> = results
+		.iter()
+		.map(|r| r["relevance_score"].as_f64().unwrap())
+		.collect();
+	assert!(
+		scores.windows(2).all(|w| w[0] >= w[1]),
+		"results must be ranked best-first: {scores:?}"
+	);
 }
 
 async fn send_messages_adaptive_thinking(gw: &AgentGateway) {

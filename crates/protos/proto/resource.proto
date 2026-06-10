@@ -183,6 +183,7 @@ message TLSConfig {
   enum CertificateSource {
     INLINE = 0;
     ISTIO_WORKLOAD = 1;
+    DYNAMIC_CA = 2;
   }
 
   enum TLSVersion {
@@ -1237,6 +1238,8 @@ message BackendPolicySpec {
       EMBEDDINGS = 7;
       // OpenAI /v1/realtime
       REALTIME = 8;
+      // Processes Cohere /v2/rerank format requests
+      RERANK = 10;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
@@ -1538,6 +1541,7 @@ message AIBackend {
     EMBEDDINGS = 4;
     ANTHROPIC_TOKEN_COUNT = 5;
     REALTIME = 6;
+    RERANK = 7;
   }
   message ProviderFormatConfig {
     ProviderFormat format = 1;

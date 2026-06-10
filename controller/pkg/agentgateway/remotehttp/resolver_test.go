@@ -13,7 +13,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -83,8 +82,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(wellknown.AgentgatewayBackendGVK.Group),
 								Kind:  gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind),
 								Name:  gwv1.ObjectName("discovery-backend"),
@@ -138,8 +137,8 @@ func TestResolve(t *testing.T) {
 						CreationTimestamp: metav1.Unix(20, 0),
 					},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -159,8 +158,8 @@ func TestResolve(t *testing.T) {
 						CreationTimestamp: metav1.Unix(10, 0),
 					},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -250,8 +249,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -374,8 +373,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),

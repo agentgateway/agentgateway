@@ -9,7 +9,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 )
 
 func TestSectionMatcher(t *testing.T) {
@@ -28,8 +27,8 @@ func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 			CreationTimestamp: metav1.Unix(10, 0),
 		},
 		Spec: agentgateway.AgentgatewayPolicySpec{
-			TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 					Group: gwv1.Group(""),
 					Kind:  gwv1.Kind("Service"),
 					Name:  gwv1.ObjectName("oauth2"),
@@ -44,8 +43,8 @@ func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 			CreationTimestamp: metav1.Unix(20, 0),
 		},
 		Spec: agentgateway.AgentgatewayPolicySpec{
-			TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 					Group: gwv1.Group(""),
 					Kind:  gwv1.Kind("Service"),
 					Name:  gwv1.ObjectName("oauth2"),

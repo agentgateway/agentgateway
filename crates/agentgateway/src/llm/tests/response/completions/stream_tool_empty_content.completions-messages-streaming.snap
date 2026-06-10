@@ -1,0 +1,33 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/stream_tool_empty_content.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"chatcmpl-tool-empty-content","type":"message","role":"assistant","content":[],"model":"claude-opus-4-8","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_empty_content","name":"Bash","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"com"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"mand\":\"pwd\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":12,"output_tokens":8}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 12,
+  "output_tokens": 8,
+  "total_tokens": 20,
+  "provider_model": "claude-opus-4-8"
+}

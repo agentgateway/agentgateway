@@ -12,8 +12,10 @@ use crate::*;
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[derive(Eq, PartialEq)]
 pub struct Policy {
+	/// Total number of attempts, including the original request.
 	#[serde(default = "default_attempts")]
 	pub attempts: NonZeroU8,
+	/// Delay between retry attempts.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -21,6 +23,7 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backoff: Option<Duration>,
+	/// HTTP response status codes that should be retried.
 	#[serde(serialize_with = "ser_display_iter", deserialize_with = "de_codes")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<std::num::NonZeroU16>"))]
 	pub codes: Box<[http::StatusCode]>,
