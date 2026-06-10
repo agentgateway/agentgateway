@@ -1088,15 +1088,21 @@
 |`binds[].listeners[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
 |`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
-|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].limit`|integer|Sustained request or token allowance per unit.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].burst`|integer|Additional bucket capacity above the sustained limit.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].limit`|integer|Sustained request or token allowance per unit.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].burst`|integer|Additional bucket capacity above the sustained limit.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7396,15 +7402,21 @@
 |`policies[].policy.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
 |`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests.|
 |`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
-|`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`policies[].policy.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`policies[].policy.localRateLimit.conditional[].limit`|integer|Sustained request or token allowance per unit.|
+|`policies[].policy.localRateLimit.conditional[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`policies[].policy.localRateLimit.conditional[].burst`|integer|Additional bucket capacity above the sustained limit.|
+|`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`policies[].policy.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`policies[].policy.localRateLimit[].limit`|integer|Sustained request or token allowance per unit.|
+|`policies[].policy.localRateLimit[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`policies[].policy.localRateLimit[].burst`|integer|Additional bucket capacity above the sustained limit.|
 |`policies[].policy.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -12765,15 +12777,21 @@
 |`routeGroups[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
 |`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
-|`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].limit`|integer|Sustained request or token allowance per unit.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].burst`|integer|Additional bucket capacity above the sustained limit.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`routeGroups[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`routeGroups[].routes[].policies.localRateLimit[].limit`|integer|Sustained request or token allowance per unit.|
+|`routeGroups[].routes[].policies.localRateLimit[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`routeGroups[].routes[].policies.localRateLimit[].burst`|integer|Additional bucket capacity above the sustained limit.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -18699,6 +18717,9 @@
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`llm.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`llm.policies.localRateLimit[].limit`|integer|Sustained request or token allowance per unit.|
+|`llm.policies.localRateLimit[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`llm.policies.localRateLimit[].burst`|integer|Additional bucket capacity above the sustained limit.|
 |`llm.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`llm.policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.remoteRateLimit.service.name`|object||
@@ -19937,15 +19958,21 @@
 |`mcp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
 |`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
-|`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.localRateLimit.conditional[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`mcp.policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.policies.localRateLimit.conditional[].limit`|integer|Sustained request or token allowance per unit.|
+|`mcp.policies.localRateLimit.conditional[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`mcp.policies.localRateLimit.conditional[].burst`|integer|Additional bucket capacity above the sustained limit.|
+|`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
 |`mcp.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
+|`mcp.policies.localRateLimit[].limit`|integer|Sustained request or token allowance per unit.|
+|`mcp.policies.localRateLimit[].unit`|enum|Unit of time for the limit.<br>Possible values: `seconds`, `minutes`, `hours`.|
+|`mcp.policies.localRateLimit[].burst`|integer|Additional bucket capacity above the sustained limit.|
 |`mcp.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
