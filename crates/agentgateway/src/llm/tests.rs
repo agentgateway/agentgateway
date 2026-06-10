@@ -563,7 +563,10 @@ mod response {
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("stream", ALL_COMPLETIONS),
+		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
+	];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),

@@ -493,7 +493,12 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(content) = &choice.delta.content {
+						if let Some(content) = choice
+							.delta
+							.content
+							.as_ref()
+							.filter(|content| !content.is_empty())
+						{
 							let index = open_text_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
