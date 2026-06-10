@@ -96,6 +96,24 @@ pub(super) fn start_login(
 	Ok(crate::http::PolicyResponse::default().with_response(response))
 }
 
+pub(super) fn restart_login_clearing_transaction(
+	policy: &OidcPolicy,
+	req: &Request,
+	transaction_cookie_name: &str,
+) -> Result<crate::http::PolicyResponse, Error> {
+	let mut response = start_login(policy, req)?;
+	if let Some(direct_response) = response.direct_response.as_mut() {
+		let clear_transaction = policy
+			.session
+			.clear_cookie(transaction_cookie_name, policy.redirect_uri.https);
+		direct_response.headers_mut().append(
+			::http::header::SET_COOKIE,
+			clear_transaction.parse().map_err(anyhow::Error::from)?,
+		);
+	}
+	Ok(response)
+}
+
 pub(super) async fn handle_callback(
 	policy: &OidcPolicy,
 	context: CallbackRequestContext,

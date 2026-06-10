@@ -253,24 +253,41 @@ impl OidcPolicy {
 		let transaction_cookie_name = self
 			.session
 			.transaction_cookie_name(&callback_state.transaction_id);
-		let transaction_cookie = crate::http::read_request_cookie(req, &transaction_cookie_name)
-			.ok_or(Error::MissingTransaction)?
-			.to_string();
+		let transaction_cookie = match crate::http::read_request_cookie(req, &transaction_cookie_name) {
+			Some(cookie) => cookie.to_string(),
+			None => {
+				return Ok(Some(callback::restart_login_clearing_transaction(
+					self,
+					req,
+					&transaction_cookie_name,
+				)?));
+			},
+		};
 		if let Some(error) = query.error {
 			return Err(Error::ProviderCallback(error));
 		}
 		let code = query.code.ok_or(Error::InvalidCallback)?;
-		let response = callback::handle_callback(
+		let response = match callback::handle_callback(
 			self,
 			callback::CallbackRequestContext {
 				code,
 				callback_state,
-				transaction_cookie_name,
+				transaction_cookie_name: transaction_cookie_name.clone(),
 				transaction_cookie,
 			},
 			client,
 		)
-		.await?;
+		.await
+		{
+			Ok(response) => response,
+			Err(
+				Error::InvalidTransaction
+				| Error::PolicyMismatch
+				| Error::CsrfMismatch
+				| Error::NonceMismatch,
+			) => callback::restart_login_clearing_transaction(self, req, &transaction_cookie_name)?,
+			Err(err) => return Err(err),
+		};
 		Ok(Some(response))
 	}
 }
