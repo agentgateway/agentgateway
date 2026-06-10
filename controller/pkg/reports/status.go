@@ -139,6 +139,7 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	handleInvalidAddresses(gwReport, &gw)
 
 	addMissingGatewayConditions(r.Gateway(&gw), &gw)
+	setInvalidGatewayParametersCondition(gwReport, &gw)
 
 	finalConditions := make([]metav1.Condition, 0)
 	for _, gwCondition := range gwReport.GetConditions() {
@@ -390,6 +391,26 @@ func addMissingGatewayConditions(gwReport *GatewayReport, gw *gwv1.Gateway) {
 			Message: GatewayProgrammedMessage,
 		})
 	}
+}
+
+func setInvalidGatewayParametersCondition(gwReport *GatewayReport, gw *gwv1.Gateway) {
+	if gw.Spec.Infrastructure == nil || gw.Spec.Infrastructure.ParametersRef == nil {
+		return
+	}
+	ref := gw.Spec.Infrastructure.ParametersRef
+	// This is only an approximate report-side check. The deployer controller
+	// resolves the reference and reports exact missing/unsupported parameter
+	// errors; here we just avoid marking clearly compatible parameter kinds as
+	// invalid before the deployer has reconciled.
+	if strings.Contains(string(ref.Kind), "AgentgatewayParameters") {
+		return
+	}
+	gwReport.SetCondition(reporter.GatewayCondition{
+		Type:    gwv1.GatewayConditionAccepted,
+		Status:  metav1.ConditionFalse,
+		Reason:  gwv1.GatewayReasonInvalidParameters,
+		Message: fmt.Sprintf("infrastructure.parametersRef on Gateway %s/%s references unsupported type", gw.GetNamespace(), gw.GetName()),
+	})
 }
 
 // Reports will initially only contain negative conditions found during translation,
