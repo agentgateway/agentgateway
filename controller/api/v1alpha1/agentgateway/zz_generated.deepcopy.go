@@ -3705,12 +3705,12 @@ func (in *Retry) DeepCopyInto(out *Retry) {
 	}
 	if in.Precondition != nil {
 		in, out := &in.Precondition, &out.Precondition
-		*out = new(shared.CELExpression)
+		*out = new(CELExpression)
 		**out = **in
 	}
 	if in.Postcondition != nil {
 		in, out := &in.Postcondition, &out.Postcondition
-		*out = new(shared.CELExpression)
+		*out = new(CELExpression)
 		**out = **in
 	}
 }

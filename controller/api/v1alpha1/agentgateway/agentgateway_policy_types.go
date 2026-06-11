@@ -2359,13 +2359,13 @@ type Retry struct {
 	// attempt is made. When it evaluates to `false`, retries are disabled and only
 	// the initial attempt is made.
 	// +optional
-	Precondition *shared.CELExpression `json:"precondition,omitempty"`
+	Precondition *CELExpression `json:"precondition,omitempty"`
 
 	// `postcondition` is a CEL expression evaluated against each response to decide
 	// whether to retry. A response is retried when its status code is in `codes` or
 	// this expression evaluates to `true`.
 	// +optional
-	Postcondition *shared.CELExpression `json:"postcondition,omitempty"`
+	Postcondition *CELExpression `json:"postcondition,omitempty"`
 }
 
 // Per-request access log settings.
