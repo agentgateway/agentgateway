@@ -503,6 +503,7 @@ binds:
           - status: 404
             body: missing
         transformations:
+          conditionalPolicy: allMatching
           conditional:
           - condition: request.path == "/transform"
             request:

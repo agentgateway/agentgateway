@@ -19,8 +19,9 @@ pub use discovery::{
 	StoreUpdater as DiscoveryStoreUpdater, WorkloadStore,
 };
 pub use policy::{
-	BackendPolicy, BackendPolicyTrait, HasExpressions, PolicyExpressions, RequestPolicy,
-	RequestPolicyTrait, ResponsePolicy, ResponsePolicyTrait,
+	BackendPolicy, BackendPolicyTrait, ConditionalPolicyExecutionMode, HasExpressions,
+	PolicyExpressions, PolicyWithCondition, RequestPolicy, RequestPolicyTrait, ResponsePolicy,
+	ResponsePolicyTrait,
 };
 
 use crate::store;

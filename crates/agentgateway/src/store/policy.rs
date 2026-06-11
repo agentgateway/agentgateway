@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use http::HeaderMap;
+use macro_rules_attribute::apply;
 use serde::Serialize;
 
 use crate::cel::{ContextBuilder, Expression};
@@ -8,6 +9,7 @@ use crate::http::Response;
 use crate::proxy;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::schema_enum;
 use crate::telemetry::log::RequestLog;
 
 pub trait HasExpressions: Send + Sync + 'static {
@@ -87,18 +89,27 @@ pub trait BackendPolicyTrait: Send + Sync + 'static {
 #[derive(Debug)]
 pub struct RequestPolicy<T> {
 	inner: RequestPolicyInner<T>,
+	execution_mode: ConditionalPolicyExecutionMode,
 	// Set when a less-specific policy with inheritance=Override has populated this field.
 	// More-specific policies are still visited later in merge order, but must not replace this
 	// policy once the field is locked.
 	inheritance_locked: bool,
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum ConditionalPolicyExecutionMode {
+	#[default]
+	FirstMatching,
+	AllMatching,
+}
+
 #[derive(Debug)]
 enum RequestPolicyInner<T> {
 	Empty,
 	Single(PolicyWithCondition<T>),
-	/// Multiple policies are run in order, and the first one that matches is used.
-	/// In the future, we *may* support running all matches instead of the first.
+	/// Multiple policies are evaluated in order. The execution mode determines whether the first
+	/// matching policy or all matching policies are used.
 	Multiple(Vec<PolicyWithCondition<T>>),
 }
 
@@ -106,6 +117,7 @@ impl<T> Default for RequestPolicy<T> {
 	fn default() -> Self {
 		Self {
 			inner: RequestPolicyInner::Empty,
+			execution_mode: ConditionalPolicyExecutionMode::FirstMatching,
 			inheritance_locked: false,
 		}
 	}
@@ -115,6 +127,7 @@ impl<T> Clone for RequestPolicy<T> {
 	fn clone(&self) -> Self {
 		Self {
 			inner: self.inner.clone(),
+			execution_mode: self.execution_mode,
 			inheritance_locked: self.inheritance_locked,
 		}
 	}
@@ -168,6 +181,7 @@ impl<T> RequestPolicy<T> {
 				pol: Arc::new(pol),
 				condition: None,
 			}),
+			execution_mode: ConditionalPolicyExecutionMode::FirstMatching,
 			inheritance_locked: false,
 		}
 	}
@@ -178,11 +192,22 @@ impl<T> RequestPolicy<T> {
 				pol,
 				condition: None,
 			}),
+			execution_mode: ConditionalPolicyExecutionMode::FirstMatching,
 			inheritance_locked: false,
 		}
 	}
 
 	pub fn from_policy_inners<I>(policies: I) -> Self
+	where
+		I: IntoIterator<Item = PolicyWithCondition<T>>,
+	{
+		Self::from_policy_inners_with_mode(policies, ConditionalPolicyExecutionMode::FirstMatching)
+	}
+
+	pub fn from_policy_inners_with_mode<I>(
+		policies: I,
+		execution_mode: ConditionalPolicyExecutionMode,
+	) -> Self
 	where
 		I: IntoIterator<Item = PolicyWithCondition<T>>,
 	{
@@ -193,6 +218,7 @@ impl<T> RequestPolicy<T> {
 				1 => RequestPolicyInner::Single(policies.into_iter().next().expect("len checked")),
 				_ => RequestPolicyInner::Multiple(policies),
 			},
+			execution_mode,
 			inheritance_locked: false,
 		}
 	}
@@ -232,12 +258,34 @@ impl<T> RequestPolicy<T> {
 		matches!(self.inner, RequestPolicyInner::Empty)
 	}
 
-	/// Selects the first matching policy without applying it.
+	/// Selects matching policies without applying them.
 	///
 	/// This is for policies whose selected config must be turned into separate per-request state
 	/// before it can run. ExtProc uses this to select an `ExtProc`, build an `ExtProcRequest`,
 	/// and keep that request state for the response phase.
-	pub fn select(&self, name: &'static str, req: &crate::http::Request) -> Option<Arc<T>> {
+	pub fn select_all(&self, name: &'static str, req: &crate::http::Request) -> Vec<Arc<T>> {
+		self
+			.matching_policies(name, req)
+			.into_iter()
+			.map(|pol| pol.pol.clone())
+			.collect()
+	}
+
+	/// Selects the last matching policy without applying it.
+	///
+	/// For first-matching conditionals this is the single selected policy. For all-matching
+	/// conditionals this lets scalar policy types use the final matching entry as the effective
+	/// value instead of silently truncating to the first match.
+	pub fn select_last(&self, name: &'static str, req: &crate::http::Request) -> Option<Arc<T>> {
+		self.select_all(name, req).into_iter().last()
+	}
+
+	fn matching_policies(
+		&self,
+		name: &'static str,
+		req: &crate::http::Request,
+	) -> Vec<&PolicyWithCondition<T>> {
+		let mut matches = Vec::new();
 		let mut first = true;
 		for pol in self.iter() {
 			if let Some(cond) = &pol.condition {
@@ -254,13 +302,16 @@ impl<T> RequestPolicy<T> {
 				} else {
 					dtrace::pol_result!(name, dtrace::Info, Apply, "condition met, applying policy");
 				}
-			};
-			if !first {
+			} else if !first {
 				dtrace::pol_result!(name, dtrace::Info, Apply, "fallback met, applying policy");
 			}
-			return Some(pol.pol.clone());
+			matches.push(pol);
+			if self.execution_mode == ConditionalPolicyExecutionMode::FirstMatching {
+				break;
+			}
+			first = false;
 		}
-		None
+		matches
 	}
 
 	pub fn set_if_unset(&mut self, policy: &RequestPolicy<T>) {
@@ -332,6 +383,21 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
+			.map(|policies| policies.into_iter().last())
+	}
+
+	/// apply_selected_all runs matching request policies and returns every policy that was run.
+	pub async fn apply_selected_all(
+		&self,
+		name: &'static str,
+		client: &PolicyClient,
+		log: &mut RequestLog,
+		req: &mut crate::http::Request,
+		response_headers: &mut HeaderMap,
+	) -> Result<Vec<Arc<T>>, proxy::ProxyResponse> {
+		self
+			.apply_internal(name, client, log, req, response_headers)
+			.await
 	}
 
 	async fn apply_internal(
@@ -341,17 +407,20 @@ impl<T: RequestPolicyTrait> RequestPolicy<T> {
 		log: &mut RequestLog,
 		req: &mut crate::http::Request,
 		response_headers: &mut HeaderMap,
-	) -> Result<Option<Arc<T>>, proxy::ProxyResponse> {
-		let Some(pol) = self.select(name, req) else {
-			return Ok(None);
-		};
+	) -> Result<Vec<Arc<T>>, proxy::ProxyResponse> {
+		let policies = self.select_all(name, req);
+		if policies.is_empty() {
+			return Ok(Vec::new());
+		}
 
-		let res = pol.apply(client, log, req).await?.apply(response_headers);
-		dtrace::snapshot!(Request, name, &req);
-		// Return the policy, for response handling.
+		for pol in &policies {
+			pol.apply(client, log, req).await?.apply(response_headers)?;
+			dtrace::snapshot!(Request, name, &req);
+		}
+		// Return the policies, for response handling.
 		// Conditions are ignored; we already evaluated them on the request side
 		// We do not allow response-side conditions
-		res.map(|_| Some(pol))
+		Ok(policies)
 	}
 }
 
@@ -368,7 +437,7 @@ impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
 		self
 			.apply_internal(name, client, log, req, response_headers)
 			.await
-			.map(ResponsePolicy::new)
+			.map(ResponsePolicy::new_all)
 	}
 
 	/// select_response evaluates request-side conditions and returns the selected policy to run on the
@@ -378,24 +447,30 @@ impl<T: RequestPolicyTrait + ResponsePolicyTrait> RequestPolicy<T> {
 		name: &'static str,
 		req: &crate::http::Request,
 	) -> ResponsePolicy<T> {
-		ResponsePolicy::new(self.select(name, req))
+		ResponsePolicy::new_all(self.select_all(name, req))
 	}
 }
 
 #[must_use]
 #[derive(Debug, Clone, Serialize)]
 pub struct ResponsePolicy<T> {
-	inner: Option<Arc<T>>,
+	inner: Vec<Arc<T>>,
 }
 
 impl<T> Default for ResponsePolicy<T> {
 	fn default() -> Self {
-		Self { inner: None }
+		Self { inner: Vec::new() }
 	}
 }
 
 impl<T> ResponsePolicy<T> {
 	pub fn new(inner: Option<Arc<T>>) -> Self {
+		Self {
+			inner: inner.into_iter().collect(),
+		}
+	}
+
+	pub fn new_all(inner: Vec<Arc<T>>) -> Self {
 		Self { inner }
 	}
 }
@@ -413,17 +488,16 @@ impl<T: ResponsePolicyTrait> ResponsePolicy<T> {
 		resp: &mut Response,
 		response_headers: &mut HeaderMap,
 	) -> Result<(), proxy::ProxyResponse> {
-		let Some(ref pol) = self.inner else {
-			return Ok(());
-		};
-		let res = pol.apply(log, resp).await?.apply(response_headers);
-		dtrace::snapshot!(Response, name, log, &resp);
-		res
+		for pol in &self.inner {
+			pol.apply(log, resp).await?.apply(response_headers)?;
+			dtrace::snapshot!(Response, name, log, &resp);
+		}
+		Ok(())
 	}
 
 	pub fn set_if_unset(&mut self, pol: &Arc<T>) {
-		if self.inner.is_none() {
-			self.inner = Some(pol.clone());
+		if self.inner.is_empty() {
+			self.inner = vec![pol.clone()];
 		}
 	}
 }

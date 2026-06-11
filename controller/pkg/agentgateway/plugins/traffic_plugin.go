@@ -1084,11 +1084,12 @@ func processConditional[T any](
 	for cond := range conditional {
 		entries = append(entries, cond)
 	}
-	return processConditionalEntries(entries, f, suffix, ctx, policyPhase, basePolicyName, policy)
+	return processConditionalEntries(entries, conditionalPolicyExecutionMode(condPol.ConditionalPolicyExecutionMode()), f, suffix, ctx, policyPhase, basePolicyName, policy)
 }
 
 func processConditionalEntries[T any](
 	entries []agentgateway.ConditionalPolicyEntry[T],
+	executionMode api.ConditionalPolicies_ExecutionMode,
 	f func(ctx PolicyCtx, pol *T, polName types.NamespacedName) (*api.Policy_Traffic, error),
 	suffix string,
 	ctx PolicyCtx,
@@ -1097,7 +1098,9 @@ func processConditionalEntries[T any](
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	var errs []error
-	conditionals := &api.ConditionalPolicies{}
+	conditionals := &api.ConditionalPolicies{
+		ExecutionMode: executionMode,
+	}
 	for _, cond := range entries {
 		base, err := f(ctx, &cond.Policy, policy)
 		if err != nil {
@@ -1130,6 +1133,15 @@ func processConditionalEntries[T any](
 		"agentgateway_policy", pol.Name)
 
 	return pol, errors.Join(errs...)
+}
+
+func conditionalPolicyExecutionMode(mode agentgateway.ConditionalPolicyExecution) api.ConditionalPolicies_ExecutionMode {
+	switch mode {
+	case agentgateway.AllMatching:
+		return api.ConditionalPolicies_ALL_MATCHING
+	default:
+		return api.ConditionalPolicies_FIRST_MATCHING
+	}
 }
 
 // processExtAuthPolicy processes ExtAuth configuration and creates corresponding agentgateway policies
@@ -1488,7 +1500,7 @@ func processRateLimitPolicy(
 	var agwPolicies []*api.Policy
 	var errs []error
 	if len(localEntries) > 0 {
-		pol, err := processConditionalEntries(localEntries, processLocalRateLimitTraffic, localRateLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
+		pol, err := processConditionalEntries(localEntries, conditionalPolicyExecutionMode(rl.ConditionalPolicyExecutionMode()), processLocalRateLimitTraffic, localRateLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1497,7 +1509,7 @@ func processRateLimitPolicy(
 		}
 	}
 	if len(globalEntries) > 0 {
-		pol, err := processConditionalEntries(globalEntries, processGlobalRateLimitTraffic, globalRateLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
+		pol, err := processConditionalEntries(globalEntries, conditionalPolicyExecutionMode(rl.ConditionalPolicyExecutionMode()), processGlobalRateLimitTraffic, globalRateLimitPolicySuffix, ctx, policyPhase, basePolicyName, policy)
 		if err != nil {
 			errs = append(errs, err)
 		}

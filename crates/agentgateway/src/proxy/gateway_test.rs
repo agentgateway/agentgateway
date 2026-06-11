@@ -2390,6 +2390,67 @@ async fn gateway_transformation_response_headers_are_applied() {
 }
 
 #[tokio::test]
+async fn route_conditional_all_matching_runs_multiple_transformations_with_metadata() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"transformations": {
+				"conditionalPolicy": "allMatching",
+				"conditional": [
+					{
+						"condition": "request.path == '/p'",
+						"request": {
+							"metadata": {
+								"routeStage": "'first'",
+							},
+							"set": {
+								"x-first-transform": "'applied'",
+							},
+						},
+					},
+					{
+						"request": {
+							"metadata": {
+								"routeStage": "'second'",
+								"routeExtra": "'metadata'",
+							},
+						},
+					},
+					{
+						"condition": "request.path == '/p'",
+						"request": {
+							"set": {
+								"x-third-transform": "metadata.routeStage + '-' + metadata.routeExtra",
+							},
+						},
+					},
+				],
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), 200);
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body
+			.headers
+			.get("x-first-transform")
+			.expect("first transformation header")
+			.as_bytes(),
+		b"applied"
+	);
+	assert_eq!(
+		body
+			.headers
+			.get("x-third-transform")
+			.expect("third transformation header")
+			.as_bytes(),
+		b"second-metadata"
+	);
+}
+
+#[tokio::test]
 async fn inline_backend_policies() {
 	let (mock, mut bind, io) = basic_setup().await;
 	bind

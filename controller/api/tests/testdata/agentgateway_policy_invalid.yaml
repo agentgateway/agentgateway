@@ -381,6 +381,24 @@ spec:
               kind: Service
             grpc: {}
 ---
+_err: 'conditionalPolicy can only be set with conditional'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-conditional-policy-without-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditionalPolicy: AllMatching
+      backendRef:
+        name: auth-server
+        kind: Service
+      grpc: {}
+---
 _err: 'exactly one of the fields in [grpc http] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -503,6 +521,26 @@ spec:
         - condition: '"x-test" in request.headers'
           policy: {}
 ---
+_err: 'conditionalPolicy: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extproc-invalid-conditional-policy
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      conditionalPolicy: LastMatching
+      conditional:
+        - condition: '"x-test" in request.headers'
+          policy:
+            backendRef:
+              name: extproc
+              kind: Service
+---
 _err: 'conditional entries without condition must be last'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -541,6 +579,23 @@ spec:
       conditional:
         - condition: '"x-test" in request.headers'
           policy: {}
+---
+_err: 'conditionalPolicy can only be set with conditional'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-ratelimit-conditional-policy-without-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      conditionalPolicy: FirstMatching
+      local:
+        - requests: 10
+          unit: Seconds
 ---
 _err: 'conditional entries without condition must be last'
 apiVersion: agentgateway.dev/v1alpha1

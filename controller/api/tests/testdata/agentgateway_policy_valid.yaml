@@ -703,6 +703,7 @@ spec:
       name: dummy
   traffic:
     extAuth:
+      conditionalPolicy: FirstMatching
       conditional:
         - condition: "random() > .5"
           policy:
@@ -746,6 +747,7 @@ spec:
       name: dummy
   traffic:
     transformation:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/transform'"
           policy:
@@ -789,6 +791,7 @@ spec:
       name: dummy
   traffic:
     extProc:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/process'"
           policy:
@@ -829,6 +832,7 @@ spec:
       name: dummy
   traffic:
     rateLimit:
+      conditionalPolicy: FirstMatching
       conditional:
         - condition: "request.path == '/limited'"
           policy:
@@ -941,6 +945,7 @@ spec:
       name: dummy
   traffic:
     directResponse:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/blocked'"
           policy:
@@ -949,6 +954,30 @@ spec:
             headers:
               - name: x-direct
                 value: "'blocked'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: direct-response-conditional-all-matching-multiple-unconditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      conditionalPolicy: AllMatching
+      conditional:
+        - policy:
+            status: 403
+            headers:
+              - name: x-first
+                value: "'true'"
+        - policy:
+            status: 404
+            headers:
+              - name: x-second
+                value: "'true'"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
