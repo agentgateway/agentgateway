@@ -2810,11 +2810,11 @@ fn should_retry(
 			if pol.codes.contains(&resp.status()) {
 				return true;
 			}
-			// A postcondition can match responses that status codes alone cannot, e.g. APIs that
+			// A condition can match responses that status codes alone cannot, e.g. APIs that
 			// return a 200 but signal failure via a header.
-			if let Some(post) = pol.postcondition.as_ref() {
+			if let Some(cond) = pol.condition.as_ref() {
 				let exec = cel::Executor::new_response(req_snapshot, resp);
-				return exec.eval_bool(post.as_ref());
+				return exec.eval_bool(cond.as_ref());
 			}
 			false
 		},
@@ -2843,7 +2843,7 @@ mod tests {
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
 
-	fn retry_policy(codes: &[u16], postcondition: Option<&str>) -> crate::http::retry::Policy {
+	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
 			attempts: std::num::NonZeroU8::new(2).unwrap(),
 			backoff: None,
@@ -2852,7 +2852,7 @@ mod tests {
 				.map(|c| ::http::StatusCode::from_u16(*c).unwrap())
 				.collect(),
 			precondition: None,
-			postcondition: postcondition
+			condition: condition
 				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
 		}
 	}
@@ -2875,7 +2875,7 @@ mod tests {
 	}
 
 	#[test]
-	fn should_retry_postcondition_matches_on_200() {
+	fn should_retry_condition_matches_on_200() {
 		// Simulate an API that returns 200 but signals failure via a header.
 		let pol = retry_policy(&[], Some(r#"response.headers["x-req-failed"] == "true""#));
 		let failed = ::http::Response::builder()

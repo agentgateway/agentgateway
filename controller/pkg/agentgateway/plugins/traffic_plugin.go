@@ -647,8 +647,8 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 		translatedRetry.Precondition = string(*retry.Precondition)
 	}
 
-	if retry.Postcondition != nil {
-		translatedRetry.Postcondition = string(*retry.Postcondition)
+	if retry.Condition != nil {
+		translatedRetry.Condition = string(*retry.Condition)
 	}
 
 	retryPolicy := &api.Policy{

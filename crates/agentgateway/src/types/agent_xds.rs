@@ -1752,13 +1752,13 @@ fn traffic_policy_from_proto(
 					&r.precondition,
 				))
 			};
-			let postcondition = if r.postcondition.is_empty() {
+			let condition = if r.condition.is_empty() {
 				None
 			} else {
 				Some(permissive_cel_expression_arc(
 					diagnostics,
-					"retry.postcondition",
-					&r.postcondition,
+					"retry.condition",
+					&r.condition,
 				))
 			};
 			TrafficPolicy::Retry(http::retry::Policy {
@@ -1766,7 +1766,7 @@ fn traffic_policy_from_proto(
 				backoff,
 				codes: codes.into_boxed_slice(),
 				precondition,
-				postcondition,
+				condition,
 			})
 		},
 		Some(tps::Kind::LocalRateLimit(lrl)) => {

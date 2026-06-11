@@ -2357,15 +2357,18 @@ type Retry struct {
 
 	// `precondition` is a CEL expression evaluated against the request before any
 	// attempt is made. When it evaluates to `false`, retries are disabled and only
-	// the initial attempt is made.
+	// the initial attempt is made, for example `request.method == "GET"`.
+	// Retrying requires buffering the request body in memory for replay, so this lets
+	// us skip that cost when the request is known to be non-retriable (for example
+	// streaming uploads or long-lived connections like websockets).
 	// +optional
 	Precondition *CELExpression `json:"precondition,omitempty"`
 
-	// `postcondition` is a CEL expression evaluated against each response to decide
+	// `condition` is a CEL expression evaluated against each response to decide
 	// whether to retry. A response is retried when its status code is in `codes` or
 	// this expression evaluates to `true`.
 	// +optional
-	Postcondition *CELExpression `json:"postcondition,omitempty"`
+	Condition *CELExpression `json:"condition,omitempty"`
 }
 
 // Per-request access log settings.

@@ -1957,8 +1957,8 @@
 |`binds[].listeners[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`binds[].listeners[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`binds[].listeners[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
-|`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
-|`binds[].listeners[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
+|`binds[].listeners[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`binds[].listeners[].routes[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`binds[].listeners[].routes[].backends`|[]object||
 |`binds[].listeners[].routes[].backends[].service`|object||
 |`binds[].listeners[].routes[].backends[].service.name`|object||
@@ -8267,8 +8267,8 @@
 |`policies[].policy.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`policies[].policy.retry.backoff`|string|Delay between retry attempts.|
 |`policies[].policy.retry.codes`|[]integer|HTTP response status codes that should be retried.|
-|`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
-|`policies[].policy.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
+|`policies[].policy.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`policies[].policy.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`workloads`|any||
 |`services`|any||
 |`backends`|[]object||
@@ -13638,8 +13638,8 @@
 |`routeGroups[].routes[].policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`routeGroups[].routes[].policies.retry.backoff`|string|Delay between retry attempts.|
 |`routeGroups[].routes[].policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
-|`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
-|`routeGroups[].routes[].policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
+|`routeGroups[].routes[].policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`routeGroups[].routes[].policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
 |`routeGroups[].routes[].backends`|[]object||
 |`routeGroups[].routes[].backends[].service`|object||
 |`routeGroups[].routes[].backends[].service.name`|object||
@@ -20812,5 +20812,5 @@
 |`mcp.policies.retry.attempts`|integer|Total number of attempts, including the original request.|
 |`mcp.policies.retry.backoff`|string|Delay between retry attempts.|
 |`mcp.policies.retry.codes`|[]integer|HTTP response status codes that should be retried.|
-|`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request *before* any attempt is made.<br>When it evaluates to `false`, retries are disabled entirely (only the initial<br>attempt is made).|
-|`mcp.policies.retry.postcondition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
+|`mcp.policies.retry.precondition`|string|CEL expression evaluated against the request before any attempt; when `false`,<br>retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.<br>Retrying requires buffering the request body in memory for replay, so this lets us skip<br>that cost when the request is known to be non-retriable (e.g. streaming or websockets).|
+|`mcp.policies.retry.condition`|string|CEL expression evaluated against each response to decide whether to retry. A response<br>is retried when its status code is in `codes` *or* this expression evaluates to `true`.|
