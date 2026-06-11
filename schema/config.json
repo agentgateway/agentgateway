@@ -2407,7 +2407,15 @@
             "null"
           ]
         },
+        "backendRef": {
+          "description": "Reference to a guardrail backend (with an `openAIModeration` provider) defined in the\ntop level backends list. Connection policies (auth, TLS, timeouts) should be attached\nto that backend.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "policies": {
+          "description": "Inline connection policies. Deprecated: reference a guardrail backend via backendRef\nand attach policies to it instead.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -3122,20 +3130,36 @@
       ]
     },
     "BedrockGuardrails": {
-      "description": "Configuration for AWS Bedrock Guardrails integration.",
+      "description": "Configuration for AWS Bedrock Guardrails integration.\n\nThe guardrail instance is configured either by referencing a guardrail backend\nvia backendRef (preferred, reusable across guards), or inline via\nguardrailIdentifier/guardrailVersion/region (deprecated).",
       "type": "object",
       "properties": {
+        "backendRef": {
+          "description": "Reference to a guardrail backend (with a `bedrock` provider) defined in the\ntop level backends list. Mutually exclusive with the inline provider fields.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "guardrailIdentifier": {
-          "description": "The unique identifier of the guardrail",
-          "type": "string"
+          "description": "The unique identifier of the guardrail. Deprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "guardrailVersion": {
-          "description": "The version of the guardrail",
-          "type": "string"
+          "description": "The version of the guardrail. Deprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "region": {
-          "description": "AWS region where the guardrail is deployed",
-          "type": "string"
+          "description": "AWS region where the guardrail is deployed. Deprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "policies": {
           "description": "Backend policies for AWS authentication (optional, defaults to implicit AWS auth)",
@@ -3149,27 +3173,35 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "guardrailIdentifier",
-        "guardrailVersion",
-        "region"
-      ]
+      "additionalProperties": false
     },
     "GoogleModelArmor": {
-      "description": "Configuration for Google Cloud Model Armor integration.",
+      "description": "Configuration for Google Cloud Model Armor integration.\n\nThe Model Armor instance is configured either by referencing a guardrail backend\nvia backendRef (preferred, reusable across guards), or inline via\ntemplateId/projectId/location (deprecated).",
       "type": "object",
       "properties": {
+        "backendRef": {
+          "description": "Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the\ntop level backends list. Mutually exclusive with the inline provider fields.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "templateId": {
-          "description": "The template ID for the Model Armor configuration",
-          "type": "string"
+          "description": "The template ID for the Model Armor configuration. Deprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "projectId": {
-          "description": "The GCP project ID",
-          "type": "string"
+          "description": "The GCP project ID. Deprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "location": {
-          "description": "The GCP region (default: us-central1)",
+          "description": "The GCP region (default: us-central1). Deprecated: use backendRef.",
           "type": [
             "string",
             "null"
@@ -3187,19 +3219,25 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "templateId",
-        "projectId"
-      ]
+      "additionalProperties": false
     },
     "AzureContentSafety": {
-      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety APIs to detect harmful content\nand jailbreak attempts. The endpoint and authentication are shared\nacross all enabled features.",
+      "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety APIs to detect harmful content\nand jailbreak attempts. The endpoint and authentication are configured either\nby referencing a guardrail backend via backendRef (preferred, reusable across\nguards), or inline via endpoint (deprecated). The evaluation behavior\n(analyzeText/detectJailbreak) always lives on the guard.",
       "type": "object",
       "properties": {
+        "backendRef": {
+          "description": "Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the\ntop level backends list. Mutually exclusive with endpoint.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "endpoint": {
-          "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
-          "type": "string"
+          "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\").\nDeprecated: use backendRef.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "policies": {
           "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",
@@ -3235,10 +3273,7 @@
           ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "endpoint"
-      ]
+      "additionalProperties": false
     },
     "AnalyzeTextConfig": {
       "description": "Configuration for the Analyze Text API.",
@@ -5273,6 +5308,18 @@
           ]
         },
         {
+          "description": "Typed guardrail integration backend, referenced from prompt guard policies via backendRef.",
+          "type": "object",
+          "properties": {
+            "guardrail": {
+              "$ref": "#/$defs/GuardrailBackend"
+            }
+          },
+          "required": [
+            "guardrail"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "routeGroup": {
@@ -6338,6 +6385,135 @@
       "required": [
         "agentRuntimeArn"
       ]
+    },
+    "GuardrailBackend": {
+      "description": "A typed guardrail integration backend, with one variant per supported provider.",
+      "oneOf": [
+        {
+          "description": "AWS Bedrock Guardrails (ApplyGuardrail API)",
+          "type": "object",
+          "properties": {
+            "bedrock": {
+              "$ref": "#/$defs/GuardrailBedrock"
+            }
+          },
+          "required": [
+            "bedrock"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Google Cloud Model Armor",
+          "type": "object",
+          "properties": {
+            "googleModelArmor": {
+              "$ref": "#/$defs/GuardrailGoogleModelArmor"
+            }
+          },
+          "required": [
+            "googleModelArmor"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Azure AI Content Safety",
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/GuardrailAzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "OpenAI moderations API",
+          "type": "object",
+          "properties": {
+            "openAIModeration": {
+              "$ref": "#/$defs/GuardrailOpenAIModeration"
+            }
+          },
+          "required": [
+            "openAIModeration"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GuardrailBedrock": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "description": "The unique identifier of the guardrail",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version of the guardrail",
+          "type": "string"
+        },
+        "region": {
+          "description": "AWS region where the guardrail is deployed (e.g. \"us-west-2\"). Used to construct the endpoint host.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "region"
+      ]
+    },
+    "GuardrailGoogleModelArmor": {
+      "type": "object",
+      "properties": {
+        "templateId": {
+          "description": "The template ID for the Model Armor configuration",
+          "type": "string"
+        },
+        "projectId": {
+          "description": "The GCP project ID",
+          "type": "string"
+        },
+        "location": {
+          "description": "The GCP region, used to construct the endpoint host (default: us-central1)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "templateId",
+        "projectId"
+      ]
+    },
+    "GuardrailAzureContentSafety": {
+      "type": "object",
+      "properties": {
+        "resourceName": {
+          "description": "The Azure resource name, used to construct the endpoint host\n(`<resourceName>.cognitiveservices.azure.com`).\nExactly one of resourceName and endpoint must be set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoint": {
+          "description": "The full endpoint host or URL (e.g. \"https://<resource-name>.cognitiveservices.azure.com\"),\nfor endpoints whose host cannot be derived from the resource name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuardrailOpenAIModeration": {
+      "type": "object",
+      "additionalProperties": false
     },
     "LocalTCPRoute": {
       "type": "object",
@@ -7476,6 +7652,17 @@
           },
           "required": [
             "aws"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "guardrail": {
+              "$ref": "#/$defs/GuardrailBackend"
+            }
+          },
+          "required": [
+            "guardrail"
           ]
         }
       ]

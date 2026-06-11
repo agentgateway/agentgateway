@@ -9,13 +9,13 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::{BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::GoogleModelArmor;
+use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailGoogleModelArmor};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
+use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 /// User prompt data for sanitization
 #[derive(Debug, Clone, Serialize)]
@@ -241,7 +241,7 @@ pub async fn send_request(
 		user_prompt_data: UserPromptData { text: content },
 	};
 
-	let response = send_model_armor_request(
+	let (response, cfg) = send_model_armor_request(
 		client,
 		claims.clone(),
 		model_armor,
@@ -251,7 +251,7 @@ pub async fn send_request(
 	.await?;
 
 	debug!(
-		template_id = %model_armor.template_id,
+		template_id = %cfg.template_id,
 		is_blocked = response.is_blocked(),
 		response = ?response,
 		"[Model Armor] <<< Received REQUEST response from Model Armor"
@@ -259,12 +259,12 @@ pub async fn send_request(
 
 	if response.is_blocked() {
 		warn!(
-			template_id = %model_armor.template_id,
+			template_id = %cfg.template_id,
 			"[Model Armor] REQUEST BLOCKED by Google Model Armor"
 		);
 	} else {
 		debug!(
-			template_id = %model_armor.template_id,
+			template_id = %cfg.template_id,
 			"[Model Armor] Request passed Google Model Armor checks"
 		);
 	}
@@ -287,7 +287,7 @@ pub async fn send_response(
 		},
 	};
 
-	let response = send_model_armor_request(
+	let (response, cfg) = send_model_armor_request(
 		client,
 		claims.clone(),
 		model_armor,
@@ -297,7 +297,7 @@ pub async fn send_response(
 	.await?;
 
 	debug!(
-		template_id = %model_armor.template_id,
+		template_id = %cfg.template_id,
 		is_blocked = response.is_blocked(),
 		response = ?response,
 		"[Model Armor] <<< Received RESPONSE response from Model Armor"
@@ -305,12 +305,12 @@ pub async fn send_response(
 
 	if response.is_blocked() {
 		warn!(
-			template_id = %model_armor.template_id,
+			template_id = %cfg.template_id,
 			"[Model Armor] RESPONSE BLOCKED by Google Model Armor"
 		);
 	} else {
 		debug!(
-			template_id = %model_armor.template_id,
+			template_id = %cfg.template_id,
 			"[Model Armor] Response passed Google Model Armor checks"
 		);
 	}
@@ -318,19 +318,41 @@ pub async fn send_response(
 	Ok(response)
 }
 
-impl GoogleModelArmor {
-	/// User-provided policies come first so they take precedence during resolution
-	/// then system TLS and implicit GCP auth are appended as fallbacks.
-	pub(crate) fn build_request_policies(&self) -> Vec<BackendTrafficPolicy> {
-		let mut pols: Vec<BackendTrafficPolicy> = self.policies.to_vec();
-		pols.push(BackendTrafficPolicy::BackendTLS(
-			crate::http::backendtls::SYSTEM_TRUST.clone(),
-		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Gcp(
-			GcpAuth::default(),
-		)));
-		pols
-	}
+/// Resolve the guardrail backend (referenced or built from the deprecated inline fields)
+/// along with its typed Model Armor provider configuration.
+fn resolve(
+	client: &PolicyClient,
+	model_armor: &GoogleModelArmor,
+) -> anyhow::Result<(SimpleBackendWithPolicies, GuardrailGoogleModelArmor)> {
+	let backend = super::resolve_guardrail_backend(
+		client,
+		model_armor.backend_ref.as_ref(),
+		|| {
+			let (Some(template_id), Some(project_id)) = (
+				model_armor.template_id.clone(),
+				model_armor.project_id.clone(),
+			) else {
+				anyhow::bail!("googleModelArmor requires either backendRef or templateId and projectId");
+			};
+			Ok(GuardrailBackend::GoogleModelArmor(
+				GuardrailGoogleModelArmor {
+					template_id,
+					project_id,
+					location: model_armor.location.clone(),
+				},
+			))
+		},
+		strng::literal!("_google-model-armor"),
+	)?;
+	let SimpleBackend::Guardrail(_, GuardrailBackend::GoogleModelArmor(cfg)) = &backend.backend
+	else {
+		anyhow::bail!(
+			"guardrail backend {} is not a google model armor guardrail backend",
+			backend.backend
+		);
+	};
+	let cfg = cfg.clone();
+	Ok((backend, cfg))
 }
 
 async fn send_model_armor_request<T: Serialize>(
@@ -339,26 +361,21 @@ async fn send_model_armor_request<T: Serialize>(
 	model_armor: &GoogleModelArmor,
 	action: &str,
 	request_body: &T,
-) -> anyhow::Result<SanitizeResponse> {
-	// Use default location if not specified
-	let location = model_armor
-		.location
-		.as_ref()
-		.map(|s| s.as_str())
-		.unwrap_or("us-central1");
+) -> anyhow::Result<(SanitizeResponse, GuardrailGoogleModelArmor)> {
+	let (backend, cfg) = resolve(client, model_armor)?;
 
-	// Build the Model Armor API URL
-	let host = strng::format!("modelarmor.{}.rep.googleapis.com", location);
+	// The transport (endpoint host, TLS, GCP auth) is owned by the resolved backend;
+	// only the API path and body are built here.
 	let path = format!(
 		"/v1/projects/{}/locations/{}/templates/{}:{}",
-		model_armor.project_id, location, model_armor.template_id, action
+		cfg.project_id,
+		cfg.location(),
+		cfg.template_id,
+		action
 	);
-	let uri = format!("https://{}{}", host, path);
-
-	let pols = model_armor.build_request_policies();
 
 	let mut rb = ::http::Request::builder()
-		.uri(&uri)
+		.uri(&path)
 		.method(::http::Method::POST)
 		.header(::http::header::CONTENT_TYPE, "application/json");
 
@@ -368,15 +385,10 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(request_body)?))?;
 
-	let mock_be = Backend::Dynamic(
-		ResourceName::new(strng::literal!("_google-model-armor"), strng::literal!("")),
-		(),
-	);
-
 	let resp = client
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_resolved(req, backend, &model_armor.policies)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;
-	Ok(resp)
+	Ok((resp, cfg))
 }

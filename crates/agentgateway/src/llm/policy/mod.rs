@@ -12,10 +12,12 @@ use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
+	BackendKey, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, ResourceName, SimpleBackend,
+	SimpleBackendReference, SimpleBackendWithPolicies,
 };
 use crate::*;
 
+pub mod guardrail;
 pub mod webhook;
 
 mod azure_content_safety;
@@ -1139,6 +1141,36 @@ enum RegexResult {
 	Reject,
 }
 
+/// Resolve the guardrail backend a guard should call: either a reference to a real,
+/// store-resident guardrail backend (which picks up any policies attached to it), or a
+/// synthetic one constructed from the guard's deprecated inline provider fields.
+pub(crate) fn resolve_guardrail_backend(
+	client: &PolicyClient,
+	backend_ref: Option<&BackendKey>,
+	inline: impl FnOnce() -> anyhow::Result<guardrail::GuardrailBackend>,
+	synthetic_name: Strng,
+) -> anyhow::Result<SimpleBackendWithPolicies> {
+	match backend_ref {
+		Some(key) => {
+			let resolved = client
+				.resolve_backend(&SimpleBackendReference::Backend(key.clone()))
+				.map_err(|e| anyhow::anyhow!("failed to resolve guardrail backend {key}: {e}"))?;
+			if !matches!(resolved.backend, SimpleBackend::Guardrail(_, _)) {
+				anyhow::bail!("backend {key} is not a guardrail backend");
+			}
+			Ok(resolved)
+		},
+		None => {
+			let backend = inline()?;
+			backend.validate()?;
+			Ok(SimpleBackendWithPolicies {
+				backend: SimpleBackend::Guardrail(ResourceName::new(synthetic_name, strng::EMPTY), backend),
+				inline_policies: Vec::new(),
+			})
+		},
+	}
+}
+
 #[apply(schema!)]
 pub struct RequestGuard {
 	#[serde(default)]
@@ -1231,6 +1263,13 @@ pub struct Moderation {
 	/// Model to use. Defaults to `omni-moderation-latest`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Reference to a guardrail backend (with an `openAIModeration` provider) defined in the
+	/// top level backends list. Connection policies (auth, TLS, timeouts) should be attached
+	/// to that backend.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub backend_ref: Option<BackendKey>,
+	/// Inline connection policies. Deprecated: reference a guardrail backend via backendRef
+	/// and attach policies to it instead.
 	#[serde(
 		default,
 		deserialize_with = "crate::types::local::de_from_local_backend_policy",
@@ -1244,14 +1283,25 @@ pub struct Moderation {
 }
 
 /// Configuration for AWS Bedrock Guardrails integration.
+///
+/// The guardrail instance is configured either by referencing a guardrail backend
+/// via backendRef (preferred, reusable across guards), or inline via
+/// guardrailIdentifier/guardrailVersion/region (deprecated).
 #[apply(schema!)]
 pub struct BedrockGuardrails {
-	/// The unique identifier of the guardrail
-	pub guardrail_identifier: Strng,
-	/// The version of the guardrail
-	pub guardrail_version: Strng,
-	/// AWS region where the guardrail is deployed
-	pub region: Strng,
+	/// Reference to a guardrail backend (with a `bedrock` provider) defined in the
+	/// top level backends list. Mutually exclusive with the inline provider fields.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub backend_ref: Option<BackendKey>,
+	/// The unique identifier of the guardrail. Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_identifier: Option<Strng>,
+	/// The version of the guardrail. Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub guardrail_version: Option<Strng>,
+	/// AWS region where the guardrail is deployed. Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub region: Option<Strng>,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
 	#[serde(
 		default,
@@ -1266,13 +1316,23 @@ pub struct BedrockGuardrails {
 }
 
 /// Configuration for Google Cloud Model Armor integration.
+///
+/// The Model Armor instance is configured either by referencing a guardrail backend
+/// via backendRef (preferred, reusable across guards), or inline via
+/// templateId/projectId/location (deprecated).
 #[apply(schema!)]
 pub struct GoogleModelArmor {
-	/// The template ID for the Model Armor configuration
-	pub template_id: Strng,
-	/// The GCP project ID
-	pub project_id: Strng,
-	/// The GCP region (default: us-central1)
+	/// Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the
+	/// top level backends list. Mutually exclusive with the inline provider fields.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub backend_ref: Option<BackendKey>,
+	/// The template ID for the Model Armor configuration. Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub template_id: Option<Strng>,
+	/// The GCP project ID. Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub project_id: Option<Strng>,
+	/// The GCP region (default: us-central1). Deprecated: use backendRef.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub location: Option<Strng>,
 	/// Backend policies for GCP authentication (optional, defaults to implicit GCP auth)
@@ -1291,12 +1351,20 @@ pub struct GoogleModelArmor {
 /// Configuration for Azure Content Safety integration.
 ///
 /// Uses the Azure AI Content Safety APIs to detect harmful content
-/// and jailbreak attempts. The endpoint and authentication are shared
-/// across all enabled features.
+/// and jailbreak attempts. The endpoint and authentication are configured either
+/// by referencing a guardrail backend via backendRef (preferred, reusable across
+/// guards), or inline via endpoint (deprecated). The evaluation behavior
+/// (analyzeText/detectJailbreak) always lives on the guard.
 #[apply(schema!)]
 pub struct AzureContentSafety {
-	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
-	pub endpoint: Strng,
+	/// Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the
+	/// top level backends list. Mutually exclusive with endpoint.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub backend_ref: Option<BackendKey>,
+	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").
+	/// Deprecated: use backendRef.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub endpoint: Option<Strng>,
 	/// Backend policies for Azure authentication (optional, defaults to implicit Azure auth)
 	#[serde(
 		default,
@@ -1308,7 +1376,8 @@ pub struct AzureContentSafety {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
-	/// Cached implicit Azure auth credential, shared across requests.
+	/// Cached implicit Azure auth credential, shared across requests when using the
+	/// deprecated inline endpoint form.
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub cached_azure_auth: crate::http::auth::AzureAuth,

@@ -153,3 +153,51 @@ policies:
         webhook:
           target: 127.0.0.1:8000
           # set forwardHeaderMatches for to forward response headers
+
+### Guardrail Backends
+
+External guardrail providers (AWS Bedrock Guardrails, Google Model Armor, Azure
+Content Safety, and the OpenAI moderation API) can be configured as a typed
+`guardrail` backend and referenced from guards via `backendRef`. This lets one
+provider configuration be reused across routes and request/response guards, and
+because the guardrail is a real backend, connection policies (auth, TLS,
+timeouts) and backend-scoped policies attach to it directly:
+
+```yaml
+backends:
+- name: bedrock-guardrail
+  guardrail:
+    bedrock:
+      identifier: bedrock-guardrail-identifier
+      version: DRAFT
+      region: us-west-2
+  policies:
+    backendAuth:
+      aws: {}
+```
+
+The guard then references the backend, keeping only per-request behavior inline:
+
+```yaml
+policies:
+  ai:
+    promptGuard:
+      request:
+      - bedrockGuardrails:
+          backendRef: bedrock-guardrail
+      response:
+      - bedrockGuardrails:
+          backendRef: bedrock-guardrail
+```
+
+The gateway derives the provider endpoint, TLS, and implicit auth from the
+provider type; only the instance-specific configuration is needed:
+
+- `bedrock`: `identifier`, `version`, `region`
+- `googleModelArmor`: `templateId`, `projectId`, optional `location`
+- `azureContentSafety`: `resourceName` (or `endpoint` for non-standard domains)
+- `openAIModeration`: no instance config (attach an auth policy to the backend)
+
+See [bedrock-backend-config.yaml](bedrock-backend-config.yaml) for a complete
+example. The older inline form (provider config directly on the guard, as in
+[bedrock-config.yaml](bedrock-config.yaml)) is still supported but deprecated.

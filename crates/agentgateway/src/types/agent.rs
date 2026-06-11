@@ -1108,6 +1108,11 @@ pub enum Backend {
 	AI(ResourceName, crate::llm::AIBackend),
 	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
+	#[serde(rename = "guardrail", serialize_with = "serialize_backend_tuple")]
+	Guardrail(
+		ResourceName,
+		crate::llm::policy::guardrail::GuardrailBackend,
+	),
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Dynamic(ResourceName, ()),
 	Invalid,
@@ -1151,6 +1156,7 @@ impl From<SimpleBackend> for Backend {
 			SimpleBackend::Service(svc, port) => Backend::Service(svc, port),
 			SimpleBackend::Opaque(name, target) => Backend::Opaque(name, target),
 			SimpleBackend::Aws(name, cfg) => Backend::Aws(name, cfg),
+			SimpleBackend::Guardrail(name, cfg) => Backend::Guardrail(name, cfg),
 			SimpleBackend::Invalid => Backend::Invalid,
 		}
 	}
@@ -1163,6 +1169,10 @@ pub enum SimpleBackend {
 	#[serde(rename = "host")]
 	Opaque(ResourceName, Target), // Hostname or IP
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
+	Guardrail(
+		ResourceName,
+		crate::llm::policy::guardrail::GuardrailBackend,
+	),
 	Invalid,
 }
 
@@ -1172,6 +1182,7 @@ impl fmt::Display for SimpleBackend {
 			SimpleBackend::Service(service, port) => write!(f, "{}:{}", service.hostname, port),
 			SimpleBackend::Opaque(name, _) => write!(f, "{}", name),
 			SimpleBackend::Aws(name, _) => write!(f, "{}", name),
+			SimpleBackend::Guardrail(name, _) => write!(f, "{}", name),
 			SimpleBackend::Invalid => write!(f, "invalid"),
 		}
 	}
@@ -1185,6 +1196,7 @@ impl TryFrom<Backend> for SimpleBackend {
 			Backend::Service(svc, port) => Ok(SimpleBackend::Service(svc, port)),
 			Backend::Opaque(name, tgt) => Ok(SimpleBackend::Opaque(name, tgt)),
 			Backend::Aws(rn, cfg) => Ok(SimpleBackend::Aws(rn, cfg)),
+			Backend::Guardrail(rn, cfg) => Ok(SimpleBackend::Guardrail(rn, cfg)),
 			Backend::Invalid => Ok(SimpleBackend::Invalid),
 			_ => anyhow::bail!("unsupported backend type"),
 		}
@@ -1243,6 +1255,7 @@ impl SimpleBackend {
 				format!("{}:{port}", svc.hostname)
 			},
 			SimpleBackend::Aws(_, cfg) => format!("{}:{}", cfg.get_host(), 443),
+			SimpleBackend::Guardrail(_, cfg) => format!("{}:{}", cfg.host(), 443),
 			SimpleBackend::Opaque(_, tgt) => tgt.hostport(),
 			SimpleBackend::Invalid => "invalid".to_string(),
 		}
@@ -1260,10 +1273,12 @@ impl SimpleBackend {
 				namespace: name.namespace.as_ref(),
 				section: None,
 			},
-			SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
-				name: name.name.as_ref(),
-				namespace: name.namespace.as_ref(),
-				section: None,
+			SimpleBackend::Aws(name, _) | SimpleBackend::Guardrail(name, _) => {
+				BackendTargetRef::Backend {
+					name: name.name.as_ref(),
+					namespace: name.namespace.as_ref(),
+					section: None,
+				}
 			},
 			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
@@ -1272,7 +1287,7 @@ impl SimpleBackend {
 	pub fn backend_type(&self) -> cel::BackendType {
 		match self {
 			SimpleBackend::Service(_, _) => cel::BackendType::Service,
-			SimpleBackend::Opaque(_, _) => cel::BackendType::Static,
+			SimpleBackend::Opaque(_, _) | SimpleBackend::Guardrail(_, _) => cel::BackendType::Static,
 			SimpleBackend::Aws(_, _) => cel::BackendType::Dynamic,
 			SimpleBackend::Invalid => cel::BackendType::Unknown,
 		}
@@ -1298,6 +1313,7 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
+			| Backend::Guardrail(name, _)
 			| Backend::Dynamic(name, _) => BackendTarget::Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
@@ -1318,6 +1334,7 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
+			| Backend::Guardrail(name, _)
 			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
@@ -1334,6 +1351,7 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
+			| Backend::Guardrail(name, _)
 			| Backend::Dynamic(name, _) => {
 				let mut s = String::with_capacity(name.namespace.len() + name.name.len() + 1);
 				s.push_str(&name.namespace);
@@ -1348,7 +1366,7 @@ impl Backend {
 	pub fn backend_type(&self) -> cel::BackendType {
 		match self {
 			Backend::Service(_, _) => cel::BackendType::Service,
-			Backend::Opaque(_, _) => cel::BackendType::Static,
+			Backend::Opaque(_, _) | Backend::Guardrail(_, _) => cel::BackendType::Static,
 			Backend::MCP(_, _) => cel::BackendType::MCP,
 			Backend::AI(_, _) => cel::BackendType::AI,
 			Backend::Aws(_, _) => cel::BackendType::Unknown,

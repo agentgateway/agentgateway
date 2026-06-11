@@ -1,0 +1,39 @@
+backends:
+- name: bedrock-guardrail
+  guardrail:
+    bedrock:
+      identifier: my-guardrail-id
+      version: DRAFT
+      region: us-west-2
+- name: content-safety-guardrail
+  guardrail:
+    azureContentSafety:
+      resourceName: my-resource
+- name: moderation-guardrail
+  guardrail:
+    openAIModeration: {}
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - bedrockGuardrails:
+                backendRef: bedrock-guardrail
+            - openAIModeration:
+                backendRef: moderation-guardrail
+            - azureContentSafety:
+                backendRef: content-safety-guardrail
+                analyzeText:
+                  severityThreshold: 2
+            response:
+            - bedrockGuardrails:
+                backendRef: bedrock-guardrail

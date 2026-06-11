@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Reusable guardrail backend: the provider connection config is defined once as a
+# typed backend and referenced from the request/response guards via backendRef.
+# Connection policies (auth, TLS, timeouts) attach to the backend; per-request
+# behavior (rejection) stays on the guard.
+backends:
+- name: bedrock-guardrail
+  guardrail:
+    bedrock:
+      identifier: bedrock-guardrail-identifier
+      version: DRAFT
+      region: us-west-2
+  policies:
+    backendAuth:
+      aws: {}
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - bedrockGuardrails:
+                backendRef: bedrock-guardrail
+            response:
+            - bedrockGuardrails:
+                backendRef: bedrock-guardrail

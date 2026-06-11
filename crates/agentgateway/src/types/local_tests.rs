@@ -309,6 +309,34 @@ async fn test_health_config() {
 }
 
 #[tokio::test]
+async fn test_guardrail_config() {
+	test_config_parsing("guardrail").await;
+}
+
+#[tokio::test]
+async fn test_guardrail_azure_backend_requires_exactly_one_endpoint_source() {
+	let err = normalize_test_config(
+		r#"
+backends:
+- name: content-safety
+  guardrail:
+    azureContentSafety:
+      resourceName: my-resource
+      endpoint: my-resource.cognitiveservices.azure.com
+binds: []
+"#,
+	)
+	.await
+	.expect_err("azure guardrail backend with both resourceName and endpoint should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("only one of resourceName and endpoint"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
 async fn test_inference_routing_requires_service_backend() {
 	let input = r#"
 binds:
