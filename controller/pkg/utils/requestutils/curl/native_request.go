@@ -41,6 +41,10 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 		},
 	}
 
+	if c.tlsConfig != nil {
+		client.Transport = &http.Transport{TLSClientConfig: c.tlsConfig}
+	}
+
 	method := c.method
 
 	var bodyReader io.Reader
