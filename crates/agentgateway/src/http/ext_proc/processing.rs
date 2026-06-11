@@ -14,17 +14,23 @@ use crate::*;
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
+	/// Reject the request when the external processing service fails.
 	#[default]
 	FailClosed,
+	/// Continue the request when the external processing service fails.
 	FailOpen,
 }
 
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum BodySendMode {
+	/// Do not send the body to the external processing service.
 	None,
+	/// Buffer and send the full body to the external processing service.
 	Buffered,
+	/// Buffer and send the body up to the configured limit.
 	BufferedPartial,
+	/// Stream the body bidirectionally with the external processing service.
 	#[default]
 	FullDuplexStreamed,
 }
@@ -72,36 +78,45 @@ impl From<EnvoyBodySendMode> for BodySendMode {
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum HeaderSendMode {
+	/// Send headers to the external processing service.
 	#[default]
 	Send,
+	/// Do not send headers to the external processing service.
 	Skip,
 }
 
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum TrailerSendMode {
+	/// Send trailers to the external processing service.
 	#[default]
 	Send,
+	/// Do not send trailers to the external processing service.
 	Skip,
 }
 
 #[apply(schema!)]
 #[derive(Copy)]
 pub struct ProcessingOptions {
+	/// How request bodies are sent to the external processing service.
 	#[serde(default = "default_body_send_mode")]
 	pub request_body_mode: BodySendMode,
+	/// How response bodies are sent to the external processing service.
 	#[serde(default = "default_body_send_mode")]
 	pub response_body_mode: BodySendMode,
+	/// Whether request headers are sent to the external processing service.
 	#[serde(default)]
 	pub request_header_mode: HeaderSendMode,
+	/// Whether response headers are sent to the external processing service.
 	#[serde(default)]
 	pub response_header_mode: HeaderSendMode,
+	/// Whether request trailers are sent to the external processing service.
 	#[serde(default)]
 	pub request_trailer_mode: TrailerSendMode,
+	/// Whether response trailers are sent to the external processing service.
 	#[serde(default)]
 	pub response_trailer_mode: TrailerSendMode,
-	/// Allow ext_proc `mode_override` values from matching headers responses to update
-	/// subsequent request/response processing phases for this exchange.
+	/// Whether the external processing service can change processing modes during a request.
 	#[serde(default)]
 	pub allow_mode_override: bool,
 }

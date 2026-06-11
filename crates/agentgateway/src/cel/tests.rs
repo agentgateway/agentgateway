@@ -98,7 +98,7 @@ async fn log_only_request_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 
-	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
@@ -157,7 +157,7 @@ async fn log_only_response_body_records_without_buffering() {
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"world")

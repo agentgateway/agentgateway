@@ -19,7 +19,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 )
 
@@ -184,8 +183,8 @@ func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
 	params := &agentgateway.AgentgatewayParameters{
 		Spec: agentgateway.AgentgatewayParametersSpec{
 			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
-				Deployment: &shared.KubernetesResourceOverlay{
-					Metadata: &shared.ObjectMetadata{
+				Deployment: &agentgateway.KubernetesResourceOverlay{
+					Metadata: &agentgateway.ObjectMetadata{
 						Labels: map[string]string{
 							"overlay-label": "overlay-value",
 						},

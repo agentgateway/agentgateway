@@ -24,7 +24,7 @@ mod magic;
 pub mod objects;
 
 mod duration;
-
+pub use duration::{format_duration, parse_duration};
 pub use ser::{Duration, Timestamp};
 
 mod ser;

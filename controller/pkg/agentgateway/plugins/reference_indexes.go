@@ -14,7 +14,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -36,7 +36,7 @@ type ReferenceTypes struct {
 	// when they need ReferenceGrant permission checks to recognize those targets.
 	KnownToReferences       sets.Set[schema.GroupKind]
 	PolicyTargets           func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool)
-	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector shared.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
+	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
 	PolicyBackend           func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend            func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	AllowedParentReferences sets.Set[schema.GroupKind]
@@ -121,7 +121,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			}
 			return nil, false
 		},
-		PolicyTargetsBySelector: func(krtctx krt.HandlerContext, policyNamespace string, selector shared.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget {
+		PolicyTargetsBySelector: func(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget {
 			targetGK := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
 			var targets []ResolvedPolicySelectorTarget
 			sectionName := selector.SectionName
@@ -473,7 +473,7 @@ func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string
 	return p.explicitReferences.PolicyTargets(krtctx, namespace, name, gk, sectionName)
 }
 
-func (p ReferenceIndex) PolicyTargetsBySelector(krtctx krt.HandlerContext, policyNamespace string, selector shared.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget {
+func (p ReferenceIndex) PolicyTargetsBySelector(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget {
 	return p.explicitReferences.PolicyTargetsBySelector(krtctx, policyNamespace, selector)
 }
 

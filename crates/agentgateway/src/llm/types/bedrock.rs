@@ -658,3 +658,93 @@ pub struct CohereEmbeddingResponse {
 	pub id: String,
 	pub texts: Vec<String>,
 }
+
+// ---- Bedrock Rerank (bedrock-agent-runtime Rerank API) ----
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RerankContentType {
+	Text,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RerankSourceType {
+	Inline,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RerankConfigType {
+	BedrockRerankingModel,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankRequest {
+	pub queries: Vec<RerankQuery>,
+	pub sources: Vec<RerankSource>,
+	pub reranking_configuration: RerankConfiguration,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankQuery {
+	pub r#type: RerankContentType,
+	pub text_query: RerankText,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RerankText {
+	pub text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankSource {
+	pub r#type: RerankSourceType,
+	pub inline_document_source: RerankInlineDoc,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankInlineDoc {
+	pub r#type: RerankContentType,
+	pub text_document: RerankText,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankConfiguration {
+	pub r#type: RerankConfigType,
+	pub bedrock_reranking_configuration: RerankInner,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankInner {
+	pub model_configuration: RerankModelConfig,
+	pub number_of_results: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankModelConfig {
+	pub model_arn: String,
+	/// Additional model request fields.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub additional_model_request_fields: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankResponse {
+	pub results: Vec<RerankResult>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RerankResult {
+	pub index: u32,
+	pub relevance_score: f64,
+}

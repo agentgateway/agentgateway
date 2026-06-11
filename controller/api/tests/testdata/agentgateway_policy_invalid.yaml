@@ -121,6 +121,19 @@ spec:
       keepalive:
         interval: 100ms
 ---
+_err: 'at least one of the fields in [request response] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: empty-buffer
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer: {}
+---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -818,6 +831,46 @@ spec:
       defaults:
         - field: a
           value: b
+---
+_err: 'backend.mcp may not be used with a Service target'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-guardrails-on-service
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: f1
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            backendRef:
+              name: guardrails-srv
+              port: 4317
+          methods:
+            tools/call: Full
+---
+_err: 'backendRef: Required'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-guardrails-no-backend-ref
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            failureMode: FailClosed
+          methods:
+            tools/call: Full
 ---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1

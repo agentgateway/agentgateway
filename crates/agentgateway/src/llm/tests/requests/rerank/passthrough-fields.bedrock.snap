@@ -1,0 +1,46 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/rerank/passthrough-fields.json
+info:
+  model: rerank-v3.5
+  query: q
+  documents:
+    - a
+  max_tokens_per_doc: 512
+  return_documents: false
+  truncation: END
+---
+{
+  "queries": [
+    {
+      "type": "TEXT",
+      "textQuery": {
+        "text": "q"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "type": "INLINE",
+      "inlineDocumentSource": {
+        "type": "TEXT",
+        "textDocument": {
+          "text": "a"
+        }
+      }
+    }
+  ],
+  "rerankingConfiguration": {
+    "type": "BEDROCK_RERANKING_MODEL",
+    "bedrockRerankingConfiguration": {
+      "modelConfiguration": {
+        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0",
+        "additionalModelRequestFields": {
+          "truncation": "END",
+          "max_tokens_per_doc": 512
+        }
+      },
+      "numberOfResults": 1
+    }
+  }
+}

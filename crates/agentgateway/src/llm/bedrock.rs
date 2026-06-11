@@ -58,12 +58,19 @@ impl Provider {
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
+			// Rerank uses the agent-runtime Rerank action (model goes in the body as an ARN).
+			super::RouteType::Rerank => strng::literal!("/rerank"),
 			_ if streaming => strng::format!("/model/{model}/converse-stream"),
 			_ => strng::format!("/model/{model}/converse"),
 		}
 	}
 
-	pub fn get_host(&self) -> Strng {
-		strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
+	pub fn get_host(&self, route_type: super::RouteType) -> Strng {
+		match route_type {
+			super::RouteType::Rerank => {
+				strng::format!("bedrock-agent-runtime.{}.amazonaws.com", self.region)
+			},
+			_ => strng::format!("bedrock-runtime.{}.amazonaws.com", self.region),
+		}
 	}
 }

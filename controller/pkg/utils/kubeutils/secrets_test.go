@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
 func TestResolveCredentialRef(t *testing.T) {
@@ -27,19 +27,19 @@ func TestResolveCredentialRef(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		ref             shared.LocalSecretObjectRef
+		ref             agentgateway.LocalSecretObjectRef
 		want            map[string][]byte
 		wantErrContains string
 		wantErrType     error
 	}{
 		{
 			name: "default secret",
-			ref:  shared.LocalSecretObjectRef{Name: "creds"},
+			ref:  agentgateway.LocalSecretObjectRef{Name: "creds"},
 			want: secret.Data,
 		},
 		{
 			name: "explicit core secret",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Name:  "creds",
 				Group: "",
 				Kind:  "Secret",
@@ -48,17 +48,17 @@ func TestResolveCredentialRef(t *testing.T) {
 		},
 		{
 			name:            "missing secret",
-			ref:             shared.LocalSecretObjectRef{Name: "missing"},
+			ref:             agentgateway.LocalSecretObjectRef{Name: "missing"},
 			wantErrContains: "secret default/missing not found",
 		},
 		{
 			name:            "empty name",
-			ref:             shared.LocalSecretObjectRef{},
+			ref:             agentgateway.LocalSecretObjectRef{},
 			wantErrContains: "credential ref name is required",
 		},
 		{
 			name: "unsupported kind",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Name:  "creds",
 				Group: "agentgateway.dev",
 				Kind:  "FileCredential",
@@ -68,7 +68,7 @@ func TestResolveCredentialRef(t *testing.T) {
 		},
 		{
 			name: "unsupported kind without name",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Group: "agentgateway.dev",
 				Kind:  "FileCredential",
 			},
@@ -121,13 +121,13 @@ func TestChainedCredentialResolver(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		ref       shared.LocalSecretObjectRef
+		ref       agentgateway.LocalSecretObjectRef
 		wantToken string
 		wantErr   error
 	}{
 		{
 			name: "custom group kind",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Name:  "custom-creds",
 				Group: "example.agentgateway.dev",
 				Kind:  "FileCredential",
@@ -136,12 +136,12 @@ func TestChainedCredentialResolver(t *testing.T) {
 		},
 		{
 			name:      "name only defaults to secret",
-			ref:       shared.LocalSecretObjectRef{Name: "secret-creds"},
+			ref:       agentgateway.LocalSecretObjectRef{Name: "secret-creds"},
 			wantToken: "secret",
 		},
 		{
 			name: "explicit core secret",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Name: "secret-creds",
 				Kind: "Secret",
 			},
@@ -149,7 +149,7 @@ func TestChainedCredentialResolver(t *testing.T) {
 		},
 		{
 			name: "unsupported",
-			ref: shared.LocalSecretObjectRef{
+			ref: agentgateway.LocalSecretObjectRef{
 				Name:  "custom-creds",
 				Group: "unknown.agentgateway.dev",
 				Kind:  "FileCredential",
@@ -183,7 +183,7 @@ type staticCredentialResolver struct {
 	data  map[string][]byte
 }
 
-func (r staticCredentialResolver) ResolveCredentialRef(_ krt.HandlerContext, ref shared.LocalSecretObjectRef, _ string) (map[string][]byte, error) {
+func (r staticCredentialResolver) ResolveCredentialRef(_ krt.HandlerContext, ref agentgateway.LocalSecretObjectRef, _ string) (map[string][]byte, error) {
 	if ref.Group != r.group {
 		return nil, ErrUnsupportedCredentialKind
 	}

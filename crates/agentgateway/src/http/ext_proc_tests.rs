@@ -1601,6 +1601,64 @@ mod immediate_and_failure {
 	}
 
 	#[tokio::test]
+	async fn immediate_response_response_body_continuation_does_not_hang() {
+		let mock = body_mock(b"upstream-response").await;
+		let processing_options = json!({
+			"requestBodyMode": "none",
+			"responseBodyMode": "fullDuplexStreamed",
+			"requestHeaderMode": "send",
+			"responseHeaderMode": "send",
+			"requestTrailerMode": "send",
+			"responseTrailerMode": "send",
+		});
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_processing_options(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(ImmediateResponseResponseBodyContinuationExtProc::default),
+			"{}",
+			Some(processing_options),
+		)
+		.await;
+		let res = tokio::time::timeout(
+			Duration::from_secs(3),
+			send_request(io, Method::GET, "http://lo"),
+		)
+		.await
+		.expect("response-body continuation should not hang on ImmediateResponse");
+		assert_eq!(res.status(), 200);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"upstream-response");
+	}
+
+	#[tokio::test]
+	async fn immediate_response_response_body_phase_returns_direct_response() {
+		let mock = body_mock(b"upstream-response").await;
+		let processing_options = json!({
+			"requestBodyMode": "none",
+			"responseBodyMode": "buffered",
+			"requestHeaderMode": "send",
+			"responseHeaderMode": "send",
+			"requestTrailerMode": "send",
+			"responseTrailerMode": "send",
+		});
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_processing_options(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(ImmediateResponseResponseBodyBufferedFallbackExtProc::default),
+			"{}",
+			Some(processing_options),
+		)
+		.await;
+		let res = send_request(io, Method::GET, "http://lo").await;
+		// ImmediateResponse during body phase in the main loop is honored as a
+		// DirectResponse because the response has not yet been committed to the
+		// downstream client.
+		assert_eq!(res.status(), 400);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"late immediate");
+	}
+
+	#[tokio::test]
 	async fn failure_fail_closed() {
 		let mock = simple_mock().await;
 		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -1989,9 +2047,7 @@ fn build_ext_proc_request_for_test(
 	processing_options: ext_proc::ProcessingOptions,
 ) -> super::ExtProcRequest {
 	let bind = setup_proxy_test("{}").unwrap().with_backend(ext_proc_addr);
-	let client = crate::proxy::httpproxy::PolicyClient {
-		inputs: bind.inputs(),
-	};
+	let client = crate::proxy::httpproxy::PolicyClient::new(bind.inputs());
 	super::ExtProc {
 		target: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
 			strng::format!("/{}", ext_proc_addr),
@@ -3180,6 +3236,101 @@ impl Handler for ImmediateResponseExtProcResponse {
 			.send(immediate_response(proto::ImmediateResponse {
 				status: Some(proto::HttpStatus { code: 202 }),
 				body: "immediate".to_string(),
+				headers: None,
+				grpc_status: None,
+				details: "".to_string(),
+			}))
+			.await;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
+struct ImmediateResponseResponseBodyContinuationExtProc;
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseResponseBodyContinuationExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_response_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(response_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_response_body(
+		&mut self,
+		body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(response_body_response(Some(CommonResponse {
+				body_mutation: Some(BodyMutation {
+					mutation: Some(body_mutation::Mutation::StreamedResponse(
+						proto::StreamedBodyResponse {
+							body: body.body.clone(),
+							end_of_stream: false,
+						},
+					)),
+				}),
+				..Default::default()
+			})))
+			.await;
+		let _ = sender
+			.send(immediate_response(proto::ImmediateResponse {
+				status: Some(proto::HttpStatus { code: 400 }),
+				body: "late immediate".to_string(),
+				headers: None,
+				grpc_status: None,
+				details: "".to_string(),
+			}))
+			.await;
+		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
+struct ImmediateResponseResponseBodyBufferedFallbackExtProc;
+
+#[async_trait::async_trait]
+impl Handler for ImmediateResponseResponseBodyBufferedFallbackExtProc {
+	async fn handle_request_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(request_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_response_headers(
+		&mut self,
+		_: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender.send(response_header_response(None)).await;
+		Ok(())
+	}
+
+	async fn handle_response_body(
+		&mut self,
+		_: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(immediate_response(proto::ImmediateResponse {
+				status: Some(proto::HttpStatus { code: 400 }),
+				body: "late immediate".to_string(),
 				headers: None,
 				grpc_status: None,
 				details: "".to_string(),

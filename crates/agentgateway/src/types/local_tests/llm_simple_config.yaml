@@ -40,7 +40,11 @@ llm:
       - name: "X-Org"
         value:
           exact: "engineering"
-  - name: gemini-0.5-pro
+    promptCaching:
+      cacheSystem: true
+      cacheMessages: true
+      minTokens: 1
+  - name: '*'
     provider: vertex
     params:
       model: claude-haiku-4-5-20251001

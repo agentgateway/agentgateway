@@ -156,7 +156,7 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
+		Key:         internalL4RouteRuleKey(obj, pos),
 		Name:        utils.RouteName(wellknown.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -246,7 +246,7 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".tls",
+		Key:         internalL4RouteRuleKey(obj, pos) + ".tls",
 		Name:        utils.RouteName(wellknown.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -265,6 +265,15 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 	})
 
 	return res, backendErr
+}
+
+func internalL4RouteRuleKey(obj controllers.Object, pos int) string {
+	key := utils.InternalRouteRuleKey(obj.GetNamespace(), obj.GetName(), pos)
+	created := obj.GetCreationTimestamp()
+	if created.IsZero() {
+		return key
+	}
+	return fmt.Sprintf("%010d/%s", created.Unix(), key)
 }
 
 func buildAgwTCPDestination(
@@ -733,7 +742,13 @@ func ReferenceAllowed(
 	localNamespace string,
 ) *ParentError {
 	if parent.ServiceKey != nil {
-		// Parent resolver already verified this reference exists.
+		// Parent resolver already verified this referenced Service exists.
+		if parentRef.Port != 0 && !slices.Contains(parent.ServicePorts, parentRef.Port) {
+			return &ParentError{
+				Reason:  ParentErrorNotAccepted,
+				Message: fmt.Sprintf("port %v not found", parentRef.Port),
+			}
+		}
 	} else if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		// check that the referenced svc exists
 		key := parentRef.Namespace + "/" + parentRef.Name
@@ -874,6 +889,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 				ParentGateway:     pr.ParentGateway,
 				ListenerKey:       pr.ListenerKey,
 				ServiceKey:        pr.ServiceKey,
+				Port:              pk.Port,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -923,6 +939,8 @@ type RouteParentReference struct {
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
 	ServiceKey *types.NamespacedName
+	// Port is the parentRef port, scoping the route to one port. Zero means any port.
+	Port gwv1.PortNumber
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid
@@ -1189,7 +1207,10 @@ var dummyTls = &TLSInfo{
 	Key:  []byte("invalid"),
 }
 
-const gatewayTLSTerminateModeKey = "gateway.istio.io/tls-terminate-mode"
+const (
+	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
+	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
+)
 
 func validateTLS(certInfo *TLSInfo) *ConfigError {
 	if certInfo.IstioWorkloadCert {
@@ -1262,6 +1283,14 @@ func buildTLS(
 			}
 		}
 
+		dynamicCA := tls.Options != nil && tls.Options[agentgatewayTLSCertificateSourceKey] == "DYNAMIC_CA"
+		if dynamicCA && gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
+			return dummyTls, &ConfigError{
+				Reason:  InvalidTLSCA,
+				Message: "GatewayTLSConfig validation caCertificateRefs cannot be configured with DYNAMIC_CA TLS certificate source",
+			}
+		}
+
 		if gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
 			// TODO: add 'Mode'
 			if len(gatewayTLS.Validation.CACertificateRefs) > 1 {
@@ -1289,6 +1318,9 @@ func buildTLS(
 			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
 				tlsRes.Info.MtlsFallbackEnabled = true
 			}
+		}
+		if dynamicCA {
+			tlsRes.Info.DynamicCA = true
 		}
 		return &tlsRes.Info, nil
 	case gwv1.TLSModePassthrough:

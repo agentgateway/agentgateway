@@ -91,7 +91,7 @@ fn root_context() -> Arc<Context> {
 static ROOT_CONTEXT: Lazy<Arc<Context>> = Lazy::new(root_context);
 
 flagset::flags! {
-	enum Attributes: u16 {
+	enum Attributes: u32 {
 		Source,
 
 		Request,
@@ -115,6 +115,7 @@ flagset::flags! {
 		Extauthz,
 		Extproc,
 		Metadata,
+		Proxy,
 	}
 }
 
@@ -174,7 +175,10 @@ impl ContextBuilder {
 		&self,
 		res: &mut crate::http::Response,
 	) -> Option<ResponseSnapshot> {
-		if self.any_has(Attributes::Response) || self.any_has(Attributes::Metadata) {
+		if self.any_has(Attributes::Response)
+			|| self.any_has(Attributes::Metadata)
+			|| self.any_has(Attributes::Proxy)
+		{
 			Some(types::snapshot_response(res))
 		} else {
 			None
@@ -188,6 +192,7 @@ impl ContextBuilder {
 		if self.any_has(Attributes::Source)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
+			|| self.any_has(Attributes::Proxy)
 			|| self.any_has(Attributes::Backend)
 			|| self.any_has(Attributes::Jwt)
 			|| self.any_has(Attributes::ApiKey)
@@ -366,6 +371,9 @@ impl Expression {
 				},
 				["metadata", ..] => {
 					attributes |= Attributes::Metadata;
+				},
+				["proxy", ..] => {
+					attributes |= Attributes::Proxy;
 				},
 				_ => {},
 			}

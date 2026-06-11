@@ -2,9 +2,7 @@ use crate::telemetry::log::MetricsConfig;
 
 pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	let proxy = super::proxymock::setup_proxy_test("{}").expect("proxy test harness");
-	crate::proxy::httpproxy::PolicyClient {
-		inputs: proxy.inputs(),
-	}
+	crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
 }
 
 pub async fn test_policy<P>(

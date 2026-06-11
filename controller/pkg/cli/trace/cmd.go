@@ -26,25 +26,32 @@ func Command() flag.Command {
 
 	return flag.Command{
 		Use:   "trace [resource] [-- <curl args...>]",
-		Short: "Trace the next request handled by an Agentgateway pod or local instance",
-		Long:  "Start an Agentgateway debug trace, render it in a TUI or JSONL, and optionally trigger the traced request against a pod or a local instance.",
-		Example: `  agctl trace
+		Short: "Trace the next request handled by an agentgateway pod or local instance.",
+		Long:  "Start an agentgateway debug trace, render it in a TUI or JSONL, and optionally trigger the traced request against a pod or a local instance.",
+		Example: `  agctl proxy trace
+  
   # Watch for the next request on a pod and trace it, displaying the result in a TUI
-  agctl trace gateway/my-gateway
+  agctl proxy trace gateway/my-gateway
+  
   # Watch for the next request on a pod and trace it, displaying the result in a JSONL format
-  agctl trace --raw
-	# Enable tracing and send a request to the gateway. The <host> part of the request is only used for setting the Hostname of the request,
+  agctl proxy trace --raw
+  
+  # Enable tracing and send a request to the gateway. The <host> part of the request is only used for setting the Hostname of the request,
   # and is not used for DNS resolution.
-  agctl trace --port 80 -- http://host/some/path
+  agctl proxy trace --port 80 -- http://host/some/path
+  
   # Enable tracing and send a request to the gateway running locally.
-  agctl trace --local --port 8080 -- http://host/some/path
+  agctl proxy trace --local --port 8080 -- http://host/some/path
+  
   # Render trace JSONL from a file or stdin instead of opening a live trace.
-  agctl trace --file trace.jsonl
-  agctl trace --file - --raw
+  agctl proxy trace --file trace.jsonl
+  agctl proxy trace --file - --raw
+  
   # Watch for the next request matching a CEL expression.
-  agctl trace --expression 'request.path == "/healthz"'
+  agctl proxy trace --expression 'request.path == "/healthz"'
+  
   # Enable tracing and send a request to the gateway, with some curl arguments.
-  agctl trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
+  agctl proxy trace gateway/my-gateway --raw --port 80 -- http://host/some/path -H "Authorization: Bearer sk-123"`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			_, _, err := parseArgs(cmd, args, flags)
 			return err

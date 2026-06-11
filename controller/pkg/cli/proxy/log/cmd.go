@@ -25,24 +25,22 @@ func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log [resource]",
 		Short: "Get or set proxy log levels",
-		Long: `Get or set log levels on the Agentgateway proxy.
+		Long: `Get or set log levels on the agentgateway proxy.
 
 With no flags, prints the current active log filter directive.
 
 The proxy uses Rust tracing-subscriber filter directives. Module names are
-Rust crate paths (e.g. agentgateway::proxy). See the Agentgateway docs for
-the full list of valid module paths. Level changes via --set are additive:
-they append to the current directive rather than replacing it. Use --level
+Rust crate paths, such as 'agentgateway::proxy'. See the agentgateway docs for
+the full list of valid module paths. Level changes via '--set' are additive:
+they append to the current directive rather than replacing it. Use '--level'
 to reset to a clean global level.
-
-Examples:
-  agctl proxy log                                      # show current directive
-  agctl proxy log --level debug                        # set global level
-  agctl proxy log --set agentgateway::proxy=debug      # set a single module
-  agctl proxy log --set agentgateway::proxy=debug,agentgateway::http=info
 
 When multiple pods back a resource, all are targeted and output is
 prefixed per pod. All pods are attempted even if one fails.`,
+		Example: `agctl proxy log                                      # show current directive
+agctl proxy log --level debug                        # set global level
+agctl proxy log --set agentgateway::proxy=debug      # set a single module
+agctl proxy log --set agentgateway::proxy=debug,agentgateway::http=info`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

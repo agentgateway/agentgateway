@@ -9,8 +9,8 @@ import (
 func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "controller",
-		Short: "Inspect and manage the Agentgateway controller",
-		Long:  "Inspect and manage the Agentgateway controller admin API.",
+		Short: "Inspect and manage the agentgateway controller",
+		Long:  "Inspect and manage the agentgateway controller admin API.",
 	}
 
 	cmd.AddCommand(log.Command())

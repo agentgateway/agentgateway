@@ -88,6 +88,7 @@ impl<'a> From<&'a RouteTarget> for RouteTargetRef<'a> {
 pub struct Store {
 	ipv6_enabled: bool,
 	core_ids: Option<Vec<core_affinity::CoreId>>,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -209,7 +210,9 @@ impl FrontendPolices {
 	}
 }
 
-#[derive(Default, Debug, Clone)]
+#[serde_with::skip_serializing_none]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
@@ -221,6 +224,7 @@ pub struct BackendPolicies {
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
+	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
@@ -254,6 +258,7 @@ impl BackendPolicies {
 			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
+			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
 			ext_authz: other.ext_authz.or(self.ext_authz),
 			http: other.http.or(self.http),
@@ -323,10 +328,13 @@ pub struct RoutePolicies {
 	pub hostname_rewrite: RequestPolicy<agent::HostRedirectOverride>,
 	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayPolicies {
+	pub cors: RequestPolicy<http::cors::Cors>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -334,11 +342,13 @@ pub struct GatewayPolicies {
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
 impl GatewayPolicies {
 	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
 		[
+			&self.cors as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.oidc as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
@@ -373,6 +383,7 @@ impl RoutePolicies {
 			&self.csrf as &dyn PolicyExpressions,
 			&self.direct_response as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.retry as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
@@ -542,14 +553,23 @@ impl Store {
 	}
 
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+		Self::new(
+			ipv6_enabled,
+			crate::ThreadingMode::Multithreaded,
+			Default::default(),
+		)
 	}
 
-	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
+	pub fn new(
+		ipv6_enabled: bool,
+		threading_mode: crate::ThreadingMode,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
+	) -> Self {
 		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 		let (listener_change_tx, listener_change_rx) = watch::channel(0);
 		Self {
 			ipv6_enabled,
+			dynamic_ca_cert_cache,
 			core_ids: match threading_mode {
 				crate::ThreadingMode::Multithreaded => None,
 				crate::ThreadingMode::ThreadPerCore => {
@@ -869,6 +889,9 @@ impl Store {
 				TrafficPolicy::CORS(p) => {
 					pol.cors.merge_with_inheritance(p, lock_inheritance);
 				},
+				TrafficPolicy::Buffer(p) => {
+					pol.buffer.set_if_unset(p);
+				},
 			}
 		}
 		if !authz.is_empty() {
@@ -878,7 +901,7 @@ impl Store {
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();
-			t.selected_policies(s)
+			t.selected_policies("route", s)
 		});
 
 		pol
@@ -906,6 +929,9 @@ impl Store {
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
 			match rule {
+				TrafficPolicy::CORS(p) => {
+					pol.cors.set_if_unset(p);
+				},
 				TrafficPolicy::Oidc(p) => {
 					pol.oidc.set_if_unset(p);
 				},
@@ -932,6 +958,10 @@ impl Store {
 				},
 			}
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("gateway", s)
+		});
 
 		pol
 	}
@@ -945,6 +975,7 @@ impl Store {
 		inline_policies: Option<&[BackendTrafficPolicy]>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"subBackend",
 			None,
 			Some(sub_backend),
 			if let Some(s) = &inline_policies {
@@ -963,6 +994,7 @@ impl Store {
 		inline_policies: &[BackendTrafficPolicy],
 	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"inlineBackend",
 			None,
 			None,
 			std::slice::from_ref(&inline_policies),
@@ -977,7 +1009,15 @@ impl Store {
 		inline_policies: &[&[BackendTrafficPolicy]],
 		path: Option<RoutePath>,
 	) -> BackendPolicies {
+		let phase = match backend {
+			BackendTargetRef::Backend {
+				section: Some(_), ..
+			}
+			| BackendTargetRef::Service { port: Some(_), .. } => "subBackend",
+			_ => "backend",
+		};
 		self.internal_backend_policies(
+			phase,
 			Some(backend.strip_section()),
 			Some(backend.clone()),
 			inline_policies,
@@ -989,6 +1029,7 @@ impl Store {
 	#[allow(clippy::too_many_arguments)]
 	fn internal_backend_policies(
 		&self,
+		phase: &str,
 		// backend with section stripped, always
 		backend: Option<BackendTargetRef>,
 		// backend with section retained.
@@ -1104,11 +1145,18 @@ impl Store {
 				BackendTrafficPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
 				},
+				BackendTrafficPolicy::McpGuardrails(p) => {
+					pol.mcp_guardrails.get_or_insert_with(|| p.clone());
+				},
 			}
 		}
 		if !mcp_authz.is_empty() {
 			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies(phase, s)
+		});
 		pol
 	}
 
@@ -1541,7 +1589,8 @@ impl Store {
 		raw: XdsListener,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		let (lis, bind_name) = Listener::from_xds(&raw, diagnostics)?;
+		let (lis, bind_name) =
+			Listener::from_xds(&raw, diagnostics, self.dynamic_ca_cert_cache.clone())?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}
@@ -1995,6 +2044,7 @@ mod tests {
 		let route = Route {
 			key: strng::literal!("route"),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::literal!("route"),
 				namespace: strng::literal!("ns"),
@@ -2061,6 +2111,7 @@ mod tests {
 				namespace: svc.namespace.to_string(),
 				hostname: svc.hostname.to_string(),
 			}),
+			service_port: 0,
 			route_group_key: Some(rgk.to_string()),
 			name: Some(XdsRouteName {
 				kind: "HTTPRoute".to_string(),

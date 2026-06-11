@@ -27,12 +27,15 @@ const DIRECT_RESPONSE_TRACE_KIND: &str = "direct_response";
 
 #[apply(schema!)]
 pub struct HeaderModifier {
+	/// Headers to append without replacing existing values.
 	#[serde(default, skip_serializing_if = "is_default")]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub add: Vec<(Strng, Strng)>,
+	/// Headers to set, replacing any existing values.
 	#[serde(default, skip_serializing_if = "is_default")]
 	#[serde_as(as = "serde_with::Map<_, _>")]
 	pub set: Vec<(Strng, Strng)>,
+	/// Header names to remove.
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub remove: Vec<Strng>,
 }
@@ -120,6 +123,7 @@ impl RequestPolicyTrait for HeaderModifier {
 
 #[apply(schema!)]
 pub struct RequestRedirect {
+	/// Scheme to use in the redirect URL, such as `http` or `https`.
 	#[serde(
 		default,
 		skip_serializing_if = "is_default",
@@ -128,10 +132,13 @@ pub struct RequestRedirect {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub scheme: Option<http::uri::Scheme>,
+	/// Host or port rewrite to apply to the redirect URL.
 	#[serde(skip_serializing_if = "is_default")]
 	pub authority: Option<HostRedirect>,
+	/// Path rewrite to apply to the redirect URL.
 	#[serde(skip_serializing_if = "is_default")]
 	pub path: Option<PathRedirect>,
+	/// HTTP status code to return for the redirect.
 	#[serde(
 		default,
 		skip_serializing_if = "is_default",
@@ -194,8 +201,10 @@ impl crate::store::RequestPolicyTrait for RequestRedirect {
 
 #[apply(schema!)]
 pub struct UrlRewrite {
+	/// Host or port rewrite to apply before forwarding the request.
 	#[serde(skip_serializing_if = "is_default")]
 	pub authority: Option<HostRedirect>,
+	/// Path rewrite to apply before forwarding the request.
 	#[serde(skip_serializing_if = "is_default")]
 	pub path: Option<PathRedirect>,
 }
@@ -268,14 +277,18 @@ impl crate::store::RequestPolicyTrait for UrlRewrite {
 
 #[apply(schema!)]
 pub struct DirectResponse {
+	/// Static response body, encoded as bytes.
 	#[serde(default, skip_serializing_if = "is_default")]
 	#[serde(serialize_with = "serdes::serde_base64::serialize")]
 	pub body: Bytes,
+	/// CEL expression that computes the response body.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body_expression: Option<Arc<Expression>>,
+	/// Response headers computed from CEL expressions.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde_as(as = "serde_with::Map<serde_with::DisplayFromStr, _>")]
 	pub headers: Vec<(HeaderName, Arc<Expression>)>,
+	/// HTTP status code to return.
 	#[serde(with = "http_serde::status_code")]
 	#[cfg_attr(feature = "schema", schemars(with = "std::num::NonZeroU16"))]
 	pub status: StatusCode,
@@ -352,8 +365,9 @@ impl crate::store::RequestPolicyTrait for DirectResponse {
 
 #[apply(schema!)]
 pub struct RequestMirror {
+	/// Backend that receives mirrored request copies.
 	pub backend: SimpleBackendReference,
-	// 0.0-1.0
+	/// Fraction of matching requests to mirror, from 0.0 to 1.0.
 	pub percentage: f64,
 }
 

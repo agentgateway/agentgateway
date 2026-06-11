@@ -1,0 +1,22 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/rerank/passthrough-fields.json
+info:
+  model: rerank-v3.5
+  query: q
+  documents:
+    - a
+  max_tokens_per_doc: 512
+  return_documents: false
+  truncation: END
+---
+{
+  "model": "rerank-v3.5",
+  "query": "q",
+  "documents": [
+    "a"
+  ],
+  "return_documents": false,
+  "max_tokens_per_doc": 512,
+  "truncation": "END"
+}

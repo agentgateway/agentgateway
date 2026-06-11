@@ -669,7 +669,7 @@ func summarizeEvent(event traceEvent) string {
 	case "routeSelection":
 		return summarizeRouteSelection(event.SelectedRoute, len(event.EvaluatedRoutes))
 	case "policySelection":
-		return summarizePolicySelection(event.EffectivePolicy)
+		return summarizePolicySelection(event.Phase, event.EffectivePolicy)
 	case "policy":
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
@@ -797,7 +797,11 @@ func summarizePolicy(kind string, result json.RawMessage) string {
 	return truncate(fmt.Sprintf("%s %s", kind, compactJSON(result)), 120)
 }
 
-func summarizePolicySelection(raw json.RawMessage) string {
+func summarizePolicySelection(phase string, raw json.RawMessage) string {
+	prefix := "effective policies"
+	if phase != "" {
+		prefix = fmt.Sprintf("%s effective policies", displayPolicySelectionPhase(phase))
+	}
 	var payload map[string]json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &payload) == nil {
 		keys := make([]string, 0, len(payload))
@@ -806,11 +810,22 @@ func summarizePolicySelection(raw json.RawMessage) string {
 		}
 		sort.Strings(keys)
 		if len(keys) == 0 {
-			return "effective policies: none"
+			return prefix + ": none"
 		}
-		return truncate("effective policies: "+strings.Join(keys, ", "), 120)
+		return truncate(prefix+": "+strings.Join(keys, ", "), 120)
 	}
-	return truncate("effective="+compactJSON(raw), 120)
+	return truncate(prefix+"="+compactJSON(raw), 120)
+}
+
+func displayPolicySelectionPhase(phase string) string {
+	switch phase {
+	case "subBackend":
+		return "sub-backend"
+	case "inlineBackend":
+		return "inline backend"
+	default:
+		return phase
+	}
 }
 
 func summarizeAuthorizationResult(result json.RawMessage, rules []traceAuthzRule) string {

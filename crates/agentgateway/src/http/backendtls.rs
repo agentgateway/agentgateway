@@ -179,17 +179,24 @@ static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct LocalBackendTLS {
+	/// Client certificate file to present to the backend.
 	cert: Option<PathBuf>,
+	/// Private key file for the client certificate.
 	key: Option<PathBuf>,
+	/// Root certificate bundle used to verify the backend certificate.
 	root: Option<PathBuf>,
-	// If set, override the SNI. Otherwise, it will automatically be set.
+	/// Server name to use for TLS verification and SNI.
 	hostname: Option<String>,
+	/// Skip certificate trust verification for the backend connection.
 	#[serde(default)]
 	insecure: bool,
+	/// Skip hostname verification for the backend certificate.
 	#[serde(default)]
 	insecure_host: bool,
+	/// ALPN protocols to offer to the backend.
 	#[serde(default)]
 	alpn: Option<Vec<String>>,
+	/// Additional subject alternative names accepted for the backend certificate.
 	#[serde(default)]
 	pub subject_alt_names: Option<Vec<String>>,
 	/// Key exchange groups allowed for negotiating TLS.

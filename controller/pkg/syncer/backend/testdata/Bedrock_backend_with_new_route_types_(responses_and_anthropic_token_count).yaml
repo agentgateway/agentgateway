@@ -13,6 +13,7 @@ inlinePolicies:
       /v1/messages/count_tokens: ANTHROPIC_TOKEN_COUNT
       /v1/models: MODELS
       /v1/realtime: REALTIME
+      /v1/rerank: RERANK
       /v1/responses: RESPONSES
 key: test-ns/bedrock-with-new-routes
 name:

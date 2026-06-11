@@ -4,6 +4,7 @@ pub mod count_tokens;
 pub mod detect;
 pub mod embeddings;
 pub mod messages;
+pub mod rerank;
 pub mod responses;
 pub mod vertex;
 
