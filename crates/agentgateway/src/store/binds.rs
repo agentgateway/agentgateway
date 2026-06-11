@@ -397,8 +397,8 @@ impl RoutePolicies {
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
-	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
+	pub local_rate_limit: Vec<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub remote_rate_limit: Vec<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
 
@@ -474,7 +474,7 @@ impl LLMRequestPolicies {
 #[derive(Debug, Default)]
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
+	pub remote_rate_limit: Vec<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
 }
@@ -2166,7 +2166,7 @@ mod tests {
 		assert_eq!(
 			pols
 				.timeout
-				.select("timeout", &request_for_policy_selection())
+				.select_last("timeout", &request_for_policy_selection())
 				.as_deref()
 				.cloned(),
 			Some(svc_timeout),
@@ -2316,7 +2316,7 @@ mod tests {
 		assert_eq!(
 			http_pols
 				.timeout
-				.select("timeout", &request_for_policy_selection())
+				.select_last("timeout", &request_for_policy_selection())
 				.as_deref()
 				.cloned(),
 			Some(http_timeout)
@@ -2333,7 +2333,7 @@ mod tests {
 		assert_eq!(
 			grpc_pols
 				.timeout
-				.select("timeout", &request_for_policy_selection())
+				.select_last("timeout", &request_for_policy_selection())
 				.as_deref()
 				.cloned(),
 			Some(grpc_timeout)
@@ -2364,7 +2364,7 @@ mod tests {
 		assert_eq!(
 			pols
 				.timeout
-				.select("timeout", &request_for_policy_selection())
+				.select_last("timeout", &request_for_policy_selection())
 				.as_deref()
 				.cloned(),
 			Some(child_timeout)
@@ -2426,7 +2426,7 @@ mod tests {
 		assert_eq!(
 			pols
 				.timeout
-				.select("timeout", &request_for_policy_selection())
+				.select_last("timeout", &request_for_policy_selection())
 				.as_deref()
 				.cloned(),
 			Some(route_timeout)
@@ -2434,7 +2434,7 @@ mod tests {
 		assert_eq!(
 			pols
 				.hostname_rewrite
-				.select("hostname rewrite", &request_for_policy_selection())
+				.select_last("hostname rewrite", &request_for_policy_selection())
 				.as_deref()
 				.copied(),
 			Some(agent::HostRedirectOverride::None)

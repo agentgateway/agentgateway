@@ -7170,9 +7170,9 @@ spec:
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level directResponse fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
+                          By default, the first matching policy will be executed.
+                          For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+                          will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
                         items:
                           properties:
                             condition:
@@ -7246,10 +7246,14 @@ spec:
                         maxItems: 16
                         minItems: 1
                         type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      conditionalPolicy:
+                        description: |-
+                          ConditionalPolicyExecution determines how matching conditional policies are executed.
+                          If unset, the first matching policy will be executed.
+                        enum:
+                        - AllMatching
+                        - FirstMatching
+                        type: string
                       headers:
                         description: Response headers to set on the direct response.
                         items:
@@ -7290,6 +7294,16 @@ spec:
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.body),has(self.bodyExpression),has(self.headers),has(self.status)].filter(x,x==true).size()
                         == 0 : true'
+                    - message: conditionalPolicy can only be set with conditional
+                      rule: 'has(self.conditionalPolicy) ? has(self.conditional) :
+                        true'
+                    - message: conditional entries without condition must be last
+                        unless conditionalPolicy is AllMatching
+                      rule: 'has(self.conditional) ? (has(self.conditionalPolicy)
+                        && self.conditionalPolicy == ''AllMatching'' ? true : self.conditional.filter(e,
+                        !has(e.condition)).size() <= 1 && (!self.conditional.exists(e,
+                        !has(e.condition)) || !has(self.conditional[size(self.conditional)
+                        - 1].condition))) : true'
                     - message: 'status: Required value'
                       rule: 'has(self.conditional) ? true : has(self.status)'
                   extAuth:
@@ -7422,9 +7436,9 @@ spec:
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level extAuth fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
+                          By default, the first matching policy will be executed.
+                          For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+                          will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
                         items:
                           properties:
                             condition:
@@ -7713,10 +7727,14 @@ spec:
                         maxItems: 16
                         minItems: 1
                         type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      conditionalPolicy:
+                        description: |-
+                          ConditionalPolicyExecution determines how matching conditional policies are executed.
+                          If unset, the first matching policy will be executed.
+                        enum:
+                        - AllMatching
+                        - FirstMatching
+                        type: string
                       failureMode:
                         description: |-
                           Behavior when the external authorization service is
@@ -7864,6 +7882,16 @@ spec:
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'
+                    - message: conditionalPolicy can only be set with conditional
+                      rule: 'has(self.conditionalPolicy) ? has(self.conditional) :
+                        true'
+                    - message: conditional entries without condition must be last
+                        unless conditionalPolicy is AllMatching
+                      rule: 'has(self.conditional) ? (has(self.conditionalPolicy)
+                        && self.conditionalPolicy == ''AllMatching'' ? true : self.conditional.filter(e,
+                        !has(e.condition)).size() <= 1 && (!self.conditional.exists(e,
+                        !has(e.condition)) || !has(self.conditional[size(self.conditional)
+                        - 1].condition))) : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
                   extProc:
@@ -7944,9 +7972,9 @@ spec:
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level extProc fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
+                          By default, the first matching policy will be executed.
+                          For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+                          will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
                         items:
                           properties:
                             condition:
@@ -8113,10 +8141,14 @@ spec:
                         maxItems: 16
                         minItems: 1
                         type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      conditionalPolicy:
+                        description: |-
+                          ConditionalPolicyExecution determines how matching conditional policies are executed.
+                          If unset, the first matching policy will be executed.
+                        enum:
+                        - AllMatching
+                        - FirstMatching
+                        type: string
                       processingOptions:
                         description: How request and response phases are sent to ext_proc.
                         properties:
@@ -8194,6 +8226,16 @@ spec:
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.processingOptions)].filter(x,x==true).size()
                         == 0 : true'
+                    - message: conditionalPolicy can only be set with conditional
+                      rule: 'has(self.conditionalPolicy) ? has(self.conditional) :
+                        true'
+                    - message: conditional entries without condition must be last
+                        unless conditionalPolicy is AllMatching
+                      rule: 'has(self.conditional) ? (has(self.conditionalPolicy)
+                        && self.conditionalPolicy == ''AllMatching'' ? true : self.conditional.filter(e,
+                        !has(e.condition)).size() <= 1 && (!self.conditional.exists(e,
+                        !has(e.condition)) || !has(self.conditional[size(self.conditional)
+                        - 1].condition))) : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
                   headerModifiers:
@@ -8795,9 +8837,9 @@ spec:
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level rateLimit fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
+                          By default, the first matching policy will be executed.
+                          For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+                          will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
                         items:
                           properties:
                             condition:
@@ -9032,10 +9074,14 @@ spec:
                         maxItems: 16
                         minItems: 1
                         type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      conditionalPolicy:
+                        description: |-
+                          ConditionalPolicyExecution determines how matching conditional policies are executed.
+                          If unset, the first matching policy will be executed.
+                        enum:
+                        - AllMatching
+                        - FirstMatching
+                        type: string
                       global:
                         description: Global rate limiting policy using an external
                           service.
@@ -9249,13 +9295,23 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [conditional global local]
-                        must be set
-                      rule: '[has(self.conditional),has(self.global),has(self.local)].filter(x,x==true).size()
+                    - message: at least one of the fields in [conditional conditionalPolicy
+                        global local] must be set
+                      rule: '[has(self.conditional),has(self.conditionalPolicy),has(self.global),has(self.local)].filter(x,x==true).size()
                         >= 1'
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.global),has(self.local)].filter(x,x==true).size()
                         == 0 : true'
+                    - message: conditionalPolicy can only be set with conditional
+                      rule: 'has(self.conditionalPolicy) ? has(self.conditional) :
+                        true'
+                    - message: conditional entries without condition must be last
+                        unless conditionalPolicy is AllMatching
+                      rule: 'has(self.conditional) ? (has(self.conditionalPolicy)
+                        && self.conditionalPolicy == ''AllMatching'' ? true : self.conditional.filter(e,
+                        !has(e.condition)).size() <= 1 && (!self.conditional.exists(e,
+                        !has(e.condition)) || !has(self.conditional[size(self.conditional)
+                        - 1].condition))) : true'
                   retry:
                     description: Retry policy.
                     properties:
@@ -9368,9 +9424,9 @@ spec:
                       conditional:
                         description: |-
                           Conditional policy execution. Set this or the top-level transformation fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
+                          By default, the first matching policy will be executed.
+                          For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+                          will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
                         items:
                           properties:
                             condition:
@@ -9638,10 +9694,14 @@ spec:
                         maxItems: 16
                         minItems: 1
                         type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      conditionalPolicy:
+                        description: |-
+                          ConditionalPolicyExecution determines how matching conditional policies are executed.
+                          If unset, the first matching policy will be executed.
+                        enum:
+                        - AllMatching
+                        - FirstMatching
+                        type: string
                       request:
                         description: Request transformation settings.
                         properties:
@@ -9870,13 +9930,23 @@ spec:
                             >= 1'
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [conditional request
-                        response] must be set
-                      rule: '[has(self.conditional),has(self.request),has(self.response)].filter(x,x==true).size()
+                    - message: at least one of the fields in [conditional conditionalPolicy
+                        request response] must be set
+                      rule: '[has(self.conditional),has(self.conditionalPolicy),has(self.request),has(self.response)].filter(x,x==true).size()
                         >= 1'
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.request),has(self.response)].filter(x,x==true).size()
                         == 0 : true'
+                    - message: conditionalPolicy can only be set with conditional
+                      rule: 'has(self.conditionalPolicy) ? has(self.conditional) :
+                        true'
+                    - message: conditional entries without condition must be last
+                        unless conditionalPolicy is AllMatching
+                      rule: 'has(self.conditional) ? (has(self.conditionalPolicy)
+                        && self.conditionalPolicy == ''AllMatching'' ? true : self.conditional.filter(e,
+                        !has(e.condition)).size() <= 1 && (!self.conditional.exists(e,
+                        !has(e.condition)) || !has(self.conditional[size(self.conditional)
+                        - 1].condition))) : true'
                 type: object
                 x-kubernetes-validations:
                 - message: phase PreRouting only supports extAuth, transformation,

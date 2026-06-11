@@ -26,7 +26,7 @@ use crate::llm::{
 	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
-use crate::store::{LocalWorkload, RequestPolicy};
+use crate::store::{self, LocalWorkload, RequestPolicy};
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, HeaderValueMatch,
@@ -330,6 +330,9 @@ struct LocalConditionalPolicy<T> {
 
 #[apply(schema_de!)]
 struct LocalConditionalPolicies<T> {
+	/// conditionalPolicy determines how matching conditional policies are executed.
+	#[serde(default)]
+	conditional_policy: store::ConditionalPolicyExecutionMode,
 	/// conditional policy entries. An entry without a condition must be the final fallback.
 	conditional: Vec<LocalConditionalPolicy<T>>,
 }
@@ -377,11 +380,16 @@ impl<T> LocalExplicitOrConditional<T> {
 			LocalExplicitOrConditional::Explicit(policy) => Ok(RequestPolicy::single(policy)),
 			LocalExplicitOrConditional::Conditional(policies) => {
 				validate_local_conditional_policies(&policies)?;
-				Ok(RequestPolicy::from_policies(
+				let execution_mode = policies.conditional_policy;
+				Ok(RequestPolicy::from_policy_inners_with_mode(
 					policies
 						.conditional
 						.into_iter()
-						.map(|entry| (entry.policy, entry.condition)),
+						.map(|entry| store::PolicyWithCondition {
+							pol: Arc::new(entry.policy),
+							condition: entry.condition,
+						}),
+					execution_mode,
 				))
 			},
 		}
@@ -394,6 +402,7 @@ fn configure_ext_authz_cache_store(policy: LocalExtAuthzPolicy) -> LocalExtAuthz
 			LocalExplicitOrConditional::Explicit(policy.with_configured_cache_store())
 		},
 		LocalExplicitOrConditional::Conditional(mut policies) => {
+			let conditional_policy = policies.conditional_policy;
 			policies.conditional = policies
 				.conditional
 				.into_iter()
@@ -402,6 +411,7 @@ fn configure_ext_authz_cache_store(policy: LocalExtAuthzPolicy) -> LocalExtAuthz
 					policy: entry.policy.with_configured_cache_store(),
 				})
 				.collect();
+			policies.conditional_policy = conditional_policy;
 			LocalExplicitOrConditional::Conditional(policies)
 		},
 	}
@@ -415,6 +425,9 @@ fn validate_local_conditional_policies<T>(
 	}
 	if policies.conditional.len() > 64 {
 		bail!("conditional policies may have at most 64 entries");
+	}
+	if policies.conditional_policy == store::ConditionalPolicyExecutionMode::AllMatching {
+		return Ok(());
 	}
 	if let Some(unconditional_idx) = policies
 		.conditional
@@ -435,15 +448,21 @@ impl LocalExplicitOrConditional<LocalTransformationConfig> {
 			)),
 			LocalExplicitOrConditional::Conditional(policies) => {
 				validate_local_conditional_policies(&policies)?;
-				Ok(RequestPolicy::from_policies(
+				let execution_mode = policies.conditional_policy;
+				Ok(RequestPolicy::from_policy_inners_with_mode(
 					policies
 						.conditional
 						.into_iter()
 						.map(|entry| {
-							Transformation::try_from_local_config(entry.policy, true)
-								.map(|policy| (policy, entry.condition))
+							Transformation::try_from_local_config(entry.policy, true).map(|policy| {
+								store::PolicyWithCondition {
+									pol: Arc::new(policy),
+									condition: entry.condition,
+								}
+							})
 						})
 						.collect::<anyhow::Result<Vec<_>>>()?,
+					execution_mode,
 				))
 			},
 		}
@@ -474,11 +493,16 @@ impl LocalRateLimitPolicy {
 			LocalRateLimitPolicy::Explicit(policies) => Ok(RequestPolicy::single(policies)),
 			LocalRateLimitPolicy::Conditional(policies) => {
 				validate_local_conditional_policies(&policies)?;
-				Ok(RequestPolicy::from_policies(
+				let execution_mode = policies.conditional_policy;
+				Ok(RequestPolicy::from_policy_inners_with_mode(
 					policies
 						.conditional
 						.into_iter()
-						.map(|entry| (vec![entry.policy], entry.condition)),
+						.map(|entry| store::PolicyWithCondition {
+							pol: Arc::new(vec![entry.policy]),
+							condition: entry.condition,
+						}),
+					execution_mode,
 				))
 			},
 		}

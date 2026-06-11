@@ -167,12 +167,12 @@ async fn apply_request_policies(
 
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
-		.apply_selected("local rate limit", c, l, req, rp.headers())
+		.apply_selected_all("local rate limit", c, l, req, rp.headers())
 		.await?;
 
 	rp.llm_request_policies.remote_rate_limit = pol
 		.remote_rate_limit
-		.apply_selected("remote rate limit", c, l, req, rp.headers())
+		.apply_selected_all("remote rate limit", c, l, req, rp.headers())
 		.await?;
 
 	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
@@ -182,10 +182,13 @@ async fn apply_request_policies(
 	// the response mutation phase instead of applying ExtProc directly.
 	rp.ext_proc = pol
 		.ext_proc
-		.select("ext proc", req)
-		.map(|p| p.build(c.clone()));
-	if let Some(x) = rp.ext_proc.as_mut() {
-		x.mutate_request(req).await?.apply(rp.headers())?;
+		.select_all("ext proc", req)
+		.into_iter()
+		.map(|p| p.build(c.clone()))
+		.collect();
+	let response_headers = &mut rp.response_headers;
+	for x in &mut rp.ext_proc {
+		x.mutate_request(req).await?.apply(response_headers)?;
 		dtrace::snapshot!(Request, "ext proc", &req);
 	}
 
@@ -211,7 +214,7 @@ async fn apply_request_policies(
 
 	// Enable Auto Hostname rewrite by default. This may be disabled by a URL Rewrite, or explicitly
 	// setting hostname_rewrite = None
-	let hostname_rewrite = pol.hostname_rewrite.select("hostname rewrite", req);
+	let hostname_rewrite = pol.hostname_rewrite.select_last("hostname rewrite", req);
 	if hostname_rewrite
 		.as_deref()
 		.copied()
@@ -377,9 +380,11 @@ async fn apply_gateway_policies(
 	// the response mutation phase instead of applying ExtProc directly.
 	let mut ext_proc = policies
 		.ext_proc
-		.select("gateway ext proc", req)
-		.map(|p| p.build(client.clone()));
-	if let Some(x) = ext_proc.as_mut() {
+		.select_all("gateway ext proc", req)
+		.into_iter()
+		.map(|p| p.build(client.clone()))
+		.collect::<Vec<_>>();
+	for x in &mut ext_proc {
 		x.mutate_request(req)
 			.await?
 			.apply(response_policies.headers())?;
@@ -410,29 +415,34 @@ async fn apply_llm_request_policies(
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
 	let local_rate_limit = policies
 		.local_rate_limit
-		.as_deref()
-		.into_iter()
-		.flatten()
+		.iter()
+		.flat_map(|limits| limits.iter())
 		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
 		.cloned()
 		.collect::<Vec<_>>();
 	for lrl in &local_rate_limit {
 		lrl.check_llm_request(llm_req)?;
 	}
-	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
+	let mut remote_rate_limit = Vec::new();
+	for rrl in &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
 		// or 0.
 		// Either way, we will 'true up' on the response side.
-		rrl
-			.check_llm(client, req, llm_req.input_tokens.unwrap_or_default())
-			.await?
-	} else {
-		(http::PolicyResponse::default(), None)
-	};
-	rl_resp.apply(response_headers)?;
+		let (rl_resp, response) = rrl
+			.check_llm(
+				client.clone(),
+				req,
+				llm_req.input_tokens.unwrap_or_default(),
+			)
+			.await?;
+		rl_resp.apply(response_headers)?;
+		if let Some(response) = response {
+			remote_rate_limit.push(response);
+		}
+	}
 	Ok(store::LLMResponsePolicies {
 		local_rate_limit,
-		remote_rate_limit: response,
+		remote_rate_limit,
 		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
 		prompt_guard: policies
 			.llm
@@ -802,7 +812,7 @@ impl HTTPProxy {
 			.route_policies(&route_path, &route_inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		let route_retry = route_policies.retry.select("retry", &req);
+		let route_retry = route_policies.retry.select_last("retry", &req);
 		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
@@ -810,7 +820,7 @@ impl HTTPProxy {
 		// a middleware-style approach where if the request side never runs, neither does the response side.
 		response_policies.timeout = route_policies
 			.timeout
-			.select("timeout", &req)
+			.select_last("timeout", &req)
 			.as_deref()
 			.cloned();
 
@@ -862,8 +872,8 @@ impl HTTPProxy {
 				.snapshot_on_err(log, &mut req);
 		}
 
-		let route_request_mirrors = route_policies.request_mirror.select("request mirror", &req);
-		let route_llm = route_policies.llm.select("llm", &req);
+		let route_request_mirrors = route_policies.request_mirror.select_all("request mirror", &req);
+		let route_llm = route_policies.llm.select_last("llm", &req);
 		let (head, body) = req.into_parts();
 		for mirror in route_request_mirrors
 			.iter()
@@ -3379,8 +3389,8 @@ struct ResponsePolicies {
 	backend_transformation: ResponsePolicy<Transformation>,
 	gateway_transformation: ResponsePolicy<Transformation>,
 	response_headers: HeaderMap,
-	ext_proc: Option<ExtProcRequest>,
-	gateway_ext_proc: Option<ExtProcRequest>,
+	ext_proc: Vec<ExtProcRequest>,
+	gateway_ext_proc: Vec<ExtProcRequest>,
 	// Populated by the standard request-policy flow after conditional rate-limit policies are
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,
@@ -3393,10 +3403,7 @@ impl ResponsePolicies {
 	}
 
 	fn take_ext_proc_body_immediate_response(&self) -> Option<http::Response> {
-		for ep in [&self.ext_proc, &self.gateway_ext_proc]
-			.into_iter()
-			.flatten()
-		{
+		for ep in self.ext_proc.iter().chain(self.gateway_ext_proc.iter()) {
 			if let Some(resp) = ep.take_body_immediate_response() {
 				return Some(resp);
 			}
@@ -3436,13 +3443,13 @@ impl ResponsePolicies {
 
 		// ext_proc is only intended to run on responses from upstream
 		if is_upstream_response {
-			if let Some(x) = self.ext_proc.as_mut() {
+			for x in &mut self.ext_proc {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
 					.await?
 					.apply(&mut self.response_headers)?;
 				dtrace::snapshot!(Response, "ext proc", l, &resp);
-			};
-			if let Some(x) = self.gateway_ext_proc.as_mut() {
+			}
+			for x in &mut self.gateway_ext_proc {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
 					.await?
 					.apply(&mut self.response_headers)?;

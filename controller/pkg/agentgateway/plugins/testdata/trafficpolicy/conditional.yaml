@@ -10,6 +10,7 @@ spec:
       name: dummy
   traffic:
     transformation:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/transform'"
           policy:
@@ -23,6 +24,7 @@ spec:
                 - name: x-conditional-transform
                   value: "'fallback'"
     extProc:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/process'"
           policy:
@@ -34,6 +36,7 @@ spec:
               name: extproc
               port: 4444
     extAuth:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "random() > .5"
           policy:
@@ -53,6 +56,7 @@ spec:
               port: 1024
             grpc: {}
     rateLimit:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/local-limit'"
           policy:
@@ -75,6 +79,7 @@ spec:
               - requests: 1
                 unit: Minutes
     directResponse:
+      conditionalPolicy: AllMatching
       conditional:
         - condition: "request.path == '/direct'"
           policy:
@@ -122,6 +127,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: request.path == '/direct'
           traffic:
@@ -150,6 +156,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: random() > .5
           traffic:
@@ -192,6 +199,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: request.path == '/process'
           traffic:
@@ -223,6 +231,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: request.path == '/global-limit'
           traffic:
@@ -252,6 +261,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: request.path == '/local-limit'
           traffic:
@@ -279,6 +289,7 @@ output:
   resource:
     policy:
       conditional:
+        executionMode: ALL_MATCHING
         policies:
         - condition: request.path == '/transform'
           traffic:

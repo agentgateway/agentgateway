@@ -131,7 +131,12 @@ message TCPRoute {
 }
 
 message ConditionalPolicies {
-    repeated ConditionalPolicy policies = 1;
+  enum ExecutionMode {
+    FIRST_MATCHING = 0;
+    ALL_MATCHING = 1;
+  }
+  repeated ConditionalPolicy policies = 1;
+  ExecutionMode execution_mode = 2;
 }
 message ConditionalPolicy {
   optional string condition = 1;

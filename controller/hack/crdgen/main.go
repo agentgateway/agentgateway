@@ -65,8 +65,9 @@ type IfThenOnlyFields struct {
 
 // +controllertools:marker:generateHelp:category="CRD validation"
 type ConditionalPolicy struct {
-	Fields  []string `marker:",optional"`
-	Message string   `marker:",optional"`
+	Fields               []string `marker:",optional"`
+	AllowWithConditional []string `marker:"allowWithConditional,optional"`
+	Message              string   `marker:",optional"`
 }
 
 // +controllertools:marker:generateHelp:category="CRD validation"
@@ -395,6 +396,14 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 		return err
 	}
 
+	allowWithConditional, err := validateFieldList(allFields, marker.AllowWithConditional, "allowWithConditional")
+	if err != nil {
+		return err
+	}
+	if slices.Contains(allowWithConditional, conditionalField) {
+		return errors.New("allowWithConditional: conditional is always allowed by ConditionalPolicy")
+	}
+
 	requiredFields, err := validateFieldList(allFields, marker.Fields, "fields")
 	if err != nil {
 		return err
@@ -405,7 +414,7 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 
 	otherFields := make([]string, 0, len(allFields))
 	for _, field := range allFields {
-		if field != conditionalField {
+		if field != conditionalField && !slices.Contains(allowWithConditional, field) {
 			otherFields = append(otherFields, field)
 		}
 	}
@@ -417,6 +426,26 @@ func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields [
 	if err := (crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalRule),
 		Message: "conditional cannot be set with any other field",
+	}).ApplyToSchema(nil, schema); err != nil {
+		return err
+	}
+
+	for _, field := range allowWithConditional {
+		if err := (crdmarkers.XValidation{
+			Rule:    fmt.Sprintf("has(self.%s) ? has(self.%s) : true", field, conditionalField),
+			Message: fmt.Sprintf("%s can only be set with conditional", field),
+		}).ApplyToSchema(nil, schema); err != nil {
+			return err
+		}
+	}
+
+	conditionalFallbackRule := "self.conditional.filter(e, !has(e.condition)).size() <= 1 && (!self.conditional.exists(e, !has(e.condition)) || !has(self.conditional[size(self.conditional) - 1].condition))"
+	if slices.Contains(allowWithConditional, "conditionalPolicy") {
+		conditionalFallbackRule = fmt.Sprintf("(has(self.conditionalPolicy) && self.conditionalPolicy == 'AllMatching' ? true : %s)", conditionalFallbackRule)
+	}
+	if err := (crdmarkers.XValidation{
+		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalFallbackRule),
+		Message: "conditional entries without condition must be last unless conditionalPolicy is AllMatching",
 	}).ApplyToSchema(nil, schema); err != nil {
 		return err
 	}

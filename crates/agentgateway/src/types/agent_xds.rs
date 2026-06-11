@@ -30,7 +30,7 @@ use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
-use crate::store::RequestPolicy;
+use crate::store::{self, RequestPolicy};
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::ProtoError;
@@ -2846,11 +2846,23 @@ fn policy_inheritance_from_proto(inheritance: i32) -> PolicyInheritance {
 	}
 }
 
+fn conditional_policy_execution_mode_from_proto(
+	execution_mode: i32,
+) -> store::ConditionalPolicyExecutionMode {
+	match proto::agent::conditional_policies::ExecutionMode::try_from(execution_mode) {
+		Ok(proto::agent::conditional_policies::ExecutionMode::AllMatching) => {
+			store::ConditionalPolicyExecutionMode::AllMatching
+		},
+		_ => store::ConditionalPolicyExecutionMode::FirstMatching,
+	}
+}
+
 fn conditional_policy_from_proto(
 	cond: &proto::agent::ConditionalPolicies,
 	diagnostics: &mut Diagnostics,
 ) -> Result<PolicyType, ProtoError> {
 	use crate::types::proto::agent::conditional_policy as cp;
+	let execution_mode = conditional_policy_execution_mode_from_proto(cond.execution_mode);
 
 	let mut traffic = Vec::new();
 	let mut expected_shape: Option<(&'static str, PolicyPhase)> = None;
@@ -2893,12 +2905,13 @@ fn conditional_policy_from_proto(
 	};
 	Ok(PolicyType::Traffic(PhasedTrafficPolicy {
 		phase,
-		policy: conditional_traffic_policy_to_policy(traffic)?,
+		policy: conditional_traffic_policy_to_policy(traffic, execution_mode)?,
 	}))
 }
 
 fn conditional_traffic_policy_to_policy(
 	policies: Vec<(Option<Arc<cel::Expression>>, PhasedTrafficPolicy)>,
+	execution_mode: store::ConditionalPolicyExecutionMode,
 ) -> Result<TrafficPolicy, ProtoError> {
 	macro_rules! build {
 		($variant:ident) => {{
@@ -2919,9 +2932,9 @@ fn conditional_traffic_policy_to_policy(
 						}),
 				);
 			}
-			Ok(TrafficPolicy::$variant(RequestPolicy::from_policy_inners(
-				inners,
-			)))
+			Ok(TrafficPolicy::$variant(
+				RequestPolicy::from_policy_inners_with_mode(inners, execution_mode),
+			))
 		}};
 	}
 
@@ -3285,6 +3298,7 @@ mod tests {
 							),
 						),
 					],
+					..Default::default()
 				},
 			)),
 		};
@@ -3324,6 +3338,7 @@ mod tests {
 							),
 						),
 					],
+					..Default::default()
 				},
 			)),
 		};
@@ -3359,6 +3374,7 @@ mod tests {
 							proto::agent::HeaderModifier::default(),
 						),
 					)],
+					..Default::default()
 				},
 			)),
 		};
@@ -3410,6 +3426,7 @@ mod tests {
 						conditional_traffic_policy("request.path == '/a'", local_rate_limit()),
 						conditional_traffic_policy("request.path == '/b'", local_rate_limit()),
 					],
+					..Default::default()
 				},
 			)),
 		};
@@ -3449,6 +3466,7 @@ mod tests {
 							),
 						),
 					],
+					..Default::default()
 				},
 			)),
 		};

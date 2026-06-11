@@ -1260,7 +1260,7 @@ impl AIProvider {
 			.insert(crate::cel::LLMContext::from(llm_info.clone()));
 		let resp = Response::from_parts(parts, body);
 
-		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+		if !rate_limit.local_rate_limit.is_empty() || !rate_limit.remote_rate_limit.is_empty() {
 			let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
 			// In the initial request, we subtracted the approximate request tokens.
 			// Now we should have the real request tokens and the response tokens
@@ -1971,7 +1971,7 @@ fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec
 	for lrl in &rate_limit.local_rate_limit {
 		lrl.amend_tokens(tokens_to_remove)
 	}
-	if let Some(rrl) = rate_limit.remote_rate_limit {
+	for rrl in rate_limit.remote_rate_limit {
 		rrl.amend_tokens(tokens_to_remove, &exec)
 	}
 }
@@ -1999,7 +1999,7 @@ impl AmendOnDrop {
 	}
 	pub fn report_rate_limit(&mut self) {
 		if let Some(pol) = self.pol.take()
-			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
+			&& (!pol.local_rate_limit.is_empty() || !pol.remote_rate_limit.is_empty())
 		{
 			self.log.non_atomic_mutate(|r| {
 				let ctx = LLMContext::from(r.clone());

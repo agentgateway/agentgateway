@@ -914,18 +914,22 @@ type DirectResponseConditional struct {
 	Policy DirectResponse `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=status
+// +kubebuilder:validation:ConditionalPolicy:fields=status,allowWithConditional=conditionalPolicy
 type DirectResponseOrConditional struct {
 	// +optional
 	DirectResponse `json:",inline"`
+	// ConditionalPolicyExecution determines how matching conditional policies are executed.
+	// If unset, the first matching policy will be executed.
+	// +optional
+	// +kubebuilder:validation:Enum=FirstMatching;AllMatching
+	ConditionalPolicyExecution ConditionalPolicyExecution `json:"conditionalPolicy,omitempty"`
 	// Conditional policy execution. Set this or the top-level directResponse fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
+	// By default, the first matching policy will be executed.
+	// For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+	// will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []DirectResponseConditional `json:"conditional,omitempty"`
 }
 
@@ -940,6 +944,10 @@ func (d *DirectResponseOrConditional) ConditionalPolicy() (*DirectResponse, iter
 		return nil, seq
 	}
 	return &d.DirectResponse, seq
+}
+
+func (d *DirectResponseOrConditional) ConditionalPolicyExecutionMode() ConditionalPolicyExecution {
+	return d.ConditionalPolicyExecution
 }
 
 // +k8s:enum
@@ -1668,7 +1676,7 @@ type TransformationConditional struct {
 	Policy Transformation `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy
+// +kubebuilder:validation:ConditionalPolicy:allowWithConditional=conditionalPolicy
 // +kubebuilder:validation:AtLeastOneFieldSet
 type TransformationOrConditional struct {
 	// Request transformation settings.
@@ -1679,14 +1687,19 @@ type TransformationOrConditional struct {
 	// +optional
 	Response *Transform `json:"response,omitempty"`
 
+	// ConditionalPolicyExecution determines how matching conditional policies are executed.
+	// If unset, the first matching policy will be executed.
+	// +optional
+	// +kubebuilder:validation:Enum=FirstMatching;AllMatching
+	ConditionalPolicyExecution ConditionalPolicyExecution `json:"conditionalPolicy,omitempty"`
+
 	// Conditional policy execution. Set this or the top-level transformation fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
+	// By default, the first matching policy will be executed.
+	// For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+	// will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []TransformationConditional `json:"conditional,omitempty"`
 }
 
@@ -1701,6 +1714,10 @@ func (t *TransformationOrConditional) ConditionalPolicy() (*Transformation, iter
 		return nil, seq
 	}
 	return &Transformation{Request: t.Request, Response: t.Response}, seq
+}
+
+func (t *TransformationOrConditional) ConditionalPolicyExecutionMode() ConditionalPolicyExecution {
+	return t.ConditionalPolicyExecution
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1893,18 +1910,34 @@ type ExtProcConditional struct {
 	Policy ExtProc `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +k8s:enum
+type ConditionalPolicyExecution string
+
+const (
+	// Execute the first conditional policy with a matching condition.
+	// This is the default option.
+	FirstMatching ConditionalPolicyExecution = "FirstMatching"
+
+	// Execute all conditional policies with matching conditions.
+	AllMatching ConditionalPolicyExecution = "AllMatching"
+)
+
+// +kubebuilder:validation:ConditionalPolicy:fields=backendRef,allowWithConditional=conditionalPolicy
 type ExtProcOrConditional struct {
 	// +optional
 	ExtProc `json:",inline"`
+	// ConditionalPolicyExecution determines how matching conditional policies are executed.
+	// If unset, the first matching policy will be executed.
+	// +optional
+	// +kubebuilder:validation:Enum=FirstMatching;AllMatching
+	ConditionalPolicyExecution ConditionalPolicyExecution `json:"conditionalPolicy,omitempty"`
 	// Conditional policy execution. Set this or the top-level extProc fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
+	// By default, the first matching policy will be executed.
+	// For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+	// will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []ExtProcConditional `json:"conditional,omitempty"`
 }
 
@@ -1921,6 +1954,10 @@ func (e *ExtProcOrConditional) ConditionalPolicy() (*ExtProc, iter.Seq[Condition
 	return &e.ExtProc, seq
 }
 
+func (e *ExtProcOrConditional) ConditionalPolicyExecutionMode() ConditionalPolicyExecution {
+	return e.ConditionalPolicyExecution
+}
+
 // +k8s:deepcopy-gen=false
 // nolint: kubeapilinter
 type ConditionalPolicyEntry[T any] struct {
@@ -1932,6 +1969,7 @@ type ConditionalPolicyEntry[T any] struct {
 // nolint: kubeapilinter
 type ConditionalPolicy[T any] interface {
 	ConditionalPolicy() (*T, iter.Seq[ConditionalPolicyEntry[T]])
+	ConditionalPolicyExecutionMode() ConditionalPolicyExecution
 }
 
 type ExtAuthConditional struct {
@@ -1945,19 +1983,23 @@ type ExtAuthConditional struct {
 	Policy ExtAuth `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:ConditionalPolicy:fields=backendRef,allowWithConditional=conditionalPolicy
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 type ExtAuthOrConditional struct {
 	// +optional
 	ExtAuth `json:",inline"`
+	// ConditionalPolicyExecution determines how matching conditional policies are executed.
+	// If unset, the first matching policy will be executed.
+	// +optional
+	// +kubebuilder:validation:Enum=FirstMatching;AllMatching
+	ConditionalPolicyExecution ConditionalPolicyExecution `json:"conditionalPolicy,omitempty"`
 	// Conditional policy execution. Set this or the top-level extAuth fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
+	// By default, the first matching policy will be executed.
+	// For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+	// will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []ExtAuthConditional `json:"conditional,omitempty"`
 }
 
@@ -1972,6 +2014,10 @@ func (e *ExtAuthOrConditional) ConditionalPolicy() (*ExtAuth, iter.Seq[Condition
 		return nil, seq
 	}
 	return &e.ExtAuth, seq
+}
+
+func (e *ExtAuthOrConditional) ConditionalPolicyExecutionMode() ConditionalPolicyExecution {
+	return e.ConditionalPolicyExecution
 }
 
 // mapseq runs f() over all elements in s and returns the result
@@ -2156,7 +2202,7 @@ type RateLimitsConditional struct {
 	Policy RateLimits `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy
+// +kubebuilder:validation:ConditionalPolicy:allowWithConditional=conditionalPolicy
 // +kubebuilder:validation:AtLeastOneFieldSet
 type RateLimitsOrConditional struct {
 	// Local rate limiting policy.
@@ -2169,14 +2215,19 @@ type RateLimitsOrConditional struct {
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
 
+	// ConditionalPolicyExecution determines how matching conditional policies are executed.
+	// If unset, the first matching policy will be executed.
+	// +optional
+	// +kubebuilder:validation:Enum=FirstMatching;AllMatching
+	ConditionalPolicyExecution ConditionalPolicyExecution `json:"conditionalPolicy,omitempty"`
+
 	// Conditional policy execution. Set this or the top-level rateLimit fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
+	// By default, the first matching policy will be executed.
+	// For FirstMatching, a single policy may be provided without a condition set; if so, it must be the last policy and
+	// will be the fallback in case no conditions are met. For AllMatching, multiple policies may omit the condition.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []RateLimitsConditional `json:"conditional,omitempty"`
 }
 
@@ -2191,6 +2242,10 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 		return nil, seq
 	}
 	return &RateLimits{Local: r.Local, Global: r.Global}, seq
+}
+
+func (r *RateLimitsOrConditional) ConditionalPolicyExecutionMode() ConditionalPolicyExecution {
+	return r.ConditionalPolicyExecution
 }
 
 type GlobalRateLimit struct {
