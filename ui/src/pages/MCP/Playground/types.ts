@@ -9,6 +9,7 @@ import type { LocalListener, LocalRoute } from "../../../config";
 export interface RouteInfo {
   bindPort: number;
   listener: LocalListener;
+  targetName: string;
   route: LocalRoute;
   endpoint: string;
   protocol: string;

@@ -1,7 +1,7 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Headphones, Server, Shield } from "lucide-react";
+import { Server, Shield } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
@@ -11,7 +11,6 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
-import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 const PageRoot = styled.div`
   display: flex;
@@ -250,17 +249,6 @@ export function MCPConfigurationPage() {
                       No MCP configuration found. Create one to start
                       configuring servers and policies.
                     </p>
-                    <div style={{ marginTop: 16 }}>
-                      <XdsAwareButton
-                        type="primary"
-                        icon={<Headphones size={16} />}
-                        onClick={() => addHandlers?.addMCP()}
-                        disabled={!addHandlers}
-                        data-testid="mcp-config-no-resources-add-button"
-                      >
-                        Add MCP Config
-                      </XdsAwareButton>
-                    </div>
                   </>
                 )}
               </PlaceholderContent>

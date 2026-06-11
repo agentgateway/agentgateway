@@ -64,6 +64,6 @@ echo "Gateway data plane pod: ${TEST_NAMESPACE}/${GW_POD}"
 echo
 echo "In a separate terminal, run:"
 echo
-echo "  kubectl -n ${TEST_NAMESPACE} port-forward pod/${GW_POD} 15000 8080 9000 9001"
+echo "  kubectl -n ${TEST_NAMESPACE} port-forward pod/${GW_POD} 15000 8080 8621 8622"
 echo
 echo "Then start the dev UI (cd ui && yarn dev) and open http://localhost:5173."

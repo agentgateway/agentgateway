@@ -1,7 +1,6 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
@@ -11,7 +10,6 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
-import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 // ---------------------------------------------------------------------------
 // Styled components
@@ -275,7 +273,6 @@ export function TrafficConfigurationPage() {
       <MetricsHeader>
         <PageHeader>
           <div>
-            <PageTitle>Traffic Configuration</PageTitle>
             <Description>
               View and edit the full agentgateway configuration.
             </Description>
@@ -310,16 +307,6 @@ export function TrafficConfigurationPage() {
                       No binds configured. Create a bind to start defining
                       listeners, routes, and backends.
                     </p>
-                    <div style={{ marginTop: 16 }}>
-                      <XdsAwareButton
-                        type="primary"
-                        icon={<Network size={16} />}
-                        onClick={() => addHandlers?.addBind()}
-                        disabled={!addHandlers}
-                      >
-                        Add Bind
-                      </XdsAwareButton>
-                    </div>
                   </>
                 )}
               </PlaceholderContent>

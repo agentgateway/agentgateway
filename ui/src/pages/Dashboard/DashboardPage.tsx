@@ -1,5 +1,5 @@
 import styled from "@emotion/styled";
-import { Card, Col, Row, Spin, Statistic, Tag, Tooltip } from "antd";
+import { Button, Card, Col, Row, Spin, Statistic, Tag, Tooltip } from "antd";
 import {
   Brain,
   Headphones,
@@ -7,10 +7,11 @@ import {
   Route,
   Server,
   Shield,
-  Workflow,
+  Workflow
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useConfig, useLLMConfig, useMCPConfig } from "../../api";
+import { useConfig, useLLMConfig, useMCPConfig, useXdsMode } from "../../api";
+import { AgentgatewayLogo } from "../../components/AgentgatewayLogo";
 import { StyledAlert } from "../../components/StyledAlert";
 import { useTrafficHierarchy } from "../../components/TrafficHierarchy";
 
@@ -24,12 +25,6 @@ const PageTitle = styled.h1`
   margin: 0 0 4px;
   font-size: 24px;
   font-weight: 600;
-`;
-
-const PageSubtitle = styled.p`
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 14px;
 `;
 
 const SectionCard = styled(Card)`
@@ -66,6 +61,20 @@ const IconBox = styled.div<{ color?: string }>`
   flex-shrink: 0;
 `;
 
+const CTAHeader = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-bg-hover) 0%, var(--color-bg-container) 100%);
+  border: 1px solid var(--color-border-secondary);
+  text-align: center;
+  gap: 12px;
+`;
+
 const IconLabel = styled.div`
   display: flex;
   align-items: center;
@@ -81,6 +90,8 @@ export const DashboardPage = () => {
   const hierarchy = useTrafficHierarchy();
   const { data: llm } = useLLMConfig();
   const { data: mcp } = useMCPConfig();
+  const { xdsMode } = useXdsMode();
+
 
   const isLoading = configLoading || hierarchy.isLoading;
 
@@ -110,6 +121,7 @@ export const DashboardPage = () => {
   }
 
   const { stats } = hierarchy;
+
   const llmModelCount = llm?.models?.length ?? 0;
   const mcpTargetCount = mcp?.targets?.length ?? 0;
 
@@ -210,12 +222,36 @@ export const DashboardPage = () => {
     },
   ];
 
+  const ctaDescription = "Connect an LLM model and MCP targets to get started with agentgateway."
+  const ctaDescriptionXdsMode = "Configuration is managed by a remote control plane. Edits are disabled.";
+
   return (
     <Container>
-      <div>
-        <PageTitle>Home</PageTitle>
-        <PageSubtitle>AgentGateway configuration overview</PageSubtitle>
-      </div>
+      
+      {/* Call to action header */}
+      <CTAHeader data-testid="xds-call-to-action-card">
+        <div style={{ width: 40, height: 40 }}>
+          <AgentgatewayLogo />
+        </div>
+          <div>
+          <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 6 }}>
+            {xdsMode ? "agentgateway: xDS mode is enabled" : "Get started with agentgateway"}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--color-text-secondary)", maxWidth: 420 }}>
+            {xdsMode ? ctaDescriptionXdsMode : ctaDescription}
+          </div>
+        </div>
+        {!xdsMode && (
+          <div style={{ display: 'flex', gap: 8}}>  
+            <Button type="primary" size="large" onClick={() => navigate("/llm-setup-wizard")}>
+              Open LLM Setup Wizard →
+            </Button>
+            <Button type="primary" size="large" onClick={() => navigate("/mcp-setup-wizard")}>
+              Open MCP Setup Wizard →
+            </Button>
+          </div>
+        )}
+      </CTAHeader>
 
       {/* Quick stats bar */}
       <Row gutter={[12, 12]}>
@@ -329,6 +365,7 @@ export const DashboardPage = () => {
           </Col>
         ))}
       </Row>
+
     </Container>
   );
 };

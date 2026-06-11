@@ -49,11 +49,13 @@ export function FieldTemplate(props: FieldTemplateProps) {
     return <div className="hidden">{children}</div>;
   }
 
+  const isArrayItem = /_(0|[1-9]\d*)$/.test(id);
+
   // Context-based label hiding: CollapsibleObjectFieldTemplate marks field IDs
   // whose labels duplicate the section title so we skip rendering the label.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const hideLabelIds = useContext(HideLabelContext);
-  const shouldHideLabel = hideLabelIds.has(id) || uiSchema?.["ui:label"] === false;
+  const shouldHideLabel = hideLabelIds.has(id) || uiSchema?.["ui:label"] === false || isArrayItem;
 
   // Build help text from description - handle string, ReactElement, or object
   let helpText = "";
@@ -71,9 +73,7 @@ export function FieldTemplate(props: FieldTemplateProps) {
 
   const hasErrors = rawErrors && rawErrors.length > 0;
 
-  // Check if this field represents an object (nested form section)
-  const isArrayItem = /_(0|[1-9]\d*)$/.test(id);
-  const isObjectField = schema.type === "object" || schema.properties !== undefined && !isArrayItem;
+  const isObjectField = (schema.type === "object" || schema.properties !== undefined) && !isArrayItem;
 
   // For object fields, render as a section header without Form.Item
   if (isObjectField) {

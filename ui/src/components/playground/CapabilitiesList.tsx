@@ -42,7 +42,7 @@ export function CapabilitiesList({
             {connectionType === "a2a" ? (
               <Bot className="h-5 w-5" />
             ) : (
-              <Settings className="h-5 w-5" />
+              <Settings className="h-5 w-5" style={{ margin: "8px" }}/>
             )}
             {connectionType === "a2a"
               ? a2aAgentCard?.name || "Unknown Agent"
@@ -194,7 +194,7 @@ export function CapabilitiesList({
     return (
       <Card
         title={
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px"}}>
             <Settings className="h-5 w-5" />
             Available Tools
           </div>

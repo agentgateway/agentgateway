@@ -2990,6 +2990,10 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     ...(showFrontendPoliciesSection ? [{ key: "frontendPolicies", label: "Frontend Policies", icon: <Settings size={14} />, onClick: handleAddFrontendPolicies } as const] : []),
   ];
 
+  const hasAddableItems = addMenuItems.some(
+    (item) => item && (item as any).type !== "divider" && !(item as any).disabled
+  );
+
   // Determine if filtered tree has any content
   const hasFilteredContent =
     (showBinds && hierarchy.binds.length > 0) ||
@@ -3001,16 +3005,18 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
     return (
       <TreeCard>
         <Empty description="No resources configured" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-            <XdsAwareButton 
-              disabled={xdsMode} 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              data-testid="hierarchy-tree-no-resources-add-button"
-            >
-              Add <DownOutlined />
-            </XdsAwareButton>
-          </Dropdown>
+          {hasAddableItems && (
+            <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
+              <XdsAwareButton
+                disabled={xdsMode}
+                type="primary"
+                icon={<PlusOutlined />}
+                data-testid="hierarchy-tree-no-resources-add-button"
+              >
+                Add <DownOutlined />
+              </XdsAwareButton>
+            </Dropdown>
+          )}
         </Empty>
       </TreeCard>
     );
@@ -3041,16 +3047,18 @@ export function HierarchyTree({ hierarchy, filter, title, onRegisterAddHandlers 
                 {cardTitle}
               </CardTitle>
               <Space size="small">
-                <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
-                  <XdsAwareButton 
-                    type="primary" 
-                    size="small" 
-                    icon={<PlusOutlined />} 
-                    data-testid="hierarchy-tree-header-row-add-button"
-                  >
-                    Add <DownOutlined />
-                  </XdsAwareButton>
-                </Dropdown>
+                {hasAddableItems && (
+                  <Dropdown menu={{ items: addMenuItems }} trigger={["click"]}>
+                    <XdsAwareButton
+                      type="primary"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      data-testid="hierarchy-tree-header-row-add-button"
+                    >
+                      Add <DownOutlined />
+                    </XdsAwareButton>
+                  </Dropdown>
+                )}
                 <Tooltip
                   title={
                     expandedKeys.length > 0 ? "Collapse All" : "Expand All"

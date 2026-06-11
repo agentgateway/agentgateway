@@ -1,6 +1,7 @@
 import styled from "@emotion/styled";
 import { Button, Card, Input, Select, Tag, Typography } from "antd";
 import { Trash2 } from "lucide-react";
+import { useEffect } from "react";
 import { PROVIDER_COLORS } from "./constants";
 import type { Message, PlaygroundModel } from "./types";
 
@@ -34,6 +35,7 @@ const EndpointInfo = styled.div`
 
 interface SettingsPanelProps {
   models: PlaygroundModel[];
+  providedModelName: string | null;
   selectedLabel: string | null;
   selectedModel: PlaygroundModel | null;
   modelOverride: string;
@@ -46,6 +48,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   models,
+  providedModelName,
   selectedLabel,
   selectedModel,
   modelOverride,
@@ -55,6 +58,15 @@ export function SettingsPanel({
   onChangeModelOverride,
   onClear,
 }: SettingsPanelProps) {
+  useEffect(() => {
+    if (!providedModelName || selectedLabel !== null) return;
+    const match = models.find((m) => m.label === providedModelName || m.defaultModel === providedModelName);
+    if (match) {
+      onSelectLabel(match.label);
+      onChangeModelOverride(match.defaultModel ?? providedModelName);
+    }
+  }, [providedModelName, models, selectedLabel, onSelectLabel, onChangeModelOverride]);
+
   return (
     <Card title="Settings" size="small">
       <SidebarSection>
@@ -70,13 +82,16 @@ export function SettingsPanel({
               placeholder="Select a configuration"
               value={selectedLabel}
               onChange={onSelectLabel}
-              options={models.map((m) => ({
+              popupMatchSelectWidth={false}
+              options={models.filter((m, i, arr) => arr.findIndex(x => x.label === m.label) === i).map((m) => ({
                 label: (
                   <span
                     style={{
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
+                      overflow: "hidden",
+                      minWidth: 0,
                     }}
                   >
                     <Tag

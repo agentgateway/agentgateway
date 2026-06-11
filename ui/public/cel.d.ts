@@ -74,6 +74,10 @@ export interface ExecutorSerde {
      */
     code?: number;
     /**
+     * The gRPC status code of the response, when present.
+     */
+    grpcStatus?: number | null;
+    /**
      * The headers of the response.
      */
     headers?: {
@@ -106,12 +110,19 @@ export interface ExecutorSerde {
    * `jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.
    */
   jwt?: {
+    /**
+     * The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.
+     */
+    rawToken?: string;
     [k: string]: unknown;
   } | null;
   /**
    * `apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.
    */
   apiKey?: {
+    /**
+     * The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.
+     */
     key: string;
     [k: string]: unknown;
   } | null;
@@ -293,6 +304,10 @@ export interface ExecutorSerde {
      * The CN of the subject from the downstream certificate, if available.
      */
     subjectCn?: string | null;
+    /**
+     * PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
+     */
+    certificate?: string | null;
     /**
      * The workload context of the downstream connection, resolved from the
      * workload discovery store by source IP. Available when the source pod is

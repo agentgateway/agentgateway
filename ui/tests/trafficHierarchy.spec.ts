@@ -28,11 +28,6 @@ test('should verify Traffic Hierarchy page contents are visible', async ({ page 
     await expect(banner).toBeVisible();
     await expect(banner).toContainText(TRAFFIC_CONFIGURATION);
 
-    // verify page heading
-    const heading = page.locator('h1').filter({ hasText: TRAFFIC_CONFIGURATION });
-    await expect(heading).toBeVisible();
-    await expect(heading).toHaveText(TRAFFIC_CONFIGURATION);
-
     // verify subtext
     const subtext = page.getByText(HEADER_SUBTEXT);
     await expect(subtext).toBeVisible();

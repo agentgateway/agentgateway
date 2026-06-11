@@ -7,17 +7,10 @@ test.beforeEach(async ({ page }) => {
     await page.goto(DASHBOARD_RESOURCE_PATH);
 });
 
-test(`should display banner, header, and subtext`, async ({ page }) => { 
+test(`should display banner`, async ({ page }) => { 
     // validate Dashboard banner
     const banner = page.getByRole('banner');
     await expect(banner).toContainText('Dashboard');
-
-    // validate Home + subtext header
-    const header = page.getByRole('heading', { name: 'Home'});
-    await expect(header).toHaveText('Home');
-
-    const headerSubtext = page.getByText('AgentGateway configuration overview');
-    await expect(headerSubtext).toHaveText('AgentGateway configuration overview');
 });
 
 test(`should validate status cards`, async ({ page }) => { 

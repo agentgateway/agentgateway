@@ -10,11 +10,15 @@ import { DashboardPage } from "./pages/Dashboard/DashboardPage";
 import { LLMConfigurationPage } from "./pages/LLM/LLMConfigurationPage";
 import { LLMLogsPage } from "./pages/LLM/LLMLogsPage";
 import { LLMMetricsPage } from "./pages/LLM/LLMMetricsPage";
+import { LLMOverviewPage } from "./pages/LLM/LLMOverviewPage";
 import { LLMPlaygroundPage } from "./pages/LLM/Playground/LLMPlaygroundPage";
+import { LLMSetupWizardPage } from "./pages/LLM/SetupWizard/LLMSetupWizardPage";
 import { MCPConfigurationPage } from "./pages/MCP/MCPConfigurationPage";
 import { MCPLogsPage } from "./pages/MCP/MCPLogsPage";
 import { MCPMetricsPage } from "./pages/MCP/MCPMetricsPage";
+import { MCPOverviewPage } from "./pages/MCP/MCPOverviewPage";
 import { MCPPlaygroundPage } from "./pages/MCP/Playground/MCPPlaygroundPage";
+import { MCPSetupWizardPage } from "./pages/MCP/SetupWizard/MCPSetupWizardPage";
 import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
 import { TrafficConfigurationPage } from "./pages/Traffic/TrafficConfigurationPage";
 import { TrafficLogsPage } from "./pages/Traffic/TrafficLogsPage";
@@ -59,7 +63,8 @@ function App() {
                   <Route path="/dashboard" element={<DashboardPage />} />
 
                   {/* LLM Section */}
-                  <Route path="/llm-configuration" element={<LLMConfigurationPage />} />
+                  <Route path="/llm-setup-wizard" element={<LLMSetupWizardPage />} />
+                  <Route path="/llm-configuration" element={<LLMOverviewPage />} />
                   <Route path="/llm-configuration/llm" element={<LLMConfigurationPage />} />
                   <Route path="/llm-configuration/llm/model/:modelIndex" element={<LLMConfigurationPage />} />
                   <Route path="/llm-configuration/llm/policy/:policyType" element={<LLMConfigurationPage />} />
@@ -72,7 +77,8 @@ function App() {
                   />
 
                   {/* MCP Section */}
-                  <Route path="/mcp-configuration" element={<MCPConfigurationPage />} />
+                  <Route path="/mcp-setup-wizard" element={<MCPSetupWizardPage />} />
+                  <Route path="/mcp-configuration" element={<MCPOverviewPage />} />
                   <Route path="/mcp-configuration/mcp" element={<MCPConfigurationPage />} />
                   <Route path="/mcp-configuration/mcp/target/:targetIndex" element={<MCPConfigurationPage />} />
                   <Route path="/mcp-configuration/mcp/target/:targetIndex/policy/:policyType" element={<MCPConfigurationPage />} />

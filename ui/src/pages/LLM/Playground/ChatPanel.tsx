@@ -136,15 +136,25 @@ export function ChatPanel({
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Brain size={16} />
           Chat
-          {selectedModel && effectiveModel && (
+        </span>
+      }
+      extra={
+        selectedModel && effectiveModel && (
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Tag
               color={PROVIDER_COLORS[selectedModel.provider] ?? "default"}
-              style={{ fontSize: 11, marginLeft: 4 }}
+              style={{ fontSize: 11 }}
             >
+              {selectedModel.provider}
+            </Tag>
+            <Tag color="cyan" style={{ fontSize: 11 }}>
               {effectiveModel}
             </Tag>
-          )}
-        </span>
+            <Tag color="purple" style={{ fontSize: 11 }}>
+              {selectedModel.label}
+            </Tag>
+          </span>
+        )
       }
       styles={{
         body: {

@@ -47,6 +47,17 @@ async function verifyReadonlyMonacoEditor(page: Page) {
     await expect(readonlyTooltip).toContainText(CANNOT_EDIT_READONLY_MODE);
 }
 
+test('Dashboard should contain xDS-specific call to action card', async ({ page }) => { 
+    // navigate to Dashboard page
+    await page.goto('/ui#/dashboard');
+
+    // verify xDS-specific call to action card is visible
+    const xdsCallToActionCard = page.getByTestId('xds-call-to-action-card');
+    await expect(xdsCallToActionCard).toBeVisible();
+    await expect(xdsCallToActionCard).toContainText('agentgateway: xDS mode is enabled');
+    await expect(xdsCallToActionCard).toContainText('Configuration is managed by a remote control plane. Edits are disabled.');
+});
+
 test('xDS banner should be visible app-wide across all pages', async ({ page }) => { 
     for (const route of AGENTGATEWAY_ROUTES) { 
         // navigate to route
@@ -61,13 +72,39 @@ test('xDS banner should be visible app-wide across all pages', async ({ page }) 
     }
 });
 
-test('LLM Configuration should be in read-only mode', async ({ page }) => { 
+test('LLM Overview should display model cards', async ({ page }) => { 
     // navigate to LLM Configuration page
     await page.goto('/ui#/llm-configuration');
 
-    // verify add buttons are disabled with tooltip
-    await verifyXdsAwareButton('hierarchy-tree-no-resources-add-button', page);
-    await verifyXdsAwareButton('llm-config-no-resources-add-button', page);
+    const pageSubheader = page.getByText('View your configured LLM models and their settings.');
+    await expect(pageSubheader).toBeVisible();
+    await expect(pageSubheader).toContainText('View your configured LLM models and their settings.');
+
+    const modelsHeader = page.getByText('Models', { exact: true});
+    await expect(modelsHeader).toBeVisible();
+    await expect(modelsHeader).toContainText('Models');
+
+    // verify model card is visible
+    const modelCard = page.getByTestId('llm-model-card-0');
+    await expect(modelCard).toBeVisible();
+    await expect(modelCard).toContainText('ollama');
+    await expect(modelCard).toContainText('openAI');
+    await expect(modelCard).toContainText('smallthinker');
+    await expect(modelCard).toContainText('http://localhost:3003');
+
+    const openPlaygroundButton = page.getByTestId('llm-model-card-0-open-playground-button');
+    await expect(openPlaygroundButton).toBeVisible();
+    await expect(openPlaygroundButton).toContainText('Open Playground');
+    await openPlaygroundButton.click();
+    await expect(page).toHaveURL('/ui#/llm-playground?modelName=smallthinker');
+
+    await page.goto('/ui#/llm-configuration');
+
+    const rawEditorButton = page.getByTestId('llm-model-card-0-raw-editor-button');
+    await expect(rawEditorButton).toBeVisible();
+    await expect(rawEditorButton).toContainText('Raw Editor');
+    await rawEditorButton.click();
+    await expect(page).toHaveURL('/ui#/traffic-configuration/editor');
 });
 
 test('LLM Editor should be in read-only mode', async ({ page }) => { 
@@ -83,13 +120,39 @@ test('LLM Editor should be in read-only mode', async ({ page }) => {
     await verifyReadonlyMonacoEditor(page);
 });
 
-test('MCP Configuration should be in read-only mode', async ({ page }) => { 
+test('MCP Overview should display MCP server target cards', async ({ page }) => { 
     // navigate to MCP Configuration page
     await page.goto('/ui#/mcp-configuration');
 
-    // verify add buttons are disabled with tooltip
-    await verifyXdsAwareButton('hierarchy-tree-no-resources-add-button', page);
-    await verifyXdsAwareButton('mcp-config-no-resources-add-button', page);
+    const pageSubheader = page.getByText('View your configured MCP servers and their settings.');
+    await expect(pageSubheader).toBeVisible();
+    await expect(pageSubheader).toContainText('View your configured MCP servers and their settings.');
+
+    const serversHeader = page.getByText('MCP Servers', { exact: true});
+    await expect(serversHeader).toBeVisible();
+    await expect(serversHeader).toContainText('MCP Servers');
+
+    // verify MCP server target card is visible
+    const mcpServerTargetCard = page.getByTestId('mcp-server-target-card-0');
+    await expect(mcpServerTargetCard).toBeVisible();
+    await expect(mcpServerTargetCard).toContainText('everything');
+    await expect(mcpServerTargetCard).toContainText('stdio');
+    await expect(mcpServerTargetCard).toContainText('npx');
+
+    const openPlaygroundButton = page.getByTestId('mcp-server-target-card-0-open-playground-button');
+    await expect(openPlaygroundButton).toBeVisible();
+    await expect(openPlaygroundButton).toContainText('Open Playground');
+    await openPlaygroundButton.click();
+    await expect(page).toHaveURL('/ui#/mcp-playground?label=everything');
+
+    await page.goto('/ui#/mcp-configuration');
+
+    const rawEditorButton = page.getByTestId('mcp-server-target-card-0-raw-editor-button');
+
+    await expect(rawEditorButton).toBeVisible();
+    await expect(rawEditorButton).toContainText('Raw Editor');
+    await rawEditorButton.click();
+    await expect(page).toHaveURL('/ui#/traffic-configuration/editor');
 });
 
 test('MCP Editor should be in read-only mode', async ({ page }) => { 
@@ -113,7 +176,7 @@ test('Traffic Configuration should be in read-only mode', async ({ page }) => {
     await verifyXdsAwareButton('hierarchy-tree-header-row-add-button', page);
 
     // open form for first port bind node
-    const firstPortBindNode = page.getByText('Port 3000');
+    const firstPortBindNode = page.getByText('Port 3002');
     await firstPortBindNode.click();
 
     // verify Edit button disabled

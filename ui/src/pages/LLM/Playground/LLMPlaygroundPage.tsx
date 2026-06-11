@@ -1,10 +1,6 @@
-import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
-import { Alert, Button, Spin } from "antd";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { CodeBlock } from "../../../components/CodeBlock";
+import { Spin } from "antd";
+import { useSearchParams } from "react-router-dom";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { usePlayground } from "./usePlayground";
@@ -12,6 +8,7 @@ import { usePlayground } from "./usePlayground";
 const Container = styled.div`
   display: flex;
   flex-direction: column;
+  padding: var(--spacing-lg);
   gap: var(--spacing-lg);
 `;
 
@@ -38,43 +35,6 @@ const PlaygroundLayout = styled.div`
   }
 `;
 
-const exampleConfig = `
-  binds:
-    - port: 8080
-      tunnelProtocol: direct
-      listeners:
-        - protocol: HTTP
-          name: listener
-          hostname: '*'
-          routes:
-            - hostnames: []
-              matches:
-                - path:
-                    pathPrefix: /
-              backends:
-                - ai:
-                    name: ollama
-                    hostOverride: localhost:11434
-                    tokenize: false
-                    provider:
-                      openAI:
-                        model: smallthinker
-                  weight: 1
-              name: route
-              policies:
-                cors:
-                  allowCredentials: false
-                  allowHeaders:
-                    - '*'
-                  allowMethods:
-                    - GET
-                    - POST
-                    - OPTIONS
-                  allowOrigins:
-                    - '*'
-                  exposeHeaders: []
-`;
-
 export function LLMPlaygroundPage() {
   const {
     isLoading,
@@ -88,18 +48,15 @@ export function LLMPlaygroundPage() {
     sending,
     error,
     chatEndRef,
-    hasTopLevelLlm,
     handleSend,
     handleClear,
     handleSelectLabel,
     setModelOverride,
     setPrompt,
   } = usePlayground();
-  const navigate = useNavigate();
 
-  const [showExample, setShowExample] = useState(false);
-
-  const showAlert = !isLoading && (hasTopLevelLlm || models.length === 0);
+  const [searchParams] = useSearchParams();
+  const providedModelName = searchParams.get("modelName");
 
   if (isLoading) {
     return (
@@ -116,60 +73,14 @@ export function LLMPlaygroundPage() {
   return (
     <Container>
       <div>
-        <PageTitle>LLM Playground</PageTitle>
         <PageSubtitle>
           Send chat completions requests to your configured LLM models
         </PageSubtitle>
-        {showAlert && (
-          <Alert
-            type="warning"
-            showIcon
-            closable
-            style={{ alignItems: "flex-start" }}
-            message={
-              <>
-                LLM Playground doesn't support root-level configuration. Configure your model with CORS at the route level using Port Bind instead.{" "}
-              </>
-            }
-            description={
-              <>
-                <a 
-                  href="https://agentgateway.dev/docs/standalone/latest/llm/configuration-modes/#traditional-http-routing-configuration" 
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Learn more
-                </a>
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ display: "flex", gap: 8}}>
-                    <Button
-                      onClick={() => setShowExample(v => !v)}
-                    >
-                      {showExample ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Example Config
-                    </Button>
-                    <Button
-                      icon={<CodeOutlined />}
-                      onClick={() => navigate("/traffic-configuration/editor")}
-                    >
-                      Editor
-                    </Button>
-                  </div>
-                  {showExample && (
-                    <div style={{ marginTop: 8 }}>
-                      <CodeBlock 
-                        code={exampleConfig} 
-                      />
-                    </div>
-                  )}
-                </div>
-              </>
-            }
-          />
-        )}
       </div>
 
       <PlaygroundLayout>
         <SettingsPanel
+          providedModelName={providedModelName}
           models={models}
           selectedLabel={selectedLabel}
           selectedModel={selectedModel}

@@ -10,6 +10,7 @@ binds:
                         cmd: npx
                         args:
                           - "@modelcontextprotocol/server-everything"
+                  statefulMode: stateless
             policies:
               cors:
                 allowOrigins:
@@ -18,5 +19,9 @@ binds:
                   - mcp-protocol-version
                   - content-type
                   - cache-control
+                allowMethods:
+                  - GET
+                  - POST
+                  - OPTIONS
                 exposeHeaders:
                   - Mcp-Session-Id

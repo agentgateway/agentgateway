@@ -225,6 +225,10 @@ export type AwsAuth =
        * AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
        */
       serviceName?: string | null;
+      /**
+       * Optional AWS STS role to assume before signing requests.
+       */
+      assumeRole?: AwsAssumeRole | null;
     };
 export type AzureAuth =
   | {
@@ -890,7 +894,17 @@ export type AIProvider =
     }
   | {
       copilot: Provider7;
+    }
+  | {
+      custom: Provider8;
     };
+export type ProviderFormat =
+  | "completions"
+  | "messages"
+  | "responses"
+  | "embeddings"
+  | "anthropicTokenCount"
+  | "realtime";
 export type LocalAwsBackend = {
   agentCore: LocalAgentCoreBackend;
   [k: string]: unknown;
@@ -923,6 +937,7 @@ export type LocalTCPRouteBackend1 =
       backend: string;
       [k: string]: unknown;
     };
+export type ConnectMode = "deny" | "route" | "tunnel";
 export type OtlpLoggingConfig = {
   policies?: SimpleLocalBackendPolicies | null;
   protocol?: "grpc" | "http";
@@ -1061,6 +1076,7 @@ export type FullLocalBackend1 =
  * The type of Azure endpoint to connect to.
  */
 export type AzureResourceType = "openAI" | "foundry";
+export type LocalLLMPassthrough = "detect" | "opaque";
 
 export interface LocalConfig {
   config?: RawConfig;
@@ -1112,15 +1128,15 @@ export interface RawConfig {
   clusterId?: string | null;
   network?: string | null;
   /**
-   * Admin UI address in the format "ip:port"
+   * Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
    */
   adminAddr?: string | null;
   /**
-   * Stats/metrics server address in the format "ip:port"
+   * Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
    */
   statsAddr?: string | null;
   /**
-   * Readiness probe server address in the format "ip:port"
+   * Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
    */
   readinessAddr?: string | null;
   /**
@@ -1244,7 +1260,7 @@ export interface RawHBONE {
 export interface LocalBind {
   port: number;
   listeners: LocalListener[];
-  tunnelProtocol?: "direct" | "hboneWaypoint" | "hboneGateway" | "proxy";
+  tunnelProtocol?: "direct" | "hboneWaypoint" | "hboneGateway" | "proxy" | "connect";
 }
 export interface LocalListener {
   name?: string | null;
@@ -1659,6 +1675,12 @@ export interface LocalBackendTLS {
    * Key exchange groups allowed for negotiating TLS.
    */
   keyExchangeGroups?: KeyExchangeGroup[] | null;
+}
+export interface AwsAssumeRole {
+  /**
+   * AWS IAM role ARN to assume.
+   */
+  roleArn: string;
 }
 export interface HTTP {
   version?: string | null;
@@ -2317,6 +2339,14 @@ export interface Provider6 {
 export interface Provider7 {
   model?: string | null;
 }
+export interface Provider8 {
+  model?: string | null;
+  formats: ProviderFormatConfig[];
+}
+export interface ProviderFormatConfig {
+  type: ProviderFormat;
+  path?: string | null;
+}
 export interface LocalAIProviders {
   providers: LocalNamedAIProvider[];
 }
@@ -2401,6 +2431,10 @@ export interface LocalFrontendPolicies {
    */
   proxyProtocol?: Proxy | null;
   /**
+   * Enable or disable downstream HTTP CONNECT handling.
+   */
+  connect?: Connect | null;
+  /**
    * Settings for request access logs.
    */
   accessLog?: LoggingPolicy | null;
@@ -2414,6 +2448,10 @@ export interface HTTP2 {
    */
   http1MaxHeaders?: number | null;
   http1IdleTimeout?: string;
+  /**
+   * Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.
+   */
+  http1HeaderCase?: "lowercase" | "preserve";
   http2WindowSize?: number | null;
   http2ConnectionWindowSize?: number | null;
   http2FrameSize?: number | null;
@@ -2444,6 +2482,9 @@ export interface TCP2 {
 export interface Proxy {
   version?: "v1" | "v2" | "all";
   mode?: "strict" | "optional";
+}
+export interface Connect {
+  mode: ConnectMode;
 }
 export interface LoggingPolicy {
   filter?: Expression | null;
@@ -2506,6 +2547,7 @@ export interface LocalRouteGroup {
 }
 export interface LocalLLMConfig {
   port?: number | null;
+  tls?: LocalTLSServerConfig | null;
   /**
    * models defines the set of models that can be served by this gateway. The model name refers to the
    * model in the users request that is matched; the model sent to the actual LLM can be overridden
@@ -2527,7 +2569,18 @@ export interface LocalLLMModels {
   /**
    * provider of the LLM we are connecting too
    */
-  provider: "openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azure" | "copilot";
+  provider:
+    | ("openAI" | "gemini" | "vertex" | "anthropic" | "bedrock" | "azure" | "copilot")
+    | {
+        custom: Provider8;
+      };
+  /**
+   * passthrough controls how requests are handled.
+   * By default, requests will be parsed and translated as needed.
+   * With passthrough, they will be unmodified and optionally inspected (with `detect`).
+   * In this mode, requests must be sent in the native format of the provider.
+   */
+  passthrough?: LocalLLMPassthrough | null;
   /**
    * defaults allows setting default values for the request. If these are not present in the request body, they will be set.
    * To override even when set, use `overrides`.
@@ -2673,6 +2726,10 @@ export interface LocalLLMPolicy {
    * Authorization policies for HTTP access.
    */
   authorization?: RuleSet | null;
+  /**
+   * Handle CORS preflight requests and append configured CORS headers to applicable requests.
+   */
+  cors?: CorsSerde | null;
   /**
    * Rate limit incoming requests. State is kept local.
    */

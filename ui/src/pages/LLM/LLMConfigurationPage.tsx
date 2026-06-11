@@ -1,8 +1,8 @@
 import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
 import { Button, Spin } from "antd";
-import { Bot, Boxes, Shield } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Boxes, Shield } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { StyledAlert } from "../../components/StyledAlert";
 import type { AddRootHandlers, UrlParams } from "../../components/TrafficHierarchy";
@@ -11,7 +11,6 @@ import {
   NodeDetailView,
   useTrafficHierarchy,
 } from "../../components/TrafficHierarchy";
-import { XdsAwareButton } from "../../components/XdsAwareButton";
 
 const PageRoot = styled.div`
   display: flex;
@@ -242,17 +241,6 @@ export function LLMConfigurationPage() {
                       No LLM configuration found. Create one to start
                       configuring models and policies.
                     </p>
-                    <div style={{ marginTop: 16 }}>
-                      <XdsAwareButton
-                        type="primary"
-                        icon={<Bot size={16} />}
-                        onClick={() => addHandlers?.addLLM()}
-                        disabled={!addHandlers}
-                        data-testid="llm-config-no-resources-add-button"
-                      >
-                        Add LLM Config
-                      </XdsAwareButton>
-                    </div>
                   </>
                 )}
               </PlaceholderContent>

@@ -38,11 +38,6 @@ test('should verify CEL Playground page contents are visible', async ({ page }) 
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('CEL Playground');
 
-    // verify page header
-    const header = page.getByRole('heading', { name: 'CEL Playground' });
-    await expect(header).toBeVisible();
-    await expect(header).toHaveText('CEL Playground');
-
     // verify info dialog box
     const infoDialogBox = page.locator('.ant-alert-info');
     await expect(infoDialogBox).toBeVisible();

@@ -1,5 +1,5 @@
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport as McpSseTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import {
   McpError,
   ListToolsResultSchema as McpListToolsResultSchema,
@@ -62,34 +62,22 @@ export function useConnection(
         { capabilities: {} },
       );
 
-      const headers: Record<string, string> = {
-        Accept: "text/event-stream",
-        "Cache-Control": "no-cache",
-        "mcp-protocol-version": "2024-11-05",
-      };
+      const headers: Record<string, string> = {};
 
       if (connectionState.authToken && connectionState.authToken.trim()) {
         headers["Authorization"] = `Bearer ${connectionState.authToken}`;
       }
 
-      const sseUrl = selectedRoute.endpoint.endsWith("/")
-        ? `${selectedRoute.endpoint}sse`
-        : `${selectedRoute.endpoint}/sse`;
-      const transport = new McpSseTransport(new URL(sseUrl), {
-        eventSourceInit: {
-          fetch: (url, init) => {
-            return fetch(url, {
-              ...init,
-              headers: headers as HeadersInit,
-            });
+      const transport = new StreamableHTTPClientTransport(
+        new URL(selectedRoute.endpoint),
+        {
+          requestInit: {
+            headers: headers as HeadersInit,
+            credentials: "omit",
+            mode: "cors",
           },
         },
-        requestInit: {
-          headers: headers as HeadersInit,
-          credentials: "omit",
-          mode: "cors",
-        },
-      });
+      );
 
       await client.connect(transport);
       setMcpState((prev) => ({ ...prev, client }));

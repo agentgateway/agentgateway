@@ -17,7 +17,7 @@ fallback data.
   - Two `AgentgatewayBackend` CRs: an AI backend pointing at host ollama
     (see "Ollama dependency" below), and an MCP backend pointing at the
     in-cluster `mcp-everything` Service.
-- A `Gateway` with three listeners (8080 → httpbin, 9000 → AI, 9001 → MCP)
+- A `Gateway` with three listeners (8080 → httpbin, 8721 → AI, 8722 → MCP)
   and one `HTTPRoute` per listener, bound via `sectionName`. The controller
   turns these into xDS pushes to the agentgateway data plane pod.
 
@@ -61,14 +61,14 @@ When complete, the script prints a `kubectl port-forward` command for the
 data plane pod. Run that in a separate terminal:
 
 ```sh
-kubectl -n agentgateway-test port-forward pod/<GW_POD> 15000 8080 9000 9001
+kubectl -n agentgateway-test port-forward pod/<GW_POD> 15000 8080 8621 8622
 ```
 
 Port roles:
 - `15000` — admin / `/config_dump` (consumed by the dev UI)
 - `8080` — httpbin listener
-- `9000` — AI listener (LLM Playground sends `POST /v1/chat/completions` here)
-- `9001` — MCP listener (MCP Playground connects here)
+- `8621` — AI listener (LLM Playground sends `POST /v1/chat/completions` here)
+- `8622` — MCP listener (MCP Playground connects here)
 
 Then start the dev UI:
 
@@ -76,7 +76,7 @@ Then start the dev UI:
 cd ui && yarn dev
 ```
 
-Open http://localhost:3000. The XDS Mode banner should appear and the
+Open http://localhost:5173. The XDS Mode banner should appear and the
 HierarchyTree should render a single Gateway on :8080 backed by httpbin.
 
 ## Validate

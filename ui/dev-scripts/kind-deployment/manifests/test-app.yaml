@@ -119,13 +119,13 @@ spec:
           from: Same
     - name: http-ai
       protocol: HTTP
-      port: 9000
+      port: 8621
       allowedRoutes:
         namespaces:
           from: Same
     - name: http-mcp
       protocol: HTTP
-      port: 9001
+      port: 8622
       allowedRoutes:
         namespaces:
           from: Same
@@ -217,5 +217,6 @@ spec:
   traffic:
     cors:
       allowOrigins: ["*"]
-      allowHeaders: [mcp-protocol-version, content-type, cache-control]
+      allowMethods: [GET, POST, OPTIONS]
+      allowHeaders: [mcp-protocol-version, content-type, cache-control, mcp-session-id]
       exposeHeaders: [Mcp-Session-Id]

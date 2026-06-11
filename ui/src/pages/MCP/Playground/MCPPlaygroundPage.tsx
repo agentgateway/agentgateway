@@ -1,11 +1,9 @@
-import { CodeOutlined } from "@ant-design/icons";
 import styled from "@emotion/styled";
-import { Alert, Button, Card, Spin } from "antd";
-import { ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { Card, Spin } from "antd";
+import { Settings } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useConfig } from "../../../api/hooks";
-import { CodeBlock } from "../../../components/CodeBlock";
 import type { LocalBind, LocalListener, LocalRoute } from "../../../config";
 import { RouteSelector } from "./RouteSelector";
 import { ToolTester } from "./ToolTester";
@@ -43,6 +41,7 @@ const SectionCard = styled(Card)`
 const Container = styled.div`
   display: flex;
   flex-direction: column;
+  padding: var(--spacing-lg);
   gap: var(--spacing-lg);
 `;
 
@@ -63,31 +62,9 @@ export function MCPPlaygroundPage() {
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteInfo | null>(null);
   const [resultExpanded, setResultExpanded] = useState<boolean>(true);
-  const [showExample, setShowExample] = useState<boolean>(false);
 
-  const exampleConfig = `
-    binds:
-    - port: 3000
-      listeners:
-      - routes:
-        - policies:
-            cors:
-              allowOrigins:
-              - "*"
-              allowHeaders:
-              - mcp-protocol-version
-              - content-type
-              - cache-control
-              exposeHeaders:
-              - "Mcp-Session-Id"
-          backends:
-          - mcp:
-              targets:
-              - name: everything
-                stdio:
-                  cmd: npx
-                  args: ["@modelcontextprotocol/server-everything"]
-  `;
+  const [searchParams] = useSearchParams();
+  const providedTargetLabel = searchParams.get("label");
 
   const {
     connectionState,
@@ -100,14 +77,13 @@ export function MCPPlaygroundPage() {
     handleMcpToolSelect,
     handleMcpParamChange,
   } = useConnection(selectedRoute, routes);
-  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!config || !config.binds) return;
+    if (!config) return;
     const extractedRoutes: RouteInfo[] = [];
 
     // extract routes from port binds
-    config.binds.forEach((bind: LocalBind) => {
+    config.binds?.forEach((bind: LocalBind) => {
       bind.listeners.forEach((listener: LocalListener) => {
         if (listener.routes) {
           listener.routes.forEach((route: LocalRoute, routeIndex: number) => {
@@ -119,6 +95,9 @@ export function MCPPlaygroundPage() {
             const hostname = listener.hostname || "localhost";
             const port = bind.port;
             const baseEndpoint = `${protocol}://${hostname}:${port}`;
+
+            const mcpBackend = route.backends?.find((b: any) => b.mcp) as any;
+            const targetName = mcpBackend?.mcp?.targets?.[0]?.name ?? route.name ?? `Route ${routeIndex + 1}`;
 
             let routePath = "/";
             if (route.matches?.[0]?.path) {
@@ -135,6 +114,7 @@ export function MCPPlaygroundPage() {
             extractedRoutes.push({
               bindPort: port,
               listener,
+              targetName,
               route,
               endpoint: baseEndpoint,
               protocol,
@@ -145,6 +125,26 @@ export function MCPPlaygroundPage() {
         }
       });
     });
+
+    // extract routes from top-level mcp config
+    if (config.mcp?.targets) {
+      const port = config.mcp.port!;
+      const baseEndpoint = `http://localhost:${port}`;
+
+      config.mcp.targets.forEach((target, targetIndex) => {
+        extractedRoutes.push({
+          bindPort: port,
+          listener: {} as LocalListener,
+          targetName: target.name ?? `Target ${targetIndex + 1}`,
+          route: {} as LocalRoute,
+          endpoint: baseEndpoint,
+          protocol: "http",
+          routeIndex: targetIndex,
+          routePath: "/",
+        });
+      });
+    }
+
     setRoutes(extractedRoutes);
   }, [config]);
 
@@ -155,57 +155,6 @@ export function MCPPlaygroundPage() {
     },
     [resetConnectionForRoute],
   );
-
-  const showAlert = !configLoading && (Boolean(config?.mcp) || routes.length === 0);
-
-  const renderAlert = () => { 
-    return (
-      <Alert
-        type="warning"
-        showIcon
-        closable
-        style={{ alignItems: "flex-start" }}
-        message={
-          <>
-            MCP Playground doesn't support root-level configuration. Configure your MCP server with CORS at the route level using Port Bind instead.
-          </>
-        }
-        description={
-          <>
-            <a 
-              href="https://agentgateway.dev/docs/standalone/latest/mcp/connect/stdio/#configure-the-agentgateway" 
-              target="_blank"
-              rel="noreferrer"
-            >
-              Learn more
-            </a>
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: "flex", gap: 8}}>
-                <Button
-                  onClick={() => setShowExample(v => !v)}
-                >
-                  {showExample ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Example Config
-                </Button>
-                <Button
-                  icon={<CodeOutlined />}
-                  onClick={() => navigate("/traffic-configuration/editor")}
-                >
-                  Editor
-                </Button>
-              </div>
-              {showExample && (
-                <div style={{ marginTop: 8 }}>
-                  <CodeBlock 
-                    code={exampleConfig} 
-                  />
-                </div>
-              )}
-            </div>
-          </>
-        }
-      />
-    );
-  }
 
   if (configLoading) {
     return (
@@ -224,7 +173,6 @@ export function MCPPlaygroundPage() {
       <Container>
         <PageTitle>MCP Playground</PageTitle>
         <PageSubtitle>Test MCP server tool calls interactively</PageSubtitle>
-        {renderAlert()}
         <Card style={{ marginTop: "1rem" }}>
           <div style={{ textAlign: "center", padding: "2rem" }}>
             <p>
@@ -239,10 +187,8 @@ export function MCPPlaygroundPage() {
 
   return (
     <Container>
-      <PageTitle>MCP Playground</PageTitle>
       <PageSubtitle>Test MCP server tool calls interactively</PageSubtitle>
-      {showAlert && renderAlert()}
-
+      
       {/* Connection Section */}
       <SectionCard
         title={
@@ -253,6 +199,7 @@ export function MCPPlaygroundPage() {
       >
         <RouteSelector
           routes={routes}
+          providedTargetLabel={providedTargetLabel}
           selectedRoute={selectedRoute}
           connectionState={connectionState}
           onSelectRoute={handleRouteSelect}

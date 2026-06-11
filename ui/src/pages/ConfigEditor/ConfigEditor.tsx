@@ -16,8 +16,14 @@ type ConfigFormat = "json" | "yaml";
 
 const STORAGE_KEY = "agentgateway-config-format";
 
+interface ConfigFilter { 
+  extract: (config: LocalConfig) => unknown;
+  merge: (full: LocalConfig, edited: unknown) => LocalConfig;
+}
+
 interface ConfigEditorProps {
   onClose: () => void;
+  configFilter?: ConfigFilter;
 }
 
 const EditorContainer = styled.div`
@@ -60,7 +66,7 @@ const InfoText = styled.div`
   font-size: 13px;
 `;
 
-export function ConfigEditor({ onClose }: ConfigEditorProps) {
+export function ConfigEditor({ onClose, configFilter }: ConfigEditorProps) {
   const { theme } = useTheme();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +97,8 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
       try {
         const config = await fetchConfig();
         originalConfigRef.current = config;
-        const configStr = convertToFormat(config, format);
+        const slice = configFilter ? configFilter.extract(config) : config;
+        const configStr = convertToFormat(slice as LocalConfig, format);
         setConfigValue(configStr);
         originalValueRef.current = configStr;
       } catch (_e) {
@@ -217,7 +224,10 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
         }
       }
 
-      await updateConfig(configObject);
+      const toSave = configFilter
+        ? configFilter.merge(originalConfigRef.current!, configObject)
+        : configObject;
+      await updateConfig(toSave);
       toast.success("Configuration saved successfully");
       originalConfigRef.current = configObject;
 
@@ -271,7 +281,8 @@ export function ConfigEditor({ onClose }: ConfigEditorProps) {
     
     // Reload config in new format
     if (originalConfigRef.current) {
-      const newValue = convertToFormat(originalConfigRef.current, newFormat);
+      const slice = configFilter ? configFilter.extract(originalConfigRef.current) : originalConfigRef.current;
+      const newValue = convertToFormat(slice as LocalConfig, newFormat);
       setConfigValue(newValue);
       originalValueRef.current = newValue;
       setHasChanges(false);

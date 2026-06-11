@@ -1,9 +1,8 @@
+import Form from "@rjsf/antd";
+import validator from "@rjsf/validator-ajv8";
 import { Button, Space } from "antd";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import Form from "@rjsf/antd";
-import validator from "@rjsf/validator-ajv8";
-import { forms } from "./forms";
 import * as api from "../../api/crud";
 import { stripFormDefaults } from "../../api/helpers";
 import {
@@ -13,6 +12,7 @@ import {
   KeyValueMapField,
   WrapIfAdditionalTemplate,
 } from "../FormTemplates";
+import { forms } from "./forms";
 
 export interface TopLevelEditTarget {
   type: "llm" | "mcp" | "frontendPolicies" | "backend" | "policy";

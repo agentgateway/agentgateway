@@ -18,14 +18,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-<<<<<<< HEAD
-  RUST_VERSION: "1.95.0"
-  GO_VERSION: "1.26.3"
-  ARTIFACT_RETENTION_DAYS: 60
-=======
   RUST_VERSION: "1.96.0"
   GO_VERSION: "1.26.4"
->>>>>>> e7e6affa1b3f72a6f7da171b4fd92961490a3fa0
+  ARTIFACT_RETENTION_DAYS: 60
 
 jobs:
   #### Proxy jobs ####
