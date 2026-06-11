@@ -37,8 +37,7 @@ to reset to a clean global level.
 
 When multiple pods back a resource, all are targeted and output is
 prefixed per pod. All pods are attempted even if one fails.`,
-		Example: `
-agctl proxy log                                      # show current directive
+		Example: `agctl proxy log                                      # show current directive
 agctl proxy log --level debug                        # set global level
 agctl proxy log --set agentgateway::proxy=debug      # set a single module
 agctl proxy log --set agentgateway::proxy=debug,agentgateway::http=info`,

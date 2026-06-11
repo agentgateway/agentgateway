@@ -32,8 +32,7 @@ With no flags, prints the current log level for each component.
 
 When multiple controller pods are running, all are targeted and output
 is prefixed per pod. All pods are attempted even if one fails.`,
-		Example: `
-agctl controller log                               # show current levels
+		Example: `agctl controller log                               # show current levels
 agctl controller log --level debug                 # set all components to debug
 agctl controller log --set reconciler=debug        # set a single component
 agctl controller log --set reconciler=debug --set xds=info  # set multiple`,
