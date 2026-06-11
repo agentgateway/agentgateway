@@ -44,8 +44,8 @@ func Command() flag.Command {
 	return flag.Command{
 		Use:     "config",
 		Aliases: []string{"c", "cfg"},
-		Short:   "Retrieve Agentgateway configuration for a resource",
-		Long:    "Retrieve Agentgateway configuration for a resource.",
+		Short:   "Retrieve agentgateway configuration for a resource",
+		Long:    "Retrieve agentgateway configuration for a resource, such as the agentgateway controller or proxy.",
 		AddPersistentFlags: func(cmd *cobra.Command) {
 			common.attach(cmd)
 		},

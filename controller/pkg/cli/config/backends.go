@@ -80,8 +80,8 @@ func backendsCommand(common *commonFlags) flag.Command {
 	return flag.Command{
 		Use:     "backends",
 		Aliases: []string{"b", "be"},
-		Short:   "Retrieve Agentgateway backend endpoint status",
-		Long:    "Retrieve Agentgateway backend endpoint status.",
+		Short:   "Retrieve agentgateway backend endpoint status",
+		Long:    "Get the status of agentgateway backend endpoints.",
 		AddFlags: func(cmd *cobra.Command) {
 			cmd.Flags().BoolVar(&showAll, "all", false, "Show endpoints with zero requests")
 		},
