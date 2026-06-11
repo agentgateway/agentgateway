@@ -3264,8 +3264,8 @@ async fn mcp_guardrails_denies_tool_by_name() {
 		|req| {
 			let name = req
 				.mcp_request
-				.as_ref()
-				.and_then(|s| serde_json::to_value(s).ok())
+				.as_deref()
+				.and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
 				.and_then(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_owned))
 				.unwrap_or_default();
 			if name.contains("forbidden") {
@@ -3335,7 +3335,7 @@ async fn mcp_guardrails_mutated_request_reaches_upstream() {
 			}
 			mutated_request_json(serde_json::json!({
 				"name": "echo",
-				"arguments": { "rewritten": true },
+				"arguments": { "rewritten": true, "limit": 10, "ratio": 2.5 },
 			}))
 		},
 		|_| pass_response(),
@@ -3368,6 +3368,9 @@ async fn mcp_guardrails_mutated_request_reaches_upstream() {
 	let text = guardrails_test_support::echo_text(&result);
 	assert!(text.contains("rewritten") && text.contains("true"));
 	assert!(!text.contains("\"hi\""));
+	// Mutated numbers keep their JSON form: integers don't become 10.0.
+	assert!(text.contains("\"limit\":10,"), "got: {text}");
+	assert!(text.contains("\"ratio\":2.5"), "got: {text}");
 }
 
 #[tokio::test]
@@ -3613,10 +3616,8 @@ async fn mcp_guardrails_fanout_runs_once_on_merged_muxed_result() {
 				return crate::test_helpers::extmcpmock::pass_response();
 			}
 			rc.fetch_add(1, Ordering::SeqCst);
-			let names: Vec<String> = req
-				.mcp_response
-				.as_ref()
-				.and_then(|s| serde_json::to_value(s).ok())
+			let names: Vec<String> = serde_json::from_slice::<serde_json::Value>(&req.mcp_response)
+				.ok()
 				.and_then(|v| {
 					v.get("tools").and_then(|t| t.as_array()).map(|arr| {
 						arr
@@ -3919,6 +3920,51 @@ async fn mcp_guardrails_protocol_violation_fails_closed() {
 		rmcp::model::ErrorCode::INTERNAL_ERROR,
 		"protocol violation should map to internal error"
 	);
+	assert!(
+		e.message.contains("protocol violation"),
+		"unexpected message: {}",
+		e.message
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_non_object_mutation_is_protocol_violation() {
+	use crate::test_helpers::extmcpmock::{closure_mock, mutated_request_json, pass_response};
+
+	// Mutated payloads must parse as the method's params; valid-but-wrong-shape
+	// JSON must hit the protocol-violation path, not surface later as a
+	// malformed MCP request.
+	let extmcp_mock = closure_mock(
+		|_| mutated_request_json(serde_json::json!([1, 2])),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("non-object mutation should reject under failure_mode=Deny");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
 	assert!(
 		e.message.contains("protocol violation"),
 		"unexpected message: {}",

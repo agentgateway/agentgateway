@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use serde_json::Value;
+use bytes::Bytes;
 
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
@@ -40,9 +40,9 @@ pub mod phase;
 pub use phase::Phase;
 
 #[derive(Debug)]
-pub enum Outcome {
+pub enum Outcome<T> {
 	Pass,
-	Mutated,
+	Mutated(T),
 	Reject(rmcp::model::ErrorData),
 }
 
@@ -185,7 +185,7 @@ pub enum FailureMode {
 pub struct CallRequestCtx<'a> {
 	pub backends: &'a [String],
 	pub method: &'a str,
-	pub params: Option<&'a mut Value>,
+	pub params: Option<Bytes>,
 }
 
 impl Processor {
@@ -197,19 +197,19 @@ impl Processor {
 		phase::resolve(method, &self.methods).runs_response()
 	}
 
-	async fn call_request(
+	async fn call_request<P: serde::de::DeserializeOwned>(
 		&self,
 		ctx: &mut CallRequestCtx<'_>,
 		req_ctx: &mut IncomingRequestContext,
 		client: &PolicyClient,
-	) -> Outcome {
+	) -> Outcome<P> {
 		match &self.kind {
 			ProcessorKind::Remote(remote) => {
-				client::check_request(
+				client::check_request::<P>(
 					remote,
 					ctx.method,
 					ctx.backends,
-					ctx.params.as_deref_mut(),
+					ctx.params.as_mut(),
 					req_ctx,
 					client,
 				)
@@ -222,10 +222,10 @@ impl Processor {
 		&self,
 		method: &str,
 		backends: &[String],
-		body: &mut Value,
+		body: &mut Bytes,
 		req_ctx: &IncomingRequestContext,
 		client: &PolicyClient,
-	) -> Outcome {
+	) -> Outcome<rmcp::model::ServerResult> {
 		match &self.kind {
 			ProcessorKind::Remote(remote) => {
 				client::check_response(remote, method, backends, body, req_ctx, client).await
@@ -237,20 +237,20 @@ impl Processor {
 /// Processors fire in order; first `Reject` short-circuits leaving `ctx` in whatever
 /// partially-mutated state earlier processors produced. When `ctx.params` is `None`
 /// (e.g. `*/list`) mutations are discarded — list filtering belongs in the response phase.
-pub async fn run_call_request(
+pub async fn run_call_request<P: serde::de::DeserializeOwned>(
 	ext: &McpGuardrails,
 	ctx: &mut CallRequestCtx<'_>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome {
+) -> Outcome<P> {
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_request(ctx.method) {
 			continue;
 		}
-		match processor.call_request(ctx, req_ctx, client).await {
+		match processor.call_request::<P>(ctx, req_ctx, client).await {
 			Outcome::Pass => {},
-			Outcome::Mutated => composed = Outcome::Mutated,
+			Outcome::Mutated(p) => composed = Outcome::Mutated(p),
 			Outcome::Reject(e) => return Outcome::Reject(e),
 		}
 	}
@@ -262,21 +262,21 @@ pub async fn run_response(
 	ext: &McpGuardrails,
 	method: &str,
 	backends: &[String],
-	body: &mut Value,
+	mut body: Bytes,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome {
+) -> Outcome<rmcp::model::ServerResult> {
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_response(method) {
 			continue;
 		}
 		match processor
-			.response(method, backends, body, req_ctx, client)
+			.response(method, backends, &mut body, req_ctx, client)
 			.await
 		{
 			Outcome::Pass => {},
-			Outcome::Mutated => composed = Outcome::Mutated,
+			Outcome::Mutated(r) => composed = Outcome::Mutated(r),
 			Outcome::Reject(e) => return Outcome::Reject(e),
 		}
 	}

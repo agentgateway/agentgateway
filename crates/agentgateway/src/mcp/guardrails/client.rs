@@ -2,13 +2,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use ::http::HeaderName;
+use bytes::Bytes;
 use prost_wkt_types::Struct;
-use rmcp::model::{ErrorCode, ErrorData};
+use rmcp::model::{ErrorCode, ErrorData, ServerResult};
 use serde_json::Value;
 use tracing::{debug, warn};
 
 use crate::cel;
-use crate::http::envoy_proto_common::{json_to_prost_value, json_to_struct};
+use crate::http::envoy_proto_common::json_to_prost_value;
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::mcp::guardrails::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::guardrails::wire::{
@@ -18,24 +19,17 @@ use crate::mcp::guardrails::{
 	FailureMode, HeaderFilter, McpGuardrailsDynamicMetadata, Outcome, Remote,
 };
 use crate::mcp::upstream::IncomingRequestContext;
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 
-pub(crate) async fn check_request(
+pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
-	body: Option<&mut Value>,
+	body: Option<&mut Bytes>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome {
-	let mcp_request = match serialize_body(body.as_deref()) {
-		Ok(b) => b,
-		Err(e) => {
-			warn!(method, ?backends, error = %e, "mcpGuardrails: failed to encode request body as Struct");
-			return fail_outcome(remote);
-		},
-	};
+) -> Outcome<P> {
+	let mcp_request = body.as_deref().cloned();
 	let http_req = req_ctx.as_request();
 	let metadata_context = build_metadata(&remote.metadata, &http_req);
 	let headers = collect_headers(&remote.request_headers, &http_req);
@@ -62,29 +56,32 @@ pub(crate) async fn check_request(
 			apply_request_side(method, backends, header_mutation, metadata, req_ctx);
 			Outcome::Pass
 		},
-		Some(mcp_request_result::Result::Mutated(s)) => match struct_to_json(&s) {
-			Ok(v) => {
+		Some(mcp_request_result::Result::Mutated(b)) => match body {
+			// `*/list` carries no params to rewrite; the mutation is discarded by
+			// contract before validation, so its bytes can never fail the call.
+			// Header/metadata side effects still apply; list filtering is a
+			// response-phase concern.
+			None => {
+				debug!(
+					method,
+					?backends,
+					"mcpGuardrails: ignoring mutation on request without body"
+				);
 				apply_request_side(method, backends, header_mutation, metadata, req_ctx);
-				match body {
-					Some(b) => {
-						*b = v;
-						Outcome::Mutated
-					},
-					// `*/list` carries no params to rewrite; the header/metadata side
-					// effects above still apply. List filtering is a response-phase concern.
-					None => {
-						debug!(
-							method,
-							?backends,
-							"mcpGuardrails: ignoring mutation on request without body"
-						);
-						Outcome::Pass
-					},
-				}
+				Outcome::Pass
 			},
-			Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
+			Some(dest) => match serde_json::from_slice::<P>(&b) {
+				Ok(p) => {
+					apply_request_side(method, backends, header_mutation, metadata, req_ctx);
+					*dest = b;
+					Outcome::Mutated(p)
+				},
+				Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
+			},
 		},
-		Some(mcp_request_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
+		Some(mcp_request_result::Result::Error(e)) => {
+			Outcome::Reject(translate_error(method, backends, e))
+		},
 		None => on_protocol_violation(remote, method, backends, "missing result oneof"),
 	}
 }
@@ -179,17 +176,11 @@ pub(crate) async fn check_response(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
-	body: &mut Value,
+	body: &mut Bytes,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome {
-	let mcp_response = match serialize_body(Some(&*body)) {
-		Ok(b) => b,
-		Err(e) => {
-			warn!(method, ?backends, error = %e, "mcpGuardrails: failed to encode response body as Struct");
-			return fail_outcome(remote);
-		},
-	};
+) -> Outcome<ServerResult> {
+	let mcp_response = body.clone();
 	let metadata_context = (!remote.metadata.is_empty())
 		.then(|| build_metadata(&remote.metadata, &req_ctx.as_request()))
 		.flatten();
@@ -207,25 +198,19 @@ pub(crate) async fn check_response(
 	};
 	match result {
 		Some(mcp_response_result::Result::Pass(_)) => Outcome::Pass,
-		Some(mcp_response_result::Result::Mutated(s)) => match struct_to_json(&s) {
-			Ok(v) => {
-				*body = v;
-				Outcome::Mutated
-			},
-			Err(e) => {
-				warn!(method, ?backends, error = %e, "mcpGuardrails: response mutated decode failed");
-				fail_outcome(remote)
-			},
+		Some(mcp_response_result::Result::Mutated(b)) => {
+			match serde_json::from_slice::<ServerResult>(&b) {
+				Ok(r) => {
+					*body = b;
+					Outcome::Mutated(r)
+				},
+				Err(e) => on_protocol_violation(remote, method, backends, &format!("mutated decode: {e}")),
+			}
 		},
-		Some(mcp_response_result::Result::Error(e)) => Outcome::Reject(translate_error(e)),
-		None => {
-			warn!(
-				method,
-				?backends,
-				"mcpGuardrails: response missing result oneof"
-			);
-			fail_outcome(remote)
+		Some(mcp_response_result::Result::Error(e)) => {
+			Outcome::Reject(translate_error(method, backends, e))
 		},
+		None => on_protocol_violation(remote, method, backends, "missing result oneof"),
 	}
 }
 
@@ -293,22 +278,13 @@ fn collect_headers(filter: &HeaderFilter, req: &crate::http::Request) -> Vec<wir
 	out
 }
 
-fn serialize_body(body: Option<&Value>) -> Result<Option<Struct>, ProxyError> {
-	body.map(|v| json_to_struct(v.clone())).transpose()
-}
-
-fn struct_to_json(s: &Struct) -> Result<Value, serde_json::Error> {
-	// prost_wkt_types::Struct serializes as a JSON object directly.
-	serde_json::to_value(s)
-}
-
 // mcpGuardrails authorization outcomes that have no standard JSON-RPC/MCP code map to
 // application-defined codes in the server-error range (-32000..=-32099).
 // -32002 is intentionally skipped: rmcp assigns it to RESOURCE_NOT_FOUND.
 const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
 const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
 
-fn translate_error(e: AuthorizationError) -> ErrorData {
+fn translate_error(method: &str, backends: &[String], e: AuthorizationError) -> ErrorData {
 	use wire::authorization_error::Code as C;
 	let code = match C::try_from(e.code).unwrap_or(C::Unknown) {
 		C::PermissionDenied => PERMISSION_DENIED,
@@ -316,20 +292,23 @@ fn translate_error(e: AuthorizationError) -> ErrorData {
 		C::Invalid => ErrorCode::INVALID_REQUEST,
 		C::Unknown => ErrorCode::INTERNAL_ERROR,
 	};
-	let data = e
-		.mcp_error
-		.as_ref()
-		.and_then(|s| serde_json::to_value(s).ok());
+	let data = e.mcp_error.as_deref().and_then(|b| {
+		serde_json::from_slice::<Value>(b)
+			.map_err(
+				|err| warn!(method, ?backends, error = %err, "mcpGuardrails: ignoring unparseable mcp_error payload"),
+			)
+			.ok()
+	});
 	ErrorData::new(code, e.reason, data)
 }
 
-fn on_grpc_error(
+fn on_grpc_error<T>(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
 	rpc: &str,
 	status: tonic::Status,
-) -> Outcome {
+) -> Outcome<T> {
 	debug!(method, ?backends, rpc, code = ?status.code(), message = %status.message(), "mcpGuardrails: gRPC error");
 	match remote.failure_mode {
 		FailureMode::FailOpen => Outcome::Pass,
@@ -341,12 +320,12 @@ fn on_grpc_error(
 	}
 }
 
-fn on_protocol_violation(
+fn on_protocol_violation<T>(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
 	reason: &str,
-) -> Outcome {
+) -> Outcome<T> {
 	warn!(
 		method,
 		?backends,
@@ -358,17 +337,6 @@ fn on_protocol_violation(
 		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
 			ErrorCode::INTERNAL_ERROR,
 			format!("mcpGuardrails protocol violation: {reason}"),
-			None,
-		)),
-	}
-}
-
-fn fail_outcome(remote: &Remote) -> Outcome {
-	match remote.failure_mode {
-		FailureMode::FailOpen => Outcome::Pass,
-		FailureMode::FailClosed => Outcome::Reject(ErrorData::new(
-			ErrorCode::INTERNAL_ERROR,
-			"mcpGuardrails internal error".to_string(),
 			None,
 		)),
 	}

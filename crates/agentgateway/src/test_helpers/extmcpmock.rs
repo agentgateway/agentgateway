@@ -52,7 +52,7 @@ pub fn reject_response(
 	})
 }
 
-pub fn mutated_request(body: Struct) -> Result<McpRequestResult, Status> {
+pub fn mutated_request(body: bytes::Bytes) -> Result<McpRequestResult, Status> {
 	Ok(McpRequestResult {
 		result: Some(mcp_request_result::Result::Mutated(body)),
 		header_mutation: None,
@@ -60,7 +60,7 @@ pub fn mutated_request(body: Struct) -> Result<McpRequestResult, Status> {
 	})
 }
 
-pub fn mutated_response(body: Struct) -> Result<McpResponseResult, Status> {
+pub fn mutated_response(body: bytes::Bytes) -> Result<McpResponseResult, Status> {
 	Ok(McpResponseResult {
 		result: Some(mcp_response_result::Result::Mutated(body)),
 	})
@@ -97,11 +97,11 @@ fn build_header_mutation(
 }
 
 pub fn mutated_request_json(body: serde_json::Value) -> Result<McpRequestResult, Status> {
-	mutated_request(serde_json::from_value(body).expect("body must be a JSON object"))
+	mutated_request(serde_json::to_vec(&body).expect("serialize body").into())
 }
 
 pub fn mutated_response_json(body: serde_json::Value) -> Result<McpResponseResult, Status> {
-	mutated_response(serde_json::from_value(body).expect("body must be a JSON object"))
+	mutated_response(serde_json::to_vec(&body).expect("serialize body").into())
 }
 
 #[async_trait]

@@ -84,8 +84,9 @@ type McpRequest struct {
 	Method string `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	// CEL-evaluated context from gateway config, one field per config key.
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
-	// JSON-RPC `params` for this method.
-	McpRequest *structpb.Struct `protobuf:"bytes,4,opt,name=mcp_request,json=mcpRequest,proto3" json:"mcp_request,omitempty"`
+	// JSON-RPC `params` as raw JSON bytes (Struct would coerce integers to
+	// doubles). Absent when the method carries no params.
+	McpRequest []byte `protobuf:"bytes,4,opt,name=mcp_request,json=mcpRequest,proto3,oneof" json:"mcp_request,omitempty"`
 	// Incoming HTTP request headers carrying this MCP call, after gateway-side
 	// allow/deny filtering. Multi-value headers appear as repeated entries with
 	// the same key. Empty for stdio upstreams.
@@ -145,7 +146,7 @@ func (x *McpRequest) GetMetadataContext() *structpb.Struct {
 	return nil
 }
 
-func (x *McpRequest) GetMcpRequest() *structpb.Struct {
+func (x *McpRequest) GetMcpRequest() []byte {
 	if x != nil {
 		return x.McpRequest
 	}
@@ -167,8 +168,9 @@ type McpResponse struct {
 	ServiceNames    []string         `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	Method          string           `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
-	// JSON-RPC `result` from upstream. Error responses don't reach this hook.
-	McpResponse   *structpb.Struct `protobuf:"bytes,4,opt,name=mcp_response,json=mcpResponse,proto3" json:"mcp_response,omitempty"`
+	// JSON-RPC `result` from upstream, as raw JSON bytes. Error responses don't
+	// reach this hook.
+	McpResponse   []byte `protobuf:"bytes,4,opt,name=mcp_response,json=mcpResponse,proto3" json:"mcp_response,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,7 +226,7 @@ func (x *McpResponse) GetMetadataContext() *structpb.Struct {
 	return nil
 }
 
-func (x *McpResponse) GetMcpResponse() *structpb.Struct {
+func (x *McpResponse) GetMcpResponse() []byte {
 	if x != nil {
 		return x.McpResponse
 	}
@@ -296,7 +298,7 @@ func (x *McpRequestResult) GetPass() *Pass {
 	return nil
 }
 
-func (x *McpRequestResult) GetMutated() *structpb.Struct {
+func (x *McpRequestResult) GetMutated() []byte {
 	if x != nil {
 		if x, ok := x.Result.(*McpRequestResult_Mutated); ok {
 			return x.Mutated
@@ -338,8 +340,12 @@ type McpRequestResult_Pass struct {
 
 type McpRequestResult_Mutated struct {
 	// Replaces JSON-RPC `params` before forwarding to the upstream MCP server.
-	// The gateway does not re-run other RBAC on the mutated request.
-	Mutated *structpb.Struct `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
+	// Raw JSON bytes; must parse as valid params for the method, else the
+	// gateway treats it as a protocol violation per `failure_mode`. The payload
+	// is re-parsed into the gateway's MCP model before forwarding: unknown
+	// fields and JSON formatting are not preserved. The gateway does not re-run
+	// other RBAC on the mutated request.
+	Mutated []byte `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
 }
 
 type McpRequestResult_Error struct {
@@ -410,7 +416,7 @@ func (x *McpResponseResult) GetPass() *Pass {
 	return nil
 }
 
-func (x *McpResponseResult) GetMutated() *structpb.Struct {
+func (x *McpResponseResult) GetMutated() []byte {
 	if x != nil {
 		if x, ok := x.Result.(*McpResponseResult_Mutated); ok {
 			return x.Mutated
@@ -437,7 +443,11 @@ type McpResponseResult_Pass struct {
 }
 
 type McpResponseResult_Mutated struct {
-	Mutated *structpb.Struct `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
+	// Replaces the JSON-RPC `result`. Raw JSON bytes; must parse as a valid
+	// result for the method, else the gateway treats it as a protocol violation
+	// per `failure_mode`. Re-parsed into the gateway's MCP model: unknown
+	// fields and JSON formatting are not preserved.
+	Mutated []byte `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
 }
 
 type McpResponseResult_Error struct {
@@ -598,8 +608,9 @@ type AuthorizationError struct {
 	state  protoimpl.MessageState  `protogen:"open.v1"`
 	Code   AuthorizationError_Code `protobuf:"varint,1,opt,name=code,proto3,enum=agentgateway.dev.ext_mcp.AuthorizationError_Code" json:"code,omitempty"`
 	Reason string                  `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
-	// Optional explicit JSON-RPC error payload. Overrides the code-derived default.
-	McpError      *structpb.Struct `protobuf:"bytes,3,opt,name=mcp_error,json=mcpError,proto3" json:"mcp_error,omitempty"`
+	// Optional explicit JSON-RPC error payload, as raw JSON bytes. Overrides the
+	// code-derived default.
+	McpError      []byte `protobuf:"bytes,3,opt,name=mcp_error,json=mcpError,proto3,oneof" json:"mcp_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -648,7 +659,7 @@ func (x *AuthorizationError) GetReason() string {
 	return ""
 }
 
-func (x *AuthorizationError) GetMcpError() *structpb.Struct {
+func (x *AuthorizationError) GetMcpError() []byte {
 	if x != nil {
 		return x.McpError
 	}
@@ -659,30 +670,31 @@ var File_ext_mcp_proto protoreflect.FileDescriptor
 
 const file_ext_mcp_proto_rawDesc = "" +
 	"\n" +
-	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x86\x02\n" +
+	"\rext_mcp.proto\x12\x18agentgateway.dev.ext_mcp\x1a\x1cgoogle/protobuf/struct.proto\"\x82\x02\n" +
 	"\n" +
 	"McpRequest\x12#\n" +
 	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
-	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x128\n" +
-	"\vmcp_request\x18\x04 \x01(\v2\x17.google.protobuf.StructR\n" +
-	"mcpRequest\x12=\n" +
-	"\aheaders\x18\x05 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\aheaders\"\xca\x01\n" +
+	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x12$\n" +
+	"\vmcp_request\x18\x04 \x01(\fH\x00R\n" +
+	"mcpRequest\x88\x01\x01\x12=\n" +
+	"\aheaders\x18\x05 \x03(\v2#.agentgateway.dev.ext_mcp.McpHeaderR\aheadersB\x0e\n" +
+	"\f_mcp_request\"\xb1\x01\n" +
 	"\vMcpResponse\x12#\n" +
 	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12B\n" +
-	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x12:\n" +
-	"\fmcp_response\x18\x04 \x01(\v2\x17.google.protobuf.StructR\vmcpResponse\"\xd5\x02\n" +
+	"\x10metadata_context\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x0fmetadataContext\x12!\n" +
+	"\fmcp_response\x18\x04 \x01(\fR\vmcpResponse\"\xbc\x02\n" +
 	"\x10McpRequestResult\x124\n" +
-	"\x04pass\x18\x01 \x01(\v2\x1e.agentgateway.dev.ext_mcp.PassH\x00R\x04pass\x123\n" +
-	"\amutated\x18\x02 \x01(\v2\x17.google.protobuf.StructH\x00R\amutated\x12D\n" +
+	"\x04pass\x18\x01 \x01(\v2\x1e.agentgateway.dev.ext_mcp.PassH\x00R\x04pass\x12\x1a\n" +
+	"\amutated\x18\x02 \x01(\fH\x00R\amutated\x12D\n" +
 	"\x05error\x18\x03 \x01(\v2,.agentgateway.dev.ext_mcp.AuthorizationErrorH\x00R\x05error\x12Q\n" +
 	"\x0fheader_mutation\x18\x04 \x01(\v2(.agentgateway.dev.ext_mcp.HeaderMutationR\x0eheaderMutation\x123\n" +
 	"\bmetadata\x18\x05 \x01(\v2\x17.google.protobuf.StructR\bmetadataB\b\n" +
-	"\x06result\"\xce\x01\n" +
+	"\x06result\"\xb5\x01\n" +
 	"\x11McpResponseResult\x124\n" +
-	"\x04pass\x18\x01 \x01(\v2\x1e.agentgateway.dev.ext_mcp.PassH\x00R\x04pass\x123\n" +
-	"\amutated\x18\x02 \x01(\v2\x17.google.protobuf.StructH\x00R\amutated\x12D\n" +
+	"\x04pass\x18\x01 \x01(\v2\x1e.agentgateway.dev.ext_mcp.PassH\x00R\x04pass\x12\x1a\n" +
+	"\amutated\x18\x02 \x01(\fH\x00R\amutated\x12D\n" +
 	"\x05error\x18\x03 \x01(\v2,.agentgateway.dev.ext_mcp.AuthorizationErrorH\x00R\x05errorB\b\n" +
 	"\x06result\"_\n" +
 	"\x0eHeaderMutation\x125\n" +
@@ -691,16 +703,18 @@ const file_ext_mcp_proto_rawDesc = "" +
 	"\tMcpHeader\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\fR\x05value\"\x06\n" +
-	"\x04Pass\"\xfa\x01\n" +
+	"\x04Pass\"\xf4\x01\n" +
 	"\x12AuthorizationError\x12E\n" +
 	"\x04code\x18\x01 \x01(\x0e21.agentgateway.dev.ext_mcp.AuthorizationError.CodeR\x04code\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x124\n" +
-	"\tmcp_error\x18\x03 \x01(\v2\x17.google.protobuf.StructR\bmcpError\"O\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x12 \n" +
+	"\tmcp_error\x18\x03 \x01(\fH\x00R\bmcpError\x88\x01\x01\"O\n" +
 	"\x04Code\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\x15\n" +
 	"\x11PERMISSION_DENIED\x10\x01\x12\x16\n" +
 	"\x12RESOURCE_EXHAUSTED\x10\x02\x12\v\n" +
-	"\aINVALID\x10\x032\xcf\x01\n" +
+	"\aINVALID\x10\x03B\f\n" +
+	"\n" +
+	"_mcp_error2\xcf\x01\n" +
 	"\x06ExtMcp\x12`\n" +
 	"\fCheckRequest\x12$.agentgateway.dev.ext_mcp.McpRequest\x1a*.agentgateway.dev.ext_mcp.McpRequestResult\x12c\n" +
 	"\rCheckResponse\x12%.agentgateway.dev.ext_mcp.McpResponse\x1a+.agentgateway.dev.ext_mcp.McpResponseResultB1Z/github.com/agentgateway/agentgateway/go/api;apib\x06proto3"
@@ -733,30 +747,25 @@ var file_ext_mcp_proto_goTypes = []any{
 }
 var file_ext_mcp_proto_depIdxs = []int32{
 	9,  // 0: agentgateway.dev.ext_mcp.McpRequest.metadata_context:type_name -> google.protobuf.Struct
-	9,  // 1: agentgateway.dev.ext_mcp.McpRequest.mcp_request:type_name -> google.protobuf.Struct
-	6,  // 2: agentgateway.dev.ext_mcp.McpRequest.headers:type_name -> agentgateway.dev.ext_mcp.McpHeader
-	9,  // 3: agentgateway.dev.ext_mcp.McpResponse.metadata_context:type_name -> google.protobuf.Struct
-	9,  // 4: agentgateway.dev.ext_mcp.McpResponse.mcp_response:type_name -> google.protobuf.Struct
-	7,  // 5: agentgateway.dev.ext_mcp.McpRequestResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
-	9,  // 6: agentgateway.dev.ext_mcp.McpRequestResult.mutated:type_name -> google.protobuf.Struct
-	8,  // 7: agentgateway.dev.ext_mcp.McpRequestResult.error:type_name -> agentgateway.dev.ext_mcp.AuthorizationError
-	5,  // 8: agentgateway.dev.ext_mcp.McpRequestResult.header_mutation:type_name -> agentgateway.dev.ext_mcp.HeaderMutation
-	9,  // 9: agentgateway.dev.ext_mcp.McpRequestResult.metadata:type_name -> google.protobuf.Struct
-	7,  // 10: agentgateway.dev.ext_mcp.McpResponseResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
-	9,  // 11: agentgateway.dev.ext_mcp.McpResponseResult.mutated:type_name -> google.protobuf.Struct
-	8,  // 12: agentgateway.dev.ext_mcp.McpResponseResult.error:type_name -> agentgateway.dev.ext_mcp.AuthorizationError
-	6,  // 13: agentgateway.dev.ext_mcp.HeaderMutation.set:type_name -> agentgateway.dev.ext_mcp.McpHeader
-	0,  // 14: agentgateway.dev.ext_mcp.AuthorizationError.code:type_name -> agentgateway.dev.ext_mcp.AuthorizationError.Code
-	9,  // 15: agentgateway.dev.ext_mcp.AuthorizationError.mcp_error:type_name -> google.protobuf.Struct
-	1,  // 16: agentgateway.dev.ext_mcp.ExtMcp.CheckRequest:input_type -> agentgateway.dev.ext_mcp.McpRequest
-	2,  // 17: agentgateway.dev.ext_mcp.ExtMcp.CheckResponse:input_type -> agentgateway.dev.ext_mcp.McpResponse
-	3,  // 18: agentgateway.dev.ext_mcp.ExtMcp.CheckRequest:output_type -> agentgateway.dev.ext_mcp.McpRequestResult
-	4,  // 19: agentgateway.dev.ext_mcp.ExtMcp.CheckResponse:output_type -> agentgateway.dev.ext_mcp.McpResponseResult
-	18, // [18:20] is the sub-list for method output_type
-	16, // [16:18] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	6,  // 1: agentgateway.dev.ext_mcp.McpRequest.headers:type_name -> agentgateway.dev.ext_mcp.McpHeader
+	9,  // 2: agentgateway.dev.ext_mcp.McpResponse.metadata_context:type_name -> google.protobuf.Struct
+	7,  // 3: agentgateway.dev.ext_mcp.McpRequestResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
+	8,  // 4: agentgateway.dev.ext_mcp.McpRequestResult.error:type_name -> agentgateway.dev.ext_mcp.AuthorizationError
+	5,  // 5: agentgateway.dev.ext_mcp.McpRequestResult.header_mutation:type_name -> agentgateway.dev.ext_mcp.HeaderMutation
+	9,  // 6: agentgateway.dev.ext_mcp.McpRequestResult.metadata:type_name -> google.protobuf.Struct
+	7,  // 7: agentgateway.dev.ext_mcp.McpResponseResult.pass:type_name -> agentgateway.dev.ext_mcp.Pass
+	8,  // 8: agentgateway.dev.ext_mcp.McpResponseResult.error:type_name -> agentgateway.dev.ext_mcp.AuthorizationError
+	6,  // 9: agentgateway.dev.ext_mcp.HeaderMutation.set:type_name -> agentgateway.dev.ext_mcp.McpHeader
+	0,  // 10: agentgateway.dev.ext_mcp.AuthorizationError.code:type_name -> agentgateway.dev.ext_mcp.AuthorizationError.Code
+	1,  // 11: agentgateway.dev.ext_mcp.ExtMcp.CheckRequest:input_type -> agentgateway.dev.ext_mcp.McpRequest
+	2,  // 12: agentgateway.dev.ext_mcp.ExtMcp.CheckResponse:input_type -> agentgateway.dev.ext_mcp.McpResponse
+	3,  // 13: agentgateway.dev.ext_mcp.ExtMcp.CheckRequest:output_type -> agentgateway.dev.ext_mcp.McpRequestResult
+	4,  // 14: agentgateway.dev.ext_mcp.ExtMcp.CheckResponse:output_type -> agentgateway.dev.ext_mcp.McpResponseResult
+	13, // [13:15] is the sub-list for method output_type
+	11, // [11:13] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_ext_mcp_proto_init() }
@@ -764,6 +773,7 @@ func file_ext_mcp_proto_init() {
 	if File_ext_mcp_proto != nil {
 		return
 	}
+	file_ext_mcp_proto_msgTypes[0].OneofWrappers = []any{}
 	file_ext_mcp_proto_msgTypes[2].OneofWrappers = []any{
 		(*McpRequestResult_Pass)(nil),
 		(*McpRequestResult_Mutated)(nil),
@@ -774,6 +784,7 @@ func file_ext_mcp_proto_init() {
 		(*McpResponseResult_Mutated)(nil),
 		(*McpResponseResult_Error)(nil),
 	}
+	file_ext_mcp_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

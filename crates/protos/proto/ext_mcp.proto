@@ -47,7 +47,7 @@ message McpRequestResult {
     Pass pass = 1;
     // Replaces JSON-RPC `params` before forwarding to the upstream MCP server.
     // The gateway does not re-run other RBAC on the mutated request.
-    google.protobuf.Struct mutated = 2;
+    bytes mutated = 2;
     AuthorizationError error = 3;
   }
   // Mutations applied to the upstream HTTP request that carries this MCP call.
@@ -62,7 +62,10 @@ message McpRequestResult {
 message McpResponseResult {
   oneof result {
     Pass pass = 1;
-    google.protobuf.Struct mutated = 2;
+    // Replaces the JSON-RPC `result`. Raw JSON bytes; must parse as a valid
+    // result for the method, else the gateway treats it as a protocol violation
+    // per `failure_mode`.
+    bytes mutated = 2;
     AuthorizationError error = 3;
   }
 }
@@ -92,6 +95,7 @@ message AuthorizationError {
   }
   Code code = 1;
   string reason = 2;
-  // Optional explicit JSON-RPC error payload. Overrides the code-derived default.
-  google.protobuf.Struct mcp_error = 3;
+  // Optional explicit JSON-RPC error payload, as raw JSON bytes. Overrides the
+  // code-derived default.
+  optional bytes mcp_error = 3;
 }

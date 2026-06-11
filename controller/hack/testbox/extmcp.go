@@ -1,13 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log"
 	"net"
 	"strings"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/agentgateway/agentgateway/api"
 )
@@ -67,43 +68,53 @@ func (s *extMcpServer) CheckResponse(_ context.Context, resp *api.McpResponse) (
 	return &api.McpResponseResult{Result: &api.McpResponseResult_Mutated{Mutated: mutated}}, nil
 }
 
-func stringField(s *structpb.Struct, key string) (string, bool) {
-	if s == nil {
-		return "", false
+// unmarshalObject decodes raw JSON into a map, keeping numbers as json.Number
+// so re-marshaling doesn't turn integers into floats.
+func unmarshalObject(raw []byte) (map[string]any, bool) {
+	if len(raw) == 0 {
+		return nil, false
 	}
-	v, ok := s.GetFields()[key]
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var m map[string]any
+	if err := dec.Decode(&m); err != nil {
+		return nil, false
+	}
+	return m, true
+}
+
+func stringField(raw []byte, key string) (string, bool) {
+	m, ok := unmarshalObject(raw)
 	if !ok {
 		return "", false
 	}
-	return v.GetStringValue(), v.GetStringValue() != ""
+	s, ok := m[key].(string)
+	return s, ok && s != ""
 }
 
 // mutateToolsListResult appends " [extmcp]" to every tool description in a
-// tools/list response. Returns the mutated struct and true if a tools array
+// tools/list response. Returns the mutated JSON and true if a tools array
 // was found.
-func mutateToolsListResult(in *structpb.Struct) (*structpb.Struct, bool) {
-	if in == nil {
-		return nil, false
-	}
-	tools, ok := in.GetFields()["tools"]
+func mutateToolsListResult(raw []byte) ([]byte, bool) {
+	m, ok := unmarshalObject(raw)
 	if !ok {
 		return nil, false
 	}
-	list := tools.GetListValue()
-	if list == nil {
+	tools, ok := m["tools"].([]any)
+	if !ok {
 		return nil, false
 	}
-	for _, item := range list.GetValues() {
-		obj := item.GetStructValue()
-		if obj == nil {
+	for _, item := range tools {
+		obj, ok := item.(map[string]any)
+		if !ok {
 			continue
 		}
-		desc, _ := obj.GetFields()["description"]
-		base := ""
-		if desc != nil {
-			base = desc.GetStringValue()
-		}
-		obj.Fields["description"] = structpb.NewStringValue(base + " [extmcp]")
+		base, _ := obj["description"].(string)
+		obj["description"] = base + " [extmcp]"
 	}
-	return in, true
+	out, err := json.Marshal(m)
+	if err != nil {
+		return nil, false
+	}
+	return out, true
 }

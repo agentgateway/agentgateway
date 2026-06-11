@@ -244,21 +244,23 @@ impl Relay {
 		})
 	}
 
-	pub(crate) async fn run_guardrails_call_request(
+	pub(crate) async fn run_guardrails_call_request<P: serde::de::DeserializeOwned>(
 		&self,
 		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
 		ctx: &mut IncomingRequestContext,
-	) -> Result<bool, UpstreamError> {
+	) -> Result<Option<P>, UpstreamError> {
 		use crate::mcp::guardrails::Outcome;
 		let Some(ext) = self.mcp_guardrails.as_ref() else {
-			return Ok(false);
+			return Ok(None);
 		};
 		let method = ext_ctx.method;
-		match crate::mcp::guardrails::run_call_request(ext, ext_ctx, ctx, &self.policy_client).await {
-			Outcome::Pass => Ok(false),
-			Outcome::Mutated => {
+		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
+			.await
+		{
+			Outcome::Pass => Ok(None),
+			Outcome::Mutated(p) => {
 				tracing::debug!(method, "mcpGuardrails: request mutated");
-				Ok(true)
+				Ok(Some(p))
 			},
 			Outcome::Reject(rej) => {
 				tracing::debug!(
@@ -290,23 +292,21 @@ impl Relay {
 		if !ext.runs_request(method) {
 			return Ok(());
 		}
-		let mut params_v = serde_json::to_value(&*params)
+		let params_b = serde_json::to_vec(&*params)
 			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
 		let backends = [backend.to_string()];
-		let mutated = self
-			.run_guardrails_call_request(
+		if let Some(p) = self
+			.run_guardrails_call_request::<P>(
 				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: &backends,
 					method,
-					params: Some(&mut params_v),
+					params: Some(params_b.into()),
 				},
 				ctx,
 			)
-			.await?;
-		if mutated {
-			*params = serde_json::from_value(params_v).map_err(|e| {
-				UpstreamError::InvalidRequest(format!("deserialize mutated {method} params: {e}"))
-			})?;
+			.await?
+		{
+			*params = p;
 		}
 		Ok(())
 	}
@@ -659,7 +659,9 @@ impl Relay {
 		// fanout (no body to rewrite); header/metadata side effects apply to the single
 		// shared ctx forwarded to every upstream. A reject fails the whole call.
 		if let Some(ext) = self.mcp_guardrails.as_ref() {
-			let outcome = crate::mcp::guardrails::run_call_request(
+			// params is None, so mutations are discarded unparsed and the params
+			// type is never used.
+			let outcome = crate::mcp::guardrails::run_call_request::<serde_json::Value>(
 				ext,
 				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: service_names.as_deref().unwrap_or_default(),
@@ -913,39 +915,30 @@ async fn apply_guardrails_response_intercept(
 	let ServerJsonRpcMessage::Response(resp) = msg else {
 		return None;
 	};
-	let mut json = match serde_json::to_value(&resp.result) {
-		Ok(v) => v,
+	let json: bytes::Bytes = match serde_json::to_vec(&resp.result) {
+		Ok(v) => v.into(),
 		Err(e) => {
-			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection; passing through");
-			return None;
+			// Fail the response rather than skip a hook the operator configured,
+			// matching the request side's handling of serialize failures.
+			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
+			return Some(ServerJsonRpcMessage::error(
+				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
+				resp.id.clone(),
+			));
 		},
 	};
 	match crate::mcp::guardrails::run_response(
 		&ctx.ext,
 		&ctx.method,
 		&ctx.backends,
-		&mut json,
+		json,
 		&ctx.req_ctx,
 		&ctx.client,
 	)
 	.await
 	{
 		Outcome::Pass => None,
-		Outcome::Mutated => {
-			let new_result: ServerResult = match serde_json::from_value(json) {
-				Ok(v) => v,
-				Err(e) => {
-					// Fail closed: passing through would leak content the operator asked us to scrub.
-					tracing::warn!(error = %e, "mcpGuardrails: failed to deserialize mutated result");
-					return Some(ServerJsonRpcMessage::error(
-						ErrorData::internal_error(
-							format!("mcpGuardrails produced an invalid response: {e}"),
-							None,
-						),
-						resp.id.clone(),
-					));
-				},
-			};
+		Outcome::Mutated(new_result) => {
 			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
 		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, resp.id.clone())),
