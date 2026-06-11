@@ -37,6 +37,12 @@ listener_routes:
                   - id: gpt-3.5-turbo
                     created: 0
                     authorization: ~
+                  - id: llama-3.1-8b-instant
+                    created: 0
+                    authorization: ~
+                  - id: fireworks-llama
+                    created: 0
+                    authorization: ~
         key: "llm:admin:model-list"
         matches:
           - path:
@@ -46,7 +52,7 @@ listener_routes:
         name: "admin:model-list"
         namespace: internal
       - backends:
-          - backend: "/llm:model:claude-3-haiku:0"
+          - backend: "/llm:model:llama-3.1-8b-instant:0"
             weight: 1
         inlinePolicies:
           - ai:
@@ -64,7 +70,65 @@ listener_routes:
                 /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-        key: "llm:model:000000:claude-3-haiku"
+        key: "llm:model:000000:llama-3.1-8b-instant"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: llama-3.1-8b-instant
+            path:
+              pathPrefix: /
+        name: "model:llama-3.1-8b-instant"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:fireworks-llama:1"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/rerank: rerank
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                /v2/rerank: rerank
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000001:fireworks-llama"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: fireworks-llama
+            path:
+              pathPrefix: /
+        name: "model:fireworks-llama"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:claude-3-haiku:2"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/rerank: rerank
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                /v2/rerank: rerank
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000002:claude-3-haiku"
         matches:
           - headers:
               - name: x-org
@@ -78,7 +142,7 @@ listener_routes:
         name: "model:claude-3-haiku"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gpt-3.5-turbo:1"
+          - backend: "/llm:model:gpt-3.5-turbo:3"
             weight: 1
         inlinePolicies:
           - ai:
@@ -96,7 +160,7 @@ listener_routes:
                 /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-        key: "llm:model:000001:gpt-3.5-turbo"
+        key: "llm:model:000003:gpt-3.5-turbo"
         matches:
           - headers:
               - name: x-gateway-model-name
@@ -107,7 +171,7 @@ listener_routes:
         name: "model:gpt-3.5-turbo"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gpt-7-max:2"
+          - backend: "/llm:model:gpt-7-max:4"
             weight: 1
         inlinePolicies:
           - ai:
@@ -125,7 +189,7 @@ listener_routes:
                 /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-        key: "llm:model:000002:gpt-7-max"
+        key: "llm:model:000004:gpt-7-max"
         matches:
           - headers:
               - name: x-gateway-model-name
@@ -136,7 +200,7 @@ listener_routes:
         name: "model:gpt-7-max"
         namespace: internal
       - backends:
-          - backend: "/llm:model:*:3"
+          - backend: "/llm:model:*:5"
             weight: 1
         inlinePolicies:
           - ai:
@@ -154,7 +218,7 @@ listener_routes:
                 /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-        key: "llm:model:000003:*"
+        key: "llm:model:000005:*"
         matches:
           - headers:
               - name: x-gateway-model-name
@@ -278,7 +342,107 @@ policies:
 backends:
   - backend:
       ai:
-        name: "llm:model:claude-3-haiku:0"
+        name: "llm:model:llama-3.1-8b-instant:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                llama-3.1-8b-instant:
+                  endpoint:
+                    name: llama-3.1-8b-instant
+                    provider:
+                      custom:
+                        formats:
+                          - type: completions
+                            path: ~
+                          - type: responses
+                            path: ~
+                    hostOverride: "api.groq.com:443"
+                    pathOverride: ~
+                    pathPrefix: /openai/v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+  - backend:
+      ai:
+        name: "llm:model:fireworks-llama:1"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                fireworks-llama:
+                  endpoint:
+                    name: fireworks-llama
+                    provider:
+                      custom:
+                        formats:
+                          - type: completions
+                            path: ~
+                          - type: messages
+                            path: ~
+                          - type: responses
+                            path: ~
+                          - type: embeddings
+                            path: ~
+                          - type: rerank
+                            path: ~
+                    hostOverride: "api.fireworks.ai:443"
+                    pathOverride: ~
+                    pathPrefix: /inference/v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+  - backend:
+      ai:
+        name: "llm:model:claude-3-haiku:2"
         namespace: ""
         target:
           providers:
@@ -353,7 +517,7 @@ backends:
             cacheMessageOffset: 0
   - backend:
       ai:
-        name: "llm:model:gpt-3.5-turbo:1"
+        name: "llm:model:gpt-3.5-turbo:3"
         namespace: ""
         target:
           providers:
@@ -393,7 +557,7 @@ backends:
                   status: 400
   - backend:
       ai:
-        name: "llm:model:gpt-7-max:2"
+        name: "llm:model:gpt-7-max:4"
         namespace: ""
         target:
           providers:
@@ -437,7 +601,7 @@ backends:
                   status: 400
   - backend:
       ai:
-        name: "llm:model:*:3"
+        name: "llm:model:*:5"
         namespace: ""
         target:
           providers:

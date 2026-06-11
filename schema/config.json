@@ -8677,13 +8677,27 @@
         {
           "type": "string",
           "enum": [
+            "openai",
             "openAI",
             "gemini",
             "vertex",
             "anthropic",
             "bedrock",
             "azure",
-            "copilot"
+            "copilot",
+            "cohere",
+            "ollama",
+            "baseten",
+            "cerebras",
+            "deepinfra",
+            "deepseek",
+            "groq",
+            "huggingface",
+            "mistral",
+            "openrouter",
+            "togetherai",
+            "xai",
+            "fireworks"
           ]
         },
         {

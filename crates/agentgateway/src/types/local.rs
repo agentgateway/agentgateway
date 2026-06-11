@@ -22,9 +22,7 @@ use crate::http::{
 	HeaderName, HeaderOrPseudo, filters, health, retry, timeout, transformation_cel,
 };
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
-use crate::llm::{
-	AIBackend, AIProvider, LocalModelAIProvider, NamedAIProvider, anthropic, copilot, openai,
-};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::{LocalWorkload, RequestPolicy};
 use crate::types::agent::{
@@ -570,6 +568,35 @@ pub struct LLMRouteMatch {
 	pub headers: Vec<HeaderMatch>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum LocalModelAIProvider {
+	#[serde(alias = "openAI")]
+	OpenAI,
+	Gemini,
+	Vertex,
+	Anthropic,
+	Bedrock,
+	Azure,
+	Copilot,
+	Custom(custom::Provider),
+	// Providers below are synthetic conversions to custom with preconfigured defaults.
+	Cohere,
+	Ollama,
+	Baseten,
+	Cerebras,
+	Deepinfra,
+	Deepseek,
+	Groq,
+	Huggingface,
+	Mistral,
+	Openrouter,
+	Togetherai,
+	XAI,
+	Fireworks,
+}
+
 #[apply(schema_de!)]
 pub struct SecretFromFile(
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
@@ -627,6 +654,97 @@ pub struct LocalLLMParams {
 
 impl LocalLLMModels {
 	#[allow(deprecated)]
+	fn apply_provider_defaults(&mut self) {
+		if self.params.base_url.is_some()
+			|| self.params.host_override.is_some()
+			|| self.params.path_override.is_some()
+		{
+			return;
+		}
+		match &self.provider {
+			LocalModelAIProvider::Cohere => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.cohere.ai"));
+			},
+			LocalModelAIProvider::Ollama => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("http://localhost:11434/v1"));
+			},
+			LocalModelAIProvider::Baseten => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://inference.baseten.co/v1"));
+			},
+			LocalModelAIProvider::Cerebras => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.cerebras.ai/v1"));
+			},
+			LocalModelAIProvider::Deepinfra => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.deepinfra.com/v1/openai"));
+			},
+			LocalModelAIProvider::Deepseek => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.deepseek.com/v1"));
+			},
+			LocalModelAIProvider::Groq => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.groq.com/openai/v1"));
+			},
+			LocalModelAIProvider::Huggingface => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://router.huggingface.co/v1"));
+			},
+			LocalModelAIProvider::Mistral => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.mistral.ai/v1"));
+			},
+			LocalModelAIProvider::Openrouter => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://openrouter.ai/api/v1"));
+			},
+			LocalModelAIProvider::Togetherai => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.together.xyz/v1"));
+			},
+			LocalModelAIProvider::XAI => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.x.ai/v1"));
+			},
+			LocalModelAIProvider::Fireworks => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://api.fireworks.ai/inference/v1"));
+			},
+			_ => {},
+		}
+	}
+
+	#[allow(deprecated)]
 	fn apply_base_url(&mut self) -> anyhow::Result<()> {
 		let Some(base_url) = self.params.base_url.as_deref() else {
 			return Ok(());
@@ -642,15 +760,31 @@ impl LocalLLMModels {
 		let host = url
 			.host_str()
 			.with_context(|| format!("params.baseUrl for model {} must include a host", self.name))?;
-		self.params.host_override = Some((host, port).into());
+		self
+			.params
+			.host_override
+			.get_or_insert_with(|| (host, port).into());
 		let path = url.path().trim_end_matches('/');
-		if !path.is_empty() {
-			self.params.path_prefix = Some(strng::new(path));
+		if !path.is_empty() && self.params.path_override.is_none() {
+			self
+				.params
+				.path_prefix
+				.get_or_insert_with(|| strng::new(path));
 		}
 		if url.scheme() == "https" && self.backend_tls.is_none() {
 			self.backend_tls = Some(http::backendtls::LocalBackendTLS::default());
 		}
 		Ok(())
+	}
+}
+
+fn custom_provider_format(
+	format: custom::ProviderFormat,
+	path: Option<&'static str>,
+) -> custom::ProviderFormatConfig {
+	custom::ProviderFormatConfig {
+		format,
+		path: path.map(strng::new),
 	}
 }
 
@@ -2271,6 +2405,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 	// Create routes and backends for each model
 	for (idx, (_, model_config)) in ordered_models.into_iter().enumerate() {
 		let mut model_config = model_config;
+		model_config.apply_provider_defaults();
 		model_config.apply_base_url()?;
 		let model_name = strng::new(&model_config.name);
 		// Index is needed because the same name can be used with different match criteria
@@ -2346,6 +2481,120 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 					..custom_provider.clone()
 				})
 			},
+			LocalModelAIProvider::Cohere => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(
+						custom::ProviderFormat::Completions,
+						Some("/compatibility/v1/chat/completions"),
+					),
+					custom_provider_format(
+						custom::ProviderFormat::Embeddings,
+						Some("/compatibility/v1/embeddings"),
+					),
+					custom_provider_format(custom::ProviderFormat::Rerank, Some("/v2/rerank")),
+				],
+			}),
+			LocalModelAIProvider::Ollama => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+				],
+			}),
+			LocalModelAIProvider::Baseten => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Messages, None),
+				],
+			}),
+			LocalModelAIProvider::Cerebras => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![custom_provider_format(
+					custom::ProviderFormat::Completions,
+					None,
+				)],
+			}),
+			LocalModelAIProvider::Deepinfra => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(
+						custom::ProviderFormat::Messages,
+						Some("/anthropic/v1/messages"),
+					),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+				],
+			}),
+			LocalModelAIProvider::Deepseek => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(
+						custom::ProviderFormat::Messages,
+						Some("/anthropic/v1/messages"),
+					),
+				],
+			}),
+			LocalModelAIProvider::Groq => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+				],
+			}),
+			LocalModelAIProvider::Huggingface => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+				],
+			}),
+			LocalModelAIProvider::Mistral => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+				],
+			}),
+			LocalModelAIProvider::Openrouter => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Messages, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+					custom_provider_format(custom::ProviderFormat::Rerank, None),
+				],
+			}),
+			LocalModelAIProvider::Togetherai => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+					custom_provider_format(custom::ProviderFormat::Rerank, None),
+				],
+			}),
+			LocalModelAIProvider::XAI => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+					custom_provider_format(custom::ProviderFormat::Realtime, None),
+				],
+			}),
+			LocalModelAIProvider::Fireworks => AIProvider::Custom(custom::Provider {
+				model,
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Messages, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+					custom_provider_format(custom::ProviderFormat::Rerank, None),
+				],
+			}),
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use secrecy::SecretString;
 
-use crate::llm::AIProvider;
+use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
 	Backend, BackendTrafficPolicy, HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget,
@@ -125,6 +125,29 @@ async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocal
 	.await
 }
 
+fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvider> {
+	let backend = normalized
+		.backends
+		.iter()
+		.find(|backend| matches!(backend.backend, Backend::AI(_, _)))
+		.expect("expected generated AI backend");
+	let Backend::AI(_, ai) = &backend.backend else {
+		panic!("expected generated AI backend");
+	};
+	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	provider
+}
+
+fn assert_hostname_target(target: &Target, expected_host: &str, expected_port: u16) {
+	match target {
+		Target::Hostname(host, port) => {
+			assert_eq!(host.as_str(), expected_host);
+			assert_eq!(*port, expected_port);
+		},
+		other => panic!("expected hostname target, got {other:?}"),
+	}
+}
+
 #[tokio::test]
 async fn test_local_dynamic_backend_reference_uses_generated_backend() {
 	let normalized = normalize_test_yaml(
@@ -236,15 +259,7 @@ llm:
 	.await
 	.expect("custom LLM provider should normalize");
 
-	let ai = normalized
-		.backends
-		.iter()
-		.find_map(|backend| match &backend.backend {
-			Backend::AI(_, ai) => Some(ai),
-			_ => None,
-		})
-		.expect("expected generated AI backend");
-	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	let provider = selected_ai_provider(&normalized);
 	let AIProvider::Custom(custom_provider) = &provider.provider else {
 		panic!("expected custom provider");
 	};
@@ -252,17 +267,101 @@ llm:
 	assert!(custom_provider.formats.iter().any(|format| format.format
 		== crate::llm::custom::ProviderFormat::Messages
 		&& format.path.as_deref() == Some("/api/messages")));
-	match provider
-		.host_override
-		.as_ref()
-		.expect("expected host override")
-	{
-		Target::Hostname(host, port) => {
-			assert_eq!(host.as_str(), "custom.example.com");
-			assert_eq!(*port, 8080);
-		},
-		other => panic!("expected hostname target, got {other:?}"),
-	}
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"custom.example.com",
+		8080,
+	);
+}
+
+#[tokio::test]
+async fn test_llm_synthetic_provider_defaults_do_not_override_host_override() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: hosted-groq
+    provider: groq
+    params:
+      hostOverride: proxy.example.com:8443
+      pathPrefix: /proxy/openai
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit host override");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"proxy.example.com",
+		8443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/proxy/openai"));
+}
+
+#[tokio::test]
+async fn test_llm_base_url_does_not_override_explicit_path_prefix() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: proxied-groq
+    provider: groq
+    params:
+      baseUrl: https://api.groq.com/openai/v1
+      pathPrefix: /gateway/openai
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit path prefix");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"api.groq.com",
+		443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/gateway/openai"));
+}
+
+#[tokio::test]
+async fn test_llm_base_url_does_not_override_explicit_host_override() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: proxied-fireworks
+    provider: fireworks
+    params:
+      baseUrl: https://api.fireworks.ai/inference/v1
+      hostOverride: proxy.example.com:8443
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit host override");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"proxy.example.com",
+		8443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/inference/v1"));
 }
 
 #[tokio::test]
