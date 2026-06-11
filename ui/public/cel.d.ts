@@ -89,6 +89,70 @@ export interface ExecutorSerde {
     body?: string | null;
   } | null;
   /**
+   * `proxy` contains proxy timing information for the request.
+   */
+  proxy?: {
+    /**
+     * The bind that accepted the request.
+     */
+    bind?: string | null;
+    /**
+     * The selected Gateway.
+     */
+    gateway?: {
+      /**
+       * The namespace of the selected Gateway.
+       */
+      namespace?: string;
+      /**
+       * The name of the selected Gateway.
+       */
+      name?: string;
+    } | null;
+    /**
+     * The selected listener.
+     */
+    listener?: {
+      /**
+       * The name of the selected listener.
+       */
+      name?: string;
+    } | null;
+    /**
+     * The selected route.
+     */
+    route?: {
+      /**
+       * The namespace of the selected route.
+       */
+      namespace?: string;
+      /**
+       * The name of the selected route.
+       */
+      name?: string;
+      /**
+       * The kind of the selected route.
+       */
+      kind?: string | null;
+      /**
+       * The selected route rule name, when available.
+       */
+      rule?: string | null;
+    } | null;
+    /**
+     * Time spent processing the request before sending the primary outbound call.
+     */
+    requestProcessingDuration?: string | null;
+    /**
+     * Time spent waiting for the primary outbound call.
+     */
+    upstreamDuration?: string | null;
+    /**
+     * Time spent processing the primary outbound response before sending the downstream response.
+     */
+    responseProcessingDuration?: string | null;
+  } | null;
+  /**
    * `env` contains selected process environment attributes exposed to CEL.
    * This does NOT expose raw environment variables, but rather a subset of well-known variables.
    */
@@ -209,6 +273,14 @@ export interface ExecutorSerde {
      * The service tier the provider served the request under.
      */
     serviceTier?: string | null;
+    /**
+     * Time from request start until the first response token is received.
+     */
+    timeToFirstToken?: string | null;
+    /**
+     * Average time from first response token to response completion per output token.
+     */
+    timePerOutputToken?: string | null;
     /**
      * The number of tokens in the request, when using the token counting endpoint
      * These are not counted as 'input tokens' since they do not consume input tokens.
@@ -423,6 +495,12 @@ export interface ExecutorSerde {
     [k: string]: unknown;
   } | null;
   /**
+   * `mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.
+   */
+  mcpGuardrails?: {
+    [k: string]: unknown;
+  } | null;
+  /**
    * `metadata` contains values set by transformation metadata expressions.
    */
   metadata?: {
@@ -439,6 +517,8 @@ export interface ExecutorSerde {
 declare const request: ExecutorSerde['request'];
 /** `response` contains attributes about the HTTP response */
 declare const response: ExecutorSerde['response'];
+/** `proxy` contains proxy timing information for the request. */
+declare const proxy: ExecutorSerde['proxy'];
 /** `env` contains selected process environment attributes exposed to CEL.
 This does NOT expose raw environment variables, but rather a subset of well-known variables. */
 declare const env: ExecutorSerde['env'];
@@ -465,5 +545,7 @@ declare const backend: ExecutorSerde['backend'];
 declare const extauthz: ExecutorSerde['extauthz'];
 /** `extproc` contains dynamic metadata from ext_proc filters */
 declare const extproc: ExecutorSerde['extproc'];
+/** `mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors. */
+declare const mcpGuardrails: ExecutorSerde['mcpGuardrails'];
 /** `metadata` contains values set by transformation metadata expressions. */
 declare const metadata: ExecutorSerde['metadata'];

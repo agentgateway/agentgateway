@@ -39,7 +39,6 @@ export type QueryValueMatch =
       regex: string;
     };
 export type HostRedirect =
-  | ("auto" | "none")
   | {
       full: string;
     }
@@ -48,7 +47,9 @@ export type HostRedirect =
     }
   | {
       port: number;
-    };
+    }
+  | "auto"
+  | "none";
 export type PathRedirect =
   | {
       full: string;
@@ -56,29 +57,63 @@ export type PathRedirect =
   | {
       prefix: string;
     };
-export type SimpleLocalBackend =
+export type LocalExplicitOrConditional = LocalConditionalPolicies | DirectResponse;
+export type Expression = string;
+/**
+ * Static response body, encoded as bytes.
+ */
+export type Bytes = number[] | string;
+/**
+ * Static response body, encoded as bytes.
+ */
+export type Bytes1 = number[] | string;
+export type Processor = {
+  /**
+   * Allowlist: only methods listed here run through this processor, at the
+   * configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
+   * or suffix (`* /list`) wildcards, or `*` for all methods. Methods matching
+   * no key bypass this processor; see [`phase::resolve`] for match precedence.
+   */
+  methods?: {
+    [k: string]: Phase;
+  };
+  [k: string]: unknown;
+} & Processor1 & {
+    /**
+     * Allowlist: only methods listed here run through this processor, at the
+     * configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
+     * or suffix (`* /list`) wildcards, or `*` for all methods. Methods matching
+     * no key bypass this processor; see [`phase::resolve`] for match precedence.
+     */
+    methods?: {
+      [k: string]: Phase;
+    };
+    [k: string]: unknown;
+  } & Processor1;
+export type Phase = "off" | "request" | "response" | "full";
+export type Processor1 =
   | "invalid"
   | {
       service: {
         name: NamespacedHostname;
         port: number;
       };
+      [k: string]: unknown;
     }
   | {
       /**
        * Hostname or IP address
        */
       host: string;
+      [k: string]: unknown;
     }
   | {
       /**
        * Explicit backend reference. Backend must be defined in the top level backends list
        */
       backend: string;
+      [k: string]: unknown;
     };
-export type LocalExplicitOrConditional = LocalConditionalPolicies | DirectResponse;
-export type Expression = string;
-export type Bytes = number[] | string;
 export type McpIDP =
   | {
       auth0: {};
@@ -89,21 +124,14 @@ export type McpIDP =
   | {
       okta: {};
     };
-export type FileInlineOrRemote =
-  | {
-      file: string;
-      [k: string]: unknown;
-    }
-  | string
-  | {
-      url: string;
-      [k: string]: unknown;
-    };
 export type RequestGuard = {
   rejection?: RequestRejection;
   [k: string]: unknown;
 } & RequestGuard1;
-export type Bytes1 = number[] | string;
+/**
+ * Response body returned when content is rejected.
+ */
+export type Bytes2 = number[] | string;
 export type RequestGuard1 =
   | {
       regex: RegexRules;
@@ -131,23 +159,41 @@ export type RequestGuard1 =
     };
 export type RegexRule =
   | {
-      builtin: Builtin;
+      /**
+       * Built-in pattern name.
+       */
+      builtin: "ssn" | "creditCard" | "phoneNumber" | "email" | "caSin";
     }
   | {
+      /**
+       * Regular expression pattern to evaluate.
+       */
       pattern: string;
     };
-export type Builtin = "ssn" | "creditCard" | "phoneNumber" | "email" | "caSin";
 export type KeyExchangeGroup = "X25519" | "P-256" | "P-384" | "X25519_MLKEM768";
 export type BackendAuth =
-  | "copilot"
   | {
       passthrough: {
+        /**
+         * Where to place the forwarded credential in the backend request.
+         */
         location?: AuthorizationLocation | null;
       };
     }
   | {
       key: {
-        value: FileOrInline;
+        /**
+         * Secret value to send to the backend.
+         */
+        value:
+          | {
+              file: string;
+              [k: string]: unknown;
+            }
+          | string;
+        /**
+         * Where to place the secret in the backend request.
+         */
         location?: AuthorizationLocation | null;
       };
     }
@@ -159,35 +205,45 @@ export type BackendAuth =
     }
   | {
       azure: AzureAuth;
-    };
+    }
+  | "copilot";
 export type AuthorizationLocation =
   | {
       header: {
+        /**
+         * Header name containing the credential.
+         */
         name: string;
+        /**
+         * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+         */
         prefix?: string | null;
       };
     }
   | {
       queryParameter: {
+        /**
+         * Query parameter name containing the credential.
+         */
         name: string;
       };
     }
   | {
       cookie: {
+        /**
+         * Cookie name containing the credential.
+         */
         name: string;
       };
     }
   | {
       expression: {
-        expression: Expression;
+        /**
+         * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+         */
+        expression: string;
       };
     };
-export type FileOrInline =
-  | {
-      file: string;
-      [k: string]: unknown;
-    }
-  | string;
 export type GcpAuth =
   | {
       type: IdToken;
@@ -208,6 +264,12 @@ export type GcpAuth =
       credential?: FileOrInline | null;
     };
 export type IdToken = "idToken";
+export type FileOrInline =
+  | {
+      file: string;
+      [k: string]: unknown;
+    }
+  | string;
 export type AccessToken = "accessToken";
 export type AwsAuth =
   | {
@@ -302,7 +364,8 @@ export type RouteType =
   | "responses"
   | "embeddings"
   | "realtime"
-  | "anthropicTokenCount";
+  | "anthropicTokenCount"
+  | "rerank";
 export type LocalRateLimitPolicy = LocalConditionalPolicies2 | RateLimitSpec[];
 export type LocalExplicitOrConditional2 = LocalConditionalPolicies3 | RemoteRateLimit;
 export type LocalConditionalPolicy3 = {
@@ -310,9 +373,12 @@ export type LocalConditionalPolicy3 = {
    * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
    */
   condition?: Expression | null;
+  /**
+   * Rate limit domain sent to the remote rate limit service.
+   */
   domain: string;
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the remote rate limit service.
    */
   policies?: SimpleLocalBackendPolicies | null;
   descriptors: DescriptorSet;
@@ -323,6 +389,9 @@ export type LocalConditionalPolicy3 = {
   failureMode?: "failClosed" | "failOpen";
   [k: string]: unknown;
 } & LocalConditionalPolicy31;
+/**
+ * Descriptors sent to the remote rate limit service.
+ */
 export type DescriptorSet = DescriptorEntry[];
 export type LocalConditionalPolicy31 =
   | "invalid"
@@ -348,12 +417,15 @@ export type LocalConditionalPolicy31 =
       [k: string]: unknown;
     };
 export type RemoteRateLimit = {
+  /**
+   * Rate limit domain sent to the remote rate limit service.
+   */
   domain: string;
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the remote rate limit service.
    */
   policies?: SimpleLocalBackendPolicies | null;
-  descriptors: DescriptorSet;
+  descriptors: DescriptorSet1;
   /**
    * Behavior when the remote rate limit service is unavailable or returns an error.
    * Defaults to failClosed, denying requests with a 500 status on service failure.
@@ -361,6 +433,10 @@ export type RemoteRateLimit = {
   failureMode?: "failClosed" | "failOpen";
   [k: string]: unknown;
 } & RemoteRateLimit1;
+/**
+ * Descriptors sent to the remote rate limit service.
+ */
+export type DescriptorSet1 = DescriptorEntry[];
 export type RemoteRateLimit1 =
   | "invalid"
   | {
@@ -386,62 +462,134 @@ export type RemoteRateLimit1 =
     };
 export type LocalJwtConfig =
   | {
+      /**
+       * Controls whether requests must include a JWT and how validation failures are handled.
+       */
       mode?: "strict" | "optional" | "permissive";
+      /**
+       * Where to read the JWT from in incoming requests.
+       */
       location?:
         | {
             header: {
+              /**
+               * Header name containing the credential.
+               */
               name: string;
+              /**
+               * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+               */
               prefix?: string | null;
             };
           }
         | {
             queryParameter: {
+              /**
+               * Query parameter name containing the credential.
+               */
               name: string;
             };
           }
         | {
             cookie: {
+              /**
+               * Cookie name containing the credential.
+               */
               name: string;
             };
           }
         | {
             expression: {
-              expression: Expression;
+              /**
+               * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+               */
+              expression: string;
             };
           };
+      /**
+       * Trusted issuers and their signing keys.
+       */
       providers: ProviderConfig[];
     }
   | {
+      /**
+       * Controls whether requests must include a JWT and how validation failures are handled.
+       */
       mode?: "strict" | "optional" | "permissive";
+      /**
+       * Where to read the JWT from in incoming requests.
+       */
       location?:
         | {
             header: {
+              /**
+               * Header name containing the credential.
+               */
               name: string;
+              /**
+               * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+               */
               prefix?: string | null;
             };
           }
         | {
             queryParameter: {
+              /**
+               * Query parameter name containing the credential.
+               */
               name: string;
             };
           }
         | {
             cookie: {
+              /**
+               * Cookie name containing the credential.
+               */
               name: string;
             };
           }
         | {
             expression: {
-              expression: Expression;
+              /**
+               * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+               */
+              expression: string;
             };
           };
+      /**
+       * Expected token issuer, matched against the JWT `iss` claim.
+       */
       issuer: string;
+      /**
+       * Accepted token audiences, matched against the JWT `aud` claim when set.
+       */
       audiences?: string[] | null;
-      jwks: FileInlineOrRemote;
-      jwtValidationOptions?: JWTValidationOptions;
+      /**
+       * JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
+       */
+      jwks:
+        | {
+            file: string;
+            [k: string]: unknown;
+          }
+        | string
+        | {
+            url: string;
+            [k: string]: unknown;
+          };
+      jwtValidationOptions?: JWTValidationOptions2;
+    };
+export type FileInlineOrRemote =
+  | {
+      file: string;
+      [k: string]: unknown;
+    }
+  | string
+  | {
+      url: string;
+      [k: string]: unknown;
     };
 export type TokenEndpointAuth = "clientSecretBasic" | "clientSecretPost";
-export type APIKey = string;
 export type LocalExplicitOrConditional3 = LocalConditionalPolicies4 | ExtAuthz;
 export type LocalConditionalPolicy4 = {
   /**
@@ -449,26 +597,26 @@ export type LocalConditionalPolicy4 = {
    */
   condition?: Expression | null;
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the authorization service.
    */
   policies?: SimpleLocalBackendPolicies | null;
   /**
-   * The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+   * Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.
    */
   protocol?:
     | {
         grpc: {
           /**
-           * Additional context to send to the authorization service.
-           * This maps to the `context_extensions` field of the request, and only allows static values.
+           * Static context values to send to the authorization service.
+           * Maps to the `context_extensions` field in the request.
            */
           context?: {
             [k: string]: string;
           } | null;
           /**
-           * Additional metadata to send to the authorization service.
-           * This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-           * If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+           * Metadata values to send to the authorization service, computed from CEL expressions.
+           * Maps to the `metadata_context.filter_metadata` field in the request.
+           * If unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.
            */
           metadata?: {
             [k: string]: Expression;
@@ -477,24 +625,27 @@ export type LocalConditionalPolicy4 = {
       }
     | {
         http: {
+          /**
+           * CEL expression that computes the authorization request path.
+           */
           path?: Expression | null;
           /**
-           * When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
-           * the provided expression rather than directly returning the error.
+           * CEL expression that computes a redirect URL when authorization fails.
+           * When the authorization service returns unauthorized, this redirects instead of returning the error directly.
            */
           redirect?: Expression | null;
           /**
-           * Specific headers from the authorization response will be copied into the request to the backend.
+           * Authorization response headers to copy into the backend request.
            */
           includeResponseHeaders?: string[];
           /**
-           * Specific headers to add in the authorization request (empty = all headers), based on the expression
+           * Headers to add to the authorization request using CEL expressions. Empty means all headers.
            */
           addRequestHeaders?: {
             [k: string]: Expression;
           };
           /**
-           * Metadata to include under the `extauthz` variable, based on the authorization response.
+           * Metadata values to expose under the `extauthz` variable after authorization.
            */
           metadata?: {
             [k: string]: Expression;
@@ -502,25 +653,25 @@ export type LocalConditionalPolicy4 = {
         };
       };
   /**
-   * Behavior when the authorization service is unavailable or returns an error
+   * Behavior when the authorization service is unavailable or returns an error.
    */
   failureMode?:
-    | ("allow" | "deny")
+    | "allow"
+    | "deny"
     | {
         denyWithStatus: number;
       };
   /**
-   * Specific headers to include in the authorization request.
-   * If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
+   * Request headers to send to the authorization service.
+   * If unset, gRPC sends all request headers and HTTP sends only `Authorization`.
    */
   includeRequestHeaders?: HeaderOrPseudo[];
   /**
-   * Options for including the request body in the authorization request
+   * Options for sending the request body to the authorization service.
    */
   includeRequestBody?: BodyOptions | null;
   /**
-   * Cache gRPC authorization results by CEL-derived request key.
-   *
+   * Cache gRPC authorization results using CEL expressions as the cache key.
    * Warning: the safety of this feature depends on the cache key accurately capturing the fields
    * the server operates on. For example, if you return a different result based on header A but only
    * cache header B, users may get incorrect cache hits.
@@ -554,26 +705,26 @@ export type LocalConditionalPolicy41 =
     };
 export type ExtAuthz = {
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the authorization service.
    */
   policies?: SimpleLocalBackendPolicies | null;
   /**
-   * The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.
+   * Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.
    */
   protocol?:
     | {
         grpc: {
           /**
-           * Additional context to send to the authorization service.
-           * This maps to the `context_extensions` field of the request, and only allows static values.
+           * Static context values to send to the authorization service.
+           * Maps to the `context_extensions` field in the request.
            */
           context?: {
             [k: string]: string;
           } | null;
           /**
-           * Additional metadata to send to the authorization service.
-           * This maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.
-           * If unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.
+           * Metadata values to send to the authorization service, computed from CEL expressions.
+           * Maps to the `metadata_context.filter_metadata` field in the request.
+           * If unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.
            */
           metadata?: {
             [k: string]: Expression;
@@ -582,24 +733,27 @@ export type ExtAuthz = {
       }
     | {
         http: {
+          /**
+           * CEL expression that computes the authorization request path.
+           */
           path?: Expression | null;
           /**
-           * When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by
-           * the provided expression rather than directly returning the error.
+           * CEL expression that computes a redirect URL when authorization fails.
+           * When the authorization service returns unauthorized, this redirects instead of returning the error directly.
            */
           redirect?: Expression | null;
           /**
-           * Specific headers from the authorization response will be copied into the request to the backend.
+           * Authorization response headers to copy into the backend request.
            */
           includeResponseHeaders?: string[];
           /**
-           * Specific headers to add in the authorization request (empty = all headers), based on the expression
+           * Headers to add to the authorization request using CEL expressions. Empty means all headers.
            */
           addRequestHeaders?: {
             [k: string]: Expression;
           };
           /**
-           * Metadata to include under the `extauthz` variable, based on the authorization response.
+           * Metadata values to expose under the `extauthz` variable after authorization.
            */
           metadata?: {
             [k: string]: Expression;
@@ -607,25 +761,25 @@ export type ExtAuthz = {
         };
       };
   /**
-   * Behavior when the authorization service is unavailable or returns an error
+   * Behavior when the authorization service is unavailable or returns an error.
    */
   failureMode?:
-    | ("allow" | "deny")
+    | "allow"
+    | "deny"
     | {
         denyWithStatus: number;
       };
   /**
-   * Specific headers to include in the authorization request.
-   * If unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.
+   * Request headers to send to the authorization service.
+   * If unset, gRPC sends all request headers and HTTP sends only `Authorization`.
    */
   includeRequestHeaders?: HeaderOrPseudo[];
   /**
-   * Options for including the request body in the authorization request
+   * Options for sending the request body to the authorization service.
    */
   includeRequestBody?: BodyOptions | null;
   /**
-   * Cache gRPC authorization results by CEL-derived request key.
-   *
+   * Cache gRPC authorization results using CEL expressions as the cache key.
    * Warning: the safety of this feature depends on the cache key accurately capturing the fields
    * the server operates on. For example, if you return a different result based on header A but only
    * cache header B, users may get incorrect cache hits.
@@ -663,11 +817,11 @@ export type LocalConditionalPolicy5 = {
    */
   condition?: Expression | null;
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the external processing service.
    */
   policies?: SimpleLocalBackendPolicies | null;
   /**
-   * Behavior when the ext_proc service is unavailable or returns an error
+   * Behavior when the external processing service is unavailable or returns an error.
    */
   failureMode?: "failClosed" | "failOpen";
   /**
@@ -719,11 +873,11 @@ export type LocalConditionalPolicy51 =
     };
 export type ExtProc = {
   /**
-   * Policies to connect to the backend
+   * Backend policies used when connecting to the external processing service.
    */
   policies?: SimpleLocalBackendPolicies | null;
   /**
-   * Behavior when the ext_proc service is unavailable or returns an error
+   * Behavior when the external processing service is unavailable or returns an error.
    */
   failureMode?: "failClosed" | "failOpen";
   /**
@@ -779,10 +933,6 @@ export type LocalRouteBackend = {
   policies?: LocalBackendPolicies | null;
   [k: string]: unknown;
 } & LocalRouteBackend1;
-/**
- * Controls how an endpoint-picker-selected destination is used.
- */
-export type InferenceRoutingDestinationMode = "validated" | "passthrough";
 export type LocalRouteBackend1 =
   | "invalid"
   | {
@@ -867,7 +1017,7 @@ export type LocalMcpTarget1 =
     };
 export type McpStatefulMode = "stateless" | "stateful";
 export type McpPrefixMode = "always" | "conditional";
-export type FailureMode4 = "failClosed" | "failOpen";
+export type FailureMode6 = "failClosed" | "failOpen";
 export type LocalAIBackend =
   | LocalNamedAIProvider
   | {
@@ -904,7 +1054,8 @@ export type ProviderFormat =
   | "responses"
   | "embeddings"
   | "anthropicTokenCount"
-  | "realtime";
+  | "realtime"
+  | "rerank";
 export type LocalAwsBackend = {
   agentCore: LocalAgentCoreBackend;
   [k: string]: unknown;
@@ -937,10 +1088,18 @@ export type LocalTCPRouteBackend1 =
       backend: string;
       [k: string]: unknown;
     };
-export type ConnectMode = "deny" | "route" | "tunnel";
 export type OtlpLoggingConfig = {
+  /**
+   * Backend policies used when exporting OTLP logs.
+   */
   policies?: SimpleLocalBackendPolicies | null;
+  /**
+   * OTLP protocol used to export logs.
+   */
   protocol?: "grpc" | "http";
+  /**
+   * OTLP HTTP path used to export logs.
+   */
   path?: string;
   [k: string]: unknown;
 } & OtlpLoggingConfig1;
@@ -972,7 +1131,7 @@ export type OtlpLoggingConfig1 =
  */
 export type TracingConfig = {
   /**
-   * Policies to connect to the backend
+   * Backend policies used when exporting traces.
    */
   policies?: SimpleLocalBackendPolicies | null;
   attributes?: OrderedStringMap_Expression;
@@ -994,7 +1153,13 @@ export type TracingConfig = {
    * requests that use this frontend policy.
    */
   clientSampling?: Expression | null;
+  /**
+   * OTLP HTTP path used to export traces.
+   */
   path?: string;
+  /**
+   * OTLP protocol used to export traces. Defaults to HTTP.
+   */
   protocol?: "grpc" | "http";
   [k: string]: unknown;
 } & TracingConfig1;
@@ -1020,19 +1185,6 @@ export type TracingConfig1 =
        */
       backend: string;
       [k: string]: unknown;
-    };
-export type PolicyTarget =
-  | {
-      gateway: ListenerTarget;
-    }
-  | {
-      route: RouteName;
-    }
-  | {
-      backend: BackendTarget;
-    }
-  | {
-      listenerSet: ListenerSetTarget;
     };
 export type BackendTarget =
   | "invalid"
@@ -1276,6 +1428,11 @@ export interface LocalListener {
   policies?: LocalGatewayPolicy | null;
 }
 export interface LocalTLSServerConfig {
+  /**
+   * Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA
+   * mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.
+   */
+  mode?: "static" | "dynamicCa";
   cert: string;
   key: string;
   root?: string | null;
@@ -1334,27 +1491,27 @@ export interface QueryMatch {
 }
 export interface FilterOrPolicy {
   /**
-   * Headers to be modified in the request.
+   * Modify request headers before forwarding.
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Headers to be modified in the response.
+   * Modify response headers before returning to the client.
    */
   responseHeaderModifier?: HeaderModifier | null;
   /**
-   * Directly respond to the request with a redirect.
+   * Return a redirect response instead of forwarding the request.
    */
   requestRedirect?: RequestRedirect | null;
   /**
-   * Modify the URL path or authority.
+   * Rewrite the request path or authority before forwarding.
    */
   urlRewrite?: UrlRewrite | null;
   /**
-   * Mirror incoming requests to another destination.
+   * Send a copy of matching requests to another backend.
    */
   requestMirror?: RequestMirror | null;
   /**
-   * Directly respond to the request with a static response.
+   * Return a configured response instead of forwarding the request.
    */
   directResponse?: LocalExplicitOrConditional | null;
   /**
@@ -1362,15 +1519,19 @@ export interface FilterOrPolicy {
    */
   cors?: CorsSerde | null;
   /**
-   * Authorization policies for MCP access.
+   * Authorization rules for MCP requests.
    */
-  mcpAuthorization?: RuleSet | null;
+  mcpAuthorization?: McpAuthorization | null;
   /**
-   * Authorization policies for HTTP access.
+   * External MCP policy processors.
+   */
+  mcpGuardrails?: McpGuardrails | null;
+  /**
+   * Authorization rules for incoming HTTP requests.
    */
   authorization?: RuleSet | null;
   /**
-   * Authentication for MCP clients.
+   * Authenticate MCP clients.
    */
   mcpAuthentication?: LocalMcpAuthentication | null;
   /**
@@ -1382,51 +1543,51 @@ export interface FilterOrPolicy {
    */
   ai?: Policy | null;
   /**
-   * Send TLS to the backend.
+   * TLS settings used when connecting to the backend.
    */
   backendTLS?: LocalBackendTLS | null;
   /**
-   * Tunnel to the backend.
+   * Tunnel settings used when connecting to the backend.
    */
   backendTunnel?: Tunnel | null;
   /**
-   * Authenticate to the backend.
+   * Authentication credentials sent to the backend.
    */
   backendAuth?: BackendAuth | null;
   /**
-   * Rate limit incoming requests. State is kept local.
+   * Local rate limits for incoming requests.
    */
   localRateLimit?: LocalRateLimitPolicy | null;
   /**
-   * Rate limit incoming requests. State is managed by a remote server.
+   * Remote rate limit checks for incoming requests.
    */
   remoteRateLimit?: LocalExplicitOrConditional2 | null;
   /**
-   * Authenticate incoming JWT requests.
+   * Authenticate incoming requests with JWT bearer tokens.
    */
   jwtAuth?: LocalJwtConfig | null;
   /**
-   * Authenticate incoming browser requests with OIDC authorization code flow.
+   * Authenticate browser requests with OIDC authorization code flow.
    */
   oidc?: LocalOidcConfig | null;
   /**
-   * Authenticate incoming requests using Basic Authentication with htpasswd.
+   * Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
    */
   basicAuth?: LocalBasicAuth | null;
   /**
-   * Authenticate incoming requests using API Keys
+   * Authenticate incoming requests with API keys.
    */
   apiKey?: LocalAPIKeys | null;
   /**
-   * Authenticate incoming requests by calling an external authorization server.
+   * Authorize incoming requests by calling an external authorization service.
    */
   extAuthz?: LocalExplicitOrConditional3 | null;
   /**
-   * Extend agentgateway with an external processor
+   * Send request and response data to an external processing service.
    */
   extProc?: LocalExplicitOrConditional4 | null;
   /**
-   * Modify requests and responses
+   * Modify request and response headers, bodies, or metadata.
    */
   transformations?: LocalExplicitOrConditional5 | null;
   /**
@@ -1434,35 +1595,91 @@ export interface FilterOrPolicy {
    */
   csrf?: Csrf | null;
   /**
-   * Timeout requests that exceed the configured duration.
+   * Buffer request and response bodies.
+   */
+  buffer?: Buffer | null;
+  /**
+   * Set request timeout limits.
    */
   timeout?: Policy2 | null;
   /**
-   * Retry matching requests.
+   * Retry matching failed upstream requests.
    */
   retry?: Policy3 | null;
 }
 export interface HeaderModifier {
+  /**
+   * Headers to append without replacing existing values.
+   */
   add?: {
     [k: string]: string;
   };
+  /**
+   * Headers to set, replacing any existing values.
+   */
   set?: {
     [k: string]: string;
   };
+  /**
+   * Header names to remove.
+   */
   remove?: string[];
 }
 export interface RequestRedirect {
+  /**
+   * Scheme to use in the redirect URL, such as `http` or `https`.
+   */
   scheme?: string | null;
+  /**
+   * Host or port rewrite to apply to the redirect URL.
+   */
   authority?: HostRedirect | null;
+  /**
+   * Path rewrite to apply to the redirect URL.
+   */
   path?: PathRedirect | null;
+  /**
+   * HTTP status code to return for the redirect.
+   */
   status?: number | null;
 }
 export interface UrlRewrite {
+  /**
+   * Host or port rewrite to apply before forwarding the request.
+   */
   authority?: HostRedirect | null;
+  /**
+   * Path rewrite to apply before forwarding the request.
+   */
   path?: PathRedirect | null;
 }
 export interface RequestMirror {
-  backend: SimpleLocalBackend;
+  /**
+   * Backend that receives mirrored request copies.
+   */
+  backend:
+    | "invalid"
+    | {
+        service: {
+          name: NamespacedHostname;
+          port: number;
+        };
+      }
+    | {
+        /**
+         * Hostname or IP address
+         */
+        host: string;
+      }
+    | {
+        /**
+         * Explicit backend reference. Backend must be defined in the top level backends list
+         */
+        backend: string;
+      };
+  /**
+   * Fraction of matching requests to mirror, from 0.0 to 1.0.
+   */
   percentage: number;
 }
 export interface NamespacedHostname {
@@ -1482,81 +1699,175 @@ export interface LocalConditionalPolicy {
    */
   condition?: Expression | null;
   body?: Bytes;
+  /**
+   * CEL expression that computes the response body.
+   */
   bodyExpression?: Expression | null;
+  /**
+   * Response headers computed from CEL expressions.
+   */
   headers?: {
     [k: string]: Expression;
   };
+  /**
+   * HTTP status code to return.
+   */
   status: number;
   [k: string]: unknown;
 }
 export interface DirectResponse {
-  body?: Bytes;
+  body?: Bytes1;
+  /**
+   * CEL expression that computes the response body.
+   */
   bodyExpression?: Expression | null;
+  /**
+   * Response headers computed from CEL expressions.
+   */
   headers?: {
     [k: string]: Expression;
   };
+  /**
+   * HTTP status code to return.
+   */
   status: number;
 }
 export interface CorsSerde {
+  /**
+   * Add `Access-Control-Allow-Credentials: true` on allowed CORS responses.
+   */
   allowCredentials?: boolean;
+  /**
+   * Values to return in `Access-Control-Allow-Headers` for allowed preflight requests.
+   */
   allowHeaders?: string[];
+  /**
+   * Values to return in `Access-Control-Allow-Methods` for allowed preflight requests.
+   */
   allowMethods?: string[];
+  /**
+   * Request origins that receive CORS response headers. Use `*` to match any origin.
+   */
   allowOrigins?: string[];
+  /**
+   * Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.
+   */
   exposeHeaders?: string[];
+  /**
+   * Value to return in `Access-Control-Max-Age` for allowed preflight requests.
+   */
   maxAge?: string | null;
 }
+/**
+ * CEL authorization rules for MCP tools, prompts, and resources.
+ */
+export interface McpAuthorization {
+  /**
+   * CEL authorization rules to evaluate for a request.
+   */
+  rules: string[];
+}
+export interface McpGuardrails {
+  /**
+   * Ordered list of policy processors applied to matched methods; the first
+   * to reject a request short-circuits the chain. Processors may run on the
+   * request or response side, or both; see `Processor.methods`.
+   *
+   * @minItems 1
+   */
+  processors: [Processor, ...Processor[]];
+}
 export interface RuleSet {
+  /**
+   * CEL authorization rules to evaluate for a request.
+   */
   rules: string[];
 }
 export interface LocalMcpAuthentication {
+  /**
+   * Expected token issuer, matched against the JWT `iss` claim.
+   */
   issuer: string;
+  /**
+   * Accepted token audiences, matched against the JWT `aud` claim.
+   */
   audiences: string[];
+  /**
+   * Identity provider type used to derive MCP authorization metadata and default JWKS URLs.
+   */
   provider?: McpIDP | null;
   resourceMetadata: ResourceMetadata;
-  jwks: FileInlineOrRemote;
+  /**
+   * JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
+   */
+  jwks:
+    | {
+        file: string;
+        [k: string]: unknown;
+      }
+    | string
+    | {
+        url: string;
+        [k: string]: unknown;
+      };
+  /**
+   * Controls whether MCP requests must include a valid JWT.
+   */
   mode?: "strict" | "optional" | "permissive";
+  /**
+   * Where to read the JWT from in incoming MCP requests.
+   */
   authorizationLocation?:
     | {
         header: {
+          /**
+           * Header name containing the credential.
+           */
           name: string;
+          /**
+           * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+           */
           prefix?: string | null;
         };
       }
     | {
         queryParameter: {
+          /**
+           * Query parameter name containing the credential.
+           */
           name: string;
         };
       }
     | {
         cookie: {
+          /**
+           * Cookie name containing the credential.
+           */
           name: string;
         };
       }
     | {
         expression: {
-          expression: Expression;
+          /**
+           * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+           */
+          expression: string;
         };
       };
   jwtValidationOptions?: JWTValidationOptions;
+  /**
+   * OAuth client ID advertised to MCP clients when needed.
+   */
   clientId?: string | null;
 }
+/**
+ * Protected resource metadata returned to MCP clients.
+ */
 export interface ResourceMetadata {
   [k: string]: unknown;
 }
 /**
- * JWT validation options controlling which claims must be present in a token.
- *
- * The `required_claims` set specifies which RFC 7519 registered claims must
- * exist in the token payload before validation proceeds. Only the following
- * values are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered
- * claims such as `iat` and `jti` are **not** enforced by the underlying
- * `jsonwebtoken` library and will be silently ignored.
- *
- * This only enforces **presence**. Standard claims like `exp` and `nbf`
- * have their values validated independently (e.g., expiry is always checked
- * when the `exp` claim is present, regardless of this setting).
- *
- * Defaults to `["exp"]`.
+ * Claim requirements to enforce after the token signature is verified.
  */
 export interface JWTValidationOptions {
   /**
@@ -1569,107 +1880,227 @@ export interface JWTValidationOptions {
 }
 export interface A2APolicy {}
 export interface Policy {
+  /**
+   * Prompt and response guardrails to apply to LLM traffic.
+   */
   promptGuard?: PromptGuard | null;
+  /**
+   * Default request body values added only when the client did not provide them.
+   */
   defaults?: {
     [k: string]: unknown;
   } | null;
+  /**
+   * Request body values that replace client-provided values.
+   */
   overrides?: {
     [k: string]: unknown;
   } | null;
+  /**
+   * Request body values computed from CEL expressions.
+   */
   transformations?: {
     [k: string]: Expression;
   } | null;
+  /**
+   * Messages to add before or after the client prompt.
+   */
   prompts?: PromptEnrichment | null;
+  /**
+   * Model name aliases that rewrite requested model names.
+   */
   modelAliases?: {
     [k: string]: string;
   };
+  /**
+   * Prompt caching settings for providers that support cache markers.
+   */
   promptCaching?: PromptCachingConfig | null;
+  /**
+   * Route type overrides selected by request path suffix.
+   */
   routes?: {
     [k: string]: RouteType;
   };
 }
 export interface PromptGuard {
+  /**
+   * Guards applied to client requests before they reach the LLM.
+   */
   request?: RequestGuard[];
+  /**
+   * Guards applied to LLM responses before they reach the client.
+   */
   response?: ResponseGuard[];
 }
+/**
+ * Response returned when the request is rejected.
+ */
 export interface RequestRejection {
-  body?: Bytes1;
+  body?: Bytes2;
+  /**
+   * HTTP status code returned when content is rejected.
+   */
   status?: number;
   /**
-   * Optional headers to add, set, or remove from the rejection response
+   * Headers to add, set, or remove from the rejection response.
    */
   headers?: HeaderModifier | null;
 }
 export interface RegexRules {
+  /**
+   * Action to take when a regex rule matches.
+   */
   action?: "mask" | "reject";
+  /**
+   * Regex or built-in patterns to evaluate.
+   */
   rules: RegexRule[];
 }
 export interface Webhook {
-  target: SimpleLocalBackend;
+  /**
+   * Backend that receives guardrail webhook requests.
+   */
+  target:
+    | "invalid"
+    | {
+        service: {
+          name: NamespacedHostname;
+          port: number;
+        };
+      }
+    | {
+        /**
+         * Hostname or IP address
+         */
+        host: string;
+      }
+    | {
+        /**
+         * Explicit backend reference. Backend must be defined in the top level backends list
+         */
+        backend: string;
+      };
+  /**
+   * Incoming request headers to forward to the webhook.
+   */
   forwardHeaderMatches?: HeaderMatch[];
+  /**
+   * Behavior when the webhook is unreachable or returns an error.
+   * Defaults to `failClosed`.
+   */
+  failureMode?: "failClosed" | "failOpen";
 }
 export interface Moderation {
   /**
-   * Model to use. Defaults to `omni-moderation-latest`
+   * Moderation model to use. Defaults to `omni-moderation-latest`.
    */
   model?: string | null;
+  /**
+   * Backend policies used when calling the moderation provider.
+   */
   policies?: SimpleLocalBackendPolicies | null;
 }
 export interface SimpleLocalBackendPolicies {
   /**
-   * Headers to be modified in the request.
+   * Modify request headers before forwarding to this backend.
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Modify requests and responses sent to and from the backend.
+   * Modify request and response data for this backend.
    */
   transformations?: LocalTransformationConfig | null;
   /**
-   * Send TLS to the backend.
+   * TLS settings used when connecting to this backend.
    */
   backendTLS?: LocalBackendTLS | null;
   /**
-   * Authenticate to the backend.
+   * Authentication credentials sent to this backend.
    */
   backendAuth?: BackendAuth | null;
   /**
-   * Specify HTTP settings for the backend
+   * HTTP protocol settings for this backend.
    */
   http?: HTTP | null;
   /**
-   * Specify TCP settings for the backend
+   * TCP protocol settings for this backend.
    */
   tcp?: TCP | null;
   /**
-   * Specify a tunnel to use when connecting to the backend
+   * Tunnel settings used when connecting to this backend.
    */
   backendTunnel?: Tunnel | null;
 }
 export interface LocalTransformationConfig {
+  /**
+   * Transform the request before it is forwarded.
+   */
   request?: LocalTransform | null;
+  /**
+   * Transform the response before it is returned.
+   */
   response?: LocalTransform | null;
 }
 export interface LocalTransform {
+  /**
+   * Headers to append using CEL expressions for values.
+   */
   add?: {
     [k: string]: string;
   };
+  /**
+   * Headers to set using CEL expressions for values.
+   */
   set?: {
     [k: string]: string;
   };
+  /**
+   * Header names to remove.
+   */
   remove?: string[];
+  /**
+   * CEL expression that computes a replacement body.
+   */
   body?: string | null;
+  /**
+   * Metadata values to add using CEL expressions.
+   */
   metadata?: {
     [k: string]: string;
   };
 }
 export interface LocalBackendTLS {
+  /**
+   * Client certificate file to present to the backend.
+   */
   cert?: string | null;
+  /**
+   * Private key file for the client certificate.
+   */
   key?: string | null;
+  /**
+   * Root certificate bundle used to verify the backend certificate.
+   */
   root?: string | null;
+  /**
+   * Server name to use for TLS verification and SNI.
+   */
   hostname?: string | null;
+  /**
+   * Skip certificate trust verification for the backend connection.
+   */
   insecure?: boolean;
+  /**
+   * Skip hostname verification for the backend certificate.
+   */
   insecureHost?: boolean;
+  /**
+   * ALPN protocols to offer to the backend.
+   */
   alpn?: string[] | null;
+  /**
+   * Additional subject alternative names accepted for the backend certificate.
+   */
   subjectAltNames?: string[] | null;
   /**
    * Key exchange groups allowed for negotiating TLS.
@@ -1683,19 +2114,31 @@ export interface AwsAssumeRole {
   roleArn: string;
 }
 export interface HTTP {
+  /**
+   * HTTP version to use when connecting to the backend.
+   */
   version?: string | null;
+  /**
+   * Maximum time allowed for a backend HTTP request.
+   */
   requestTimeout?: string | null;
 }
 export interface TCP {
   keepalives: KeepaliveConfig1;
   connectTimeout: Duration;
 }
+/**
+ * TCP keepalive settings for backend connections.
+ */
 export interface KeepaliveConfig1 {
   enabled?: boolean;
   time?: string;
   interval?: string;
   retries?: number;
 }
+/**
+ * Maximum time allowed to establish a backend TCP connection.
+ */
 export interface Duration {
   secs: number;
   nanos: number;
@@ -1703,7 +2146,7 @@ export interface Duration {
 }
 export interface Tunnel {
   /**
-   * Reference to the proxy address
+   * Proxy backend used to tunnel the connection.
    */
   proxy:
     | "invalid"
@@ -1825,16 +2268,28 @@ export interface DetectJailbreakConfig {
    */
   apiVersion?: string | null;
 }
+/**
+ * Response returned when the LLM response is rejected.
+ */
 export interface RequestRejection1 {
-  body?: Bytes1;
+  body?: Bytes2;
+  /**
+   * HTTP status code returned when content is rejected.
+   */
   status?: number;
   /**
-   * Optional headers to add, set, or remove from the rejection response
+   * Headers to add, set, or remove from the rejection response.
    */
   headers?: HeaderModifier | null;
 }
 export interface PromptEnrichment {
+  /**
+   * Messages appended to the end of each chat request.
+   */
   append?: SimpleChatCompletionMessage[];
+  /**
+   * Messages prepended to the beginning of each chat request.
+   */
   prepend?: SimpleChatCompletionMessage[];
 }
 /**
@@ -1845,10 +2300,25 @@ export interface SimpleChatCompletionMessage {
   content: string;
 }
 export interface PromptCachingConfig {
+  /**
+   * Add cache markers to system prompts when supported by the provider.
+   */
   cacheSystem?: boolean;
+  /**
+   * Add cache markers to chat messages when supported by the provider.
+   */
   cacheMessages?: boolean;
+  /**
+   * Add cache markers to tool definitions when supported by the provider.
+   */
   cacheTools?: boolean;
+  /**
+   * Minimum prompt size required before cache markers are added.
+   */
   minTokens?: number | null;
+  /**
+   * Message offset used when choosing where to place cache markers.
+   */
   cacheMessageOffset?: number;
 }
 export interface LocalConditionalPolicies2 {
@@ -1862,16 +2332,40 @@ export interface LocalConditionalPolicy2 {
    * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
    */
   condition?: Expression | null;
+  /**
+   * Maximum number of tokens that can accumulate in the local bucket.
+   */
   maxTokens?: number;
+  /**
+   * Number of tokens added to the local bucket each fill interval.
+   */
   tokensPerFill?: number;
+  /**
+   * How often the local bucket is refilled.
+   */
   fillInterval: string;
+  /**
+   * Whether this limit counts requests or LLM tokens.
+   */
   type?: "requests" | "tokens";
   [k: string]: unknown;
 }
 export interface RateLimitSpec {
+  /**
+   * Maximum number of tokens that can accumulate in the local bucket.
+   */
   maxTokens?: number;
+  /**
+   * Number of tokens added to the local bucket each fill interval.
+   */
   tokensPerFill?: number;
+  /**
+   * How often the local bucket is refilled.
+   */
   fillInterval: string;
+  /**
+   * Whether this limit counts requests or LLM tokens.
+   */
   type?: "requests" | "tokens";
 }
 export interface LocalConditionalPolicies3 {
@@ -1881,7 +2375,13 @@ export interface LocalConditionalPolicies3 {
   conditional: LocalConditionalPolicy3[];
 }
 export interface DescriptorEntry {
+  /**
+   * Descriptor key/value entries. Values are CEL expressions evaluated from the request.
+   */
   entries: KV[];
+  /**
+   * Whether this descriptor limits requests or LLM tokens.
+   */
   type?: "requests" | "tokens";
   /**
    * cost determines the optional expression to determine the cost of the request.
@@ -1903,15 +2403,63 @@ export interface DescriptorEntry {
   limitOverride?: Expression | null;
 }
 export interface KV {
+  /**
+   * Descriptor entry key sent to the remote rate limit service.
+   */
   key: string;
+  /**
+   * CEL expression used to compute the descriptor entry value.
+   */
   value: string;
   [k: string]: unknown;
 }
 export interface ProviderConfig {
+  /**
+   * Expected token issuer, matched against the JWT `iss` claim.
+   */
   issuer: string;
+  /**
+   * Accepted token audiences, matched against the JWT `aud` claim when set.
+   */
   audiences?: string[] | null;
-  jwks: FileInlineOrRemote;
-  jwtValidationOptions?: JWTValidationOptions;
+  /**
+   * JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
+   */
+  jwks:
+    | {
+        file: string;
+        [k: string]: unknown;
+      }
+    | string
+    | {
+        url: string;
+        [k: string]: unknown;
+      };
+  jwtValidationOptions?: JWTValidationOptions1;
+}
+/**
+ * Claim requirements to enforce after the token signature is verified.
+ */
+export interface JWTValidationOptions1 {
+  /**
+   * Claims that must be present in the token before validation.
+   * Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
+   * (including "iat" and "jti") are ignored.
+   * Defaults to ["exp"]. Use an empty list to require no claims.
+   */
+  requiredClaims?: string[];
+}
+/**
+ * Claim requirements to enforce after the token signature is verified.
+ */
+export interface JWTValidationOptions2 {
+  /**
+   * Claims that must be present in the token before validation.
+   * Only "exp", "nbf", "aud", "iss", "sub" are enforced; others
+   * (including "iat" and "jti") are ignored.
+   * Defaults to ["exp"]. Use an empty list to require no claims.
+   */
+  requiredClaims?: string[];
 }
 /**
  * Browser-based OIDC authentication policy.
@@ -1970,7 +2518,7 @@ export interface LocalOidcConfig {
 }
 export interface LocalBasicAuth {
   /**
-   * .htpasswd file contents/reference
+   * User database in htpasswd format. Can be inline or loaded from a file.
    */
   htpasswd:
     | {
@@ -1979,71 +2527,115 @@ export interface LocalBasicAuth {
       }
     | string;
   /**
-   * Realm name for the WWW-Authenticate header
+   * Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.
    */
   realm?: string | null;
   /**
-   * Validation mode for basic authentication
+   * Controls whether requests must include valid Basic Auth credentials.
    */
   mode?: "strict" | "optional";
+  /**
+   * Where to read the Basic Auth credentials from in incoming requests.
+   */
   authorizationLocation?:
     | {
         header: {
+          /**
+           * Header name containing the credential.
+           */
           name: string;
+          /**
+           * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+           */
           prefix?: string | null;
         };
       }
     | {
         queryParameter: {
+          /**
+           * Query parameter name containing the credential.
+           */
           name: string;
         };
       }
     | {
         cookie: {
+          /**
+           * Cookie name containing the credential.
+           */
           name: string;
         };
       }
     | {
         expression: {
-          expression: Expression;
+          /**
+           * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+           */
+          expression: string;
         };
       };
 }
 export interface LocalAPIKeys {
   /**
-   * List of API keys
+   * API keys that are accepted by this policy.
    */
   keys: LocalAPIKey[];
   /**
-   * Validation mode for API keys
+   * Controls whether requests must include a valid API key.
    */
   mode?: "strict" | "optional" | "permissive";
+  /**
+   * Where to read the API key from in incoming requests.
+   */
   location?:
     | {
         header: {
+          /**
+           * Header name containing the credential.
+           */
           name: string;
+          /**
+           * Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.
+           */
           prefix?: string | null;
         };
       }
     | {
         queryParameter: {
+          /**
+           * Query parameter name containing the credential.
+           */
           name: string;
         };
       }
     | {
         cookie: {
+          /**
+           * Cookie name containing the credential.
+           */
           name: string;
         };
       }
     | {
         expression: {
-          expression: Expression;
+          /**
+           * CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+           */
+          expression: string;
         };
       };
 }
 export interface LocalAPIKey {
-  key: APIKey;
-  metadata?: unknown;
+  /**
+   * API key value to accept.
+   */
+  key: string;
+  /**
+   * Optional metadata attached to requests authenticated with this key.
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
 }
 export interface LocalConditionalPolicies4 {
   /**
@@ -2053,15 +2645,15 @@ export interface LocalConditionalPolicies4 {
 }
 export interface BodyOptions {
   /**
-   * Maximum size of request body to buffer (default: 8192)
+   * Maximum request body size to send to the authorization service. Defaults to 8192 bytes.
    */
   maxRequestBytes?: number;
   /**
-   * If true, send partial body when max_request_bytes is reached
+   * Whether to send a partial body when the request exceeds `maxRequestBytes`.
    */
   allowPartialMessage?: boolean;
   /**
-   * If true, pack body as raw bytes in gRPC
+   * Whether to send the body as raw bytes for gRPC authorization checks.
    */
   packAsBytes?: boolean;
 }
@@ -2089,29 +2681,69 @@ export interface LocalConditionalPolicies5 {
    */
   conditional: LocalConditionalPolicy5[];
 }
+/**
+ * Controls which request and response parts are sent to the external processing service.
+ */
 export interface ProcessingOptions {
+  /**
+   * How request bodies are sent to the external processing service.
+   */
   requestBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  /**
+   * How response bodies are sent to the external processing service.
+   */
   responseBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  /**
+   * Whether request headers are sent to the external processing service.
+   */
   requestHeaderMode?: "send" | "skip";
+  /**
+   * Whether response headers are sent to the external processing service.
+   */
   responseHeaderMode?: "send" | "skip";
+  /**
+   * Whether request trailers are sent to the external processing service.
+   */
   requestTrailerMode?: "send" | "skip";
+  /**
+   * Whether response trailers are sent to the external processing service.
+   */
   responseTrailerMode?: "send" | "skip";
   /**
-   * Allow ext_proc `mode_override` values from matching headers responses to update
-   * subsequent request/response processing phases for this exchange.
+   * Whether the external processing service can change processing modes during a request.
    */
   allowModeOverride?: boolean;
 }
+/**
+ * Controls which request and response parts are sent to the external processing service.
+ */
 export interface ProcessingOptions1 {
+  /**
+   * How request bodies are sent to the external processing service.
+   */
   requestBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  /**
+   * How response bodies are sent to the external processing service.
+   */
   responseBodyMode?: "none" | "buffered" | "bufferedPartial" | "fullDuplexStreamed";
+  /**
+   * Whether request headers are sent to the external processing service.
+   */
   requestHeaderMode?: "send" | "skip";
+  /**
+   * Whether response headers are sent to the external processing service.
+   */
   responseHeaderMode?: "send" | "skip";
+  /**
+   * Whether request trailers are sent to the external processing service.
+   */
   requestTrailerMode?: "send" | "skip";
+  /**
+   * Whether response trailers are sent to the external processing service.
+   */
   responseTrailerMode?: "send" | "skip";
   /**
-   * Allow ext_proc `mode_override` values from matching headers responses to update
-   * subsequent request/response processing phases for this exchange.
+   * Whether the external processing service can change processing modes during a request.
    */
   allowModeOverride?: boolean;
 }
@@ -2126,77 +2758,133 @@ export interface LocalConditionalPolicy6 {
    * condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
    */
   condition?: Expression | null;
+  /**
+   * Transform the request before it is forwarded.
+   */
   request?: LocalTransform | null;
+  /**
+   * Transform the response before it is returned.
+   */
   response?: LocalTransform | null;
   [k: string]: unknown;
 }
 export interface Csrf {
+  /**
+   * Additional trusted origins allowed to send state-changing requests.
+   */
   additionalOrigins?: string[];
 }
+export interface Buffer {
+  /**
+   * Buffer incoming request bodies before forwarding.
+   */
+  request?: BufferBody | null;
+  /**
+   * Buffer upstream response bodies before sending them to the client.
+   */
+  response?: BufferBody | null;
+}
+export interface BufferBody {
+  /**
+   * Maximum body size to buffer in bytes.
+   */
+  maxBytes?: number | null;
+}
 export interface Policy2 {
+  /**
+   * Maximum time allowed for the full downstream request and response.
+   */
   requestTimeout?: string | null;
+  /**
+   * Maximum time allowed for the upstream backend request.
+   */
   backendRequestTimeout?: string | null;
 }
 export interface Policy3 {
+  /**
+   * Total number of attempts, including the original request.
+   */
   attempts?: number;
+  /**
+   * Delay between retry attempts.
+   */
   backoff?: string | null;
+  /**
+   * HTTP response status codes that should be retried.
+   */
   codes: number[];
+  /**
+   * CEL expression evaluated against the request before any attempt; when `false`,
+   * retries are disabled (only the initial attempt is made), e.g. `request.method == "GET"`.
+   * Retrying requires buffering the request body in memory for replay, so this lets us skip
+   * that cost when the request is known to be non-retriable (e.g. streaming or websockets).
+   */
+  precondition?: Expression | null;
+  /**
+   * CEL expression evaluated against each response to decide whether to retry. A response
+   * is retried when its status code is in `codes` *or* this expression evaluates to `true`.
+   */
+  condition?: Expression | null;
 }
 export interface LocalBackendPolicies {
   /**
-   * Headers to be modified in the request.
+   * Modify request headers before forwarding to this backend.
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Modify requests and responses sent to and from the backend.
+   * Modify request and response data for this backend.
    */
   transformations?: LocalTransformationConfig | null;
   /**
-   * Send TLS to the backend.
+   * TLS settings used when connecting to this backend.
    */
   backendTLS?: LocalBackendTLS | null;
   /**
-   * Authenticate to the backend.
+   * Authentication credentials sent to this backend.
    */
   backendAuth?: BackendAuth | null;
   /**
-   * Specify HTTP settings for the backend
+   * HTTP protocol settings for this backend.
    */
   http?: HTTP | null;
   /**
-   * Specify TCP settings for the backend
+   * TCP protocol settings for this backend.
    */
   tcp?: TCP | null;
   /**
-   * Specify a tunnel to use when connecting to the backend
+   * Tunnel settings used when connecting to this backend.
    */
   backendTunnel?: Tunnel | null;
   /**
-   * Headers to be modified in the response.
+   * Modify response headers returned from this backend.
    */
   responseHeaderModifier?: HeaderModifier | null;
   /**
-   * Directly respond to the request with a redirect.
+   * Return a redirect response instead of forwarding to this backend.
    */
   requestRedirect?: RequestRedirect | null;
   /**
-   * Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.
+   * Detect unhealthy backend responses and temporarily remove unhealthy endpoints.
    */
   health?: LocalHealthPolicy | null;
   /**
-   * Authenticate incoming requests by calling an external authorization server after this backend is selected.
+   * Authorize incoming requests by calling an external authorization service after this backend is selected.
    */
   extAuthz?: ExtAuthz | null;
   /**
-   * Authorization policies for MCP access.
+   * Authorization rules for MCP requests.
    */
-  mcpAuthorization?: RuleSet | null;
+  mcpAuthorization?: McpAuthorization | null;
+  /**
+   * External MCP policy processors.
+   */
+  mcpGuardrails?: McpGuardrails | null;
   /**
    * Mark this traffic as A2A to enable A2A processing and telemetry.
    */
   a2a?: A2APolicy | null;
   /**
-   * Route requests through an endpoint picker before forwarding to the selected backend.
+   * Route requests through an endpoint picker before forwarding to this backend.
    */
   inferenceRouting?: InferenceRouting | null;
   /**
@@ -2210,24 +2898,64 @@ export interface LocalBackendPolicies {
  */
 export interface LocalHealthPolicy {
   /**
-   * CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.
-   * When unset, any 5xx or connection failure is treated as unhealthy.
+   * CEL expression where `true` marks the backend response as unhealthy.
+   * When unset, any 5xx response or connection failure is treated as unhealthy.
    */
   unhealthyExpression?: string | null;
+  /**
+   * Settings for temporarily removing unhealthy backends.
+   */
   eviction?: LocalEviction | null;
 }
 /**
  * Local/config eviction sub-policy with duration as string; mirrors `Eviction`.
  */
 export interface LocalEviction {
+  /**
+   * How long to evict an unhealthy backend.
+   */
   duration?: string | null;
+  /**
+   * Health score to restore when the backend returns from eviction.
+   */
   restoreHealth?: number | null;
+  /**
+   * Consecutive unhealthy responses required before eviction.
+   */
   consecutiveFailures?: number | null;
+  /**
+   * Health score threshold below which an unhealthy response can evict the backend.
+   */
   healthThreshold?: number | null;
 }
 export interface InferenceRouting {
-  endpointPicker: SimpleLocalBackend;
-  destinationMode?: InferenceRoutingDestinationMode;
+  /**
+   * Endpoint picker backend that selects the destination endpoint.
+   */
+  endpointPicker:
+    | "invalid"
+    | {
+        service: {
+          name: NamespacedHostname;
+          port: number;
+        };
+      }
+    | {
+        /**
+         * Hostname or IP address
+         */
+        host: string;
+      }
+    | {
+        /**
+         * Explicit backend reference. Backend must be defined in the top level backends list
+         */
+        backend: string;
+      };
+  /**
+   * How to use the destination returned by the endpoint picker.
+   */
+  destinationMode?: "validated" | "passthrough";
 }
 export interface LocalMcpBackend {
   targets: LocalMcpTarget[];
@@ -2237,41 +2965,45 @@ export interface LocalMcpBackend {
    * Behavior when one or more MCP targets fail to initialize or fail during fanout.
    * Defaults to `failClosed`.
    */
-  failureMode?: FailureMode4 | null;
+  failureMode?: FailureMode6 | null;
 }
 export interface MCPLocalBackendPolicies {
   /**
-   * Headers to be modified in the request.
+   * Modify request headers before forwarding to this backend.
    */
   requestHeaderModifier?: HeaderModifier | null;
   /**
-   * Modify requests and responses sent to and from the backend.
+   * Modify request and response data for this backend.
    */
   transformations?: LocalTransformationConfig | null;
   /**
-   * Send TLS to the backend.
+   * TLS settings used when connecting to this backend.
    */
   backendTLS?: LocalBackendTLS | null;
   /**
-   * Authenticate to the backend.
+   * Authentication credentials sent to this backend.
    */
   backendAuth?: BackendAuth | null;
   /**
-   * Specify HTTP settings for the backend
+   * HTTP protocol settings for this backend.
    */
   http?: HTTP | null;
   /**
-   * Specify TCP settings for the backend
+   * TCP protocol settings for this backend.
    */
   tcp?: TCP | null;
   /**
-   * Specify a tunnel to use when connecting to the backend
+   * Tunnel settings used when connecting to this backend.
    */
   backendTunnel?: Tunnel | null;
   /**
-   * Authorization policies for MCP access.
+   * Authorization rules for MCP requests.
    */
-  mcpAuthorization?: RuleSet | null;
+  mcpAuthorization?: McpAuthorization | null;
+  /**
+   * External MCP policy processors.
+   */
+  mcpGuardrails?: McpGuardrails | null;
 }
 export interface LocalNamedAIProvider {
   name: string;
@@ -2370,41 +3102,45 @@ export interface TCPFilterOrPolicy {
 }
 export interface LocalTCPBackendPolicies {
   /**
-   * Send TLS to the backend.
+   * TLS settings used when connecting to this backend.
    */
   backendTLS?: LocalBackendTLS | null;
   /**
-   * Tunnel to the backend.
+   * Tunnel settings used when connecting to this backend.
    */
   backendTunnel?: Tunnel | null;
 }
 export interface LocalGatewayPolicy {
   /**
-   * Authenticate incoming browser requests with OIDC authorization code flow.
+   * Authenticate browser requests with OIDC authorization code flow.
    */
   oidc?: LocalOidcConfig | null;
   /**
-   * Authenticate incoming JWT requests.
+   * Authenticate incoming requests with JWT bearer tokens.
    */
   jwtAuth?: LocalJwtConfig | null;
   /**
-   * Authenticate incoming requests by calling an external authorization server.
+   * Authorize incoming requests by calling an external authorization service.
    */
   extAuthz?: LocalExplicitOrConditional3 | null;
   /**
-   * Extend agentgateway with an external processor
+   * Send request and response data to an external processing service.
    */
   extProc?: LocalExplicitOrConditional4 | null;
   /**
-   * Modify requests and responses
+   * Handle CORS preflight requests and append configured CORS headers to applicable requests.
+   */
+  cors?: CorsSerde | null;
+  /**
+   * Modify request and response headers, bodies, or metadata.
    */
   transformations?: LocalExplicitOrConditional5 | null;
   /**
-   * Authenticate incoming requests using Basic Authentication with htpasswd.
+   * Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
    */
   basicAuth?: LocalBasicAuth | null;
   /**
-   * Authenticate incoming requests using API Keys
+   * Authenticate incoming requests with API keys.
    */
   apiKey?: LocalAPIKeys | null;
 }
@@ -2424,7 +3160,7 @@ export interface LocalFrontendPolicies {
   /**
    * CEL authorization for downstream network connections.
    */
-  networkAuthorization?: RuleSet | null;
+  networkAuthorization?: NetworkAuthorization | null;
   /**
    * Enable downstream PROXY protocol handling on this gateway or port, including
    * version matching and whether PROXY headers are required or optional.
@@ -2438,38 +3174,80 @@ export interface LocalFrontendPolicies {
    * Settings for request access logs.
    */
   accessLog?: LoggingPolicy | null;
+  /**
+   * Settings for exporting request traces.
+   */
   tracing?: TracingConfig | null;
 }
 export interface HTTP2 {
+  /**
+   * Maximum request or response body size buffered by the frontend.
+   */
   maxBufferSize?: number;
   /**
-   * The maximum number of headers allowed in a request. Changing this value results in a performance
-   * degradation, even if set to a lower value than the default (100)
+   * Maximum number of headers allowed in an HTTP/1 request. Changing this value causes a
+   * performance degradation, even when set lower than the default of 100.
    */
   http1MaxHeaders?: number | null;
+  /**
+   * How long an idle HTTP/1 connection may stay open.
+   */
   http1IdleTimeout?: string;
   /**
-   * Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.
+   * Header casing behavior for HTTP/1 responses.
    */
   http1HeaderCase?: "lowercase" | "preserve";
+  /**
+   * HTTP/2 stream flow-control window size.
+   */
   http2WindowSize?: number | null;
+  /**
+   * HTTP/2 connection flow-control window size.
+   */
   http2ConnectionWindowSize?: number | null;
+  /**
+   * Maximum HTTP/2 frame size.
+   */
   http2FrameSize?: number | null;
+  /**
+   * Maximum size of HTTP/2 request headers.
+   */
   http2MaxHeaderSize?: number | null;
+  /**
+   * Interval between HTTP/2 keepalive pings.
+   */
   http2KeepaliveInterval?: string | null;
+  /**
+   * Time to wait for an HTTP/2 keepalive ping response.
+   */
   http2KeepaliveTimeout?: string | null;
   /**
-   * Maximum duration a connection is allowed to remain open. After this duration,
-   * the connection is gracefully closed after the current in-flight request completes.
-   * Useful for ensuring even traffic distribution behind load balancers during scaling events.
+   * Maximum time a connection may stay open. After this duration, the connection is gracefully
+   * closed after the current in-flight request completes. Useful for even traffic distribution
+   * behind load balancers during scaling events.
    */
   maxConnectionDuration?: string | null;
 }
 export interface TLS {
+  /**
+   * Maximum time allowed to complete the downstream TLS handshake.
+   */
   handshakeTimeout?: string;
+  /**
+   * ALPN protocols advertised to downstream clients.
+   */
   alpn?: number[][] | null;
+  /**
+   * Minimum TLS version accepted from downstream clients.
+   */
   minVersion?: TLSVersion | null;
+  /**
+   * Maximum TLS version accepted from downstream clients.
+   */
   maxVersion?: TLSVersion | null;
+  /**
+   * Cipher suites allowed for downstream TLS.
+   */
   cipherSuites?: string[] | null;
   /**
    * Key exchange groups allowed for negotiating TLS.
@@ -2477,21 +3255,60 @@ export interface TLS {
   keyExchangeGroups?: string[] | null;
 }
 export interface TCP2 {
-  keepalives: KeepaliveConfig1;
+  keepalives: KeepaliveConfig2;
+}
+/**
+ * TCP keepalive settings for downstream connections.
+ */
+export interface KeepaliveConfig2 {
+  enabled?: boolean;
+  time?: string;
+  interval?: string;
+  retries?: number;
+}
+/**
+ * CEL authorization rules for downstream network connections.
+ */
+export interface NetworkAuthorization {
+  /**
+   * CEL authorization rules to evaluate for a request.
+   */
+  rules: string[];
 }
 export interface Proxy {
+  /**
+   * PROXY protocol versions accepted from downstream clients.
+   */
   version?: "v1" | "v2" | "all";
+  /**
+   * Whether downstream connections must include a PROXY protocol header.
+   */
   mode?: "strict" | "optional";
 }
 export interface Connect {
-  mode: ConnectMode;
+  /**
+   * How downstream HTTP CONNECT requests are handled.
+   */
+  mode: "deny" | "route" | "tunnel";
 }
 export interface LoggingPolicy {
+  /**
+   * CEL expression that decides whether a request is logged.
+   */
   filter?: Expression | null;
+  /**
+   * Access log fields to add, computed from CEL expressions.
+   */
   add?: {
     [k: string]: string;
   };
+  /**
+   * Access log field names to remove.
+   */
   remove?: string[];
+  /**
+   * OTLP log export settings.
+   */
   otlp?: OtlpLoggingConfig | null;
 }
 /**
@@ -2509,17 +3326,32 @@ export interface OrderedStringMap_Expression1 {
 }
 export interface LocalPolicy {
   name: ResourceName;
-  target: PolicyTarget;
   /**
-   * phase defines at what level the policy runs at. Gateway policies run pre-routing, while
-   * Route policies apply post-routing.
-   * Only a subset of policies are eligible as Gateway policies.
-   * In general, normal (route level) policies should be used, except you need the policy to influence
-   * routing.
+   * Gateway, listener, route, or backend that this policy attaches to.
+   */
+  target:
+    | {
+        gateway: ListenerTarget;
+      }
+    | {
+        route: RouteName;
+      }
+    | {
+        backend: BackendTarget;
+      }
+    | {
+        listenerSet: ListenerSetTarget;
+      };
+  /**
+   * When the policy runs. Gateway policies run before route selection, while route policies run after route selection.
+   * Use route policies by default unless the policy needs to affect route selection.
    */
   phase?: "route" | "gateway";
-  policy: FilterOrPolicy;
+  policy: FilterOrPolicy1;
 }
+/**
+ * Policy name used when attaching this policy to a target.
+ */
 export interface ResourceName {
   name: string;
   namespace: string;
@@ -2540,6 +3372,127 @@ export interface ListenerSetTarget {
   name: string;
   namespace: string;
   section?: string | null;
+}
+/**
+ * Policy settings to apply to the selected target.
+ */
+export interface FilterOrPolicy1 {
+  /**
+   * Modify request headers before forwarding.
+   */
+  requestHeaderModifier?: HeaderModifier | null;
+  /**
+   * Modify response headers before returning to the client.
+   */
+  responseHeaderModifier?: HeaderModifier | null;
+  /**
+   * Return a redirect response instead of forwarding the request.
+   */
+  requestRedirect?: RequestRedirect | null;
+  /**
+   * Rewrite the request path or authority before forwarding.
+   */
+  urlRewrite?: UrlRewrite | null;
+  /**
+   * Send a copy of matching requests to another backend.
+   */
+  requestMirror?: RequestMirror | null;
+  /**
+   * Return a configured response instead of forwarding the request.
+   */
+  directResponse?: LocalExplicitOrConditional | null;
+  /**
+   * Handle CORS preflight requests and append configured CORS headers to applicable requests.
+   */
+  cors?: CorsSerde | null;
+  /**
+   * Authorization rules for MCP requests.
+   */
+  mcpAuthorization?: McpAuthorization | null;
+  /**
+   * External MCP policy processors.
+   */
+  mcpGuardrails?: McpGuardrails | null;
+  /**
+   * Authorization rules for incoming HTTP requests.
+   */
+  authorization?: RuleSet | null;
+  /**
+   * Authenticate MCP clients.
+   */
+  mcpAuthentication?: LocalMcpAuthentication | null;
+  /**
+   * Mark this traffic as A2A to enable A2A processing and telemetry.
+   */
+  a2a?: A2APolicy | null;
+  /**
+   * Mark this as LLM traffic to enable LLM processing.
+   */
+  ai?: Policy | null;
+  /**
+   * TLS settings used when connecting to the backend.
+   */
+  backendTLS?: LocalBackendTLS | null;
+  /**
+   * Tunnel settings used when connecting to the backend.
+   */
+  backendTunnel?: Tunnel | null;
+  /**
+   * Authentication credentials sent to the backend.
+   */
+  backendAuth?: BackendAuth | null;
+  /**
+   * Local rate limits for incoming requests.
+   */
+  localRateLimit?: LocalRateLimitPolicy | null;
+  /**
+   * Remote rate limit checks for incoming requests.
+   */
+  remoteRateLimit?: LocalExplicitOrConditional2 | null;
+  /**
+   * Authenticate incoming requests with JWT bearer tokens.
+   */
+  jwtAuth?: LocalJwtConfig | null;
+  /**
+   * Authenticate browser requests with OIDC authorization code flow.
+   */
+  oidc?: LocalOidcConfig | null;
+  /**
+   * Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
+   */
+  basicAuth?: LocalBasicAuth | null;
+  /**
+   * Authenticate incoming requests with API keys.
+   */
+  apiKey?: LocalAPIKeys | null;
+  /**
+   * Authorize incoming requests by calling an external authorization service.
+   */
+  extAuthz?: LocalExplicitOrConditional3 | null;
+  /**
+   * Send request and response data to an external processing service.
+   */
+  extProc?: LocalExplicitOrConditional4 | null;
+  /**
+   * Modify request and response headers, bodies, or metadata.
+   */
+  transformations?: LocalExplicitOrConditional5 | null;
+  /**
+   * Handle CSRF protection by validating request origins against configured allowed origins.
+   */
+  csrf?: Csrf | null;
+  /**
+   * Buffer request and response bodies.
+   */
+  buffer?: Buffer | null;
+  /**
+   * Set request timeout limits.
+   */
+  timeout?: Policy2 | null;
+  /**
+   * Retry matching failed upstream requests.
+   */
+  retry?: Policy3 | null;
 }
 export interface LocalRouteGroup {
   name: string;
@@ -2629,6 +3582,10 @@ export interface LocalLLMModels {
    */
   guardrails?: PromptGuard | null;
   /**
+   * promptCaching configures cache point insertion for supported LLM providers.
+   */
+  promptCaching?: PromptCachingConfig | null;
+  /**
    * matches specifies the conditions under which this model should be used in addition to matching the model name.
    */
   matches?: LLMRouteMatch[];
@@ -2695,47 +3652,47 @@ export interface LLMRouteMatch {
 }
 export interface LocalLLMPolicy {
   /**
-   * Authenticate incoming browser requests with OIDC authorization code flow.
+   * Authenticate browser requests with OIDC authorization code flow.
    */
   oidc?: LocalOidcConfig | null;
   /**
-   * Authenticate incoming JWT requests.
+   * Authenticate incoming requests with JWT bearer tokens.
    */
   jwtAuth?: LocalJwtConfig | null;
   /**
-   * Authenticate incoming requests by calling an external authorization server.
+   * Authorize incoming requests by calling an external authorization service.
    */
   extAuthz?: LocalExplicitOrConditional3 | null;
   /**
-   * Extend agentgateway with an external processor
+   * Send request and response data to an external processing service.
    */
   extProc?: LocalExplicitOrConditional4 | null;
-  /**
-   * Modify requests and responses
-   */
-  transformations?: LocalExplicitOrConditional5 | null;
-  /**
-   * Authenticate incoming requests using Basic Authentication with htpasswd.
-   */
-  basicAuth?: LocalBasicAuth | null;
-  /**
-   * Authenticate incoming requests using API Keys
-   */
-  apiKey?: LocalAPIKeys | null;
-  /**
-   * Authorization policies for HTTP access.
-   */
-  authorization?: RuleSet | null;
   /**
    * Handle CORS preflight requests and append configured CORS headers to applicable requests.
    */
   cors?: CorsSerde | null;
   /**
-   * Rate limit incoming requests. State is kept local.
+   * Modify request and response headers, bodies, or metadata.
+   */
+  transformations?: LocalExplicitOrConditional5 | null;
+  /**
+   * Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
+   */
+  basicAuth?: LocalBasicAuth | null;
+  /**
+   * Authenticate incoming requests with API keys.
+   */
+  apiKey?: LocalAPIKeys | null;
+  /**
+   * Authorization rules for incoming HTTP requests.
+   */
+  authorization?: RuleSet | null;
+  /**
+   * Local rate limits for incoming requests.
    */
   localRateLimit?: RateLimitSpec[];
   /**
-   * Rate limit incoming requests. State is managed by a remote server.
+   * Remote rate limit checks for incoming requests.
    */
   remoteRateLimit?: RemoteRateLimit | null;
 }
@@ -2748,6 +3705,6 @@ export interface LocalSimpleMcpConfig {
    * Behavior when one or more MCP targets fail to initialize or fail during fanout.
    * Defaults to `failClosed`.
    */
-  failureMode?: FailureMode4 | null;
+  failureMode?: FailureMode6 | null;
   policies?: FilterOrPolicy | null;
 }
