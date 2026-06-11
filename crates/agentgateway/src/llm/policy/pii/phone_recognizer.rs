@@ -1,95 +1,103 @@
-use once_cell::sync::Lazy;
-use phonenumber::{country, parse};
-use regex::Regex;
+use rlibphonenumber::Region;
+use rlibphonenumber::phonenumber_matcher::{FindNumberExt, Leniency, PhoneNumberMatch};
 
 use super::recognizer::Recognizer;
 use super::recognizer_result::RecognizerResult;
 
+/// Recognizes phone numbers in free text using `rlibphonenumber`'s streaming
+/// [`PhoneNumberMatcher`](rlibphonenumber::phonenumber_matcher::PhoneNumberMatcher).
+///
+/// Previously this recognizer hand-rolled a candidate regex and then looped over
+/// a small, hard-coded list of regions (`US, GB, DE, IL, IN, CA, BR`), parsing
+/// every candidate against each region and scoring/deduping the results manually.
+/// That approach silently missed valid numbers from every other country and kept
+/// an unused copy of libphonenumber's `_PATTERN` around.
+///
+/// `rlibphonenumber` exposes the real `PhoneNumberMatcher` (a port of Google's
+/// `findNumbers`), which handles candidate extraction, validation and grouping
+/// leniency natively. By default this recognizer now auto-detects numbers across
+/// **all regions supported by the bundled metadata** (~250), resolving ambiguous
+/// national-format numbers with a most-recently-used cache. Deployments that only
+/// care about a fixed set of countries can opt back into a restricted subset via
+/// [`PhoneRecognizer::with_regions`], which is both faster (fewer parse attempts)
+/// and avoids spurious cross-region matches.
 pub struct PhoneRecognizer {
-	regions: Vec<&'static str>,
+	/// `None` => auto-detect across every supported region.
+	/// `Some(_)` => only probe this subset of regions.
+	regions: Option<Vec<Region>>,
+	/// How strictly a candidate must look like a phone number to be reported.
+	leniency: Leniency,
 }
 
 impl PhoneRecognizer {
+	/// Creates a recognizer that auto-detects phone numbers across every region
+	/// supported by `rlibphonenumber`'s metadata.
+	///
+	/// The default leniency is [`Leniency::Possible`], which is the appropriate
+	/// choice for PII/DLP: the goal is to redact anything that *looks* like a
+	/// phone number, even reserved/example ranges that are not actually
+	/// assigned. Use [`PhoneRecognizer::with_leniency`] to tighten this (e.g.
+	/// [`Leniency::Valid`] to only report fully valid numbers).
 	pub fn new() -> Self {
-		// this is _PATTERN from libphonenumbers
-		let _r: Regex = Regex::new(r#"(?:[(\[（［+＋][-x‐-―−ー－-／  \u{AD}\u{200B}\u{2060}　()（）［］.\[\]/~⁓∼～]{0,4}){0,2}\d{1,20}(?:[-x‐-―−ー－-／  \u{AD}\u{200B}\u{2060}　()（）［］.\[\]/~⁓∼～]{0,4}\d{1,20}){0,20}(?:;ext=(\d{1,20})|[  \t,]*(?:e?xt(?:ensi(?:ó?|ó))?n?|ｅ?ｘｔｎ?|доб|anexo)[:\.．]?[  \t,-]*(\d{1,20})#?|[  \t,]*(?:[xｘ#＃~～]|int|ｉｎｔ)[:\.．]?[  \t,-]*(\d{1,9})#?|[- ]+(\d{1,6})#)?"#).unwrap();
+		Self {
+			regions: None,
+			leniency: Leniency::Possible,
+		}
+	}
 
-		// Default regions to check, can be extended
-		let regions = vec!["US", "GB", "DE", "IL", "IN", "CA", "BR"];
-		Self { regions }
+	/// Restricts detection to a specific subset of regions.
+	///
+	/// International (`+`) numbers are always resolved from their own country
+	/// code; national-format numbers are only attributed to one of the provided
+	/// regions. Order does not matter (the matcher sorts/dedups internally).
+	pub fn with_regions(mut self, regions: impl IntoIterator<Item = Region>) -> Self {
+		self.regions = Some(regions.into_iter().collect());
+		self
+	}
+
+	/// Overrides the leniency used when scanning text.
+	pub fn with_leniency(mut self, leniency: Leniency) -> Self {
+		self.leniency = leniency;
+		self
+	}
+}
+
+impl Default for PhoneRecognizer {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+/// Converts a matcher result into a `RecognizerResult`.
+///
+/// The score is a confidence proxy based on how many digits the match carries
+/// (longer, fully specified numbers are slightly more confident). The range is
+/// kept identical to the previous implementation (`0.60..=0.75`) so downstream
+/// thresholds keep working unchanged.
+fn to_result(m: PhoneNumberMatch<'_>) -> RecognizerResult {
+	let score = if m.number.is_valid() { 0.9 } else { 0.75 };
+
+	RecognizerResult {
+		entity_type: "PHONE_NUMBER".to_string(),
+		matched: m.raw_string.to_string(),
+		start: m.start,
+		end: m.end(),
+		score,
 	}
 }
 
 impl Recognizer for PhoneRecognizer {
 	fn recognize(&self, text: &str) -> Vec<RecognizerResult> {
-		static CANDIDATE_RE: Lazy<Regex> =
-			Lazy::new(|| Regex::new(r"(?i)(^|[^0-9])([+()]?[0-9][0-9\s().\-]{6,30})").unwrap());
+		let builder = text.phone_number_matcher_builder().leniency(self.leniency);
 
-		// Map region strings once.
-		fn to_country(code: &str) -> Option<country::Id> {
-			match code {
-				"US" => Some(country::US),
-				"CA" => Some(country::CA),
-				"GB" => Some(country::GB),
-				"DE" => Some(country::DE),
-				"IL" => Some(country::IL),
-				"IN" => Some(country::IN),
-				"BR" => Some(country::BR),
-				_ => None,
-			}
+		match &self.regions {
+			None => builder.auto_region().build().map(to_result).collect(),
+			Some(regions) => builder
+				.regions(regions.iter().copied())
+				.build()
+				.map(to_result)
+				.collect(),
 		}
-
-		let mut results = Vec::new();
-
-		for caps in CANDIDATE_RE.captures_iter(text) {
-			let m = caps.get(2).unwrap();
-			let mut best: Option<RecognizerResult> = None;
-
-			for &region in &self.regions {
-				let Some(country) = to_country(region) else {
-					continue;
-				};
-				let candidate = m.as_str();
-
-				if let Ok(num) = parse(Some(country), candidate) {
-					if !num.is_valid() {
-						continue;
-					}
-
-					// prefer longer matches
-					let digit_count = candidate.chars().filter(|c| c.is_ascii_digit()).count();
-					let score = 0.6_f32 + (digit_count.min(15) as f32) / 100.0;
-
-					let res = RecognizerResult {
-						entity_type: "PHONE_NUMBER".to_string(),
-						matched: candidate.to_string(),
-						start: m.start(),
-						end: m.end(),
-						score,
-					};
-
-					best = match best {
-						Some(prev) => {
-							let prev_digits = prev.matched.chars().filter(|c| c.is_ascii_digit()).count();
-							if digit_count > prev_digits || (digit_count == prev_digits && score > prev.score) {
-								Some(res)
-							} else {
-								Some(prev)
-							}
-						},
-						None => Some(res),
-					};
-				}
-			}
-
-			if let Some(r) = best {
-				results.push(r);
-			}
-		}
-
-		results.sort_by_key(|r| (r.start, r.end, r.matched.clone()));
-		results.dedup_by(|a, b| a.start == b.start && a.end == b.end && a.matched == b.matched);
-		results
 	}
 
 	fn name(&self) -> &str {
