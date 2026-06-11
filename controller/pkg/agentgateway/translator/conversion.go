@@ -1257,7 +1257,10 @@ func bundleCaCertificates(
 			}
 		}
 
-		caBundle = append(append(caBundle, '\n'), cred.Info.CaCert...)
+		if len(caBundle) > 0 {
+			caBundle = append(caBundle, '\n')
+		}
+		caBundle = append(caBundle, cred.Info.CaCert...)
 	}
 	return caBundle, nil
 }

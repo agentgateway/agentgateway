@@ -98,7 +98,7 @@ func WithScheme(scheme string) Option {
 	}
 }
 
-// WithTLSConfig returns the Option to configure the TLS paraeters like client certificate and key
+// WithTLSConfig returns the Option to configure the TLS parameters like client certificate and key
 // as well as root CAs used to validate the server certificate
 func WithTLSConfig(tls *tls.Config) Option {
 	return func(config *requestConfig) {

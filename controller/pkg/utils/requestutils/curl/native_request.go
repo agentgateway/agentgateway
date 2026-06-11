@@ -42,7 +42,9 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 	}
 
 	if c.tlsConfig != nil {
-		client.Transport = &http.Transport{TLSClientConfig: c.tlsConfig}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = c.tlsConfig
+		client.Transport = transport
 	}
 
 	method := c.method

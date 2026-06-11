@@ -133,7 +133,7 @@ func parseBytes(
 ) ([]runtime.Object, error) {
 	file := contents
 	if transformer != nil {
-		file = []byte(transformer(string(contents)))
+		file = []byte(transformer(string(file)))
 	}
 
 	type metaOnly struct {
