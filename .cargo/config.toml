@@ -9,13 +9,21 @@ rustflags = [
     "-C", "force-frame-pointers",
 ]
 
-# x86_64 supports both flags
+# x86_64 supports both flags (gnu + musl)
 [target.x86_64-unknown-linux-gnu.env]
 CFLAGS   = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 CXXFLAGS = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 
-# aarch64 supports both flags
+[target.x86_64-unknown-linux-musl.env]
+CFLAGS   = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+CXXFLAGS = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+
+# aarch64 supports both flags (gnu + musl)
 [target.aarch64-unknown-linux-gnu.env]
+CFLAGS   = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+CXXFLAGS = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+
+[target.aarch64-unknown-linux-musl.env]
 CFLAGS   = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 CXXFLAGS = "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
 
