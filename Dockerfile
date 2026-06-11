@@ -4,7 +4,7 @@
 #
 # Build with buildx (TARGETARCH/BUILDARCH are set automatically per --platform):
 #
-#   docker buildx build -f Dockerfile.multiarch \
+#   docker buildx build -f Dockerfile \
 #     --platform linux/amd64,linux/arm64,linux/s390x \
 #     --build-arg VERSION="$(git describe --tags --always --dirty)" \
 #     --build-arg GIT_REVISION="$(git rev-parse HEAD)" \
@@ -24,6 +24,12 @@
 
 ARG BUILDER=base
 
+# Predefined buildx platform args. Declared in the global scope so they expand
+# reliably in the `FROM --platform=$BUILDPLATFORM` / `FROM ui-natives-${BUILDARCH}`
+# lines below; buildx populates their values automatically per build host.
+ARG BUILDPLATFORM
+ARG BUILDARCH
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UI native deps for s390x — only materialized when BUILDARCH=s390x.
 # These run on the build host ($BUILDPLATFORM) since they feed the UI build.
@@ -40,7 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @napi-rs/cli
+# Pin the build tool for reproducibility (see ARG defaults below).
+ARG NAPI_CLI_VERSION=3.7.1
+RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
 
 # Keep in sync with the lightningcss version resolved in ui/package-lock.json.
 ARG LIGHTNINGCSS_VERSION=1.30.2
@@ -66,7 +74,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @napi-rs/cli pnpm
+# Pin the build tools for reproducibility.
+ARG NAPI_CLI_VERSION=3.7.1
+ARG PNPM_VERSION=11.5.3
+RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION} pnpm@${PNPM_VERSION}
 
 # Keep in sync with the @tailwindcss/oxide version resolved in ui/package-lock.json.
 ARG OXIDE_VERSION=4.1.18
@@ -201,9 +212,9 @@ RUN --mount=type=cache,target=/app/target \
 set -e
 export VERSION="${VERSION}"
 export GIT_REVISION="${GIT_REVISION}"
-# Fail fast — before the multi-minute compile — if the version wasn't provided.
-if [ -z "${VERSION}" ]; then
-  echo "ERROR: --build-arg VERSION=... is required (also pass --build-arg GIT_REVISION=...)." >&2
+# Fail fast — before the multi-minute compile — if version/revision weren't provided.
+if [ -z "${VERSION}" ] || [ -z "${GIT_REVISION}" ]; then
+  echo "ERROR: both --build-arg VERSION=... and --build-arg GIT_REVISION=... are required." >&2
   echo "  e.g. --build-arg VERSION=\"\$(git describe --tags --always --dirty)\" --build-arg GIT_REVISION=\"\$(git rev-parse HEAD)\"" >&2
   exit 1
 fi
