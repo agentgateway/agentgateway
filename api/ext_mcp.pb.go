@@ -84,8 +84,7 @@ type McpRequest struct {
 	Method string `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	// CEL-evaluated context from gateway config, one field per config key.
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
-	// JSON-RPC `params` as raw JSON bytes (Struct would coerce integers to
-	// doubles). Absent when the method carries no params.
+	// JSON-RPC `params` as raw JSON bytes; absent when the method has none.
 	McpRequest []byte `protobuf:"bytes,4,opt,name=mcp_request,json=mcpRequest,proto3,oneof" json:"mcp_request,omitempty"`
 	// Incoming HTTP request headers carrying this MCP call, after gateway-side
 	// allow/deny filtering. Multi-value headers appear as repeated entries with
@@ -168,8 +167,7 @@ type McpResponse struct {
 	ServiceNames    []string         `protobuf:"bytes,1,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
 	Method          string           `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
 	MetadataContext *structpb.Struct `protobuf:"bytes,3,opt,name=metadata_context,json=metadataContext,proto3" json:"metadata_context,omitempty"`
-	// JSON-RPC `result` from upstream, as raw JSON bytes. Error responses don't
-	// reach this hook.
+	// JSON-RPC `result` from upstream as raw JSON bytes. Errors skip this hook.
 	McpResponse   []byte `protobuf:"bytes,4,opt,name=mcp_response,json=mcpResponse,proto3" json:"mcp_response,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -340,11 +338,7 @@ type McpRequestResult_Pass struct {
 
 type McpRequestResult_Mutated struct {
 	// Replaces JSON-RPC `params` before forwarding to the upstream MCP server.
-	// Raw JSON bytes; must parse as valid params for the method, else the
-	// gateway treats it as a protocol violation per `failure_mode`. The payload
-	// is re-parsed into the gateway's MCP model before forwarding: unknown
-	// fields and JSON formatting are not preserved. The gateway does not re-run
-	// other RBAC on the mutated request.
+	// The gateway does not re-run other RBAC on the mutated request.
 	Mutated []byte `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
 }
 
@@ -445,8 +439,7 @@ type McpResponseResult_Pass struct {
 type McpResponseResult_Mutated struct {
 	// Replaces the JSON-RPC `result`. Raw JSON bytes; must parse as a valid
 	// result for the method, else the gateway treats it as a protocol violation
-	// per `failure_mode`. Re-parsed into the gateway's MCP model: unknown
-	// fields and JSON formatting are not preserved.
+	// per `failure_mode`.
 	Mutated []byte `protobuf:"bytes,2,opt,name=mutated,proto3,oneof"`
 }
 

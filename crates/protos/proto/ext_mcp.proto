@@ -23,8 +23,8 @@ message McpRequest {
   string method = 2;
   // CEL-evaluated context from gateway config, one field per config key.
   google.protobuf.Struct metadata_context = 3;
-  // JSON-RPC `params` for this method.
-  google.protobuf.Struct mcp_request = 4;
+  // JSON-RPC `params` as raw JSON bytes; absent when the method has none.
+  optional bytes mcp_request = 4;
   // Incoming HTTP request headers carrying this MCP call, after gateway-side
   // allow/deny filtering. Multi-value headers appear as repeated entries with
   // the same key. Empty for stdio upstreams.
@@ -38,8 +38,8 @@ message McpResponse {
   repeated string service_names = 1;
   string method = 2;
   google.protobuf.Struct metadata_context = 3;
-  // JSON-RPC `result` from upstream. Error responses don't reach this hook.
-  google.protobuf.Struct mcp_response = 4;
+  // JSON-RPC `result` from upstream as raw JSON bytes. Errors skip this hook.
+  bytes mcp_response = 4;
 }
 
 message McpRequestResult {
