@@ -138,20 +138,28 @@ fn bedrock_target_model<'a>(
 
 fn requires_adaptive_thinking(model: &str) -> bool {
 	model
-		.split(['.', '/', ':'])
-		.any(is_claude_opus_48_model_part)
+		.rsplit(['.', '/'])
+		.next()
+		.is_some_and(is_claude_opus_48_bedrock_model_id)
 }
 
-fn is_claude_opus_48_model_part(part: &str) -> bool {
-	if part == "claude-opus-4-8" {
+fn is_claude_opus_48_bedrock_model_id(model_id: &str) -> bool {
+	if model_id == "claude-opus-4-8" {
 		return true;
 	}
 
-	part
-		.strip_prefix("claude-opus-4-8-")
-		.and_then(|suffix| suffix.rsplit('-').next())
-		.and_then(|version| version.strip_prefix('v'))
-		.is_some_and(|version| !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit()))
+	let Some(suffix) = model_id.strip_prefix("claude-opus-4-8-v") else {
+		return false;
+	};
+	let (version, revision) = match suffix.split_once(':') {
+		Some((version, revision)) => (version, Some(revision)),
+		None => (suffix, None),
+	};
+	let valid_version = !version.is_empty() && version.bytes().all(|b| b.is_ascii_digit());
+	let valid_revision = revision
+		.map(|revision| !revision.is_empty() && revision.bytes().all(|b| b.is_ascii_digit()))
+		.unwrap_or(true);
+	valid_version && valid_revision
 }
 
 fn thinking_budget_to_adaptive_effort(budget_tokens: u64) -> &'static str {
