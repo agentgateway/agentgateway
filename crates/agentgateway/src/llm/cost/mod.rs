@@ -1,12 +1,10 @@
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
 use catalog::{Breakdown, Catalog as CatalogData, Rates, Usage};
-use notify::RecursiveMode;
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -272,76 +270,22 @@ async fn load_files(paths: &[PathBuf]) -> anyhow::Result<CatalogSnapshot> {
 }
 
 fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
-	let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-	let mut watcher =
-		notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res| {
-			futures::executor::block_on(async {
-				let _ = tx.send(res).await;
-			})
-		})
-		.map_err(|e| anyhow::anyhow!("failed to create model catalog watcher: {e}"))?;
-
-	let abspaths = paths
-		.iter()
-		.map(std::path::absolute)
-		.collect::<std::io::Result<Vec<_>>>()?;
-
-	// Watch files and parents to catch edits, ConfigMap symlink rotations, and
-	// Docker single-file bind mount updates.
-	let mut watch_targets: Vec<PathBuf> = Vec::new();
-	for abspath in &abspaths {
-		let parent = abspath.parent().ok_or_else(|| {
-			anyhow::anyhow!(
-				"failed to get the parent of the model catalog file {}",
-				abspath.display()
-			)
-		})?;
-		for target in [abspath.as_path(), parent] {
-			if !watch_targets.iter().any(|p| p == target) {
-				watch_targets.push(target.to_path_buf());
-			}
-		}
-	}
-
-	let mut watched = false;
-	let mut watch_errors = Vec::new();
-	for target in &watch_targets {
-		match watcher.watch(target, RecursiveMode::NonRecursive) {
-			Ok(()) => watched = true,
-			Err(e) => {
-				watch_errors.push(format!("{}: {}", target.display(), e));
-				warn!(
-					"failed to watch model catalog path {}: {}",
-					target.display(),
-					e
-				);
-			},
-		}
-	}
-	if !watched {
-		return Err(anyhow::anyhow!(
-			"failed to watch model catalog files: {}",
-			watch_errors.join(", ")
-		));
-	}
+	let watched = crate::util::watch_files(paths)?;
+	let paths = watched.paths;
+	let mut changes = watched.changes;
 	info!(count = paths.len(), "watching model catalog files");
-
 	tokio::task::spawn(async move {
-		while let Some(events) = rx.recv().await {
-			match events {
-				Ok(_) => match load_files(&abspaths).await {
-					Ok(snap) => {
-						info!("model catalog reloaded");
-						catalog.snapshot.store(Arc::new(snap));
-					},
-					Err(e) => {
-						error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
-					},
+		while changes.recv().await.is_some() {
+			match load_files(&paths).await {
+				Ok(snap) => {
+					info!("model catalog reloaded");
+					catalog.snapshot.store(Arc::new(snap));
 				},
-				Err(errors) => warn!("model catalog watch error: {errors:?}"),
+				Err(e) => {
+					error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
+				},
 			}
 		}
-		drop(watcher);
 	});
 	Ok(())
 }
