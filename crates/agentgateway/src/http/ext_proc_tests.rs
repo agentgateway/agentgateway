@@ -2063,7 +2063,6 @@ fn build_ext_proc_request_for_test(
 }
 
 const STANDALONE_SERVICE_NAME: &str = "model-service.default.svc.cluster.local";
-const STANDALONE_SERVICE_REF: &str = "default/model-service.default.svc.cluster.local";
 const STANDALONE_SERVICE_PORT: u16 = 8000;
 
 #[derive(Clone)]
@@ -2311,7 +2310,7 @@ async fn setup_inference_routing_mock(
 		"backends": [
 			{
 				"service": {
-					"name": STANDALONE_SERVICE_REF,
+					"name": { "namespace": "default", "hostname": STANDALONE_SERVICE_NAME },
 					"port": STANDALONE_SERVICE_PORT,
 				},
 				"policies": {
@@ -2344,7 +2343,7 @@ async fn setup_body_driven_inference_routing_mock(
 		"backends": [
 			{
 				"service": {
-					"name": STANDALONE_SERVICE_REF,
+					"name": { "namespace": "default", "hostname": STANDALONE_SERVICE_NAME },
 					"port": STANDALONE_SERVICE_PORT,
 				},
 				"policies": {

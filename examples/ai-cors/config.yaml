@@ -1,0 +1,34 @@
+binds:
+  - port: 3000
+    tunnelProtocol: direct
+    listeners:
+      - protocol: HTTP
+        name: listener
+        hostname: "*"
+        routes:
+          - hostnames: []
+            matches:
+              - path:
+                  pathPrefix: /
+            backends:
+              - ai:
+                  name: ollama
+                  hostOverride: localhost:11434
+                  tokenize: false
+                  provider:
+                    openAI:
+                      model: smallthinker
+                weight: 1
+            name: route
+            policies:
+              cors:
+                allowCredentials: false
+                allowHeaders:
+                  - "*"
+                allowMethods:
+                  - GET
+                  - POST
+                  - OPTIONS
+                allowOrigins:
+                  - "*"
+                exposeHeaders: []

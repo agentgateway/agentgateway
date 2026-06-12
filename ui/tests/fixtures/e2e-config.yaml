@@ -1,0 +1,60 @@
+binds:
+  - port: 3002
+    listeners:
+      - routes:
+          - backends:
+              - mcp:
+                  targets:
+                    - name: everything
+                      stdio:
+                        cmd: npx
+                        args:
+                          - '@modelcontextprotocol/server-everything'
+                  statefulMode: stateless
+            policies:
+              cors:
+                allowOrigins:
+                  - '*'
+                allowHeaders:
+                  - mcp-protocol-version
+                  - content-type
+                  - cache-control
+                allowMethods:
+                  - GET
+                  - POST
+                  - OPTIONS
+                exposeHeaders:
+                  - Mcp-Session-Id
+  - port: 3003
+    tunnelProtocol: direct
+    listeners:
+      - protocol: HTTP
+        name: listener
+        hostname: '*'
+        routes:
+          - hostnames: []
+            matches:
+              - path:
+                  pathPrefix: /
+            backends:
+              - ai:
+                  name: ollama
+                  hostOverride: localhost:11434
+                  tokenize: false
+                  provider:
+                    openAI:
+                      model: smallthinker
+                weight: 1
+            name: route
+            policies:
+              cors:
+                allowCredentials: false
+                allowHeaders:
+                  - '*'
+                allowMethods:
+                  - GET
+                  - POST
+                  - OPTIONS
+                allowOrigins:
+                  - '*'
+                exposeHeaders: []

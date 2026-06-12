@@ -1,0 +1,1 @@
+export { MonacoEditorWithSettings } from "./MonacoEditorWithSettings";

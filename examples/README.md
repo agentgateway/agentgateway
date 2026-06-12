@@ -43,6 +43,14 @@ The `http` example shows how to use agentgateway to serve generic HTTP traffic.
 
 The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
 
+### [AI Backend with CORS](ai-cors/README.md)
+
+The `ai-cors` example shows how to expose an AI backend (Ollama via the OpenAI-compatible API) through agentgateway with a permissive CORS policy for browser-based clients.
+
+### [MCP Backend with CORS](mcp-cors/README.md)
+
+The `mcp-cors` example shows how to expose an MCP stdio backend with the CORS headers required by browser-based MCP clients using the streamable HTTP transport.
+
 ### [Standalone EPP](standalone-epp/README.md)
 
 The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy

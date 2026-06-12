@@ -1,0 +1,878 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutorSerde",
+  "description": "Owned version of Executor for JSON serialization/deserialization.\n\n`ExecutorSerde` is a fully-owned representation that can be deserialized from JSON,\nstored, and later converted to an `Executor<'_>` for use with CEL expressions.\n\nJSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.",
+  "type": "object",
+  "properties": {
+    "request": {
+      "description": "`request` contains attributes about the incoming HTTP request",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "method": {
+          "description": "The HTTP method of the request. For example, `GET`",
+          "type": "string",
+          "default": "GET"
+        },
+        "uri": {
+          "description": "The complete URI of the request. For example, `http://example.com/path`.",
+          "type": "string",
+          "default": "/"
+        },
+        "host": {
+          "description": "The hostname of the request. For example, `example.com`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "scheme": {
+          "description": "The scheme of the request. For example, `https`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "path": {
+          "description": "The path of the request URI. For example, `/path`.",
+          "type": "string",
+          "default": ""
+        },
+        "pathAndQuery": {
+          "description": "The path and query of the request URI. For example, `/path?foo=bar`.",
+          "type": "string",
+          "default": "/"
+        },
+        "version": {
+          "description": "The version of the request. For example, `HTTP/1.1`.",
+          "type": "string",
+          "default": "HTTP/1.1"
+        },
+        "headers": {
+          "description": "The headers of the request.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "body": {
+          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startTime": {
+          "description": "The time the request started",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endTime": {
+          "description": "The time the request completed",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "description": "`response` contains attributes about the HTTP response",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "code": {
+          "description": "The HTTP status code of the response.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
+        "grpcStatus": {
+          "description": "The gRPC status code of the response, when present.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "headers": {
+          "description": "The headers of the response.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "body": {
+          "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "proxy": {
+      "description": "`proxy` contains proxy timing information for the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "bind": {
+          "description": "The bind that accepted the request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The selected Gateway.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "listener": {
+          "description": "The selected listener.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The name of the selected listener.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "description": "The selected route.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "kind": {
+              "description": "The kind of the selected route.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rule": {
+              "description": "The selected route rule name, when available.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "requestProcessingDuration": {
+          "description": "Time spent processing the request before sending the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstreamDuration": {
+          "description": "Time spent waiting for the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseProcessingDuration": {
+          "description": "Time spent processing the primary outbound response before sending the downstream response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "description": "`env` contains selected process environment attributes exposed to CEL.\nThis does NOT expose raw environment variables, but rather a subset of well-known variables.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "podName": {
+          "description": "The name of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "The namespace of the pod (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The Gateway we are running as (when running on Kubernetes)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "jwt": {
+      "description": "`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "rawToken": {
+          "description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "apiKey": {
+      "description": "`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "key": {
+          "description": "The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": true
+    },
+    "basicAuth": {
+      "description": "`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "username"
+      ]
+    },
+    "llm": {
+      "description": "`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "streaming": {
+          "description": "Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.",
+          "type": "boolean"
+        },
+        "requestModel": {
+          "description": "The model requested for the LLM request. This may differ from the actual model used.",
+          "type": "string"
+        },
+        "responseModel": {
+          "description": "The model that actually served the LLM response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "description": "The provider of the LLM.",
+          "type": "string"
+        },
+        "inputTokens": {
+          "description": "The number of tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputImageTokens": {
+          "description": "The number of image tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputTextTokens": {
+          "description": "The number of text tokens in the input/prompt.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "inputAudioTokens": {
+          "description": "The number of audio tokens in the input/prompt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "description": "The number of tokens in the input/prompt read from cache (savings)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "cacheCreationInputTokens": {
+          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "description": "The number of tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputImageTokens": {
+          "description": "The number of image tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputTextTokens": {
+          "description": "The number of text tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "outputAudioTokens": {
+          "description": "The number of audio tokens in the output/completion.\nNote: this field is only set in multi-modal calls where the total token count is split out by\ntext/image/audio; for standard all-text calls, this is unset.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reasoningTokens": {
+          "description": "The number of reasoning tokens in the output/completion.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "description": "The total number of tokens for the request.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "serviceTier": {
+          "description": "The service tier the provider served the request under.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timeToFirstToken": {
+          "description": "Time from request start until the first response token is received.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timePerOutputToken": {
+          "description": "Average time from first response token to response completion per output token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "countTokens": {
+          "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "prompt": {
+          "description": "The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "description": "SimpleChatCompletionMessage is a simplified chat message",
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "completion": {
+          "description": "The completion from the LLM. Warning: accessing this has some performance impacts for large responses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "params": {
+          "description": "The parameters for the LLM request.",
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "top_p": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "frequency_penalty": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "presence_penalty": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "seed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "max_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "encoding_format": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dimensions": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "streaming",
+        "requestModel",
+        "provider",
+        "params"
+      ]
+    },
+    "llmRequest": {
+      "description": "`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
+    },
+    "source": {
+      "description": "`source` contains attributes about the source of the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "address": {
+          "description": "The IP address of the downstream connection.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "port": {
+          "description": "The port of the downstream connection.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
+        "rawAddress": {
+          "description": "The original TCP peer IP address of the downstream connection.\nThis can differ from the `address` when using tunneling protocols like PROXY.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "rawPort": {
+          "description": "The original TCP peer port of the downstream connection.\nThis can differ from the `port` when using tunneling protocols like PROXY.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        },
+        "identity": {
+          "description": "The (Istio SPIFFE) identity of the downstream connection, if available.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "trustDomain": {
+              "description": "The trust domain of the identity.",
+              "type": "string"
+            },
+            "namespace": {
+              "description": "The namespace of the identity.",
+              "type": "string"
+            },
+            "serviceAccount": {
+              "description": "The service account of the identity.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "trustDomain",
+            "namespace",
+            "serviceAccount"
+          ],
+          "default": null
+        },
+        "subjectAltNames": {
+          "description": "The subject alt names from the downstream certificate, if available.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "issuer": {
+          "description": "The issuer from the downstream certificate, if available.",
+          "type": "string",
+          "default": ""
+        },
+        "subject": {
+          "description": "The subject from the downstream certificate, if available.",
+          "type": "string",
+          "default": ""
+        },
+        "subjectCn": {
+          "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "certificate": {
+          "description": "PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "unverifiedWorkload": {
+          "description": "The workload context of the downstream connection, resolved from the\nworkload discovery store by source IP. Available when the source pod is\nknown to the controller's workload discovery store.\n\nFields are nested under `unverified` to signal that they are derived\nfrom the source IP (not cryptographically authenticated). Policy\nauthors should prefer `source.identity.*` for trust-sensitive checks.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The pod name of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "namespace": {
+              "description": "The namespace of the source workload.",
+              "type": "string",
+              "default": ""
+            },
+            "serviceAccount": {
+              "description": "The service account of the source workload.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp": {
+      "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.\nPost-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "methodName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target handling the tool call after multiplexing resolution.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The resolved tool name sent to the upstream target.",
+              "type": "string"
+            },
+            "arguments": {
+              "description": "The JSON arguments passed to the tool call.",
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            },
+            "result": {
+              "description": "The terminal tool result payload, if available."
+            },
+            "error": {
+              "description": "The terminal JSON-RPC error payload, if available."
+            }
+          },
+          "required": [
+            "target",
+            "name"
+          ]
+        },
+        "prompt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target of the resource",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the resource",
+              "type": "string",
+              "default": ""
+            }
+          }
+        },
+        "resource": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target of the resource",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the resource",
+              "type": "string",
+              "default": ""
+            }
+          }
+        }
+      }
+    },
+    "backend": {
+      "description": "`backend` contains information about the backend being used.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.",
+          "type": "string",
+          "default": ""
+        },
+        "type": {
+          "description": "The type of backend.",
+          "type": "string",
+          "enum": [
+            "ai",
+            "mcp",
+            "static",
+            "dynamic",
+            "service",
+            "unknown"
+          ],
+          "default": "unknown"
+        },
+        "protocol": {
+          "description": "The protocol of backend.",
+          "type": "string",
+          "enum": [
+            "http",
+            "tcp",
+            "a2a",
+            "mcp",
+            "llm"
+          ],
+          "default": "http"
+        }
+      },
+      "additionalProperties": false
+    },
+    "extauthz": {
+      "description": "`extauthz` contains dynamic metadata from ext_authz filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "extproc": {
+      "description": "`extproc` contains dynamic metadata from ext_proc filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "mcpGuardrails": {
+      "description": "`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "metadata": {
+      "description": "`metadata` contains values set by transformation metadata expressions.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,84 @@
+binds:
+- port: 8080
+  tunnelProtocol: direct
+  listeners:
+  - protocol: HTTP
+    name: listener
+    hostname: '*'
+    routes:
+    - hostnames: []
+      matches:
+      - path:
+          pathPrefix: /
+      backends:
+      - ai:
+          name: smallthinker-backend
+          provider:
+            openAI:
+              model: smallthinker
+          hostOverride: localhost:11434
+      - mcp:
+          targets: []
+          statefulMode: stateless
+        weight: 1
+      - service:
+          name:
+            namespace: default
+            hostname: service
+          port: 8080
+        weight: 1
+      name: route
+      policies:
+        cors:
+          allowCredentials: false
+          allowHeaders:
+          - '*'
+          allowMethods:
+          - GET
+          - POST
+          - OPTIONS
+          allowOrigins:
+          - '*'
+          exposeHeaders: []
+llm:
+  port: 12111
+  models:
+  - name: model-1
+    provider: openAI
+  - name: model-2
+    provider: openAI
+    requestHeaders:
+      remove: []
+    responseHeaders:
+      remove: []
+    backendTLS:
+      alpn: []
+      subjectAltNames: []
+    guardrails:
+      request: []
+      response: []
+    matches: []
+  - name: model-3
+    provider: openAI
+  policies:
+    jwtAuth:
+      issuer: ''
+      audiences: []
+      jwks: '{"keys":[]}'
+    basicAuth:
+      htpasswd: ''
+    transformations: {}
+mcp:
+  port: 221
+  statefulMode: stateless
+  targets:
+  - name: target-1
+    sse:
+      host: localhost
+      port: 8080
+      path: /sse
+  policies:
+    cors: {}
+    apiKey:
+      keys: []
+frontendPolicies: {}

@@ -53,7 +53,9 @@ binds:
     - name: default
       backends:
         - service:
-            name: default/test-service.default.svc.cluster.local
+            name: 
+              namespace: default
+              hostname: test-service.default.svc.cluster.local
             port: 8080
 "#
 	);
@@ -183,7 +185,9 @@ binds:
     - name: default
       backends:
         - service:
-            name: default/remote-service.default.svc.cluster.local
+            name: 
+              namespace: default
+              hostname: remote-service.default.svc.cluster.local
             port: 8080
 "#
 	);
@@ -317,7 +321,9 @@ binds:
     - name: default
       backends:
         - service:
-            name: remote/backend.remote.svc.cluster.local
+            name: 
+              namespace: remote
+              hostname: backend.remote.svc.cluster.local
             port: 8080
 "#
 	);
@@ -436,7 +442,9 @@ binds:
     - name: default
       backends:
         - service:
-            name: default/backend.default.svc.cluster.local
+            name: 
+              namespace: default
+              hostname: backend.default.svc.cluster.local
             port: 8080
 "#,
 		backend_ip = backend_addr.ip(),
@@ -539,7 +547,9 @@ binds:
     - name: default
       backends:
         - service:
-            name: default/remote-service.default.svc.cluster.local
+            name: 
+              namespace: default
+              hostname: remote-service.default.svc.cluster.local
             port: 8080
 "#
 	);
