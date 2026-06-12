@@ -6153,6 +6153,11 @@
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
+|`binds[].listeners[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`binds[].listeners[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -19953,6 +19958,11 @@
 |`llm.policies.jwtAuth.jwks.url`|string||
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
+|`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`llm.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`llm.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`llm.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -20525,11 +20535,6 @@
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`llm.policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
-|`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`llm.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
-|`llm.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests.|
 |`llm.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|

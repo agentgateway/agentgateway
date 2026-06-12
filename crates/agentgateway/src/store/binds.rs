@@ -338,6 +338,7 @@ pub struct GatewayPolicies {
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
+	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
@@ -352,6 +353,7 @@ impl GatewayPolicies {
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.oidc as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
+			&self.authorization as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
 			&self.transformation as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
@@ -926,6 +928,7 @@ impl Store {
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
+		let mut authz = Vec::new();
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
 			match rule {
@@ -944,6 +947,9 @@ impl Store {
 				TrafficPolicy::APIKey(p) => {
 					pol.api_key.set_if_unset(p);
 				},
+				TrafficPolicy::Authorization(p) => {
+					authz.push(p.clone().0);
+				},
 				TrafficPolicy::ExtAuthz(p) => {
 					pol.ext_authz.set_if_unset(p);
 				},
@@ -957,6 +963,11 @@ impl Store {
 					warn!("unexpected gateway policy: {:?}", other);
 				},
 			}
+		}
+		if !authz.is_empty() {
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(
+				crate::http::authorization::RuleSets::from_arcs(authz),
+			));
 		}
 		dtrace::trace(|t| {
 			let s = serde_json::to_value(&pol).unwrap_or_default();

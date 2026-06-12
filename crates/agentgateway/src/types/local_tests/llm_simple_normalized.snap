@@ -216,7 +216,7 @@ policies:
           rules:
             allow:
               - "jwt.email.endsWith(\"@example.com\")"
-        phase: route
+        phase: gateway
   - key: listener/3
     name: ~
     target:

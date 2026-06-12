@@ -1427,9 +1427,6 @@ where
 struct LocalLLMPolicy {
 	#[serde(flatten)]
 	gateway: LocalGatewayPolicy,
-	/// Authorization rules for incoming HTTP requests.
-	#[serde(default)]
-	authorization: Option<Authorization>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
@@ -1447,6 +1444,9 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests with JWT bearer tokens.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authorization rules for incoming HTTP requests.
+	#[serde(default)]
+	authorization: Option<Authorization>,
 	/// Authorize incoming requests by calling an external authorization service.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthzPolicy>,
@@ -1476,6 +1476,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		let LocalGatewayPolicy {
 			oidc,
 			jwt_auth,
+			authorization,
 			ext_authz,
 			ext_proc,
 			cors,
@@ -1486,6 +1487,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		FilterOrPolicy {
 			oidc,
 			jwt_auth,
+			authorization,
 			ext_authz,
 			ext_proc,
 			cors,
@@ -2108,14 +2110,12 @@ async fn convert_llm_config(
 	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
 		let LocalLLMPolicy {
 			gateway,
-			authorization,
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
 		let route_policies = split_policies(
 			client.clone(),
 			FilterOrPolicy {
-				authorization,
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),

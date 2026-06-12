@@ -862,6 +862,33 @@ async fn gateway_phase_cors_handles_preflight_before_route_selection() {
 }
 
 #[tokio::test]
+async fn gateway_phase_authorization_runs_before_route_selection() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"authorization": {
+				"rules": [
+					{"allow": "request.headers[\"x-pre-routing\"] == \"yes\""}
+				]
+			}
+		}))
+		.await;
+
+	let denied = send_request(io.clone(), Method::GET, "http://lo/no-route-needed").await;
+	assert_eq!(denied.status(), 403);
+	assert_eq!(read_body!(denied).as_bytes(), b"authorization failed");
+
+	let allowed = send_request_headers(
+		io,
+		Method::GET,
+		"http://lo/upstream",
+		&[("x-pre-routing", "yes")],
+	)
+	.await;
+	assert_eq!(allowed.status(), 200);
+}
+
+#[tokio::test]
 async fn network_authorization_allow() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind

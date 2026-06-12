@@ -489,7 +489,7 @@ func translateTrafficPolicyToAgw(
 
 	// Convert Authorization policy if present
 	if traffic.Authorization != nil {
-		appendPolicy("authorization")(processAuthorizationPolicy(traffic.Authorization, basePolicyName, policyName))
+		appendPolicy("authorization")(processAuthorizationPolicy(traffic.Authorization, traffic.Phase, basePolicyName, policyName))
 	}
 
 	// Process RateLimit policies if present
@@ -1412,6 +1412,7 @@ func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgate
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
 	auth *agentgateway.Authorization,
+	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
@@ -1433,6 +1434,7 @@ func processAuthorizationPolicy(
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
 				Kind: &api.TrafficPolicySpec_Authorization{
 					Authorization: &api.TrafficPolicySpec_RBAC{
 						Allow:   allowPolicies,

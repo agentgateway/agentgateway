@@ -7185,6 +7185,18 @@
             }
           ]
         },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "extAuthz": {
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
@@ -8667,6 +8679,18 @@
             }
           ]
         },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "extAuthz": {
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
@@ -8733,18 +8757,6 @@
               "type": "null"
             }
           ]
-        },
-        "authorization": {
-          "description": "Authorization rules for incoming HTTP requests.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Authorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         },
         "localRateLimit": {
           "description": "Local rate limits for incoming requests.",

@@ -374,6 +374,17 @@ async fn apply_gateway_policies(
 		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
 		.await?;
 
+	policies
+		.authorization
+		.apply_without_response(
+			"gateway authorization",
+			c,
+			l,
+			req,
+			response_policies.headers(),
+		)
+		.await?;
+
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
 	// The selected config is built into per-request state, which must be retained for
 	// the response mutation phase instead of applying ExtProc directly.
