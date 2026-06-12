@@ -1,12 +1,11 @@
 use std::fmt;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
 use catalog::{Breakdown, Catalog as CatalogData, Rates, Usage};
-use notify::RecursiveMode;
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -47,9 +46,9 @@ impl ModelCatalog {
 			let catalog = catalog.clone();
 			async move {
 				match load_files(&paths).await {
-					Ok(snap) => {
-						info!(count = paths.len(), "loaded model catalog");
-						catalog.snapshot.store(Arc::new(snap));
+					Ok(loaded) => {
+						log_loaded_catalog("loaded model catalog", &loaded);
+						catalog.snapshot.store(Arc::new(loaded.snapshot));
 					},
 					Err(e) => {
 						warn!("model catalog load failed; will load when the files become valid: {e:#}")
@@ -258,90 +257,94 @@ impl From<&Breakdown> for CostBreakdown {
 	}
 }
 
-async fn load_files(paths: &[PathBuf]) -> anyhow::Result<CatalogSnapshot> {
+#[derive(Debug)]
+struct LoadedCatalog {
+	snapshot: CatalogSnapshot,
+	loaded: usize,
+	missing: Vec<PathBuf>,
+}
+
+async fn load_files(paths: &[PathBuf]) -> anyhow::Result<LoadedCatalog> {
+	if paths.is_empty() {
+		bail!("no model catalog files supplied");
+	}
+
 	let mut catalogs = Vec::with_capacity(paths.len());
+	let mut missing = Vec::new();
 	for path in paths {
-		let json = fs_err::tokio::read_to_string(path)
-			.await
-			.with_context(|| format!("reading model catalog {}", path.display()))?;
+		let json = match fs_err::tokio::read_to_string(path).await {
+			Ok(json) => json,
+			Err(e) if e.kind() == ErrorKind::NotFound => {
+				missing.push(path.clone());
+				continue;
+			},
+			Err(e) => {
+				return Err(e).context("reading model catalog");
+			},
+		};
 		let catalog = catalog::from_json(&json)
 			.with_context(|| format!("invalid model catalog at {}", path.display()))?;
 		catalogs.push(catalog);
 	}
-	Ok(CatalogSnapshot::from_catalogs(catalogs))
+	if catalogs.is_empty() {
+		bail!(
+			"no configured model catalog files are currently readable; missing files: {}",
+			missing
+				.iter()
+				.map(|p| p.display().to_string())
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
+	}
+	Ok(LoadedCatalog {
+		snapshot: CatalogSnapshot::from_catalogs(catalogs),
+		loaded: paths.len() - missing.len(),
+		missing,
+	})
+}
+
+fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
+	if loaded.missing.is_empty() {
+		info!(count = loaded.loaded, "{}", message);
+	} else {
+		info!(
+			count = loaded.loaded,
+			missing_files = %format_paths(&loaded.missing),
+			"{}",
+			message
+		);
+	}
+}
+
+fn format_paths(paths: &[PathBuf]) -> String {
+	paths
+		.iter()
+		.map(|p| p.display().to_string())
+		.collect::<Vec<_>>()
+		.join(", ")
 }
 
 fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
-	let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-	let mut watcher =
-		notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res| {
-			futures::executor::block_on(async {
-				let _ = tx.send(res).await;
-			})
-		})
-		.map_err(|e| anyhow::anyhow!("failed to create model catalog watcher: {e}"))?;
-
-	let abspaths = paths
-		.iter()
-		.map(std::path::absolute)
-		.collect::<std::io::Result<Vec<_>>>()?;
-
-	// Watch files and parents to catch edits, ConfigMap symlink rotations, and
-	// Docker single-file bind mount updates.
-	let mut watch_targets: Vec<PathBuf> = Vec::new();
-	for abspath in &abspaths {
-		let parent = abspath.parent().ok_or_else(|| {
-			anyhow::anyhow!(
-				"failed to get the parent of the model catalog file {}",
-				abspath.display()
-			)
-		})?;
-		for target in [abspath.as_path(), parent] {
-			if !watch_targets.iter().any(|p| p == target) {
-				watch_targets.push(target.to_path_buf());
-			}
-		}
-	}
-
-	let mut watched = false;
-	let mut watch_errors = Vec::new();
-	for target in &watch_targets {
-		match watcher.watch(target, RecursiveMode::NonRecursive) {
-			Ok(()) => watched = true,
-			Err(e) => {
-				watch_errors.push(format!("{}: {}", target.display(), e));
-				warn!(
-					"failed to watch model catalog path {}: {}",
-					target.display(),
-					e
-				);
-			},
-		}
-	}
-	if !watched {
-		return Err(anyhow::anyhow!(
-			"failed to watch model catalog files: {}",
-			watch_errors.join(", ")
-		));
-	}
-	info!(count = paths.len(), "watching model catalog files");
-
+	let mut watched = crate::util::watch_files_with_options(
+		paths,
+		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),
+	)?;
+	info!(
+		count = watched.paths().len(),
+		"watching model catalog files"
+	);
 	tokio::task::spawn(async move {
-		while let Some(events) = rx.recv().await {
-			match events {
-				Ok(_) => match load_files(&abspaths).await {
-					Ok(snap) => {
-						info!("model catalog reloaded");
-						catalog.snapshot.store(Arc::new(snap));
-					},
-					Err(e) => {
-						error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
-					},
+		while watched.changed().await {
+			match load_files(watched.paths()).await {
+				Ok(loaded) => {
+					log_loaded_catalog("model catalog reloaded", &loaded);
+					catalog.snapshot.store(Arc::new(loaded.snapshot));
 				},
-				Err(errors) => warn!("model catalog watch error: {errors:?}"),
+				Err(e) => {
+					error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
+				},
 			}
 		}
-		drop(watcher);
 	});
 	Ok(())
 }
@@ -577,6 +580,47 @@ mod tests {
 			CacheTokenConvention::InputIncludesCache,
 		);
 		assert_eq!(cost, Some(9.0), "later layer's rate wins");
+	}
+
+	#[tokio::test]
+	async fn missing_later_layer_is_skipped() {
+		let dir = tempfile::tempdir().unwrap();
+		let base = dir.path().join("base.json");
+		let override_file = dir.path().join("overrides.json");
+		fs_err::tokio::write(&base, test_catalog("1"))
+			.await
+			.unwrap();
+
+		let loaded = load_files(&[base, override_file]).await.unwrap();
+		assert_eq!(loaded.loaded, 1);
+		assert_eq!(loaded.missing.len(), 1);
+		assert_eq!(loaded.missing[0].file_name().unwrap(), "overrides.json");
+
+		let resp = LLMResponse {
+			input_tokens: Some(1_000_000),
+			..Default::default()
+		};
+		let (cost, _) = loaded.snapshot.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
+		assert_eq!(cost, Some(1.0), "base layer remains usable");
+	}
+
+	#[tokio::test]
+	async fn all_missing_layers_are_not_loaded() {
+		let dir = tempfile::tempdir().unwrap();
+		let err = load_files(&[dir.path().join("base.json")])
+			.await
+			.unwrap_err();
+
+		assert!(
+			err
+				.to_string()
+				.contains("no configured model catalog files are currently readable")
+		);
 	}
 
 	#[test]
