@@ -32,14 +32,12 @@ function buildLLMDisplayModels(config: any): LLMDisplayModel[] {
     const models: LLMDisplayModel[] = [];
 
     if (config?.llm?.models) {
-        const llmPort = config.llm.port ?? 3000;
-        const baseUrl = `http://localhost:${llmPort}`;
         (config.llm.models as any[]).forEach((m, modelIndex) => {
             models.push({
                 label: m.name ?? "unnamed",
                 defaultModel: m.params?.model ?? "",
                 provider: m.provider ?? "unknown",
-                baseUrl,
+                baseUrl: m.params?.baseUrl,
                 source: "topLevel",
                 modelIndex,
             });
@@ -73,7 +71,7 @@ function buildLLMDisplayModels(config: any): LLMDisplayModel[] {
                                         label,
                                         defaultModel: model,
                                         provider: providerName,
-                                        baseUrl: `http://localhost:${bindPort}`,
+                                        baseUrl: `http://${ai.hostOverride}`,
                                         source: "portBind",
                                         bindPort,
                                         listenerIndex,
