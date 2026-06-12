@@ -225,6 +225,19 @@ impl LoggingFields {
 	}
 }
 
+fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
+	// serde_json::Number::as_f64 also succeeds for integers; only convert numbers
+	// that were actually stored as f64 so large integers stay exact.
+	if let Value::Number(n) = v
+		&& n.is_f64()
+		&& let Some(f) = n.as_f64()
+	{
+		ValueBag::from_f64(f)
+	} else {
+		ValueBag::capture_serde1(v)
+	}
+}
+
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
@@ -1303,8 +1316,9 @@ impl Drop for DropOnLog {
 				// TODO: we could allow log() to take a list of borrows and then a list of OwnedValueBag
 				let raws = cel_exec.eval_additions();
 				for (k, v) in &raws {
-					// TODO: convert directly instead of via json()
-					let eval = v.as_ref().map(ValueBag::capture_serde1);
+					// Preserve JSON numbers as numeric ValueBags so the core logger can control
+					// JSON number formatting instead of serializing serde_json::Number directly.
+					let eval = v.as_ref().map(json_value_to_value_bag);
 					kv.push((k, eval));
 				}
 

@@ -23,6 +23,7 @@ use nonblocking::NonBlocking;
 use once_cell::sync::{Lazy, OnceCell};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
+use serde_json::value::RawValue;
 use thiserror::Error;
 use tracing::{Event, Subscriber, field, info, warn};
 use tracing_core::Field;
@@ -193,20 +194,7 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 		};
 
 		if *json {
-			let mut sx = serde_json::Serializer::new(StringWriteAdaptor::new(buf));
-			let mut s = sx.serialize_map(Some(kv.len() + 3))?;
-			s.serialize_entry("level", level)?;
-			s.serialize_entry("time", &date::build())?;
-			s.serialize_entry("scope", target)?;
-			for (k, v) in kv {
-				match v {
-					None => {},
-					Some(i) => {
-						s.serialize_entry(k, i)?;
-					},
-				}
-			}
-			s.end()?;
+			write_json_log(buf, level, target, kv)?;
 		} else {
 			date::write(buf);
 			write!(buf, "\t{level}\t{target}")?;
@@ -229,6 +217,47 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 	if let Some(sink) = OTEL_LOG_SINK.get() {
 		sink.emit(level, target, kv);
 	}
+}
+
+fn write_json_log(
+	buf: &mut String,
+	level: &str,
+	target: &str,
+	kv: &[(&str, Option<ValueBag>)],
+) -> anyhow::Result<()> {
+	let mut sx = serde_json::Serializer::new(StringWriteAdaptor::new(buf));
+	let mut s = sx.serialize_map(Some(kv.len() + 3))?;
+	s.serialize_entry("level", level)?;
+	s.serialize_entry("time", &date::build())?;
+	s.serialize_entry("scope", target)?;
+	for (k, v) in kv {
+		match v {
+			None => {},
+			Some(i) => {
+				s.serialize_key(k)?;
+				if i.to_i64().is_none()
+					&& i.to_u64().is_none()
+					&& let Some(f) = i.to_f64()
+					&& f.is_finite()
+					&& serde_json_float_uses_exponent(f)
+				{
+					let raw = RawValue::from_string(f.to_string())?;
+					s.serialize_value(&*raw)?;
+				} else {
+					s.serialize_value(i)?;
+				}
+			},
+		}
+	}
+	s.end()?;
+	Ok(())
+}
+
+fn serde_json_float_uses_exponent(value: f64) -> bool {
+	let abs = value.abs();
+	// serde_json delegates finite float formatting to zmij, which writes f64
+	// values in fixed notation only for decimal exponents in -5..=15.
+	abs != 0.0 && !(1e-5..1e16).contains(&abs)
 }
 
 pub fn setup_logging(default_level: &str, json: bool) -> nonblocking::WorkerGuard {
@@ -845,5 +874,47 @@ pub mod testing {
 			.with(fmt_layer(non_blocking, "", true))
 			.with(layer)
 			.init();
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn json_log_writes_floats_without_exponents() {
+		let value = ValueBag::from_f64(1.2e41);
+		let kv = [("large_float", Some(value))];
+		let mut buf = String::new();
+
+		write_json_log(&mut buf, "info", "test", &kv).expect("log should serialize");
+
+		let value = json_field_value(&buf, "large_float");
+		assert!(!value.contains('e'));
+		assert!(!value.contains('E'));
+		assert!(!value.starts_with('"'));
+		let parsed: serde_json::Value = serde_json::from_str(&buf).expect("log must be valid json");
+		assert_eq!(parsed["large_float"].as_f64(), Some(1.2e41));
+	}
+
+	#[test]
+	fn json_log_uses_normal_float_path_without_exponents() {
+		let value = ValueBag::from_f64(123.456);
+		let kv = [("ordinary_float", Some(value))];
+		let mut buf = String::new();
+
+		write_json_log(&mut buf, "info", "test", &kv).expect("log should serialize");
+
+		assert_eq!(json_field_value(&buf, "ordinary_float"), "123.456");
+	}
+
+	fn json_field_value<'a>(json: &'a str, field: &str) -> &'a str {
+		let prefix = format!("\"{field}\":");
+		let start = json.find(&prefix).expect("field should be present") + prefix.len();
+		let end = json[start..]
+			.find([',', '}'])
+			.map(|idx| start + idx)
+			.expect("field should be followed by delimiter");
+		&json[start..end]
 	}
 }
