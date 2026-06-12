@@ -159,7 +159,10 @@
 |`binds[].listeners[].routes[].policies.cors.exposeHeaders`|[]string|Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.|
 |`binds[].listeners[].routes[].policies.cors.maxAge`|string|Value to return in `Access-Control-Max-Age` for allowed preflight requests.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -279,7 +282,10 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`binds[].listeners[].routes[].policies.authorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
@@ -2215,7 +2221,10 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -2627,7 +2636,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3874,7 +3886,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -5091,7 +5106,10 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6735,7 +6753,10 @@
 |`frontendPolicies.tcp.keepalives.interval`|string||
 |`frontendPolicies.tcp.keepalives.retries`|integer||
 |`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
-|`frontendPolicies.networkAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`frontendPolicies.networkAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`frontendPolicies.networkAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`frontendPolicies.networkAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`frontendPolicies.networkAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`frontendPolicies.proxyProtocol`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
 |`frontendPolicies.proxyProtocol.version`|enum|PROXY protocol versions accepted from downstream clients.<br>Possible values: `v1`, `v2`, `all`.|
 |`frontendPolicies.proxyProtocol.mode`|enum|Whether downstream connections must include a PROXY protocol header.<br>Possible values: `strict`, `optional`.|
@@ -7059,7 +7080,10 @@
 |`policies[].policy.cors.exposeHeaders`|[]string|Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.|
 |`policies[].policy.cors.maxAge`|string|Value to return in `Access-Control-Max-Age` for allowed preflight requests.|
 |`policies[].policy.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`policies[].policy.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`policies[].policy.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`policies[].policy.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`policies[].policy.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`policies[].policy.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpGuardrails`|object|External MCP policy processors.|
 |`policies[].policy.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`policies[].policy.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7179,7 +7203,10 @@
 |`policies[].policy.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`policies[].policy.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`policies[].policy.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`policies[].policy.authorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`policies[].policy.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`policies[].policy.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`policies[].policy.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`policies[].policy.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpAuthentication`|object|Authenticate MCP clients.|
 |`policies[].policy.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`policies[].policy.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
@@ -9110,7 +9137,10 @@
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9522,7 +9552,10 @@
 |`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`backends[].ai.policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10769,7 +10802,10 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -11985,7 +12021,10 @@
 |`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`backends[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -13020,7 +13059,10 @@
 |`routeGroups[].routes[].policies.cors.exposeHeaders`|[]string|Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.|
 |`routeGroups[].routes[].policies.cors.maxAge`|string|Value to return in `Access-Control-Max-Age` for allowed preflight requests.|
 |`routeGroups[].routes[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -13140,7 +13182,10 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`routeGroups[].routes[].policies.authorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`routeGroups[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`routeGroups[].routes[].policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
@@ -15076,7 +15121,10 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -15488,7 +15536,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -16735,7 +16786,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -17952,7 +18006,10 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -20469,7 +20526,10 @@
 |`llm.policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`llm.policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`llm.policies.authorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`llm.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`llm.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests.|
 |`llm.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
@@ -20724,7 +20784,10 @@
 |`mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`mcp.targets[].policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -20902,7 +20965,10 @@
 |`mcp.policies.cors.exposeHeaders`|[]string|Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.|
 |`mcp.policies.cors.maxAge`|string|Value to return in `Access-Control-Max-Age` for allowed preflight requests.|
 |`mcp.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
-|`mcp.policies.mcpAuthorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`mcp.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`mcp.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`mcp.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`mcp.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`mcp.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`mcp.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -21022,7 +21088,10 @@
 |`mcp.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
 |`mcp.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
-|`mcp.policies.authorization.rules`|[]string|CEL authorization rules to evaluate for a request.|
+|`mcp.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`mcp.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`mcp.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`mcp.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`mcp.policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`mcp.policies.mcpAuthentication.audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim.|
