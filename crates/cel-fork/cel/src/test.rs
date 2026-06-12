@@ -355,6 +355,112 @@ fn run_with_optimizer(
 }
 
 #[test]
+fn match_expression_with_subject() {
+	run(
+		r#"
+		match request.path {
+			"/admin" => "deny",
+			"/health" => "allow",
+		}
+		"#,
+		OwnedRequest {
+			path: "/health".to_string(),
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("allow")),
+	);
+}
+
+#[test]
+fn match_expression_without_subject() {
+	run(
+		r#"
+		match {
+			request.path == "/admin" => "deny",
+			request.path == "/health" => "allow",
+			_ => "default",
+		}
+		"#,
+		OwnedRequest {
+			path: "/admin".to_string(),
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("deny")),
+	);
+}
+
+#[test]
+fn match_expression_wildcard_with_subject() {
+	run(
+		r#"
+		match request.method {
+			"GET" => "read",
+			"POST" => "write",
+			"PUT" => "replace",
+			"DELETE" => "delete",
+			_ => "unknown",
+		}
+		"#,
+		OwnedRequest {
+			method: http::Method::PATCH,
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("unknown")),
+	);
+}
+
+#[test]
+fn match_expression_wildcard_without_subject() {
+	run(
+		r#"
+		match {
+			request.path == "/admin" => "deny",
+			request.path == "/health" => "allow",
+			_ => "default",
+		}
+		"#,
+		OwnedRequest {
+			path: "/missing".to_string(),
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("default")),
+	);
+}
+
+#[test]
+fn match_expression_inside_larger_expression() {
+	run(
+		r#""prefix-" + match request.path { "/health" => "ok" }"#,
+		OwnedRequest {
+			path: "/health".to_string(),
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("prefix-ok")),
+	);
+}
+
+#[test]
+fn match_expression_no_match_returns_null() {
+	run(
+		r#"match request.path { "/admin" => "deny" }"#,
+		OwnedRequest::default(),
+		|res| assert_eq!(res, Value::Null),
+	);
+}
+
+#[test]
+fn match_expression_evaluates_only_selected_result() {
+	run(
+		r#"match request.path { "/health" => "ok", "/admin" => missing.value }"#,
+		OwnedRequest {
+			path: "/health".to_string(),
+			..Default::default()
+		},
+		|res| assert_eq!(res.json().unwrap(), json!("ok")),
+	);
+}
+
+#[test]
 fn dynamic_value_complex() {
 	let headers = HashMap::from([("k".to_string(), "v".to_string())]);
 	let claims = data::Claims(json!({"sub": "me@example.com"}));
