@@ -1,4 +1,5 @@
 use serde::de::Error;
+use std::num::NonZeroU64;
 
 use crate::llm::LLMRequest;
 use crate::proxy::ProxyError;
@@ -6,7 +7,7 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(with = "RateLimitSpec"))]
+#[cfg_attr(feature = "schema", schemars(with = "RateLimitConfig"))]
 #[derive(serde::Serialize)]
 pub struct RateLimit {
 	#[serde(skip_serializing)]
@@ -25,7 +26,7 @@ impl<'de> serde::Deserialize<'de> for RateLimit {
 	}
 }
 
-#[apply(schema!)]
+#[apply(schema_ser_schema!)]
 pub struct RateLimitSpec {
 	/// Maximum number of tokens that can accumulate in the local bucket.
 	#[serde(default)]
@@ -41,6 +42,102 @@ pub struct RateLimitSpec {
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
+}
+
+impl<'de> serde::Deserialize<'de> for RateLimitSpec {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		<RateLimitConfig as serde::Deserialize>::deserialize(deserializer)?
+			.try_into()
+			.map_err(D::Error::custom)
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+enum RateLimitConfig {
+	Explicit(ExplicitRateLimitSpec),
+	Simple(SimpleRateLimitSpec),
+}
+
+#[apply(schema!)]
+struct ExplicitRateLimitSpec {
+	/// Maximum number of tokens that can accumulate in the local bucket.
+	#[serde(default)]
+	max_tokens: u64,
+	/// Number of tokens added to the local bucket each fill interval.
+	#[serde(default)]
+	tokens_per_fill: u64,
+	/// How often the local bucket is refilled.
+	#[serde(with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	fill_interval: Duration,
+	/// Whether this limit counts requests or LLM tokens.
+	#[serde(default)]
+	#[serde(rename = "type")]
+	limit_type: RateLimitType,
+}
+
+#[apply(schema!)]
+struct SimpleRateLimitSpec {
+	/// Whether this limit counts requests or LLM tokens.
+	#[serde(rename = "type")]
+	limit_type: RateLimitType,
+	/// Sustained request or token allowance per unit.
+	limit: NonZeroU64,
+	/// Unit of time for the limit.
+	unit: RateLimitUnit,
+	/// Additional bucket capacity above the sustained limit.
+	#[serde(default)]
+	burst: u64,
+}
+
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
+enum RateLimitUnit {
+	/// Per second.
+	Seconds,
+	/// Per minute.
+	Minutes,
+	/// Per hour.
+	Hours,
+}
+
+impl TryFrom<RateLimitConfig> for RateLimitSpec {
+	type Error = String;
+
+	fn try_from(value: RateLimitConfig) -> Result<Self, Self::Error> {
+		match value {
+			RateLimitConfig::Explicit(value) => Ok(RateLimitSpec {
+				max_tokens: value.max_tokens,
+				tokens_per_fill: value.tokens_per_fill,
+				fill_interval: value.fill_interval,
+				limit_type: value.limit_type,
+			}),
+			RateLimitConfig::Simple(value) => {
+				let limit = value.limit.get();
+				let max_tokens = value
+					.limit
+					.get()
+					.checked_add(value.burst)
+					.ok_or_else(|| "limit plus burst exceeds uint64".to_string())?;
+				Ok(RateLimitSpec {
+					max_tokens,
+					tokens_per_fill: limit,
+					fill_interval: match value.unit {
+						RateLimitUnit::Seconds => Duration::from_secs(1),
+						RateLimitUnit::Minutes => Duration::from_secs(60),
+						RateLimitUnit::Hours => Duration::from_secs(60 * 60),
+					},
+					limit_type: value.limit_type,
+				})
+			},
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -138,6 +235,98 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 			rate_limit.check_request()?;
 		}
 		Ok(http::PolicyResponse::default())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn simple_requests_rate_limit_deserializes() {
+		let spec: RateLimitSpec = serde_yaml::from_str(
+			r#"
+type: requests
+limit: 50
+unit: seconds
+"#,
+		)
+		.unwrap();
+
+		assert_eq!(spec.limit_type, RateLimitType::Requests);
+		assert_eq!(spec.max_tokens, 50);
+		assert_eq!(spec.tokens_per_fill, 50);
+		assert_eq!(spec.fill_interval, Duration::from_secs(1));
+	}
+
+	#[test]
+	fn simple_rate_limit_burst_only_increases_capacity() {
+		let spec: RateLimitSpec = serde_yaml::from_str(
+			r#"
+type: requests
+limit: 50
+unit: seconds
+burst: 10
+"#,
+		)
+		.unwrap();
+
+		assert_eq!(spec.limit_type, RateLimitType::Requests);
+		assert_eq!(spec.max_tokens, 60);
+		assert_eq!(spec.tokens_per_fill, 50);
+		assert_eq!(spec.fill_interval, Duration::from_secs(1));
+	}
+
+	#[test]
+	fn simple_tokens_rate_limit_deserializes() {
+		let spec: RateLimitSpec = serde_yaml::from_str(
+			r#"
+type: tokens
+limit: 1000
+unit: minutes
+"#,
+		)
+		.unwrap();
+
+		assert_eq!(spec.limit_type, RateLimitType::Tokens);
+		assert_eq!(spec.max_tokens, 1000);
+		assert_eq!(spec.tokens_per_fill, 1000);
+		assert_eq!(spec.fill_interval, Duration::from_secs(60));
+	}
+
+	#[test]
+	fn simple_rate_limit_rejects_invalid_shapes() {
+		for yaml in [
+			r#"
+type: requests
+unit: seconds
+"#,
+			r#"
+type: requests
+limit: 50
+"#,
+			r#"
+type: requests
+limit: 50
+unit: days
+"#,
+			r#"
+type: requests
+limit: 0
+unit: seconds
+"#,
+			r#"
+type: requests
+limit: 50
+unit: seconds
+maxTokens: 50
+"#,
+		] {
+			assert!(
+				serde_yaml::from_str::<RateLimitSpec>(yaml).is_err(),
+				"expected invalid rate limit config: {yaml}"
+			);
+		}
 	}
 }
 

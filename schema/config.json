@@ -3936,7 +3936,7 @@
         {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RateLimitSpec"
+            "$ref": "#/$defs/RateLimitConfig"
           }
         }
       ]
@@ -3971,50 +3971,18 @@
             }
           ],
           "default": null
-        },
-        "maxTokens": {
-          "description": "Maximum number of tokens that can accumulate in the local bucket.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0,
-          "default": 0
-        },
-        "tokensPerFill": {
-          "description": "Number of tokens added to the local bucket each fill interval.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0,
-          "default": 0
-        },
-        "fillInterval": {
-          "description": "How often the local bucket is refilled.",
-          "type": "string"
-        },
-        "type": {
-          "description": "Whether this limit counts requests or LLM tokens.",
-          "$ref": "#/$defs/RateLimitType",
-          "default": "requests"
         }
       },
-      "required": [
-        "fillInterval"
-      ]
-    },
-    "RateLimitType": {
-      "oneOf": [
+      "anyOf": [
         {
-          "description": "Count each request as one unit.",
-          "type": "string",
-          "const": "requests"
+          "$ref": "#/$defs/ExplicitRateLimitSpec"
         },
         {
-          "description": "Count LLM token usage.",
-          "type": "string",
-          "const": "tokens"
+          "$ref": "#/$defs/SimpleRateLimitSpec"
         }
       ]
     },
-    "RateLimitSpec": {
+    "ExplicitRateLimitSpec": {
       "type": "object",
       "properties": {
         "maxTokens": {
@@ -4044,6 +4012,81 @@
       "additionalProperties": false,
       "required": [
         "fillInterval"
+      ]
+    },
+    "RateLimitType": {
+      "oneOf": [
+        {
+          "description": "Count each request as one unit.",
+          "type": "string",
+          "const": "requests"
+        },
+        {
+          "description": "Count LLM token usage.",
+          "type": "string",
+          "const": "tokens"
+        }
+      ]
+    },
+    "SimpleRateLimitSpec": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Whether this limit counts requests or LLM tokens.",
+          "$ref": "#/$defs/RateLimitType"
+        },
+        "limit": {
+          "description": "Sustained request or token allowance per unit.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1
+        },
+        "unit": {
+          "description": "Unit of time for the limit.",
+          "$ref": "#/$defs/RateLimitUnit"
+        },
+        "burst": {
+          "description": "Additional bucket capacity above the sustained limit.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "limit",
+        "unit"
+      ]
+    },
+    "RateLimitUnit": {
+      "oneOf": [
+        {
+          "description": "Per second.",
+          "type": "string",
+          "const": "seconds"
+        },
+        {
+          "description": "Per minute.",
+          "type": "string",
+          "const": "minutes"
+        },
+        {
+          "description": "Per hour.",
+          "type": "string",
+          "const": "hours"
+        }
+      ]
+    },
+    "RateLimitConfig": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExplicitRateLimitSpec"
+        },
+        {
+          "$ref": "#/$defs/SimpleRateLimitSpec"
+        }
       ]
     },
     "LocalExplicitOrConditional2": {
@@ -8750,7 +8793,7 @@
           "description": "Local rate limits for incoming requests.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/RateLimitSpec"
+            "$ref": "#/$defs/RateLimitConfig"
           },
           "default": []
         },

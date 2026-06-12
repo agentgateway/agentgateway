@@ -17,12 +17,12 @@ The `localRateLimit` indicates how to configure local rate limiting.
 ```yaml
     - policies:
         localRateLimit:
-          - maxTokens: 10
-            tokensPerFill: 1
-            fillInterval: 60s
+          - type: requests
+            limit: 50
+            unit: seconds
 ```
 
-To adjust rate limiting configuration, you may increase the `maxTokens` in the `config.yaml` as needed.
+To adjust rate limiting configuration, you may change the `limit` in the `config.yaml` as needed.
 
 To test the authorization, users will be required to pass a valid JWT token matching the criteria, refer to the [authorization](../authorization) for details.
 
