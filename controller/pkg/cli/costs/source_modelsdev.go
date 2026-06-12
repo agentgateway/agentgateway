@@ -26,6 +26,7 @@ func init() {
 }
 
 var modelsDevProviderIDs = map[string]string{
+	// Native providers, each backed by a dedicated gateway provider implementation.
 	"openai":         "openai",
 	"anthropic":      "anthropic",
 	"amazon-bedrock": "aws.bedrock",
@@ -33,6 +34,19 @@ var modelsDevProviderIDs = map[string]string{
 	"google-vertex":  "gcp.vertex_ai",
 	"azure":          "azure",
 	"github-copilot": "copilot",
+	// TODO: not yet exposed at cost time — proxy resolves these custom-backed providers as "custom".
+	"cohere":       "cohere",
+	"baseten":      "baseten",
+	"cerebras":     "cerebras",
+	"deepinfra":    "deepinfra",
+	"deepseek":     "deepseek",
+	"groq":         "groq",
+	"huggingface":  "huggingface",
+	"mistral":      "mistral",
+	"openrouter":   "openrouter",
+	"togetherai":   "togetherai",
+	"xai":          "xai",
+	"fireworks-ai": "fireworks",
 }
 
 type modelsDevProvider struct {
@@ -94,9 +108,11 @@ func modelsDevSelectProviders(api map[string]modelsDevProvider, requested []stri
 	if len(requested) > 0 {
 		return requested
 	}
-	ids := make([]string, 0, len(api))
-	for id := range api {
-		ids = append(ids, id)
+	ids := make([]string, 0, len(modelsDevProviderIDs))
+	for id := range modelsDevProviderIDs {
+		if _, ok := api[id]; ok {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
 	return ids
@@ -110,11 +126,9 @@ func modelsDevDecodeAPI(r io.Reader) (map[string]modelsDevProvider, error) {
 	return api, nil
 }
 
-func modelsDevMapProviderID(sourceID string) string {
-	if gatewayID, ok := modelsDevProviderIDs[sourceID]; ok {
-		return gatewayID
-	}
-	return sourceID
+func modelsDevMapProviderID(sourceID string) (string, bool) {
+	gatewayID, ok := modelsDevProviderIDs[sourceID]
+	return gatewayID, ok
 }
 
 func modelsDevTransform(api map[string]modelsDevProvider, providers []string, legacy bool) (*ModelCatalog, []string, error) {
@@ -124,13 +138,17 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 	matchedProvider := false
 
 	for _, srcID := range providers {
+		gwID, supported := modelsDevMapProviderID(srcID)
+		if !supported {
+			warn("provider %q is not supported by the proxy; skipping", srcID)
+			continue
+		}
 		src, ok := api[srcID]
 		if !ok {
 			warn("provider %q not found in source", srcID)
 			continue
 		}
 		matchedProvider = true
-		gwID := modelsDevMapProviderID(srcID)
 		models := map[string]Model{}
 		for modelID, m := range src.Models {
 			if m.Status == "deprecated" && !legacy {

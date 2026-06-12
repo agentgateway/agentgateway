@@ -22,9 +22,9 @@ func TestSelectModelsDevProviders(t *testing.T) {
 		}
 	})
 
-	t.Run("all by default", func(t *testing.T) {
+	t.Run("supported only by default", func(t *testing.T) {
 		got := modelsDevSelectProviders(api, nil)
-		want := []string{"alibaba-cn", "freebie", "google", "openai"}
+		want := []string{"anthropic", "google", "openai"}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("modelsDevSelectProviders(..., nil) = %v, want %v", got, want)
 		}
@@ -41,6 +41,14 @@ func sampleAPI() map[string]modelsDevProvider {
 			},
 			"gpt-4o-mini": {
 				Cost: &modelsDevCost{modelsDevRates: modelsDevRates{Input: "0.15", Output: "0.6", CacheRead: "0.075"}},
+			},
+			"gpt-4o-mini-audio-preview": {
+				Cost: &modelsDevCost{modelsDevRates: modelsDevRates{Input: "0.15", Output: "0.6", InputAudio: "10", OutputAudio: "20"}},
+			},
+		}},
+		"anthropic": {ID: "anthropic", Models: map[string]modelsDevModel{
+			"claude-sonnet-4-5": {
+				Cost: &modelsDevCost{modelsDevRates: modelsDevRates{Input: "3", Output: "15", CacheRead: "0.3", CacheWrite: "3.75"}},
 			},
 		}},
 		"google": {ID: "google", Models: map[string]modelsDevModel{
@@ -79,14 +87,27 @@ func TestTransformIncludesLegacyModelsWhenRequested(t *testing.T) {
 }
 
 func TestTransformOmitsModelsWithoutCost(t *testing.T) {
-	_, _, err := modelsDevTransform(sampleAPI(), []string{"freebie"}, false)
+	api := map[string]modelsDevProvider{
+		"openai": {Models: map[string]modelsDevModel{"chatgpt-image-latest": {}}},
+	}
+	_, _, err := modelsDevTransform(api, []string{"openai"}, false)
 	if err == nil || !strings.Contains(err.Error(), "no importable models") {
 		t.Fatalf("expected no importable models error, got %v", err)
 	}
 }
 
+func TestTransformSkipsUnsupportedProvider(t *testing.T) {
+	_, warns, err := modelsDevTransform(sampleAPI(), []string{"alibaba-cn"}, false)
+	if err == nil || !strings.Contains(err.Error(), "no providers matched") {
+		t.Fatalf("expected no providers matched error, got %v", err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "not supported") {
+		t.Fatalf("expected not-supported warning, got %v", warns)
+	}
+}
+
 func TestTransformMatchesGoldenCatalog(t *testing.T) {
-	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"alibaba-cn", "google", "openai"}, false)
+	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"anthropic", "google", "openai"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +169,8 @@ func TestTransformRejectsNegativeRate(t *testing.T) {
 }
 
 func TestTransformMissingProviderWarnsAndEmptyErrors(t *testing.T) {
-	_, warns, err := modelsDevTransform(sampleAPI(), []string{"nope"}, false)
+	// azure is supported by the proxy but absent from this source snapshot.
+	_, warns, err := modelsDevTransform(sampleAPI(), []string{"azure"}, false)
 	if err == nil {
 		t.Fatal("expected error when no providers match")
 	}

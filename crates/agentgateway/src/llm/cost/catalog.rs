@@ -299,14 +299,14 @@ mod tests {
 			Some(Money::parse("0.125").unwrap())
 		);
 
-		let audio = &catalog.providers["alibaba-cn"].models["qwen3-omni-flash"];
+		let audio = &catalog.providers["openai"].models["gpt-4o-mini-audio-preview"];
+		assert_eq!(audio.rates.input_audio, Some(Money::parse("10").unwrap()));
+		assert_eq!(audio.rates.output_audio, Some(Money::parse("20").unwrap()));
+
+		let anthropic = &catalog.providers["anthropic"].models["claude-sonnet-4-5"];
 		assert_eq!(
-			audio.rates.input_audio,
-			Some(Money::parse("3.584").unwrap())
-		);
-		assert_eq!(
-			audio.rates.output_audio,
-			Some(Money::parse("7.168").unwrap())
+			anthropic.rates.cache_write,
+			Some(Money::parse("3.75").unwrap())
 		);
 
 		let mini = catalog.resolve("openai", "gpt-4o-mini");
