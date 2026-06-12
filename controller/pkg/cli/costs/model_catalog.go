@@ -29,13 +29,12 @@ type Provider struct {
 }
 
 type Model struct {
-	Rates  Rates   `json:"rates,omitzero"`
-	Tiers  []Tier  `json:"tiers,omitempty"`
-	Limits *Limits `json:"limits,omitempty"`
+	Rates Rates  `json:"rates,omitzero"`
+	Tiers []Tier `json:"tiers,omitempty"`
 }
 
 func (m Model) IsZero() bool {
-	return m.Rates.IsZero() && len(m.Tiers) == 0 && m.Limits == nil
+	return m.Rates.IsZero() && len(m.Tiers) == 0
 }
 
 type Rates struct {
@@ -51,12 +50,6 @@ type Rates struct {
 type Tier struct {
 	ContextOver uint64 `json:"contextOver"`
 	Rates       Rates  `json:"rates,omitzero"`
-}
-
-type Limits struct {
-	ContextWindow   uint64 `json:"contextWindow,omitempty"`
-	MaxInputTokens  uint64 `json:"maxInputTokens,omitempty"`
-	MaxOutputTokens uint64 `json:"maxOutputTokens,omitempty"`
 }
 
 type Money string

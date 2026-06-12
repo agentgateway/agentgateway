@@ -246,6 +246,7 @@ dependencies = [
  "rmcp 0.10.0",
  "rmcp 1.6.0",
  "rstest",
+ "rust_decimal",
  "rustls",
  "rustls-native-certs",
  "rustls-openssl",
@@ -474,6 +475,12 @@ checksum = "03918c3dbd7701a85c6b9887732e2921175f26c350b4563841d0958c21d57e6d"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "asn1-rs"
@@ -5873,6 +5880,16 @@ dependencies = [
  "rustc_version",
  "syn",
  "unicode-ident",
+]
+
+[[package]]
+name = "rust_decimal"
+version = "1.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c5108e3d4d903e21aac27f12ba5377b6b34f9f44b325e4894c7924169d06995"
+dependencies = [
+ "arrayvec",
+ "num-traits",
 ]
 
 [[package]]

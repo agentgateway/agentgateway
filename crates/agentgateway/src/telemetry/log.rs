@@ -36,7 +36,8 @@ use crate::llm::InputFormat;
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
-	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
+	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
+	RouteIdentifier,
 };
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
@@ -553,6 +554,16 @@ impl DropOnLog {
 				custom: custom_metric_fields.clone(),
 				route: route_identifier.clone(),
 			});
+			if let Some(status) = llm_response.cost_status {
+				log
+					.metrics
+					.cost_catalog_lookups
+					.get_or_create(&CostCatalogLookupLabels {
+						status,
+						common: gen_ai_labels.clone().into(),
+					})
+					.inc();
+			}
 			if let Some(it) = llm_response.input_tokens {
 				log
 					.metrics
@@ -1206,6 +1217,13 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
+				),
+				(
+					"gen_ai.usage.cost",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.cost.as_ref())
+						.map(|c| c.total.into()),
 				),
 				// Not part of official semconv
 				(

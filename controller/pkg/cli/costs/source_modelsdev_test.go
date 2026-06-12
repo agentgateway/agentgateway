@@ -2,9 +2,13 @@ package costs
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 func TestSelectModelsDevProviders(t *testing.T) {
@@ -36,13 +40,11 @@ func sampleAPI() map[string]modelsDevProvider {
 				Cost:   &modelsDevCost{modelsDevRates: modelsDevRates{Input: "30", Output: "60"}},
 			},
 			"gpt-4o-mini": {
-				Limit: &modelsDevLimit{Context: 128000, Output: 16384},
-				Cost:  &modelsDevCost{modelsDevRates: modelsDevRates{Input: "0.15", Output: "0.6", CacheRead: "0.075"}},
+				Cost: &modelsDevCost{modelsDevRates: modelsDevRates{Input: "0.15", Output: "0.6", CacheRead: "0.075"}},
 			},
 		}},
 		"google": {ID: "google", Models: map[string]modelsDevModel{
 			"gemini-2.5-pro": {
-				Limit: &modelsDevLimit{Context: 1048576, Output: 65536},
 				Cost: &modelsDevCost{
 					modelsDevRates: modelsDevRates{Input: "1.25", Output: "10", CacheRead: "0.125"},
 					Tiers: []modelsDevTier{{
@@ -58,12 +60,12 @@ func sampleAPI() map[string]modelsDevProvider {
 			},
 		}},
 		"freebie": {ID: "freebie", Models: map[string]modelsDevModel{
-			"identity": {Limit: &modelsDevLimit{Context: 4096}},
+			"identity": {},
 		}},
 	}
 }
 
-func TestTransformMapsProvidersRatesTiersAndLimits(t *testing.T) {
+func TestTransformMapsProvidersRatesAndTiers(t *testing.T) {
 	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"openai", "google"}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -87,9 +89,6 @@ func TestTransformMapsProvidersRatesTiersAndLimits(t *testing.T) {
 	if len(gemini.Tiers) != 1 || gemini.Tiers[0].ContextOver != 200000 ||
 		gemini.Tiers[0].Rates.Input != "2.5" || gemini.Tiers[0].Rates.Output != "15" {
 		t.Fatalf("unexpected gemini tiers: %+v", gemini.Tiers)
-	}
-	if gemini.Limits == nil || gemini.Limits.ContextWindow != 1048576 || gemini.Limits.MaxOutputTokens != 65536 {
-		t.Fatalf("unexpected gemini limits: %+v", gemini.Limits)
 	}
 
 	mini := cat.Providers["openai"].Models["gpt-4o-mini"]
@@ -128,18 +127,43 @@ func TestTransformMapsAudioRates(t *testing.T) {
 	}
 }
 
-// A model with no cost block resolves but carries no rates: Unpriced, not $0.
-func TestTransformRatelessModelIsUnpriced(t *testing.T) {
-	cat, _, err := modelsDevTransform(sampleAPI(), []string{"freebie"}, false)
+func TestTransformOmitsModelsWithoutCost(t *testing.T) {
+	_, _, err := modelsDevTransform(sampleAPI(), []string{"freebie"}, false)
+	if err == nil || !strings.Contains(err.Error(), "no importable models") {
+		t.Fatalf("expected no importable models error, got %v", err)
+	}
+}
+
+func TestTransformMatchesGoldenCatalog(t *testing.T) {
+	cat, warns, err := modelsDevTransform(sampleAPI(), []string{"alibaba-cn", "google", "openai"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := cat.Providers["freebie"].Models["identity"]
-	if m.Rates != (Rates{}) {
-		t.Fatalf("expected empty rates, got %+v", m.Rates)
+	if len(warns) != 0 {
+		t.Fatalf("unexpected warnings: %v", warns)
 	}
 	if err := cat.Validate(); err != nil {
 		t.Fatalf("catalog invalid: %v", err)
+	}
+	got, err := marshalCatalog(cat, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := os.ReadFile(filepath.Join(
+		testutils.GitRootDirectory(),
+		"crates",
+		"agentgateway",
+		"src",
+		"llm",
+		"cost",
+		"testdata",
+		"model_catalog.golden.json",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("golden catalog mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
 

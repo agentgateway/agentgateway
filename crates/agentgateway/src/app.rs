@@ -91,6 +91,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
 
+	crate::llm::cost::init(config.model_catalog.paths.clone())?;
+
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
 		// When we get the initial XDS state, unblock readiness
