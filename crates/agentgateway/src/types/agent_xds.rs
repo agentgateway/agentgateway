@@ -753,6 +753,7 @@ fn convert_backend_ai_policy(
 							.collect::<Result<Vec<_>, _>>()?;
 						let md = llm::policy::Moderation {
 							model: m.model.as_deref().map(strng::new),
+							backend_ref: guardrail_backend_ref(m.backend_ref.as_ref())?,
 							policies: pols,
 						};
 						llm::policy::RequestGuardKind::OpenAIModeration(md)
@@ -764,8 +765,9 @@ fn convert_backend_ai_policy(
 							.map(|policy| backend_policy_from_proto(policy, diagnostics))
 							.collect::<Result<Vec<_>, _>>()?;
 						llm::policy::RequestGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
-							template_id: strng::new(&gma.template_id),
-							project_id: strng::new(&gma.project_id),
+							backend_ref: guardrail_backend_ref(gma.backend_ref.as_ref())?,
+							template_id: (!gma.template_id.is_empty()).then(|| strng::new(&gma.template_id)),
+							project_id: (!gma.project_id.is_empty()).then(|| strng::new(&gma.project_id)),
 							location: gma.location.as_ref().map(strng::new),
 							policies: pols,
 						})
@@ -777,9 +779,10 @@ fn convert_backend_ai_policy(
 							.map(|policy| backend_policy_from_proto(policy, diagnostics))
 							.collect::<Result<Vec<_>, _>>()?;
 						llm::policy::RequestGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
-							guardrail_identifier: strng::new(&bg.identifier),
-							guardrail_version: strng::new(&bg.version),
-							region: strng::new(&bg.region),
+							backend_ref: guardrail_backend_ref(bg.backend_ref.as_ref())?,
+							guardrail_identifier: (!bg.identifier.is_empty()).then(|| strng::new(&bg.identifier)),
+							guardrail_version: (!bg.version.is_empty()).then(|| strng::new(&bg.version)),
+							region: (!bg.region.is_empty()).then(|| strng::new(&bg.region)),
 							policies: pols,
 						})
 					},
@@ -790,7 +793,8 @@ fn convert_backend_ai_policy(
 							.map(|policy| backend_policy_from_proto(policy, diagnostics))
 							.collect::<Result<Vec<_>, _>>()?;
 						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
-							endpoint: strng::new(&acs.endpoint),
+							backend_ref: guardrail_backend_ref(acs.backend_ref.as_ref())?,
+							endpoint: (!acs.endpoint.is_empty()).then(|| strng::new(&acs.endpoint)),
 							policies: pols,
 							cached_azure_auth: Default::default(),
 							analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -841,8 +845,9 @@ fn convert_backend_ai_policy(
 						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
-						template_id: strng::new(&gma.template_id),
-						project_id: strng::new(&gma.project_id),
+						backend_ref: guardrail_backend_ref(gma.backend_ref.as_ref()).ok()?,
+						template_id: (!gma.template_id.is_empty()).then(|| strng::new(&gma.template_id)),
+						project_id: (!gma.project_id.is_empty()).then(|| strng::new(&gma.project_id)),
 						location: gma.location.as_ref().map(strng::new),
 						policies: pols,
 					})
@@ -854,9 +859,10 @@ fn convert_backend_ai_policy(
 						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
-						guardrail_identifier: strng::new(&bg.identifier),
-						guardrail_version: strng::new(&bg.version),
-						region: strng::new(&bg.region),
+						backend_ref: guardrail_backend_ref(bg.backend_ref.as_ref()).ok()?,
+						guardrail_identifier: (!bg.identifier.is_empty()).then(|| strng::new(&bg.identifier)),
+						guardrail_version: (!bg.version.is_empty()).then(|| strng::new(&bg.version)),
+						region: (!bg.region.is_empty()).then(|| strng::new(&bg.region)),
 						policies: pols,
 					})
 				},
@@ -867,7 +873,8 @@ fn convert_backend_ai_policy(
 						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
 						.collect::<Vec<_>>();
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
-						endpoint: strng::new(&acs.endpoint),
+						backend_ref: guardrail_backend_ref(acs.backend_ref.as_ref()).ok()?,
+						endpoint: (!acs.endpoint.is_empty()).then(|| strng::new(&acs.endpoint)),
 						policies: pols,
 						cached_azure_auth: Default::default(),
 						analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1427,6 +1434,13 @@ pub(crate) fn backend_with_policies_from_proto(
 			let es = crate::types::loadbalancer::EndpointSet::new(provider_groups);
 			Backend::AI(name.into(), AIBackend { providers: es })
 		},
+		Some(backend::Kind::Guardrail(g)) => {
+			let guardrail = guardrail_backend_from_proto(g)?;
+			guardrail
+				.validate()
+				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			Backend::Guardrail(name.into(), guardrail)
+		},
 		Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
 			name.into(),
 			McpBackend {
@@ -1458,6 +1472,45 @@ pub(crate) fn backend_with_policies_from_proto(
 		backend,
 		inline_policies: pols,
 	})
+}
+
+fn guardrail_backend_from_proto(
+	g: &proto::agent::GuardrailBackend,
+) -> Result<llm::policy::guardrail::GuardrailBackend, ProtoError> {
+	use llm::policy::guardrail;
+	use proto::agent::guardrail_backend::Provider;
+	let backend = match &g.provider {
+		Some(Provider::Bedrock(b)) => {
+			guardrail::GuardrailBackend::Bedrock(guardrail::GuardrailBedrock {
+				identifier: strng::new(&b.identifier),
+				version: strng::new(&b.version),
+				region: strng::new(&b.region),
+			})
+		},
+		Some(Provider::GoogleModelArmor(m)) => {
+			guardrail::GuardrailBackend::GoogleModelArmor(guardrail::GuardrailGoogleModelArmor {
+				template_id: strng::new(&m.template_id),
+				project_id: strng::new(&m.project_id),
+				location: m.location.as_ref().map(strng::new),
+			})
+		},
+		Some(Provider::AzureContentSafety(a)) => {
+			guardrail::GuardrailBackend::AzureContentSafety(guardrail::GuardrailAzureContentSafety {
+				resource_name: a.resource_name.as_ref().map(strng::new),
+				endpoint: a.endpoint.as_ref().map(strng::new),
+				cached_auth: Default::default(),
+			})
+		},
+		Some(Provider::OpenaiModeration(_)) => {
+			guardrail::GuardrailBackend::OpenAIModeration(guardrail::GuardrailOpenAIModeration {})
+		},
+		None => {
+			return Err(ProtoError::Generic(
+				"guardrail backend must specify a provider".to_string(),
+			));
+		},
+	};
+	Ok(backend)
 }
 
 fn mcp_target_from_proto(
@@ -3184,6 +3237,22 @@ fn resolve_simple_reference(
 		},
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			SimpleBackendReference::Backend(name.into())
+		},
+	}
+}
+
+/// Guardrail backendRefs must reference a Backend (which carries the typed provider
+/// config); service references cannot be guardrail backends.
+fn guardrail_backend_ref(
+	r: Option<&proto::agent::BackendReference>,
+) -> Result<Option<BackendKey>, ProtoError> {
+	match r {
+		None => Ok(None),
+		Some(br) => match br.kind.as_ref() {
+			Some(proto::agent::backend_reference::Kind::Backend(name)) => Ok(Some(name.into())),
+			_ => Err(ProtoError::Generic(
+				"guardrail backendRef must reference a Backend".to_string(),
+			)),
 		},
 	}
 }

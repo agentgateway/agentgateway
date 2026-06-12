@@ -926,9 +926,9 @@ mod prompt_guard_config_tests {
 
 		match &prompt_guard.request[0].kind {
 			RequestGuardKind::BedrockGuardrails(bg) => {
-				assert_eq!(bg.guardrail_identifier.as_str(), "my-guardrail-id");
-				assert_eq!(bg.guardrail_version.as_str(), "1");
-				assert_eq!(bg.region.as_str(), "us-east-1");
+				assert_eq!(bg.guardrail_identifier.as_deref(), Some("my-guardrail-id"));
+				assert_eq!(bg.guardrail_version.as_deref(), Some("1"));
+				assert_eq!(bg.region.as_deref(), Some("us-east-1"));
 				assert!(!bg.policies.is_empty());
 			},
 			_ => panic!("Expected BedrockGuardrails guard kind"),
@@ -960,8 +960,8 @@ mod prompt_guard_config_tests {
 
 		match &prompt_guard.request[0].kind {
 			RequestGuardKind::GoogleModelArmor(gma) => {
-				assert_eq!(gma.template_id.as_str(), "my-template");
-				assert_eq!(gma.project_id.as_str(), "my-project");
+				assert_eq!(gma.template_id.as_deref(), Some("my-template"));
+				assert_eq!(gma.project_id.as_deref(), Some("my-project"));
 				assert_eq!(gma.location.as_ref().unwrap().as_str(), "us-central1");
 				assert!(!gma.policies.is_empty());
 			},
@@ -1027,9 +1027,12 @@ mod prompt_guard_config_tests {
 
 		match &prompt_guard.response[0].kind {
 			ResponseGuardKind::BedrockGuardrails(bg) => {
-				assert_eq!(bg.guardrail_identifier.as_str(), "response-guardrail");
-				assert_eq!(bg.guardrail_version.as_str(), "2");
-				assert_eq!(bg.region.as_str(), "eu-west-1");
+				assert_eq!(
+					bg.guardrail_identifier.as_deref(),
+					Some("response-guardrail")
+				);
+				assert_eq!(bg.guardrail_version.as_deref(), Some("2"));
+				assert_eq!(bg.region.as_deref(), Some("eu-west-1"));
 			},
 			_ => panic!("Expected BedrockGuardrails response guard kind"),
 		}
@@ -1059,8 +1062,8 @@ mod prompt_guard_config_tests {
 
 		match &prompt_guard.response[0].kind {
 			ResponseGuardKind::GoogleModelArmor(gma) => {
-				assert_eq!(gma.template_id.as_str(), "response-template");
-				assert_eq!(gma.project_id.as_str(), "my-project");
+				assert_eq!(gma.template_id.as_deref(), Some("response-template"));
+				assert_eq!(gma.project_id.as_deref(), Some("my-project"));
 			},
 			_ => panic!("Expected GoogleModelArmor response guard kind"),
 		}
@@ -1220,29 +1223,31 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
 	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailBedrock};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
-	let guardrails = BedrockGuardrails {
-		guardrail_identifier: strng::new("test-guardrail"),
-		guardrail_version: strng::new("1"),
+	let backend = GuardrailBackend::Bedrock(GuardrailBedrock {
+		identifier: strng::new("test-guardrail"),
+		version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
-			AwsAuth::ExplicitConfig {
-				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
-				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
-				region: Some("us-east-1".to_string()),
-				session_token: None,
-				service_name: None,
-			},
-		))],
-	};
+	});
+	let user_policies = vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
+		AwsAuth::ExplicitConfig {
+			access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
+			secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+			region: Some("us-east-1".to_string()),
+			session_token: None,
+			service_name: None,
+		},
+	))];
 
-	let pols = guardrails.build_request_policies();
-
-	// Resolve through the real policy resolution code (same path as call_with_explicit_policies)
+	// Resolve through the real policy resolution code, then merge over the
+	// gateway-owned defaults as the guardrail backend call path does.
 	let store = BindStore::default();
-	let resolved = store.inline_backend_policies(&pols);
+	let resolved = backend
+		.default_policies()
+		.merge(store.inline_backend_policies(&user_policies));
 
 	assert!(
 		matches!(
@@ -1258,19 +1263,19 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 #[test]
 fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailBedrock};
 	use crate::store::BindStore;
 
-	let guardrails = BedrockGuardrails {
-		guardrail_identifier: strng::new("test-guardrail"),
-		guardrail_version: strng::new("1"),
+	let backend = GuardrailBackend::Bedrock(GuardrailBedrock {
+		identifier: strng::new("test-guardrail"),
+		version: strng::new("1"),
 		region: strng::new("us-west-2"),
-		policies: vec![],
-	};
-
-	let pols = guardrails.build_request_policies();
+	});
 
 	let store = BindStore::default();
-	let resolved = store.inline_backend_policies(&pols);
+	let resolved = backend
+		.default_policies()
+		.merge(store.inline_backend_policies(&[]));
 
 	assert!(
 		matches!(
@@ -1291,23 +1296,24 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
 	use crate::http::auth::BackendAuth;
+	use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailGoogleModelArmor};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
-	let model_armor = GoogleModelArmor {
+	let backend = GuardrailBackend::GoogleModelArmor(GuardrailGoogleModelArmor {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
-			value: SecretString::new("user-provided-api-key".into()),
-			location: None,
-		})],
-	};
-
-	let pols = model_armor.build_request_policies();
+	});
+	let user_policies = vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		value: SecretString::new("user-provided-api-key".into()),
+		location: None,
+	})];
 
 	let store = BindStore::default();
-	let resolved = store.inline_backend_policies(&pols);
+	let resolved = backend
+		.default_policies()
+		.merge(store.inline_backend_policies(&user_policies));
 
 	assert!(
 		matches!(
@@ -1326,19 +1332,19 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 #[test]
 fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 	use crate::http::auth::BackendAuth;
+	use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailGoogleModelArmor};
 	use crate::store::BindStore;
 
-	let model_armor = GoogleModelArmor {
+	let backend = GuardrailBackend::GoogleModelArmor(GuardrailGoogleModelArmor {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: None,
-		policies: vec![],
-	};
-
-	let pols = model_armor.build_request_policies();
+	});
 
 	let store = BindStore::default();
-	let resolved = store.inline_backend_policies(&pols);
+	let resolved = backend
+		.default_policies()
+		.merge(store.inline_backend_policies(&[]));
 
 	assert!(
 		matches!(resolved.backend_auth, Some(BackendAuth::Gcp(_))),

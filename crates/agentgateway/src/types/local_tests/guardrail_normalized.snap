@@ -1,0 +1,112 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for guardrail: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            weight: 1
+        inlinePolicies:
+          - ai:
+              promptGuard:
+                request:
+                  - bedrockGuardrails:
+                      backendRef: bedrock-guardrail
+                    rejection:
+                      body: The request was rejected due to inappropriate content
+                      status: 403
+                  - openAIModeration:
+                      backendRef: moderation-guardrail
+                    rejection:
+                      body: The request was rejected due to inappropriate content
+                      status: 403
+                  - azureContentSafety:
+                      backendRef: content-safety-guardrail
+                      analyzeText:
+                        severityThreshold: 2
+                    rejection:
+                      body: The request was rejected due to inappropriate content
+                      status: 403
+                response:
+                  - bedrockGuardrails:
+                      backendRef: bedrock-guardrail
+                    rejection:
+                      body: The request was rejected due to inappropriate content
+                      status: 403
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
+policies: []
+backends:
+  - backend:
+      ai:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target:
+          providers:
+            - active:
+                openai:
+                  endpoint:
+                    name: openai
+                    provider:
+                      openAI:
+                        model: gpt-4o-mini
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+  - backend:
+      guardrail:
+        name: bedrock-guardrail
+        namespace: ""
+        target:
+          bedrock:
+            identifier: my-guardrail-id
+            version: DRAFT
+            region: us-west-2
+  - backend:
+      guardrail:
+        name: content-safety-guardrail
+        namespace: ""
+        target:
+          azureContentSafety:
+            resourceName: my-resource
+  - backend:
+      guardrail:
+        name: moderation-guardrail
+        namespace: ""
+        target:
+          openAIModeration: {}
+route_groups: []
+workloads: []
+services: []

@@ -2,14 +2,13 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::http::auth::{AwsAuth, BackendAuth};
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
-use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
+use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailBedrock};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
+use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -111,24 +110,41 @@ impl ApplyGuardrailResponse {
 	}
 }
 
-impl BedrockGuardrails {
-	/// User-provided policies come first so they take precedence during resolution
-	/// then system TLS and implicit AWS auth are appended as fallbacks.
-	pub(crate) fn build_request_policies(&self) -> Vec<BackendTrafficPolicy> {
-		let mut pols: Vec<BackendTrafficPolicy> = self.policies.to_vec();
-		pols.push(BackendTrafficPolicy::BackendTLS(
-			crate::http::backendtls::SYSTEM_TRUST.clone(),
-		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
-			AwsAuth::Implicit {
-				service_name: None,
-				assume_role: None,
-				source_credentials_cache: Default::default(),
-				assume_role_cache: Default::default(),
-			},
-		)));
-		pols
-	}
+/// Resolve the guardrail backend (referenced or built from the deprecated inline fields)
+/// along with its typed Bedrock provider configuration.
+fn resolve(
+	client: &PolicyClient,
+	guardrails: &BedrockGuardrails,
+) -> anyhow::Result<(SimpleBackendWithPolicies, GuardrailBedrock)> {
+	let backend = super::resolve_guardrail_backend(
+		client,
+		guardrails.backend_ref.as_ref(),
+		|| {
+			let (Some(identifier), Some(version), Some(region)) = (
+				guardrails.guardrail_identifier.clone(),
+				guardrails.guardrail_version.clone(),
+				guardrails.region.clone(),
+			) else {
+				anyhow::bail!(
+					"bedrockGuardrails requires either backendRef or guardrailIdentifier, guardrailVersion, and region"
+				);
+			};
+			Ok(GuardrailBackend::Bedrock(GuardrailBedrock {
+				identifier,
+				version,
+				region,
+			}))
+		},
+		strng::literal!("_bedrock-guardrails"),
+	)?;
+	let SimpleBackend::Guardrail(_, GuardrailBackend::Bedrock(cfg)) = &backend.backend else {
+		anyhow::bail!(
+			"guardrail backend {} is not a bedrock guardrail backend",
+			backend.backend
+		);
+	};
+	let cfg = cfg.clone();
+	Ok((backend, cfg))
 }
 
 /// Send a request to the Bedrock Guardrails ApplyGuardrail API for request content
@@ -189,31 +205,27 @@ async fn send_guardrail_request(
 	source: GuardrailSource,
 	content: Vec<GuardrailContentBlock>,
 ) -> anyhow::Result<ApplyGuardrailResponse> {
+	let (backend, cfg) = resolve(client, guardrails)?;
 	let request_body = ApplyGuardrailRequest { source, content };
-	let host = strng::format!("bedrock-runtime.{}.amazonaws.com", guardrails.region);
+	// The transport (endpoint host, TLS, AWS auth) is owned by the resolved backend;
+	// only the API path and body are built here.
 	let path = format!(
 		"/guardrail/{}/version/{}/apply",
-		guardrails.guardrail_identifier, guardrails.guardrail_version
+		cfg.identifier, cfg.version
 	);
-	let uri = format!("https://{}{}", host, path);
 
 	tracing::debug!(
 		request_body = %serde_json::to_string_pretty(&request_body).unwrap_or_default(),
-		uri = %uri,
+		path = %path,
 		"Sending Bedrock guardrail request"
 	);
 
-	let pols = guardrails.build_request_policies();
-
 	// AWS requires both Content-Type and Accept headers
 	let mut rb = ::http::Request::builder()
-		.uri(&uri)
+		.uri(&path)
 		.method(::http::Method::POST)
 		.header(::http::header::CONTENT_TYPE, "application/json")
-		.header(::http::header::ACCEPT, "application/json")
-		.extension(AwsRegion {
-			region: guardrails.region.to_string(),
-		});
+		.header(::http::header::ACCEPT, "application/json");
 
 	if let Some(claims) = claims {
 		rb = rb.extension(claims);
@@ -221,14 +233,9 @@ async fn send_guardrail_request(
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(&request_body)?))?;
 
-	let mock_be = Backend::Dynamic(
-		ResourceName::new(strng::literal!("_bedrock-guardrails"), strng::literal!("")),
-		(),
-	);
-
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_resolved(req, backend, &guardrails.policies)
 		.await?;
 
 	let status = resp.status();
@@ -241,7 +248,7 @@ async fn send_guardrail_request(
 		tracing::warn!(
 			status = %status,
 			error_body = %error_body,
-			guardrail_id = %guardrails.guardrail_identifier,
+			guardrail_id = %cfg.identifier,
 			"Bedrock guardrail API returned error"
 		);
 		anyhow::bail!(
@@ -256,15 +263,15 @@ async fn send_guardrail_request(
 
 	if resp.is_blocked() {
 		tracing::debug!(
-			guardrail_id = %guardrails.guardrail_identifier,
-			guardrail_version = %guardrails.guardrail_version,
+			guardrail_id = %cfg.identifier,
+			guardrail_version = %cfg.version,
 			source = ?source,
 			"Bedrock guardrail blocked content"
 		);
 	} else if resp.is_anonymized() {
 		tracing::debug!(
-			guardrail_id = %guardrails.guardrail_identifier,
-			guardrail_version = %guardrails.guardrail_version,
+			guardrail_id = %cfg.identifier,
+			guardrail_version = %cfg.version,
 			source = ?source,
 			"Bedrock guardrail anonymized content"
 		);

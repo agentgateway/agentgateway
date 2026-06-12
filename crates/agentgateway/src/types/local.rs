@@ -808,6 +808,8 @@ pub enum FullLocalBackendSpec {
 	AI(LocalAIBackend),
 	#[serde(rename = "aws")]
 	Aws(LocalAwsBackend),
+	#[serde(rename = "guardrail")]
+	Guardrail(llm::policy::guardrail::GuardrailBackend),
 }
 
 impl From<FullLocalBackendSpec> for LocalBackend {
@@ -817,6 +819,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
 			FullLocalBackendSpec::Aws(a) => LocalBackend::Aws(a),
+			FullLocalBackendSpec::Guardrail(g) => LocalBackend::Guardrail(g),
 		}
 	}
 }
@@ -859,6 +862,9 @@ pub enum LocalBackend {
 	AI(LocalAIBackend),
 	#[serde(rename = "aws")]
 	Aws(LocalAwsBackend),
+	/// Typed guardrail integration backend, referenced from prompt guard policies via backendRef.
+	#[serde(rename = "guardrail")]
+	Guardrail(llm::policy::guardrail::GuardrailBackend),
 	#[serde(rename = "routeGroup")]
 	RouteGroup(RouteGroupKey),
 	Invalid,
@@ -1108,6 +1114,10 @@ impl LocalBackend {
 					},
 				};
 				vec![Backend::Aws(name, config).into()]
+			},
+			LocalBackend::Guardrail(g) => {
+				g.validate()?;
+				vec![Backend::Guardrail(name, g.clone()).into()]
 			},
 			LocalBackend::RouteGroup(_) => vec![], // Route groups stay as references
 			LocalBackend::Invalid => vec![Backend::Invalid.into()],
@@ -1991,6 +2001,7 @@ async fn convert(
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
 			| Backend::Aws(n, _)
+			| Backend::Guardrail(n, _)
 			| Backend::Dynamic(n, _) => n == &name,
 			Backend::Service(_, _) | Backend::Invalid => false,
 		}) {

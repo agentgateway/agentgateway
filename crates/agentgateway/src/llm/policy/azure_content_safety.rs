@@ -3,13 +3,13 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::BackendAuth;
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
+use crate::llm::policy::guardrail::{GuardrailAzureContentSafety, GuardrailBackend};
 use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
+use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 // ---------------------------------------------------------------------------
 // Analyze Text types
@@ -180,28 +180,42 @@ pub async fn send_detect_jailbreak_for_request(
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/// Extract hostname from the root config endpoint.
-fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
-	let endpoint = root.endpoint.as_str().trim_end_matches('/');
-	let host_str = endpoint
-		.strip_prefix("https://")
-		.or_else(|| endpoint.strip_prefix("http://"))
-		.unwrap_or(endpoint);
-	strng::new(host_str)
-}
-
-/// Build the common set of backend policies from the root config.
-fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
-	let mut pols = vec![
-		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendTrafficPolicy::BackendAuth(BackendAuth::Azure(root.cached_azure_auth.clone())),
-	];
-	pols.extend(root.policies.iter().cloned());
-	pols
+/// Resolve the guardrail backend (referenced or built from the deprecated inline
+/// endpoint field) and return it along with the resolved endpoint host.
+fn resolve(
+	client: &PolicyClient,
+	root: &AzureContentSafety,
+) -> anyhow::Result<(SimpleBackendWithPolicies, agent_core::strng::Strng)> {
+	let backend = super::resolve_guardrail_backend(
+		client,
+		root.backend_ref.as_ref(),
+		|| {
+			let Some(endpoint) = root.endpoint.clone() else {
+				anyhow::bail!("azureContentSafety requires either backendRef or endpoint");
+			};
+			Ok(GuardrailBackend::AzureContentSafety(
+				GuardrailAzureContentSafety {
+					resource_name: None,
+					endpoint: Some(endpoint),
+					cached_auth: root.cached_azure_auth.clone(),
+				},
+			))
+		},
+		strng::literal!("_azure-content-safety"),
+	)?;
+	let SimpleBackend::Guardrail(_, cfg @ GuardrailBackend::AzureContentSafety(_)) = &backend.backend
+	else {
+		anyhow::bail!(
+			"guardrail backend {} is not an azure content safety guardrail backend",
+			backend.backend
+		);
+	};
+	let host = cfg.host();
+	Ok((backend, host))
 }
 
 /// Send an arbitrary JSON POST to an Azure Content Safety sub-path and
-/// return the deserialized response.
+/// return the deserialized response along with the endpoint host (for logging).
 async fn send_content_safety_request<Req: Serialize, Resp: serde::de::DeserializeOwned>(
 	client: &PolicyClient,
 	claims: Option<Claims>,
@@ -210,19 +224,17 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 	api_version: &str,
 	body: &Req,
 	operation: &str,
-) -> anyhow::Result<Resp> {
-	let host = resolve_host(root);
-	let uri = format!(
-		"https://{}/contentsafety/{}?api-version={}",
-		host, path, api_version
-	);
+) -> anyhow::Result<(Resp, agent_core::strng::Strng)> {
+	let (backend, host) = resolve(client, root)?;
+	// The transport (endpoint host, TLS, Azure auth) is owned by the resolved backend;
+	// only the API path and body are built here.
+	let uri = format!("/contentsafety/{}?api-version={}", path, api_version);
 
 	debug!(
 		uri = %uri,
+		host = %host,
 		">>> Sending {} request", operation
 	);
-
-	let pols = build_policies(root);
 
 	let mut rb = ::http::Request::builder()
 		.uri(&uri)
@@ -235,17 +247,9 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(body)?))?;
 
-	let mock_be = Backend::Dynamic(
-		ResourceName::new(
-			strng::literal!("_azure-content-safety"),
-			strng::literal!(""),
-		),
-		(),
-	);
-
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_resolved(req, backend, &root.policies)
 		.await?;
 
 	let status = resp.status();
@@ -258,7 +262,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 		warn!(
 			status = %status,
 			error_body = %error_body,
-			endpoint = %root.endpoint,
+			endpoint = %host,
 			"Azure Content Safety API returned error"
 		);
 		anyhow::bail!(
@@ -268,12 +272,13 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 		);
 	}
 
-	serde_json::from_slice(&bytes).map_err(|e| {
+	let resp = serde_json::from_slice(&bytes).map_err(|e| {
 		anyhow::anyhow!(
 			"Failed to parse Azure Content Safety {} response: {e}",
 			operation
 		)
-	})
+	})?;
+	Ok((resp, host))
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +306,7 @@ async fn send_analyze_text(
 		.map(|s| s.as_str())
 		.unwrap_or("2024-09-01");
 
-	let resp: AnalyzeTextResponse = send_content_safety_request(
+	let (resp, host): (AnalyzeTextResponse, _) = send_content_safety_request(
 		client,
 		claims,
 		root,
@@ -315,7 +320,7 @@ async fn send_analyze_text(
 	let threshold = config.severity_threshold.unwrap_or(2);
 	if resp.is_blocked(threshold) {
 		warn!(
-			endpoint = %root.endpoint,
+			endpoint = %host,
 			severity_threshold = threshold,
 			categories = ?resp.categories_analysis.iter().map(|c| (&c.category, c.severity)).collect::<Vec<_>>(),
 			blocklist_matches = resp.blocklists_match.len(),
@@ -323,7 +328,7 @@ async fn send_analyze_text(
 		);
 	} else {
 		debug!(
-			endpoint = %root.endpoint,
+			endpoint = %host,
 			categories = ?resp.categories_analysis.iter().map(|c| (&c.category, c.severity)).collect::<Vec<_>>(),
 			"Content passed safety checks"
 		);
@@ -353,7 +358,7 @@ async fn send_detect_jailbreak(
 		.map(|s| s.as_str())
 		.unwrap_or("2024-02-15-preview");
 
-	let resp: DetectJailbreakResponse = send_content_safety_request(
+	let (resp, host): (DetectJailbreakResponse, _) = send_content_safety_request(
 		client,
 		claims,
 		root,
@@ -366,12 +371,12 @@ async fn send_detect_jailbreak(
 
 	if resp.jailbreak_detected() {
 		warn!(
-			endpoint = %root.endpoint,
+			endpoint = %host,
 			"Jailbreak attempt DETECTED"
 		);
 	} else {
 		debug!(
-			endpoint = %root.endpoint,
+			endpoint = %host,
 			"No jailbreak detected"
 		);
 	}
