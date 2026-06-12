@@ -91,14 +91,14 @@
             "null"
           ]
         },
-        "modelCatalogPaths": {
-          "description": "Paths to one or more model catalog files; multiple files are merged in order, with later entries taking precedence.",
+        "modelCatalog": {
+          "description": "Model cost catalog sources; entries are merged in order, with later entries taking precedence.",
           "type": [
             "array",
             "null"
           ],
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/ModelCatalogSource"
           }
         },
         "caAddress": {
@@ -346,6 +346,22 @@
           "description": "Only query for AAAA (IPv6) records.",
           "type": "string",
           "const": "V6Only"
+        }
+      ]
+    },
+    "ModelCatalogSource": {
+      "description": "A source of model cost catalog data.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
         }
       ]
     },

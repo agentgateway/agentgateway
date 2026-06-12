@@ -51,15 +51,17 @@ func importSourceList() string {
 }
 
 func importCmd() *cobra.Command {
-	f := &importFlags{}
+	f := &importFlags{
+		source: modelsDevSourceName,
+	}
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import model costs",
 		Long: `Import a model cost catalog.
 
 Examples:
-	agctl costs import --source models.dev > catalog.json
-	agctl costs import --source models.dev --out ./costs/catalog.json
+	agctl costs import > catalog.json
+	agctl costs import --out ./costs/catalog.json
 	agctl costs import --source models.dev --providers anthropic,google,openai`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -71,8 +73,8 @@ Examples:
 	cmd.Flags().StringVar(&f.source, "source", f.source, "import source ("+importSourceList()+")")
 	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: import every provider exposed by the source)")
 	cmd.Flags().BoolVar(&f.legacy, "legacy", false, "include deprecated models")
-	cmd.Flags().StringVarP(&f.out, "out", "o", f.out, "output catalog path (default: stdout)")
 	cmd.Flags().BoolVar(&f.pretty, "pretty", false, "pretty-print the output JSON")
+	cmd.Flags().StringVarP(&f.out, "out", "o", f.out, "output catalog path (default: stdout)")
 
 	return cmd
 }

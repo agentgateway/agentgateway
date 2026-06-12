@@ -1305,9 +1305,10 @@ pub struct LLMContext {
 	pub cost_status: Option<llm::cost::CostLookupStatus>,
 }
 
-impl From<llm::LLMInfo> for LLMContext {
-	fn from(value: LLMInfo) -> Self {
-		let projection = llm::cost::project(&value);
+impl LLMContext {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+		let projection = model_catalog.map(|catalog| catalog.project(&value));
+
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
@@ -1336,14 +1337,16 @@ impl From<llm::LLMInfo> for LLMContext {
 			// Better info, override
 			base.input_tokens = Some(pt);
 		}
-		base.cost = projection.cost;
-		base.cost_rates = projection.cost_rates;
-		base.cost_status = Some(projection.status);
+
+		if let Some(projection) = projection {
+			base.cost = projection.cost;
+			base.cost_rates = projection.cost_rates;
+			base.cost_status = Some(projection.status);
+		}
+
 		base
 	}
-}
 
-impl LLMContext {
 	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
 		let Some(first_token) = self.first_token else {
 			return;

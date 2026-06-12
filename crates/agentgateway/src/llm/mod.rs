@@ -1140,6 +1140,7 @@ impl AIProvider {
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
+		model_catalog: Option<&Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		// Non-success responses are plain JSON, not event-stream data.
@@ -1153,10 +1154,12 @@ impl AIProvider {
 					req_snapshot,
 					log,
 					include_completion_in_log,
+					model_catalog.cloned(),
 					resp,
 				)
 				.await;
 		}
+		let model_catalog = model_catalog.map(Arc::as_ref);
 
 		// Buffer the body
 		let buffer_limit = http::response_buffer_limit(&resp);
@@ -1201,13 +1204,14 @@ impl AIProvider {
 				count_tokens: Some(count),
 				..Default::default()
 			};
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		// embeddings has simplified response handling
@@ -1215,22 +1219,24 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			if !parts.status.is_success() {
 				let body = self.process_error(&req, parts.status, &bytes)?;
-				let llm_info = LLMInfo::new(req, LLMResponse::default());
-				parts
-					.extensions
-					.insert(crate::cel::LLMContext::from(llm_info.clone()));
-				let resp = Response::from_parts(parts, body.into());
-				log.store(Some(llm_info));
-				return Ok(resp);
+				return Ok(Self::finalize_response(
+					parts,
+					body.into(),
+					req,
+					LLMResponse::default(),
+					model_catalog,
+					&log,
+				));
 			}
 			let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		// rerank has simplified response handling (like embeddings)
@@ -1238,22 +1244,24 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			if !parts.status.is_success() {
 				let body = self.process_error(&req, parts.status, &bytes)?;
-				let llm_info = LLMInfo::new(req, LLMResponse::default());
-				parts
-					.extensions
-					.insert(crate::cel::LLMContext::from(llm_info.clone()));
-				let resp = Response::from_parts(parts, body.into());
-				log.store(Some(llm_info));
-				return Ok(resp);
+				return Ok(Self::finalize_response(
+					parts,
+					body.into(),
+					req,
+					LLMResponse::default(),
+					model_catalog,
+					&log,
+				));
 			}
 			let (llm_resp, bytes) = self.process_rerank_response(bytes)?;
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		let (llm_resp, body) = if !parts.status.is_success() {
@@ -1300,7 +1308,10 @@ impl AIProvider {
 		let llm_info = LLMInfo::new(req, llm_resp);
 		parts
 			.extensions
-			.insert(crate::cel::LLMContext::from(llm_info.clone()));
+			.insert(crate::cel::LLMContext::from_llm_info(
+				llm_info.clone(),
+				model_catalog,
+			));
 		let resp = Response::from_parts(parts, body);
 
 		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
@@ -1311,6 +1322,25 @@ impl AIProvider {
 		}
 		log.store(Some(llm_info));
 		Ok(resp)
+	}
+
+	fn finalize_response(
+		mut parts: ::http::response::Parts,
+		body: Body,
+		req: LLMRequest,
+		llm_resp: LLMResponse,
+		model_catalog: Option<&cost::ModelCatalog>,
+		log: &AsyncLog<llm::LLMInfo>,
+	) -> Response {
+		let llm_info = LLMInfo::new(req, llm_resp);
+		parts
+			.extensions
+			.insert(crate::cel::LLMContext::from_llm_info(
+				llm_info.clone(),
+				model_catalog,
+			));
+		log.store(Some(llm_info));
+		Response::from_parts(parts, body)
 	}
 
 	fn process_embeddings_response(
@@ -1522,6 +1552,7 @@ impl AIProvider {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn process_streaming(
 		&self,
 		req: LLMRequest,
@@ -1529,6 +1560,7 @@ impl AIProvider {
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
+		model_catalog: Option<Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		let is_vertex_anthropic = match self {
@@ -1565,7 +1597,7 @@ impl AIProvider {
 			normalize_sse_response_headers(resp)
 		};
 
-		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot, model_catalog);
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
 			_ => "sseJson",
@@ -2023,6 +2055,7 @@ pub struct AmendOnDrop {
 	log: AsyncLog<llm::LLMInfo>,
 	pol: Option<LLMResponsePolicies>,
 	req: Option<Arc<RequestSnapshot>>,
+	catalog: Option<Arc<cost::ModelCatalog>>,
 }
 
 impl AmendOnDrop {
@@ -2030,11 +2063,13 @@ impl AmendOnDrop {
 		log: AsyncLog<llm::LLMInfo>,
 		pol: LLMResponsePolicies,
 		req: Option<Arc<RequestSnapshot>>,
+		catalog: Option<Arc<cost::ModelCatalog>>,
 	) -> Self {
 		Self {
 			log,
 			pol: Some(pol),
 			req,
+			catalog,
 		}
 	}
 	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
@@ -2045,7 +2080,7 @@ impl AmendOnDrop {
 			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
 		{
 			self.log.non_atomic_mutate(|r| {
-				let ctx = LLMContext::from(r.clone());
+				let ctx = LLMContext::from_llm_info(r.clone(), self.catalog.as_deref());
 				let exec = cel::Executor::new_llm_rate_limit_streaming(self.req.as_deref(), &ctx);
 				amend_tokens(pol, r, exec)
 			});
