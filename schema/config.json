@@ -807,7 +807,29 @@
             }
           ]
         },
+        "minTlsVersion": {
+          "description": "Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TLSVersion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "maxTLSVersion": {
+          "description": "Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TLSVersion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxTlsVersion": {
           "description": "Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).",
           "anyOf": [
             {
@@ -833,6 +855,24 @@
       "required": [
         "cert",
         "key"
+      ],
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "minTLSVersion",
+              "minTlsVersion"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "maxTLSVersion",
+              "maxTlsVersion"
+            ]
+          }
+        }
       ]
     },
     "LocalTLSServerMode": {
@@ -1638,9 +1678,7 @@
       "oneOf": [
         {
           "type": "string",
-          "enum": [
-            "invalid"
-          ]
+          "enum": []
         },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
@@ -2031,12 +2069,6 @@
             "kind"
           ],
           "oneOf": [
-            {
-              "type": "string",
-              "enum": [
-                "invalid"
-              ]
-            },
             {
               "description": "Service reference. Service must be defined in the top level services list.",
               "type": "object",
@@ -4118,12 +4150,6 @@
       ],
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
           "properties": {
@@ -4253,9 +4279,19 @@
           "const": "failClosed"
         },
         {
+          "description": "Deny the request with a 500 status when the rate limit service is unavailable (default).",
+          "type": "string",
+          "const": "FailClosed"
+        },
+        {
           "description": "Allow the request through when the rate limit service is unavailable.",
           "type": "string",
           "const": "failOpen"
+        },
+        {
+          "description": "Allow the request through when the rate limit service is unavailable.",
+          "type": "string",
+          "const": "FailOpen"
         }
       ]
     },
@@ -4293,12 +4329,6 @@
       ],
       "unevaluatedProperties": false,
       "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -4800,12 +4830,6 @@
       },
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
           "properties": {
@@ -5100,12 +5124,6 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
           "properties": {
@@ -5265,12 +5283,6 @@
         }
       },
       "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -5501,12 +5513,6 @@
       },
       "unevaluatedProperties": false,
       "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -5784,12 +5790,6 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "type": "object",
           "properties": {
             "service": {
@@ -5892,6 +5892,17 @@
           },
           "required": [
             "routeGroup"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "invalid": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "invalid"
           ]
         }
       ]
@@ -6575,6 +6586,11 @@
           "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
           "type": "string",
           "const": "foundry"
+        },
+        {
+          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "type": "string",
+          "const": "aiServices"
         }
       ]
     },
@@ -7071,12 +7087,6 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
           "properties": {
@@ -7328,6 +7338,18 @@
           ],
           "default": null
         },
+        "proxy": {
+          "description": "Enable downstream PROXY protocol handling on this gateway or port, including\nversion matching and whether PROXY headers are required or optional.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Proxy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "proxyProtocol": {
           "description": "Enable downstream PROXY protocol handling on this gateway or port, including\nversion matching and whether PROXY headers are required or optional.",
           "anyOf": [
@@ -7364,6 +7386,18 @@
           ],
           "default": null
         },
+        "logging": {
+          "description": "Settings for request access logs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoggingPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tracing": {
           "description": "Settings for exporting request traces.",
           "anyOf": [
@@ -7377,7 +7411,25 @@
           "default": null
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "proxy",
+              "proxyProtocol"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "accessLog",
+              "logging"
+            ]
+          }
+        }
+      ]
     },
     "HTTP2": {
       "type": "object",
@@ -7728,12 +7780,6 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
-        {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
           "properties": {
@@ -7865,12 +7911,6 @@
       },
       "unevaluatedProperties": false,
       "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "invalid"
-          ]
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -8411,6 +8451,17 @@
           ],
           "default": null
         },
+        "backendTLS": {
+          "description": "tls configures TLS when connecting to the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tls": {
           "description": "tls configures TLS when connecting to the LLM provider.",
           "anyOf": [
@@ -8491,6 +8542,16 @@
       "required": [
         "name",
         "provider"
+      ],
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "backendTLS",
+              "tls"
+            ]
+          }
+        }
       ]
     },
     "LocalLLMParams": {

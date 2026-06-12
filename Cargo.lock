@@ -250,7 +250,7 @@ dependencies = [
  "rustls-native-certs",
  "rustls-openssl",
  "rustls-pki-types",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "secrecy",
  "serde",
  "serde-transcode",
@@ -5760,7 +5760,7 @@ dependencies = [
  "rand 0.9.4",
  "reqwest 0.12.28",
  "rmcp-macros 0.10.0",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sse-stream",
@@ -5794,7 +5794,7 @@ dependencies = [
  "rand 0.10.1",
  "reqwest 0.13.3",
  "rmcp-macros 1.6.0",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sse-stream",
@@ -6069,8 +6069,8 @@ dependencies = [
 
 [[package]]
 name = "schemars"
-version = "1.0.4"
-source = "git+https://github.com/howardjohn/schemars?rev=4364354fa41897a0c2001d891c0a9a38eafedb82#4364354fa41897a0c2001d891c0a9a38eafedb82"
+version = "1.2.1"
+source = "git+https://github.com/howardjohn/schemars?rev=f3e45a59786debf49e67d6bd6d8dcffc004d39ff#f3e45a59786debf49e67d6bd6d8dcffc004d39ff"
 dependencies = [
  "arcstr",
  "bytes",
@@ -6084,8 +6084,8 @@ dependencies = [
 
 [[package]]
 name = "schemars_derive"
-version = "1.0.4"
-source = "git+https://github.com/howardjohn/schemars?rev=4364354fa41897a0c2001d891c0a9a38eafedb82#4364354fa41897a0c2001d891c0a9a38eafedb82"
+version = "1.2.1"
+source = "git+https://github.com/howardjohn/schemars?rev=f3e45a59786debf49e67d6bd6d8dcffc004d39ff#f3e45a59786debf49e67d6bd6d8dcffc004d39ff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6319,7 +6319,7 @@ dependencies = [
  "indexmap 1.9.3",
  "indexmap 2.14.0",
  "schemars 0.9.0",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "serde_core",
  "serde_json",
  "serde_with_macros",
@@ -8324,7 +8324,7 @@ dependencies = [
  "anyhow",
  "cel",
  "fs-err",
- "schemars 1.0.4",
+ "schemars 1.2.1",
  "serde_json",
 ]
 

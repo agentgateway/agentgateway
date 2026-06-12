@@ -1345,10 +1345,7 @@ pub struct LocalTCPRouteBackend {
 #[apply(schema_de!)]
 pub enum SimpleLocalBackend {
 	/// Service reference. Service must be defined in the top level services list.
-	Service {
-		name: NamespacedHostname,
-		port: u16,
-	},
+	Service { name: NamespacedHostname, port: u16 },
 	/// Hostname or IP address
 	#[serde(rename = "host")]
 	Opaque(
@@ -1359,6 +1356,8 @@ pub enum SimpleLocalBackend {
 		/// Explicit backend reference. Backend must be defined in the top level backends list
 		BackendKey,
 	),
+	#[serde(skip_deserializing)] // No need to deserialize an intentionally invalid entry
+	#[cfg_attr(feature = "schema", schemars(skip))]
 	Invalid,
 }
 
