@@ -90,7 +90,7 @@ test('LLM Overview should display model cards', async ({ page }) => {
     await expect(modelCard).toContainText('ollama');
     await expect(modelCard).toContainText('openAI');
     await expect(modelCard).toContainText('smallthinker');
-    await expect(modelCard).toContainText('http://localhost:3003');
+    await expect(modelCard).toContainText('http://localhost:11434');
 
     const openPlaygroundButton = page.getByTestId('llm-model-card-0-open-playground-button');
     await expect(openPlaygroundButton).toBeVisible();

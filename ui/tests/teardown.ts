@@ -1,10 +1,9 @@
 import {
+    copyFileSync,
     existsSync,
+    mkdirSync,
     readdirSync,
-    renameSync,
-    rmSync,
     statSync,
-    unlinkSync
 } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +20,9 @@ const RESULTS_DIR = path.join(__dirname, '..', 'test-results');
  */
 function flattenVideos(rootDir: string): void {
   if (!existsSync(rootDir)) return;
+  const flatDir = path.join(rootDir, 'videos');
   for (const entry of readdirSync(rootDir)) {
+    if (entry === 'videos') continue;
     const subPath = path.join(rootDir, entry);
     let s;
     try {
@@ -32,24 +33,12 @@ function flattenVideos(rootDir: string): void {
     if (!s.isDirectory()) continue;
     const videoSrc = path.join(subPath, 'video.webm');
     if (!existsSync(videoSrc)) continue;
-    const videoDest = path.join(rootDir, `${entry}.webm`);
-    if (existsSync(videoDest)) {
-      try {
-        unlinkSync(videoDest);
-      } catch {
-        // overwrite race; the rename below will fail loudly if so
-      }
-    }
+    mkdirSync(flatDir, { recursive: true });
+    const videoDest = path.join(flatDir, `${entry}.webm`);
     try {
-      renameSync(videoSrc, videoDest);
+      copyFileSync(videoSrc, videoDest);
     } catch (e) {
       console.warn(`Could not flatten video for ${entry}:`, e);
-      continue;
-    }
-    try {
-      if (readdirSync(subPath).length === 0) rmSync(subPath, { recursive: false });
-    } catch {
-      // Leave the dir if it still has trace/screenshots etc.
     }
   }
 }
