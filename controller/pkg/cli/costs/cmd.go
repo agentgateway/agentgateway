@@ -71,7 +71,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&f.source, "source", f.source, "import source ("+importSourceList()+")")
-	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: import every provider exposed by the source)")
+	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: every provider the proxy supports)")
 	cmd.Flags().BoolVar(&f.legacy, "legacy", false, "include deprecated models")
 	cmd.Flags().BoolVar(&f.pretty, "pretty", false, "pretty-print the output JSON")
 	cmd.Flags().StringVarP(&f.out, "out", "o", f.out, "output catalog path (default: stdout)")

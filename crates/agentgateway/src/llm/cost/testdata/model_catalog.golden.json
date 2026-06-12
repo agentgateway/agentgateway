@@ -1,13 +1,13 @@
 {
   "providers": {
-    "alibaba-cn": {
+    "anthropic": {
       "models": {
-        "qwen3-omni-flash": {
+        "claude-sonnet-4-5": {
           "rates": {
-            "input": "0.058",
-            "output": "0.23",
-            "inputAudio": "3.584",
-            "outputAudio": "7.168"
+            "input": "3",
+            "output": "15",
+            "cacheRead": "0.3",
+            "cacheWrite": "3.75"
           }
         }
       }
@@ -40,6 +40,14 @@
             "input": "0.15",
             "output": "0.6",
             "cacheRead": "0.075"
+          }
+        },
+        "gpt-4o-mini-audio-preview": {
+          "rates": {
+            "input": "0.15",
+            "output": "0.6",
+            "inputAudio": "10",
+            "outputAudio": "20"
           }
         }
       }
