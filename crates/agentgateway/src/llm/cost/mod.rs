@@ -12,7 +12,7 @@ use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
-use super::{LLMInfo, LLMResponse};
+use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 
 mod catalog;
 
@@ -54,12 +54,19 @@ impl CatalogSnapshot {
 		provider: &str,
 		model: &str,
 		resp: &LLMResponse,
+		convention: CacheTokenConvention,
 	) -> (Option<f64>, CostLookupStatus) {
-		let p = self.project(provider, model, resp);
+		let p = self.project(provider, model, resp, convention);
 		(p.amount(), p.status)
 	}
 
-	fn project(&self, provider: &str, model: &str, resp: &LLMResponse) -> CostProjection {
+	fn project(
+		&self,
+		provider: &str,
+		model: &str,
+		resp: &LLMResponse,
+		convention: CacheTokenConvention,
+	) -> CostProjection {
 		let Some(catalog) = self.catalog.as_ref() else {
 			return CostProjection::unpriced(CostLookupStatus::NoCatalog);
 		};
@@ -68,7 +75,7 @@ impl CatalogSnapshot {
 			return CostProjection::unpriced(CostLookupStatus::Missing);
 		};
 
-		let provisional_usage = usage_for(provider, resp, true);
+		let provisional_usage = usage_for(convention, resp, true);
 		// Tier selection must be invariant to cache-read repricing below: the
 		// cache tokens may move between input/cache_read, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
@@ -80,7 +87,7 @@ impl CatalogSnapshot {
 		let usage = if rates.cache_read.is_some() {
 			provisional_usage
 		} else {
-			usage_for(provider, resp, false)
+			usage_for(convention, resp, false)
 		};
 		CostProjection {
 			status: CostLookupStatus::Exact,
@@ -195,9 +202,12 @@ pub fn project(info: &LLMInfo) -> CostProjection {
 		.provider_model
 		.as_ref()
 		.unwrap_or(&info.request.request_model);
-	CATALOG
-		.load()
-		.project(provider, model.as_str(), &info.response)
+	CATALOG.load().project(
+		provider,
+		model.as_str(),
+		&info.response,
+		info.request.cache_convention,
+	)
 }
 
 pub fn init(paths: Vec<PathBuf>) -> anyhow::Result<()> {
@@ -318,11 +328,11 @@ pub enum CostLookupStatus {
 	NoCatalog,
 }
 
-fn input_includes_cache(provider: &str) -> bool {
-	!matches!(provider, "anthropic" | "aws.bedrock")
-}
-
-fn usage_for(provider: &str, resp: &LLMResponse, prices_cache_read: bool) -> Usage {
+fn usage_for(
+	convention: CacheTokenConvention,
+	resp: &LLMResponse,
+	prices_cache_read: bool,
+) -> Usage {
 	let mut cache_read = resp.cached_input_tokens.unwrap_or(0);
 	let cache_write = resp.cache_creation_input_tokens.unwrap_or(0);
 	let input_audio = resp.input_audio_tokens.unwrap_or(0);
@@ -330,7 +340,7 @@ fn usage_for(provider: &str, resp: &LLMResponse, prices_cache_read: bool) -> Usa
 	let reasoning = resp.reasoning_tokens.unwrap_or(0);
 
 	let mut input = resp.input_tokens.unwrap_or(0).saturating_sub(input_audio);
-	if input_includes_cache(provider) {
+	if matches!(convention, CacheTokenConvention::InputIncludesCache) {
 		if prices_cache_read {
 			input = input.saturating_sub(cache_read);
 		} else {
@@ -374,7 +384,7 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for("openai", &resp, true);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
 		assert_eq!(u.input, 700, "fresh input excludes the cached portion");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.output, 500);
@@ -388,7 +398,7 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for("openai", &resp, false);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, false);
 		assert_eq!(u.input, 1000, "cached tokens remain billable in input");
 		assert_eq!(u.cache_read, 0, "no separate cache bucket");
 	}
@@ -402,19 +412,39 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for("anthropic", &resp, true);
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true);
 		assert_eq!(u.input, 1000, "Anthropic input_tokens is already fresh");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.cache_write, 200);
 	}
 
 	#[test]
-	fn bedrock_is_exclusive_like_anthropic() {
-		assert!(!input_includes_cache("aws.bedrock"));
-		assert!(!input_includes_cache("anthropic"));
-		assert!(input_includes_cache("openai"));
-		assert!(input_includes_cache("gcp.vertex_ai"));
-		assert!(input_includes_cache("custom"));
+	fn exclusive_convention_never_subtracts_cache_from_input() {
+		// Vertex Anthropic / custom-Messages case: input_tokens is already fresh.
+		let resp = LLMResponse {
+			input_tokens: Some(1000),
+			cached_input_tokens: Some(300),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true);
+		assert_eq!(
+			u.input, 1000,
+			"fresh input must not be reduced by cache_read"
+		);
+		assert_eq!(u.cache_read, 300);
+	}
+
+	#[test]
+	fn inclusive_convention_splits_cache_out_of_input() {
+		// Regression guard: OpenAI-style providers keep the subtract-once behavior.
+		let resp = LLMResponse {
+			input_tokens: Some(1000),
+			cached_input_tokens: Some(300),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
+		assert_eq!(u.input, 700);
+		assert_eq!(u.cache_read, 300);
 	}
 
 	#[test]
@@ -428,7 +458,7 @@ mod tests {
 			output_audio_tokens: Some(100),
 			..Default::default()
 		};
-		let u = usage_for("openai", &resp, true);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
 		assert_eq!(u.input, 500, "fresh text = 1000 - 300 cached - 200 audio");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.input_audio, 200);
@@ -450,7 +480,12 @@ mod tests {
 			output_tokens: Some(500_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "my-model", &resp);
+		let (cost, status) = snap.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(2.0));
 	}
@@ -461,7 +496,12 @@ mod tests {
 			input_tokens: Some(1000),
 			..Default::default()
 		};
-		let (cost, status) = snapshot().price("openai", "my-model", &resp);
+		let (cost, status) = snapshot().price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(cost, None);
 		assert_eq!(status, CostLookupStatus::NoCatalog);
 	}
@@ -473,7 +513,12 @@ mod tests {
 			input_tokens: Some(1000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "totally-made-up", &resp);
+		let (cost, status) = snap.price(
+			"openai",
+			"totally-made-up",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(cost, None);
 		assert_eq!(status, CostLookupStatus::Missing);
 	}
@@ -487,7 +532,12 @@ mod tests {
 			input_tokens: Some(1_000_000),
 			..Default::default()
 		};
-		let (cost, _) = snap.price("openai", "my-model", &resp);
+		let (cost, _) = snap.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(cost, Some(9.0), "later layer's rate wins");
 	}
 
@@ -504,7 +554,12 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "listed", &resp);
+		let (cost, status) = snap.price(
+			"openai",
+			"listed",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Unpriced);
 		assert_eq!(cost, None, "rate-less entries must not price as $0");
 	}
@@ -525,7 +580,12 @@ mod tests {
 			cached_input_tokens: Some(100_000),
 			..Default::default()
 		};
-		let p = snap.project("openai", "m", &resp);
+		let p = snap.project(
+			"openai",
+			"m",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(p.status, CostLookupStatus::Exact);
 		let rates = p.cost_rates.expect("priced projection has rates");
 		assert_eq!(rates.input, Some(2.5));
@@ -546,7 +606,12 @@ mod tests {
 			cached_input_tokens: Some(400_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "m", &resp);
+		let (cost, status) = snap.price(
+			"openai",
+			"m",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(10.0));
 	}
@@ -567,7 +632,12 @@ mod tests {
 			cached_input_tokens: Some(40_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "m", &below_tier);
+		let (cost, status) = snap.price(
+			"openai",
+			"m",
+			&below_tier,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(1.0));
 
@@ -576,7 +646,12 @@ mod tests {
 			cached_input_tokens: Some(100_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "m", &above_tier);
+		let (cost, status) = snap.price(
+			"openai",
+			"m",
+			&above_tier,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(2.1));
 	}
@@ -593,7 +668,12 @@ mod tests {
 			input_tokens: Some(100_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "m", &below_tier);
+		let (cost, status) = snap.price(
+			"openai",
+			"m",
+			&below_tier,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Unpriced);
 		assert_eq!(cost, None);
 
@@ -601,7 +681,12 @@ mod tests {
 			input_tokens: Some(300_000),
 			..Default::default()
 		};
-		let (cost, status) = snap.price("openai", "m", &above_tier);
+		let (cost, status) = snap.price(
+			"openai",
+			"m",
+			&above_tier,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(3.0));
 	}

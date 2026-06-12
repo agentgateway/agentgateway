@@ -285,6 +285,7 @@ impl super::RequestType for Request {
 			input_tokens,
 			input_format: InputFormat::Completions,
 			native_format: Some(crate::llm::custom::ProviderFormat::Completions),
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

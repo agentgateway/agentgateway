@@ -1372,6 +1372,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			input_tokens,
 			input_format: _, // Expose this?
 			native_format: _,
+			cache_convention: _,
 			request_model,
 			provider,
 			streaming,

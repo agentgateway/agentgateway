@@ -2263,6 +2263,7 @@ async fn make_backend_call(
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
 								native_format: Some(llm::custom::ProviderFormat::Realtime),
+								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
