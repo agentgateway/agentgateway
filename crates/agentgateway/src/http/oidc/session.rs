@@ -32,7 +32,6 @@ pub struct TransactionState {
 	pub transaction_id: String,
 	pub csrf_state: String,
 	pub nonce: String,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub pkce_verifier: SecretString,
 	pub original_uri: String,
 	pub expires_at_unix: u64,
@@ -43,8 +42,10 @@ impl Serialize for TransactionState {
 	where
 		S: Serializer,
 	{
-		// Cookie payloads must serialize the raw secret values so the encrypted blob can be
-		// round-tripped. The field-level redact serializers are for external config/debug output.
+		// Cookie payloads must serialize the raw secret values so the encrypted
+		// blob can be round-tripped; this hand-written impl is the ONLY
+		// serializer for this type (the derive is Deserialize-only), so never
+		// serialize it outside the encrypted-cookie path.
 		#[derive(Serialize)]
 		#[serde(rename_all = "camelCase")]
 		struct SerializableTransactionState<'a> {
@@ -74,9 +75,8 @@ impl Serialize for TransactionState {
 #[serde(rename_all = "camelCase")]
 pub struct BrowserSession {
 	pub policy_id: PolicyId,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub raw_id_token: SecretString,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(default)]
 	pub expires_at_unix: Option<u64>,
 }
 
@@ -85,8 +85,10 @@ impl Serialize for BrowserSession {
 	where
 		S: Serializer,
 	{
-		// Cookie payloads must serialize the raw secret values so the encrypted blob can be
-		// round-tripped. The field-level redact serializers are for external config/debug output.
+		// Cookie payloads must serialize the raw secret values so the encrypted
+		// blob can be round-tripped; this hand-written impl is the ONLY
+		// serializer for this type (the derive is Deserialize-only), so never
+		// serialize it outside the encrypted-cookie path.
 		#[derive(Serialize)]
 		#[serde(rename_all = "camelCase")]
 		struct SerializableBrowserSession<'a> {
@@ -113,6 +115,30 @@ impl BrowserSession {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(transparent)]
+pub(crate) struct OidcCookieEncoder(sessionpersistence::Encoder);
+
+impl OidcCookieEncoder {
+	/// Derive an OIDC cookie encoder from the configured session encoder. Returns
+	/// `None` when `SESSION_KEY` is absent or non-AES; callers surface their own
+	/// context-specific error (xDS decode vs. local config compile).
+	pub(crate) fn from_session_encoder(encoder: &sessionpersistence::Encoder) -> Option<Self> {
+		match encoder {
+			sessionpersistence::Encoder::Aes(_) => Some(Self(encoder.clone())),
+			sessionpersistence::Encoder::Base64(_) => None,
+		}
+	}
+
+	fn encrypt(&self, plaintext: &str) -> Result<String, sessionpersistence::Error> {
+		self.0.encrypt(plaintext)
+	}
+
+	fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, sessionpersistence::Error> {
+		self.0.decrypt(encoded)
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
 	pub cookie_name: String,
@@ -123,7 +149,7 @@ pub struct SessionConfig {
 	pub ttl: Duration,
 	#[serde(with = "crate::serdes::serde_dur")]
 	pub transaction_ttl: Duration,
-	pub encoder: sessionpersistence::Encoder,
+	pub(crate) encoder: OidcCookieEncoder,
 }
 
 impl SessionConfig {
@@ -181,11 +207,11 @@ impl SessionConfig {
 			self.secure,
 			is_https,
 			Some(ttl),
-			false,
 		)
 	}
 
 	pub fn clear_cookie(&self, name: &str, is_https: bool) -> String {
+		// Duration::ZERO yields Max-Age=0, expiring the cookie immediately.
 		cookie_header(
 			name,
 			"",
@@ -193,7 +219,6 @@ impl SessionConfig {
 			self.secure,
 			is_https,
 			Some(Duration::ZERO),
-			true,
 		)
 	}
 
@@ -282,7 +307,6 @@ fn cookie_header(
 	secure_mode: CookieSecureMode,
 	is_https: bool,
 	max_age: Option<Duration>,
-	expire_now: bool,
 ) -> String {
 	let secure = match secure_mode {
 		CookieSecureMode::Always => true,
@@ -299,7 +323,7 @@ fn cookie_header(
 		})
 		.secure(secure);
 	if let Some(max_age) = max_age {
-		let secs = if expire_now { 0 } else { max_age.as_secs() };
+		let secs = max_age.as_secs();
 		let secs = i64::try_from(secs).unwrap_or(i64::MAX);
 		cookie = cookie.max_age(cookie::time::Duration::seconds(secs));
 	}

@@ -62,16 +62,26 @@ impl Default for Stores {
 
 impl Stores {
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Stores {
-		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded, None)
 	}
 
-	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Stores {
-		Self::new_with_dynamic_ca_cert_cache(ipv6_enabled, threading_mode, Default::default())
-	}
-
-	pub fn new_with_dynamic_ca_cert_cache(
+	pub(crate) fn new(
 		ipv6_enabled: bool,
 		threading_mode: crate::ThreadingMode,
+		oidc_cookie_encoder: Option<crate::http::oidc::OidcCookieEncoder>,
+	) -> Stores {
+		Self::new_with_dynamic_ca_cert_cache(
+			ipv6_enabled,
+			threading_mode,
+			oidc_cookie_encoder,
+			Default::default(),
+		)
+	}
+
+	pub(crate) fn new_with_dynamic_ca_cert_cache(
+		ipv6_enabled: bool,
+		threading_mode: crate::ThreadingMode,
+		oidc_cookie_encoder: Option<crate::http::oidc::OidcCookieEncoder>,
 		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	) -> Stores {
 		Stores {
@@ -79,6 +89,7 @@ impl Stores {
 			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::new(
 				ipv6_enabled,
 				threading_mode,
+				oidc_cookie_encoder,
 				dynamic_ca_cert_cache,
 			)))),
 		}

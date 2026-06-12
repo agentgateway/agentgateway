@@ -14,38 +14,44 @@ func (k FetchKey) String() string {
 	return string(k)
 }
 
+// HashKey returns the SHA-256 FetchKey over parts. Each part is
+// null-terminated so the concatenation is unambiguous, making the key a stable
+// identity for (target, transport) tuples — callers that change the part list
+// or its order change every derived cache key.
+func HashKey(parts ...string) FetchKey {
+	hash := sha256.New()
+	for _, part := range parts {
+		_, _ = hash.Write([]byte(part))
+		_, _ = hash.Write([]byte{0})
+	}
+	return FetchKey(hex.EncodeToString(hash.Sum(nil)))
+}
+
 func (r FetchTarget) Key() FetchKey {
 	transport := r.Transport
 
-	hash := sha256.New()
-	writeHashPart := func(value string) {
-		_, _ = hash.Write([]byte(value))
-		_, _ = hash.Write([]byte{0})
-	}
-
-	writeHashPart(r.URL)
+	parts := []string{r.URL}
 	if r.ProxyURL != "" {
-		writeHashPart(r.ProxyURL)
+		parts = append(parts, r.ProxyURL)
 	}
-	writeHashPart(transportVerificationFingerprint(r.URL, transport.Verification))
-	writeHashPart(transport.ServerName)
-	writeHashPart(transport.CABundleHash)
-	for _, nextProto := range transport.NextProtos {
-		writeHashPart(nextProto)
-	}
+	parts = append(parts,
+		transportVerificationFingerprint(r.URL, transport.Verification),
+		transport.ServerName,
+		transport.CABundleHash,
+	)
+	parts = append(parts, transport.NextProtos...)
 
 	pt := r.ProxyTransport
 	if pt.ServerName != "" || pt.CABundleHash != "" || pt.Verification != "" || len(pt.NextProtos) > 0 {
-		writeHashPart(transportVerificationFingerprint(r.ProxyURL, pt.Verification))
-		writeHashPart(pt.ServerName)
-		writeHashPart(pt.CABundleHash)
-		for _, nextProto := range pt.NextProtos {
-			writeHashPart(nextProto)
-		}
+		parts = append(parts,
+			transportVerificationFingerprint(r.ProxyURL, pt.Verification),
+			pt.ServerName,
+			pt.CABundleHash,
+		)
+		parts = append(parts, pt.NextProtos...)
 	}
 
-	sum := hash.Sum(nil)
-	return FetchKey(hex.EncodeToString(sum[:]))
+	return HashKey(parts...)
 }
 
 func transportVerificationFingerprint(url string, mode agentgateway.InsecureTLSMode) string {

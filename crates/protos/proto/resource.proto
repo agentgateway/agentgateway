@@ -1039,6 +1039,79 @@ message TrafficPolicySpec {
     Mode mode = 1;
   }
 
+  // OIDC browser authentication configuration.
+  //
+  // Provider metadata (issuer validation, authorization/token endpoints, and
+  // discovered jwks_uri) is resolved by the controller from the issuer's
+  // discovery document. The dataplane never fetches discovery or JWKS URLs
+  // itself.
+  message OIDC {
+    // Client authentication method at the token endpoint.
+    //
+    // `NONE` is public-client mode: no client authentication is presented and
+    // `client_secret` must be empty on the wire. PKCE still protects the
+    // authorization code exchange in the OIDC callback flow.
+    enum TokenEndpointAuth {
+      TOKEN_ENDPOINT_AUTH_UNSPECIFIED = 0;
+      CLIENT_SECRET_BASIC = 1;
+      CLIENT_SECRET_POST = 2;
+      NONE = 3;
+    }
+
+    // Was policy_id; the dataplane now derives the session namespace from the
+    // enclosing resource key ("policy/<key>" or "route/<key>").
+    reserved 1;
+
+    // IdP issuer identifier (matches the "iss" claim on id tokens).
+    string issuer = 2;
+
+    // Absolute authorization endpoint URL (the /authorize URL).
+    string authorization_endpoint = 3;
+
+    // Absolute token endpoint URL (the /token URL).
+    string token_endpoint = 4;
+
+    // Optional user override of the token-endpoint client authentication
+    // method. When `TOKEN_ENDPOINT_AUTH_UNSPECIFIED`, the dataplane selects the
+    // method from `token_endpoint_auth_methods_supported`, mirroring the
+    // local-config discovery path. The controller validates an explicit
+    // override's method/`client_secret` pairing at apply time; the
+    // "IdP advertises nothing usable" case is resolved at dataplane load.
+    TokenEndpointAuth token_endpoint_auth = 5;
+
+    // JWKS content, as JSON, resolved by the controller through the shared
+    // JWKS pipeline. The dataplane does not fetch jwks_uri.
+    string jwks_inline = 6;
+
+    // OIDC client identifier registered with the IdP.
+    string client_id = 7;
+
+    // OIDC client secret. SECURITY: plaintext on the wire — xDS MUST be
+    // TLS-protected; not encrypted at the proto layer.
+    string client_secret = 8;
+
+    // Absolute callback URI registered with the IdP.
+    string redirect_uri = 9;
+
+    // Requested scopes. The dataplane always includes `openid` and drops
+    // duplicates (normalize_scopes, shared with the local-config path).
+    repeated string scopes = 10;
+
+    // Optional backend reference used for token-endpoint calls. When set, the
+    // dataplane routes the token exchange through the referenced backend and
+    // applies its attached backend TLS policy (private CA, insecureSkipVerify,
+    // SNI, etc.). When unset, the dataplane connects directly to
+    // `token_endpoint` using the system trust store.
+    BackendReference provider_backend = 11;
+
+    // Token-endpoint client authentication methods advertised by the IdP
+    // (OIDC Discovery `token_endpoint_auth_methods_supported`), passed through
+    // by the controller. The dataplane uses these to select the method when
+    // `token_endpoint_auth` is unspecified. Empty implies the spec default
+    // (`client_secret_basic`).
+    repeated string token_endpoint_auth_methods_supported = 12;
+  }
+
   PolicyPhase phase = 1;
   oneof kind {
     Timeout timeout = 2;
@@ -1062,6 +1135,7 @@ message TrafficPolicySpec {
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
+    OIDC oidc = 23;
   }
 }
 

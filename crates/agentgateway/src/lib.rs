@@ -514,8 +514,6 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
-	/// Runtime cookie/session crypto for browser OIDC flows.
-	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
@@ -557,13 +555,18 @@ impl Config {
 			port: Some(port),
 		}
 	}
+	/// Cookie encoder for OIDC policies. `Some` iff `session_encoder` is AES-backed.
+	pub(crate) fn oidc_cookie_encoder(&self) -> Option<crate::http::oidc::OidcCookieEncoder> {
+		crate::http::oidc::OidcCookieEncoder::from_session_encoder(&self.session_encoder)
+	}
+
 	pub fn as_policy_context(
 		&self,
 		policy_key: impl std::fmt::Display,
 	) -> Option<local::AttachedPolicyContext> {
 		Some(local::AttachedPolicyContext {
 			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
-			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+			oidc_cookie_encoder: self.oidc_cookie_encoder(),
 		})
 	}
 }

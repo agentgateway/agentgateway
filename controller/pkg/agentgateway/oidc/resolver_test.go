@@ -1,4 +1,4 @@
-package jwks_test
+package oidc_test
 
 import (
 	"crypto/tls"
@@ -6,67 +6,187 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+const (
+	testIssuerURL    = "https://dummy-idp.default:8443"
+	testDiscoveryURL = "https://dummy-idp.default:8443/.well-known/openid-configuration"
+	testOidcIssuer   = "https://idp.example"
+)
+
+func TestDefaultResolverDirectFetchSkipsResolver(t *testing.T) {
+	r := oidc.NewResolver(nil)
+	owner := oidc.RemoteOidcOwner{
+		ID: remotecache.OwnerID{
+			Kind:      remotecache.OwnerKindPolicy,
+			Namespace: "default",
+			Name:      "p1",
+			Path:      "spec.traffic.oidc",
+		},
+		Config: agentgateway.OIDC{
+			IssuerURL:   testOidcIssuer,
+			ClientID:    "agw",
+			RedirectURI: "https://gateway.example/oauth2/callback",
+		},
+		TTL: oidc.OidcRefreshInterval,
+	}
+
+	resolved, err := r.ResolveOwner(nil, owner)
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	require.Equal(t, owner.ID, resolved.OwnerID)
+	require.Equal(t, owner.Config.IssuerURL, resolved.ExpectedIssuer)
+	require.False(t, resolved.ViaBackendRef)
+	require.Equal(t, owner.TTL, resolved.TTL)
+	require.Equal(t, testOidcIssuer+"/.well-known/openid-configuration", resolved.Target.Target.URL)
+	require.Nil(t, resolved.Target.TLSConfig)
+	require.Nil(t, resolved.Target.ProxyTLSConfig)
+}
+
+func TestDefaultResolverPropagatesDiscoveryURLError(t *testing.T) {
+	r := oidc.NewResolver(nil)
+	owner := oidc.RemoteOidcOwner{
+		ID: remotecache.OwnerID{Name: "bad"},
+		Config: agentgateway.OIDC{
+			IssuerURL: "http://insecure.example",
+		},
+	}
+
+	resolved, err := r.ResolveOwner(nil, owner)
+	require.Error(t, err)
+	require.Nil(t, resolved)
+}
+
+func TestDiscoveryURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		issuer  string
+		want    string
+		wantErr string
+	}{
+		{
+			name:   "root issuer",
+			issuer: "https://issuer.example",
+			want:   "https://issuer.example/.well-known/openid-configuration",
+		},
+		{
+			name:   "path based issuer",
+			issuer: "https://issuer.example/realms/demo",
+			want:   "https://issuer.example/realms/demo/.well-known/openid-configuration",
+		},
+		{
+			name:   "trailing slash issuer",
+			issuer: "https://issuer.example/realms/demo/",
+			want:   "https://issuer.example/realms/demo/.well-known/openid-configuration",
+		},
+		{
+			name:    "rejects http issuer",
+			issuer:  "http://issuer.example",
+			wantErr: "absolute HTTPS",
+		},
+		{
+			name:    "rejects missing host",
+			issuer:  "https:///issuer",
+			wantErr: "host",
+		},
+		{
+			name:    "rejects query",
+			issuer:  "https://issuer.example?tenant=demo",
+			wantErr: "query or fragment",
+		},
+		{
+			name:    "rejects fragment",
+			issuer:  "https://issuer.example#fragment",
+			wantErr: "query or fragment",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := oidc.NewResolver(nil)
+			owner := oidc.RemoteOidcOwner{
+				ID: remotecache.OwnerID{Name: "test-owner"},
+				Config: agentgateway.OIDC{
+					IssuerURL: tc.issuer,
+				},
+			}
+			resolved, err := r.ResolveOwner(nil, owner)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				require.Nil(t, resolved)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, resolved)
+			require.Equal(t, tc.want, resolved.Target.Target.URL)
+		})
+	}
+}
+
 func TestResolveEndpoint(t *testing.T) {
-	serviceRemote := remoteProvider(
-		"/org-one/keys",
-		gwv1.BackendObjectReference{
-			Group:     ptr.Of(gwv1.Group("")),
-			Kind:      ptr.Of(gwv1.Kind("Service")),
-			Name:      gwv1.ObjectName("dummy-idp"),
-			Namespace: ptr.Of(gwv1.Namespace("default")),
-			Port:      ptr.Of(gwv1.PortNumber(8443)),
-		},
-	)
-	backendRemote := remoteProvider(
-		"org-one/keys",
-		gwv1.BackendObjectReference{
-			Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-			Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-			Name:  gwv1.ObjectName("dummy-idp"),
-			Port:  ptr.Of(gwv1.PortNumber(8443)),
-		},
-	)
+	serviceBackendRef := &gwv1.BackendObjectReference{
+		Group:     new(gwv1.Group("")),
+		Kind:      new(gwv1.Kind("Service")),
+		Name:      gwv1.ObjectName("dummy-idp"),
+		Namespace: new(gwv1.Namespace("default")),
+		Port:      new(gwv1.PortNumber(8443)),
+	}
+	staticBackendRef := &gwv1.BackendObjectReference{
+		Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+		Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+		Name:  gwv1.ObjectName("dummy-idp"),
+		Port:  new(gwv1.PortNumber(8443)),
+	}
 
 	tests := []struct {
 		name                string
 		inputs              []any
-		remoteProvider      agentgateway.RemoteJWKS
+		cfg                 agentgateway.OIDC
 		disableAutoResolver bool
 		expectedError       string
 		expectedURL         string
 		expectedTLS         *tls.Config
 	}{
 		{
-			name:                "errors when resolver is not initialized",
-			remoteProvider:      serviceRemote,
+			name:        "no backendRef returns synthetic target with discovery URL",
+			cfg:         oidcConfig(nil),
+			expectedURL: testDiscoveryURL,
+		},
+		{
+			name:                "no backendRef does not require resolver",
+			cfg:                 oidcConfig(nil),
+			disableAutoResolver: true,
+			expectedURL:         testDiscoveryURL,
+		},
+		{
+			name:                "errors when backendRef is set but resolver is not initialized",
+			cfg:                 oidcConfig(serviceBackendRef),
 			disableAutoResolver: true,
 			expectedError:       "remote http resolver hasn't been initialized",
 		},
 		{
-			name: "service-backed remote jwks uses attached backend tls policy",
+			name: "service-backed oidc uses attached backend tls policy",
 			inputs: []any{
-				gatewayJWTPolicy(serviceRemote),
+				gatewayOIDCPolicy(serviceBackendRef),
 				testCAConfigMap(),
 				attachedBackendPolicy(gwv1.Group(""), gwv1.Kind("Service"), "dummy-idp", &agentgateway.BackendTLS{
 					CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
-					Sni:               ptr.Of(agentgateway.SNI("test.testns")),
+					Sni:               new(agentgateway.SNI("test.testns")),
 					AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 				}),
 			},
-			remoteProvider: serviceRemote,
-			expectedURL:    "https://dummy-idp.default.svc.cluster.local:8443/org-one/keys",
+			cfg:         oidcConfig(serviceBackendRef),
+			expectedURL: "https://dummy-idp.default.svc.cluster.local:8443/.well-known/openid-configuration",
 			expectedTLS: &tls.Config{ //nolint:gosec
 				ServerName: "test.testns",
 				NextProtos: []string{"test1", "test2"},
@@ -74,9 +194,9 @@ func TestResolveEndpoint(t *testing.T) {
 			},
 		},
 		{
-			name: "backend-backed remote jwks uses attached backend policy",
+			name: "static-backend-backed oidc uses attached backend policy",
 			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
+				gatewayOIDCPolicy(staticBackendRef),
 				staticBackend("dummy-idp", "dummy-idp.default", 8443, nil),
 				testCAConfigMap(),
 				attachedBackendPolicy(
@@ -85,13 +205,13 @@ func TestResolveEndpoint(t *testing.T) {
 					"dummy-idp",
 					&agentgateway.BackendTLS{
 						CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
-						Sni:               ptr.Of(agentgateway.SNI("test.testns")),
+						Sni:               new(agentgateway.SNI("test.testns")),
 						AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 					},
 				),
 			},
-			remoteProvider: backendRemote,
-			expectedURL:    "https://dummy-idp.default:8443/org-one/keys",
+			cfg:         oidcConfig(staticBackendRef),
+			expectedURL: "https://dummy-idp.default:8443/.well-known/openid-configuration",
 			expectedTLS: &tls.Config{ //nolint:gosec
 				ServerName: "test.testns",
 				NextProtos: []string{"test1", "test2"},
@@ -101,21 +221,10 @@ func TestResolveEndpoint(t *testing.T) {
 		{
 			name: "returns resolver error for missing backend",
 			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
+				gatewayOIDCPolicy(staticBackendRef),
 			},
-			remoteProvider: backendRemote,
-			expectedError:  "backend default/dummy-idp not found, policy default/gw-policy",
-		},
-		{
-			name: "returns resolver error for non-static backend",
-			inputs: []any{
-				gatewayJWTPolicy(backendRemote),
-				&agentgateway.AgentgatewayBackend{
-					ObjectMeta: metav1.ObjectMeta{Name: "dummy-idp", Namespace: "default"},
-				},
-			},
-			remoteProvider: backendRemote,
-			expectedError:  "only static backends are supported; backend: default/dummy-idp, policy: default/gw-policy",
+			cfg:           oidcConfig(staticBackendRef),
+			expectedError: "backend default/dummy-idp not found, policy default/gw-policy",
 		},
 	}
 
@@ -127,32 +236,53 @@ func TestResolveEndpoint(t *testing.T) {
 				resolver = testutils.BuildRemoteHTTPResolver(ctx.Collections)
 			}
 
-			endpoint, err := jwks.ResolveEndpoint(ctx.Krt, resolver, "gw-policy", "default", tt.remoteProvider)
+			owner := oidc.RemoteOidcOwner{
+				ID: remotecache.OwnerID{
+					Kind:      remotecache.OwnerKindPolicy,
+					Namespace: "default",
+					Name:      "gw-policy",
+					Path:      "spec.traffic.oidc",
+				},
+				Config: tt.cfg,
+				TTL:    oidc.OidcRefreshInterval,
+			}
+
+			r := oidc.NewResolver(resolver)
+			resolved, err := r.ResolveOwner(ctx.Krt, owner)
 			if tt.expectedError != "" {
 				require.EqualError(t, err, tt.expectedError)
-				require.Nil(t, endpoint)
+				require.Nil(t, resolved)
 				return
 			}
 
 			require.NoError(t, err)
-			require.NotNil(t, endpoint)
-			require.Equal(t, tt.expectedURL, endpoint.Target.URL)
-			require.Equal(t, endpoint.Key, endpoint.Target.Key())
+			require.NotNil(t, resolved)
+			require.Equal(t, tt.expectedURL, resolved.Target.Target.URL)
 			if tt.expectedTLS == nil {
-				require.Nil(t, endpoint.TLSConfig)
+				require.Nil(t, resolved.Target.TLSConfig)
 				return
 			}
 
-			require.NotNil(t, endpoint.TLSConfig)
-			require.Equal(t, tt.expectedTLS.ServerName, endpoint.TLSConfig.ServerName)
-			require.Equal(t, tt.expectedTLS.NextProtos, endpoint.TLSConfig.NextProtos)
-			require.Equal(t, tt.expectedTLS.InsecureSkipVerify, endpoint.TLSConfig.InsecureSkipVerify)
-			require.True(t, tt.expectedTLS.RootCAs.Equal(endpoint.TLSConfig.RootCAs))
+			require.NotNil(t, resolved.Target.TLSConfig)
+			require.Equal(t, tt.expectedTLS.ServerName, resolved.Target.TLSConfig.ServerName)
+			require.Equal(t, tt.expectedTLS.NextProtos, resolved.Target.TLSConfig.NextProtos)
+			require.Equal(t, tt.expectedTLS.InsecureSkipVerify, resolved.Target.TLSConfig.InsecureSkipVerify)
+			require.True(t, tt.expectedTLS.RootCAs.Equal(resolved.Target.TLSConfig.RootCAs))
 		})
 	}
 }
 
-func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.AgentgatewayPolicy {
+func oidcConfig(backendRef *gwv1.BackendObjectReference) agentgateway.OIDC {
+	return agentgateway.OIDC{
+		IssuerURL:   testIssuerURL,
+		ClientID:    "client",
+		RedirectURI: "https://gateway.example/oauth/callback",
+		BackendRef:  backendRef,
+	}
+}
+
+func gatewayOIDCPolicy(backendRef *gwv1.BackendObjectReference) *agentgateway.AgentgatewayPolicy {
+	cfg := oidcConfig(backendRef)
 	return &agentgateway.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "gw-policy", Namespace: "default"},
 		Spec: agentgateway.AgentgatewayPolicySpec{
@@ -163,15 +293,7 @@ func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.Agentgateway
 					Name:  gwv1.ObjectName("super-gateway"),
 				},
 			}},
-			Traffic: &agentgateway.Traffic{
-				JWTAuthentication: &agentgateway.JWTAuthentication{
-					Mode: agentgateway.JWTAuthenticationModeStrict,
-					Providers: []agentgateway.JWTProvider{{
-						Issuer: "https://agentgateway.dev",
-						JWKS:   agentgateway.JWKS{Remote: &remote},
-					}},
-				},
-			},
+			Traffic: &agentgateway.Traffic{OIDC: &cfg},
 		},
 	}
 }
@@ -210,13 +332,6 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 				},
 			},
 		},
-	}
-}
-
-func remoteProvider(path string, backendRef gwv1.BackendObjectReference) agentgateway.RemoteJWKS {
-	return agentgateway.RemoteJWKS{
-		JwksPath:   path,
-		BackendRef: backendRef,
 	}
 }
 

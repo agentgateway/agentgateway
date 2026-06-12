@@ -4582,8 +4582,11 @@
           "type": "string"
         },
         "clientSecret": {
-          "description": "OAuth2 client secret used for token exchange.",
-          "type": "string"
+          "description": "OAuth2 client secret used for token exchange. Omit for a public\nclient (`tokenEndpointAuth: none`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "redirectURI": {
           "description": "Absolute callback URI handled by the gateway.\nThis policy always redirects unauthenticated non-callback requests back through this login\nflow.",
@@ -4602,7 +4605,6 @@
       "required": [
         "issuer",
         "clientId",
-        "clientSecret",
         "redirectURI"
       ]
     },
@@ -4610,7 +4612,8 @@
       "type": "string",
       "enum": [
         "clientSecretBasic",
-        "clientSecretPost"
+        "clientSecretPost",
+        "none"
       ]
     },
     "LocalBasicAuth": {

@@ -27,6 +27,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+// sessionKeyEnvVar holds the dataplane session encryption key, auto-generated
+// by the deployer when unset. Required by OIDC.
 const sessionKeyEnvVar = "SESSION_KEY"
 
 var defaultResourceRequests = corev1.ResourceList{

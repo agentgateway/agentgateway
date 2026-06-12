@@ -17,7 +17,7 @@ where
 	policy.apply(&client, &mut log, req).await
 }
 
-fn make_min_req_log() -> crate::telemetry::log::RequestLog {
+pub fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 	use std::sync::Arc;
 

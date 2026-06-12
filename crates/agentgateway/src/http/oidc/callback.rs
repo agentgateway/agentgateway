@@ -20,11 +20,11 @@ pub(super) struct CallbackTransactionState {
 	pub csrf_state: String,
 }
 
-pub(super) struct CallbackRequestContext {
-	pub code: String,
-	pub callback_state: CallbackTransactionState,
-	pub transaction_cookie_name: String,
-	pub transaction_cookie: String,
+struct CallbackRequestContext {
+	code: String,
+	callback_state: CallbackTransactionState,
+	transaction_cookie_name: String,
+	transaction_cookie: String,
 }
 
 impl CallbackTransactionState {
@@ -40,6 +40,83 @@ impl CallbackTransactionState {
 			.map_err(|_| Error::InvalidCallback)?;
 		serde_json::from_slice(&raw).map_err(|_| Error::InvalidCallback)
 	}
+}
+
+struct CallbackQuery {
+	state: String,
+	code: Option<String>,
+	error: Option<String>,
+}
+
+impl CallbackQuery {
+	/// Parse callback query parameters from the request in a single pass.
+	/// Returns `None` if the query does not contain `state` + (`code` | `error`),
+	/// meaning this request is not an OAuth2 callback.
+	fn parse(req: &Request) -> Option<Self> {
+		let mut state = None;
+		let mut code = None;
+		let mut error = None;
+		for (key, value) in
+			url::form_urlencoded::parse(req.uri().query().unwrap_or_default().as_bytes())
+		{
+			match key.as_ref() {
+				"state" => state = Some(value.into_owned()),
+				"code" => code = Some(value.into_owned()),
+				"error" => error = Some(value.into_owned()),
+				_ => {},
+			}
+		}
+		let state = state?;
+		if code.is_none() && error.is_none() {
+			return None;
+		}
+		Some(CallbackQuery { state, code, error })
+	}
+}
+
+/// Intercept the OAuth2 redirect callback. Returns `Ok(None)` when the
+/// request is not a callback for this policy (wrong method/path, or the query
+/// is not a callback query — see [`CallbackQuery::parse`]). A provider
+/// `error` is honored only after the transaction cookie is found, so an
+/// attacker cannot clear state with a forged error response.
+pub(super) async fn maybe_handle(
+	policy: &super::OidcPolicy,
+	req: &mut Request,
+	client: PolicyClient,
+) -> Result<Option<crate::http::PolicyResponse>, Error> {
+	if req.method() != ::http::Method::GET
+		|| req.uri().path() != policy.redirect_uri.callback_path.path()
+	{
+		return Ok(None);
+	}
+
+	let Some(query) = CallbackQuery::parse(req) else {
+		return Ok(None);
+	};
+
+	let callback_state = CallbackTransactionState::decode(&query.state)?;
+	let transaction_cookie_name = policy
+		.session
+		.transaction_cookie_name(&callback_state.transaction_id);
+	let transaction_cookie = crate::http::read_request_cookie(req, &transaction_cookie_name)
+		.ok_or(Error::MissingTransaction)?
+		.to_string();
+	if let Some(error) = query.error {
+		return Err(Error::ProviderCallback(error));
+	}
+	let code = query.code.ok_or(Error::InvalidCallback)?;
+	let response = handle_callback(
+		policy,
+		CallbackRequestContext {
+			code,
+			callback_state,
+			transaction_cookie_name,
+			transaction_cookie,
+		},
+		client,
+	)
+	.await?;
+	Ok(Some(response))
 }
 
 pub(super) fn start_login(
@@ -79,24 +156,21 @@ pub(super) fn start_login(
 		policy.redirect_uri.https,
 		policy.session.transaction_ttl,
 	);
-	let location = with_query(
-		&policy.provider.authorization_endpoint,
-		&[
-			("response_type", "code".into()),
-			("client_id", policy.client.client_id.clone()),
-			("redirect_uri", policy.redirect_uri.redirect_uri.clone()),
-			("scope", policy.scopes.join(" ")),
-			("state", state),
-			("nonce", nonce),
-			("code_challenge", code_challenge),
-			("code_challenge_method", "S256".into()),
-		],
-	);
+	let location = policy.provider.authorization_endpoint.with_query(&[
+		("response_type", "code".into()),
+		("client_id", policy.client.client_id.clone()),
+		("redirect_uri", policy.redirect_uri.redirect_uri.clone()),
+		("scope", policy.scopes.join(" ")),
+		("state", state),
+		("nonce", nonce),
+		("code_challenge", code_challenge),
+		("code_challenge_method", "S256".into()),
+	]);
 	let response = build_redirect_response(&location, &[cookie])?;
 	Ok(crate::http::PolicyResponse::default().with_response(response))
 }
 
-pub(super) async fn handle_callback(
+async fn handle_callback(
 	policy: &OidcPolicy,
 	context: CallbackRequestContext,
 	client: PolicyClient,
@@ -127,6 +201,7 @@ pub(super) async fn handle_callback(
 		&policy.redirect_uri.redirect_uri,
 		&context.code,
 		&transaction.pkce_verifier,
+		policy.provider_backend.as_ref(),
 	)
 	.await?;
 	let id_token = token.id_token.ok_or(Error::MissingIdToken)?;
@@ -170,10 +245,6 @@ pub(super) async fn handle_callback(
 	let location = transaction.original_uri;
 	let response = build_redirect_response(&location, &[session_cookie, clear_transaction])?;
 	Ok(crate::http::PolicyResponse::default().with_response(response))
-}
-
-fn with_query(uri: &super::ProviderEndpoint, params: &[(&str, String)]) -> String {
-	uri.with_query(params)
 }
 
 fn constant_time_str_eq(expected: &str, actual: &str) -> bool {

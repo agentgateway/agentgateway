@@ -3,9 +3,11 @@ package jwks
 import (
 	"crypto/tls"
 	"encoding/json"
-	"reflect"
 	"time"
 
+	"istio.io/istio/pkg/kube/krt"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
 
@@ -16,10 +18,31 @@ type Keyset struct {
 	JwksJSON   string              `json:"jwks"`
 }
 
-// JwksSource is a per-owner JWKS request before KRT collapses equivalent
-// sources onto a shared request key.
-type JwksSource struct {
-	OwnerKey   OwnerKey
+func (k Keyset) RemoteRequestKey() remotehttp.FetchKey { return k.RequestKey }
+func (k Keyset) RemoteFetchedAt() time.Time            { return k.FetchedAt }
+
+func (k Keyset) ResourceName() string { return string(k.RequestKey) }
+
+// Equals: field-by-field avoids reflect.DeepEqual on every KRT diff;
+// FetchedAt uses time.Equal to ignore monotonic clock state.
+func (k Keyset) Equals(other Keyset) bool {
+	return k.RequestKey == other.RequestKey &&
+		k.URL == other.URL &&
+		k.FetchedAt.Equal(other.FetchedAt) &&
+		k.JwksJSON == other.JwksJSON
+}
+
+var (
+	_ krt.ResourceNamer   = Keyset{}
+	_ krt.Equaler[Keyset] = Keyset{}
+)
+
+// jwksRequestSpec is the shared identity of a JWKS request: the fields that
+// decide what to fetch and how to reach it. JwksSource adds the per-owner key;
+// SharedJwksRequest is the collapsed canonical form. Both embed this so a field
+// added here automatically participates in equality, the krt snapshot JSON, and
+// the runtime request for both — no lockstep duplication.
+type jwksRequestSpec struct {
 	RequestKey remotehttp.FetchKey
 	Target     remotehttp.FetchTarget
 	// +noKrtEquals
@@ -29,84 +52,68 @@ type JwksSource struct {
 	TTL            time.Duration
 }
 
-func (s JwksSource) ResourceName() string {
-	return s.OwnerKey.String()
-}
+func (s jwksRequestSpec) RemoteRequestKey() remotehttp.FetchKey { return s.RequestKey }
+func (s jwksRequestSpec) RemoteTTL() time.Duration              { return s.TTL }
 
-func (s JwksSource) Equals(other JwksSource) bool {
-	return s.OwnerKey == other.OwnerKey &&
-		s.RequestKey == other.RequestKey &&
-		reflect.DeepEqual(s.Target, other.Target) &&
+// equals avoids reflect.DeepEqual on every KRT diff.
+func (s jwksRequestSpec) equals(other jwksRequestSpec) bool {
+	return s.RequestKey == other.RequestKey &&
+		s.Target.Equals(other.Target) &&
 		s.TTL == other.TTL
 }
 
-func (s JwksSource) MarshalJSON() ([]byte, error) {
-	type jsonJwksSource struct {
-		OwnerKey          OwnerKey               `json:"ownerKey"`
-		RequestKey        remotehttp.FetchKey    `json:"requestKey"`
-		Target            remotehttp.FetchTarget `json:"target"`
-		HasTLSConfig      bool                   `json:"hasTLSConfig"`
-		HasProxyTLSConfig bool                   `json:"hasProxyTLSConfig"`
-		TTL               time.Duration          `json:"ttl"`
-	}
+// jwksRequestJSON is the krt-snapshot view of a spec: the embedded *tls.Config
+// objects are not serializable, so their presence is reported as booleans.
+type jwksRequestJSON struct {
+	RequestKey        remotehttp.FetchKey    `json:"requestKey"`
+	Target            remotehttp.FetchTarget `json:"target"`
+	HasTLSConfig      bool                   `json:"hasTLSConfig"`
+	HasProxyTLSConfig bool                   `json:"hasProxyTLSConfig"`
+	TTL               time.Duration          `json:"ttl"`
+}
 
-	return json.Marshal(jsonJwksSource{
-		OwnerKey:          s.OwnerKey,
+func (s jwksRequestSpec) snapshot() jwksRequestJSON {
+	return jwksRequestJSON{
 		RequestKey:        s.RequestKey,
 		Target:            s.Target,
-		HasTLSConfig:      s.TLSConfig != nil,      // the underlying tls.Config is not serializable, so we will just indicate its presence
-		HasProxyTLSConfig: s.ProxyTLSConfig != nil, // the underlying tls.Config is not serializable, so we will just indicate its presence
+		HasTLSConfig:      s.TLSConfig != nil,
+		HasProxyTLSConfig: s.ProxyTLSConfig != nil,
 		TTL:               s.TTL,
-	})
+	}
+}
+
+// JwksSource is a per-owner JWKS request before KRT collapses equivalent
+// sources onto a shared request key.
+type JwksSource struct {
+	OwnerKey remotecache.OwnerID
+	jwksRequestSpec
+}
+
+func (s JwksSource) ResourceName() string { return s.OwnerKey.String() }
+
+func (s JwksSource) Equals(other JwksSource) bool {
+	return s.OwnerKey == other.OwnerKey && s.jwksRequestSpec.equals(other.jwksRequestSpec)
+}
+
+func (s JwksSource) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		OwnerKey remotecache.OwnerID `json:"ownerKey"`
+		jwksRequestJSON
+	}{OwnerKey: s.OwnerKey, jwksRequestJSON: s.jwksRequestSpec.snapshot()})
 }
 
 // SharedJwksRequest is the canonical JWKS request produced by KRT for a shared
 // fetch key. It is the unit the runtime Fetcher and persistence layer watch.
 type SharedJwksRequest struct {
-	RequestKey remotehttp.FetchKey
-	Target     remotehttp.FetchTarget
-	// +noKrtEquals
-	TLSConfig *tls.Config
-	// +noKrtEquals
-	ProxyTLSConfig *tls.Config
-	TTL            time.Duration
+	jwksRequestSpec
 }
 
-func (r SharedJwksRequest) ResourceName() string {
-	return string(r.RequestKey)
-}
+func (r SharedJwksRequest) ResourceName() string { return string(r.RequestKey) }
 
 func (r SharedJwksRequest) Equals(other SharedJwksRequest) bool {
-	return r.RequestKey == other.RequestKey &&
-		reflect.DeepEqual(r.Target, other.Target) &&
-		r.TTL == other.TTL
+	return r.jwksRequestSpec.equals(other.jwksRequestSpec)
 }
 
 func (r SharedJwksRequest) MarshalJSON() ([]byte, error) {
-	type jsonSharedJwksRequest struct {
-		RequestKey        remotehttp.FetchKey    `json:"requestKey"`
-		Target            remotehttp.FetchTarget `json:"target"`
-		HasTLSConfig      bool                   `json:"hasTLSConfig"`
-		HasProxyTLSConfig bool                   `json:"hasProxyTLSConfig"`
-		TTL               time.Duration          `json:"ttl"`
-	}
-
-	return json.Marshal(jsonSharedJwksRequest{
-		RequestKey:        r.RequestKey,
-		Target:            r.Target,
-		HasTLSConfig:      r.TLSConfig != nil,      // the underlying tls.Config is not serializable, so we will just indicate its presence
-		HasProxyTLSConfig: r.ProxyTLSConfig != nil, // the underlying tls.Config is not serializable, so we will just indicate its presence
-		TTL:               r.TTL,
-	})
-}
-
-// JwksSource returns the canonical runtime request consumed by the Fetcher.
-func (r SharedJwksRequest) JwksSource() JwksSource {
-	return JwksSource{
-		RequestKey:     r.RequestKey,
-		Target:         r.Target,
-		TLSConfig:      r.TLSConfig,
-		ProxyTLSConfig: r.ProxyTLSConfig,
-		TTL:            r.TTL,
-	}
+	return json.Marshal(r.jwksRequestSpec.snapshot())
 }

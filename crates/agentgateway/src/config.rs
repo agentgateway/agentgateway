@@ -325,10 +325,6 @@ pub fn parse_config(
 			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
 		}
 	};
-	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
-	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
-		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
-		.transpose()?;
 	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
 
 	Ok(crate::Config {
@@ -502,7 +498,6 @@ pub fn parse_config(
 		},
 		dynamic_ca_cert_cache,
 		session_encoder,
-		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
 			// window size: per-stream limit
 			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?

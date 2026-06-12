@@ -5,11 +5,12 @@ use anyhow::Context;
 use base64::Engine;
 use secrecy::{ExposeSecret, SecretString};
 
-use super::{Error, Provider, TokenEndpointAuth};
+use super::{ClientCredentials, Error, Provider};
 use crate::http::Body;
 use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+use crate::types::agent::SimpleBackendReference;
 
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct TokenResponse {
@@ -27,6 +28,7 @@ pub(crate) async fn exchange_code(
 	redirect_uri: &str,
 	code: &str,
 	pkce_verifier: &SecretString,
+	provider_backend: Option<&SimpleBackendReference>,
 ) -> Result<TokenResponse, Error> {
 	exchange_code_with_timeout(
 		client,
@@ -35,11 +37,13 @@ pub(crate) async fn exchange_code(
 		redirect_uri,
 		code,
 		pkce_verifier,
+		provider_backend,
 		DEFAULT_TOKEN_EXCHANGE_TIMEOUT,
 	)
 	.await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn exchange_code_with_timeout(
 	client: PolicyClient,
 	provider: &Provider,
@@ -47,6 +51,7 @@ pub(crate) async fn exchange_code_with_timeout(
 	redirect_uri: &str,
 	code: &str,
 	pkce_verifier: &SecretString,
+	provider_backend: Option<&SimpleBackendReference>,
 	timeout: Duration,
 ) -> Result<TokenResponse, Error> {
 	let mut form = vec![
@@ -60,11 +65,14 @@ pub(crate) async fn exchange_code_with_timeout(
 		.uri(provider.token_endpoint.as_str())
 		.header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(header::ACCEPT, "application/json");
-	match client_config.token_endpoint_auth {
-		TokenEndpointAuth::ClientSecretBasic => {
+	// The token endpoint always needs to know which client is exchanging the
+	// code; confidential clients additionally prove their identity with a
+	// secret. Public clients (`None`) send only the client_id and rely on
+	// PKCE to bind the request to the authorization.
+	match &client_config.credentials {
+		ClientCredentials::ClientSecretBasic { client_secret } => {
 			let encoded_client_id = form_urlencode_component(&client_config.client_id);
-			let encoded_client_secret =
-				form_urlencode_component(client_config.client_secret.expose_secret());
+			let encoded_client_secret = form_urlencode_component(client_secret.expose_secret());
 			let auth = format!(
 				"Basic {}",
 				base64::engine::general_purpose::STANDARD
@@ -72,12 +80,12 @@ pub(crate) async fn exchange_code_with_timeout(
 			);
 			req = req.header(header::AUTHORIZATION, auth);
 		},
-		TokenEndpointAuth::ClientSecretPost => {
+		ClientCredentials::ClientSecretPost { client_secret } => {
 			form.push(("client_id", client_config.client_id.clone()));
-			form.push((
-				"client_secret",
-				client_config.client_secret.expose_secret().to_string(),
-			));
+			form.push(("client_secret", client_secret.expose_secret().to_string()));
+		},
+		ClientCredentials::Public => {
+			form.push(("client_id", client_config.client_id.clone()));
 		},
 	}
 	let body = serde_urlencoded::to_string(form).map_err(anyhow::Error::from)?;
@@ -85,10 +93,12 @@ pub(crate) async fn exchange_code_with_timeout(
 		.body(Body::from(body))
 		.map_err(|e| Error::Config(format!("failed to build token exchange request: {e}")))?;
 	req.extensions_mut().insert(BackendRequestTimeout(timeout));
-	let resp = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
-		.simple_call(req)
-		.await
+	let client = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc);
+	let call = match provider_backend {
+		Some(backend_ref) => client.call_reference(req, backend_ref).await,
+		None => client.simple_call(req).await,
+	};
+	let resp = call
 		.map_err(anyhow::Error::from)
 		.map_err(Error::TokenExchangeFailed)?;
 	let status = resp.status();

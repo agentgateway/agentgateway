@@ -1,19 +1,15 @@
 package jwks
 
 import (
-	"cmp"
+	"time"
 
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/slices"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
-
-var FetchKeyIndexCollectionFunc = krt.WithIndexCollectionFromString(func(s string) remotehttp.FetchKey {
-	return remotehttp.FetchKey(s)
-})
 
 type CollectionInputs struct {
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
@@ -23,21 +19,17 @@ type CollectionInputs struct {
 }
 
 type Collections struct {
-	PolicyOwners   krt.Collection[RemoteJwksOwner]
-	BackendOwners  krt.Collection[RemoteJwksOwner]
-	Owners         krt.Collection[RemoteJwksOwner]
-	Sources        krt.Collection[JwksSource]
 	SharedRequests krt.Collection[SharedJwksRequest]
 }
 
 func NewCollections(inputs CollectionInputs) Collections {
 	policyOwners := krt.NewManyCollection(inputs.AgentgatewayPolicies, func(kctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner {
 		return OwnersFromPolicy(policy)
-	}, inputs.KrtOpts.ToOptions("jwks/PolicyOwners")...)
+	}, inputs.KrtOpts.ToOptions("jwks/policyOwners")...)
 	backendOwners := krt.NewManyCollection(inputs.Backends, func(kctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []RemoteJwksOwner {
 		return OwnersFromBackend(backend)
-	}, inputs.KrtOpts.ToOptions("jwks/BackendOwners")...)
-	owners := krt.JoinCollection([]krt.Collection[RemoteJwksOwner]{policyOwners, backendOwners}, inputs.KrtOpts.ToOptions("jwks/Owners")...)
+	}, inputs.KrtOpts.ToOptions("jwks/backendOwners")...)
+	owners := krt.JoinCollection([]krt.Collection[RemoteJwksOwner]{policyOwners, backendOwners}, inputs.KrtOpts.ToOptions("jwks/owners")...)
 
 	sources := krt.NewCollection(owners, func(kctx krt.HandlerContext, owner RemoteJwksOwner) *JwksSource {
 		resolved, err := inputs.Resolver.ResolveOwner(kctx, owner)
@@ -47,54 +39,42 @@ func NewCollections(inputs CollectionInputs) Collections {
 		}
 
 		return &JwksSource{
-			OwnerKey:       resolved.OwnerID,
-			RequestKey:     resolved.Target.Key,
-			Target:         resolved.Target.Target,
-			TLSConfig:      resolved.Target.TLSConfig,
-			ProxyTLSConfig: resolved.Target.ProxyTLSConfig,
-			TTL:            resolved.TTL,
+			OwnerKey: resolved.OwnerID,
+			jwksRequestSpec: jwksRequestSpec{
+				RequestKey:     resolved.RequestKey(),
+				Target:         resolved.Target.Target,
+				TLSConfig:      resolved.Target.TLSConfig,
+				ProxyTLSConfig: resolved.Target.ProxyTLSConfig,
+				TTL:            resolved.TTL,
+			},
 		}
-	}, inputs.KrtOpts.ToOptions("jwks/Sources")...)
+	}, inputs.KrtOpts.ToOptions("jwks/sources")...)
 
-	sourcesByRequestKey := krt.NewIndex(sources, "jwks-request-key", func(source JwksSource) []remotehttp.FetchKey {
-		return []remotehttp.FetchKey{source.RequestKey}
-	})
-	requestGroups := sourcesByRequestKey.AsCollection(append(inputs.KrtOpts.ToOptions("jwks/RequestGroups"), FetchKeyIndexCollectionFunc)...)
-	sharedRequests := krt.NewCollection(requestGroups, func(kctx krt.HandlerContext, grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
-		return CollapseJwksSources(grouped)
-	}, inputs.KrtOpts.ToOptions("jwks/Requests")...)
+	sharedRequests := remotecache.NewSharedRequestCollection(
+		sources,
+		"jwks",
+		inputs.KrtOpts,
+		func(source JwksSource) remotehttp.FetchKey { return source.RequestKey },
+		collapseJwksSources,
+	)
 
 	return Collections{
-		PolicyOwners:   policyOwners,
-		BackendOwners:  backendOwners,
-		Owners:         owners,
-		Sources:        sources,
 		SharedRequests: sharedRequests,
 	}
 }
 
-func CollapseJwksSources(grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
+func collapseJwksSources(grouped krt.IndexObject[remotehttp.FetchKey, JwksSource]) *SharedJwksRequest {
 	if len(grouped.Objects) == 0 {
 		return nil
 	}
-
-	sources := append([]JwksSource(nil), grouped.Objects...)
-	sources = slices.SortFunc(sources, func(a, b JwksSource) int {
-		return cmp.Compare(a.OwnerKey.String(), b.OwnerKey.String())
-	})
-
-	shared := SharedJwksRequest{
+	primary, minTTL := remotecache.CollapseSources(grouped.Objects,
+		func(s JwksSource) string { return s.OwnerKey.String() },
+		func(s JwksSource) time.Duration { return s.TTL })
+	return &SharedJwksRequest{jwksRequestSpec{
 		RequestKey:     grouped.Key,
-		Target:         sources[0].Target,
-		TLSConfig:      sources[0].TLSConfig,
-		ProxyTLSConfig: sources[0].ProxyTLSConfig,
-		TTL:            sources[0].TTL,
-	}
-	for _, source := range sources[1:] {
-		if source.TTL < shared.TTL {
-			shared.TTL = source.TTL
-		}
-	}
-
-	return &shared
+		Target:         primary.Target,
+		TLSConfig:      primary.TLSConfig,
+		ProxyTLSConfig: primary.ProxyTLSConfig,
+		TTL:            minTTL,
+	}}
 }

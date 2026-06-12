@@ -2,11 +2,13 @@ package remotehttp
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -16,6 +18,11 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
+
+// ErrResolverNotInitialized is returned when a BackendRef-backed fetch is
+// attempted but no remotehttp.Resolver was wired in. Shared by the jwks and
+// oidc subsystems, which both gate their BackendRef path on a non-nil resolver.
+var ErrResolverNotInitialized = errors.New("remote http resolver hasn't been initialized")
 
 // ResolvedBackend is the normalized backend shape required by the remote HTTP
 // resolver. Additional backend kinds can resolve to this type to reuse the
@@ -106,7 +113,7 @@ func (r *defaultResolver) Resolve(krtctx krt.HandlerContext, input ResolveInput)
 			Verification: resolved.proxyTLS.verification,
 			ServerName:   resolved.proxyTLS.serverName,
 			CABundleHash: resolved.proxyTLS.caBundleHash,
-			NextProtos:   append([]string(nil), resolved.proxyTLS.nextProtos...),
+			NextProtos:   slices.Clone(resolved.proxyTLS.nextProtos),
 		}
 	}
 
@@ -118,7 +125,6 @@ func (r *defaultResolver) Resolve(krtctx krt.HandlerContext, input ResolveInput)
 	if resolved.tls == nil {
 		target.URL = fmt.Sprintf("http://%s/%s", resolved.connectHost, path)
 		return &ResolvedTarget{
-			Key:            target.Key(),
 			Target:         target,
 			ProxyTLSConfig: proxyTLSConfig,
 		}, nil
@@ -129,11 +135,10 @@ func (r *defaultResolver) Resolve(krtctx krt.HandlerContext, input ResolveInput)
 		Verification: resolved.tls.verification,
 		ServerName:   resolved.tls.serverName,
 		CABundleHash: resolved.tls.caBundleHash,
-		NextProtos:   append([]string(nil), resolved.tls.nextProtos...),
+		NextProtos:   slices.Clone(resolved.tls.nextProtos),
 	}
 
 	return &ResolvedTarget{
-		Key:            target.Key(),
 		Target:         target,
 		TLSConfig:      resolved.tls.tlsConfig,
 		ProxyTLSConfig: proxyTLSConfig,

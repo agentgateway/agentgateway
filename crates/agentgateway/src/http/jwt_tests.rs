@@ -4,7 +4,7 @@ use itertools::Itertools;
 use serde_json::json;
 
 use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
-use crate::telemetry::log::MetricsConfig;
+use crate::test_helpers::policy::make_min_req_log;
 
 type ProviderInfo = (&'static str, &'static str, &'static str);
 
@@ -630,37 +630,6 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 	assert!(res.is_ok());
 	assert_eq!(req.uri().to_string(), "http://example.com/?keep=yes");
 	assert!(req.extensions().get::<super::Claims>().is_some());
-}
-
-fn make_min_req_log() -> crate::telemetry::log::RequestLog {
-	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-	use std::sync::Arc;
-
-	use frozen_collections::FzHashSet;
-	use prometheus_client::registry::Registry;
-
-	use crate::telemetry::log;
-	use crate::telemetry::log::{LoggingFields, RequestLog};
-	use crate::telemetry::metrics::Metrics;
-	use crate::transport::stream::TCPConnectionInfo;
-
-	let log_cfg = log::Config {
-		filter: None,
-		fields: LoggingFields::default(),
-		level: "info".to_string(),
-		format: crate::LoggingFormat::Text,
-	};
-	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
-	let mut prom = Registry::default();
-	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
-	let start = agent_core::Timestamp::now();
-	let tcp_info = TCPConnectionInfo {
-		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
-		local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
-		start: start.as_instant(),
-		raw_peer_addr: None,
-	};
-	RequestLog::new(cel, metrics, start, tcp_info)
 }
 
 fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {

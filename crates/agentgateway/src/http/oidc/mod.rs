@@ -12,6 +12,7 @@ use tracing::debug;
 use crate::http::{Body, PolicyResponse, Request, Response, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
+use crate::types::agent::SimpleBackendReference;
 
 mod callback;
 mod local;
@@ -23,7 +24,9 @@ mod session;
 mod tests;
 
 pub use local::LocalOidcConfig;
+pub(crate) use local::{PreparedOidcPolicy, parse_jwks_inline};
 pub use redirect::RedirectUri;
+pub(crate) use session::OidcCookieEncoder;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
 	TransactionState,
@@ -31,6 +34,8 @@ pub use session::{
 
 pub use crate::http::oauth::TokenEndpointAuth;
 
+/// Cookie-prefix identity correlating an OIDC policy across controller, xDS,
+/// and dataplane. Wire form: `route/<key>` or `policy/<key>`.
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -131,6 +136,11 @@ pub struct OidcPolicy {
 	pub redirect_uri: RedirectUri,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
+	/// Optional backend reference for token-endpoint calls. When set, exchange_code
+	/// routes through `PolicyClient::call_reference` so attached backend TLS policies
+	/// apply (private CA, insecureSkipVerify, SNI). When None, `simple_call` is used
+	/// with the system trust store.
+	pub provider_backend: Option<SimpleBackendReference>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -146,9 +156,65 @@ pub struct Provider {
 #[serde(rename_all = "camelCase")]
 pub struct ClientConfig {
 	pub client_id: String,
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
-	pub client_secret: SecretString,
-	pub token_endpoint_auth: TokenEndpointAuth,
+	pub credentials: ClientCredentials,
+}
+
+/// Runtime-strict pairing of a token-endpoint auth method with the secret it
+/// requires. Confidential variants carry the `client_secret`; `None` is the
+/// public-client mode where PKCE alone protects the authorization code
+/// exchange. By tying the method to the secret at the type level, public and
+/// confidential configurations cannot be mixed by accident at a call site.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase", tag = "method")]
+pub enum ClientCredentials {
+	ClientSecretBasic {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	ClientSecretPost {
+		#[serde(serialize_with = "crate::serdes::ser_redact")]
+		client_secret: SecretString,
+	},
+	Public,
+}
+
+impl ClientCredentials {
+	#[cfg(test)]
+	pub(super) fn method(&self) -> TokenEndpointAuth {
+		match self {
+			Self::ClientSecretBasic { .. } => TokenEndpointAuth::ClientSecretBasic,
+			Self::ClientSecretPost { .. } => TokenEndpointAuth::ClientSecretPost,
+			Self::Public => TokenEndpointAuth::Public,
+		}
+	}
+
+	/// Pair a method with its (optional) secret, rejecting mismatches. Returns
+	/// an [`Error::Config`] with a user-comprehensible message that names both
+	/// the method and whether a secret was expected.
+	pub fn from_parts(
+		method: TokenEndpointAuth,
+		client_secret: Option<SecretString>,
+	) -> Result<Self, Error> {
+		match (method, client_secret) {
+			(TokenEndpointAuth::ClientSecretBasic, Some(client_secret)) => {
+				Ok(Self::ClientSecretBasic { client_secret })
+			},
+			(TokenEndpointAuth::ClientSecretPost, Some(client_secret)) => {
+				Ok(Self::ClientSecretPost { client_secret })
+			},
+			(TokenEndpointAuth::Public, None) => Ok(Self::Public),
+			(
+				method @ (TokenEndpointAuth::ClientSecretBasic | TokenEndpointAuth::ClientSecretPost),
+				None,
+			) => Err(Error::Config(format!(
+				"tokenEndpointAuthMethod {} requires a clientSecret",
+				method.as_str()
+			))),
+			(TokenEndpointAuth::Public, Some(_)) => Err(Error::Config(
+				"tokenEndpointAuthMethod 'none' must not be paired with a clientSecret".into(),
+			)),
+		}
+	}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -187,12 +253,6 @@ pub enum Error {
 	Http(#[from] anyhow::Error),
 }
 
-struct CallbackQuery {
-	state: String,
-	code: Option<String>,
-	error: Option<String>,
-}
-
 impl OidcPolicy {
 	pub async fn apply(
 		&self,
@@ -200,7 +260,7 @@ impl OidcPolicy {
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
-		if let Some(response) = self.maybe_handle_callback(req, client.clone()).await? {
+		if let Some(response) = callback::maybe_handle(self, req, client.clone()).await? {
 			return Ok(response);
 		}
 
@@ -233,46 +293,6 @@ impl OidcPolicy {
 		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
 		callback::start_login(self, req)
 	}
-
-	async fn maybe_handle_callback(
-		&self,
-		req: &mut Request,
-		client: PolicyClient,
-	) -> Result<Option<PolicyResponse>, Error> {
-		if req.method() != ::http::Method::GET
-			|| req.uri().path() != self.redirect_uri.callback_path.path()
-		{
-			return Ok(None);
-		}
-
-		let Some(query) = CallbackQuery::parse(req) else {
-			return Ok(None);
-		};
-
-		let callback_state = callback::CallbackTransactionState::decode(&query.state)?;
-		let transaction_cookie_name = self
-			.session
-			.transaction_cookie_name(&callback_state.transaction_id);
-		let transaction_cookie = crate::http::read_request_cookie(req, &transaction_cookie_name)
-			.ok_or(Error::MissingTransaction)?
-			.to_string();
-		if let Some(error) = query.error {
-			return Err(Error::ProviderCallback(error));
-		}
-		let code = query.code.ok_or(Error::InvalidCallback)?;
-		let response = callback::handle_callback(
-			self,
-			callback::CallbackRequestContext {
-				code,
-				callback_state,
-				transaction_cookie_name,
-				transaction_cookie,
-			},
-			client,
-		)
-		.await?;
-		Ok(Some(response))
-	}
 }
 
 impl crate::store::RequestPolicyTrait for OidcPolicy {
@@ -297,32 +317,6 @@ fn is_cors_preflight(req: &Request) -> bool {
 			.get(header::ACCESS_CONTROL_REQUEST_METHOD)
 			.map(|value| !value.as_bytes().is_empty())
 			.unwrap_or(false)
-}
-
-impl CallbackQuery {
-	/// Parse callback query parameters from the request in a single pass.
-	/// Returns `None` if the query does not contain `state` + (`code` | `error`),
-	/// meaning this request is not an OAuth2 callback.
-	fn parse(req: &Request) -> Option<Self> {
-		let mut state = None;
-		let mut code = None;
-		let mut error = None;
-		for (key, value) in
-			url::form_urlencoded::parse(req.uri().query().unwrap_or_default().as_bytes())
-		{
-			match key.as_ref() {
-				"state" => state = Some(value.into_owned()),
-				"code" => code = Some(value.into_owned()),
-				"error" => error = Some(value.into_owned()),
-				_ => {},
-			}
-		}
-		let state = state?;
-		if code.is_none() && error.is_none() {
-			return None;
-		}
-		Some(CallbackQuery { state, code, error })
-	}
 }
 
 pub(crate) fn build_redirect_response(
@@ -354,7 +348,7 @@ pub(crate) fn now_unix() -> u64 {
 		.as_secs()
 }
 
-pub(crate) fn dedupe_scopes(mut scopes: Vec<String>) -> Vec<String> {
+pub(crate) fn normalize_scopes(mut scopes: Vec<String>) -> Vec<String> {
 	scopes.insert(0, "openid".into());
 	let mut seen = HashSet::new();
 	scopes.retain(|scope| seen.insert(scope.clone()));

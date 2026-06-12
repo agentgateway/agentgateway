@@ -354,6 +354,8 @@ async fn apply_gateway_policies(
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
 		.await?;
+	// OIDC cookies are stripped later in apply_request_policies, after the
+	// route-level OIDC callback handler has had a chance to consume them.
 
 	policies
 		.jwt

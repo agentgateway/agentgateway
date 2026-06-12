@@ -15,10 +15,10 @@ Start the demo dependencies:
 docker compose -f examples/oidc/docker-compose.yaml up -d
 ```
 
-Export the required browser-auth cookie secret, then start agentgateway:
+Export the session key used to encrypt OIDC cookies, then start agentgateway:
 
 ```bash
-export OIDC_COOKIE_SECRET="$(python3 -c 'import os; print(os.urandom(32).hex())')"
+export SESSION_KEY="$(python3 -c 'import os; print(os.urandom(32).hex())')"
 cargo run -- -f examples/oidc/config.yaml
 ```
 
