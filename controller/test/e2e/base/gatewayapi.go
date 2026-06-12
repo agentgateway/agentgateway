@@ -29,6 +29,8 @@ var (
 	GwApiV1_2_0 = GwApiVersionMustParse("1.2.0")
 	// BackendTLSPolicy moved to standard/v1 in 1.4.0.
 	GwApiV1_4_0 = GwApiVersionMustParse("1.4.0")
+	// Frontend TLS (a.k.a. client cert validation) became standard in 1.5.0
+	GwApiV1_5_0 = GwApiVersionMustParse("1.5.0")
 
 	GwApiRequireRouteNames = map[GwApiChannel]*GwApiVersion{
 		GwApiChannelExperimental: &GwApiV1_2_0,
@@ -38,6 +40,11 @@ var (
 	GwApiRequireBackendTLSPolicy = map[GwApiChannel]*GwApiVersion{
 		GwApiChannelExperimental: &GwApiV1_4_0,
 		GwApiChannelStandard:     &GwApiV1_4_0,
+	}
+
+	GwApiRequireFrontendTLSConfig = map[GwApiChannel]*GwApiVersion{
+		GwApiChannelExperimental: &GwApiV1_4_0,
+		GwApiChannelStandard:     &GwApiV1_5_0,
 	}
 )
 

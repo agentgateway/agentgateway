@@ -1233,6 +1233,50 @@ func validateTLS(certInfo *TLSInfo) *ConfigError {
 	return nil
 }
 
+func bundleCaCertificates(
+	ctx krt.HandlerContext,
+	secrets krt.Collection[*corev1.Secret],
+	configMaps krt.Collection[*corev1.ConfigMap],
+	grants ReferenceGrants,
+	gw controllers.Object,
+	caCertRefs []gwv1.ObjectReference,
+) ([]byte, *ConfigError) {
+	namespace := gw.GetNamespace()
+	caPool := x509.NewCertPool()
+	var caBundle []byte
+
+	for _, ref := range caCertRefs {
+		cred, err := buildCaCertificateReference(ctx, ref, gw, configMaps, secrets)
+		if err != nil {
+			return nil, err
+		}
+
+		if !caPool.AppendCertsFromPEM(cred.Info.CaCert) {
+			return nil, &ConfigError{
+				Reason:  InvalidTLSCA,
+				Message: fmt.Sprintf("invalid CA certificate reference %v, the bundle is malformed", cred.Source),
+			}
+		}
+
+		sameNamespace := cred.Source.Namespace == namespace
+		if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
+			return nil, &ConfigError{
+				Reason: InvalidListenerRefNotPermitted,
+				Message: fmt.Sprintf(
+					"caCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
+					cred.Source.Namespace, ref.Name, namespace,
+				),
+			}
+		}
+
+		if len(caBundle) > 0 {
+			caBundle = append(caBundle, '\n')
+		}
+		caBundle = append(caBundle, cred.Info.CaCert...)
+	}
+	return caBundle, nil
+}
+
 func buildTLS(
 	ctx krt.HandlerContext,
 	secrets krt.Collection[*corev1.Secret],
@@ -1293,28 +1337,11 @@ func buildTLS(
 
 		if gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
 			// TODO: add 'Mode'
-			if len(gatewayTLS.Validation.CACertificateRefs) > 1 {
-				return dummyTls, &ConfigError{
-					Reason:  InvalidTLS,
-					Message: "only one caCertificateRef is supported",
-				}
-			}
-			caCertRef := gatewayTLS.Validation.CACertificateRefs[0]
-			cred, err := buildCaCertificateReference(ctx, caCertRef, gw, configMaps, secrets)
+			caBundle, err := bundleCaCertificates(ctx, secrets, configMaps, grants, gw, gatewayTLS.Validation.CACertificateRefs)
 			if err != nil {
 				return dummyTls, err
 			}
-			sameNamespace := cred.Source.Namespace == namespace
-			if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
-				return dummyTls, &ConfigError{
-					Reason: InvalidListenerRefNotPermitted,
-					Message: fmt.Sprintf(
-						"caCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
-						cred.Source.Namespace, caCertRef.Name, namespace,
-					),
-				}
-			}
-			tlsRes.Info.CaCert = cred.Info.CaCert
+			tlsRes.Info.CaCert = caBundle
 			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
 				tlsRes.Info.MtlsFallbackEnabled = true
 			}
