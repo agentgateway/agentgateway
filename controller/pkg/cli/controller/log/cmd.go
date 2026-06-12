@@ -26,18 +26,16 @@ func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "log",
 		Short: "Get or set controller log levels",
-		Long: `Get or set log levels on the Agentgateway controller.
+		Long: `Get or set log levels on the agentgateway controller.
 
 With no flags, prints the current log level for each component.
 
-Examples:
-  agctl controller log                               # show current levels
-  agctl controller log --level debug                 # set all components to debug
-  agctl controller log --set reconciler=debug        # set a single component
-  agctl controller log --set reconciler=debug --set xds=info  # set multiple
-
 When multiple controller pods are running, all are targeted and output
 is prefixed per pod. All pods are attempted even if one fails.`,
+		Example: `agctl controller log                               # show current levels
+agctl controller log --level debug                 # set all components to debug
+agctl controller log --set reconciler=debug        # set a single component
+agctl controller log --set reconciler=debug --set xds=info  # set multiple`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

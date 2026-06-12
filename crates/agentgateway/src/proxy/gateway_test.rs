@@ -146,6 +146,7 @@ fn https_bind() -> Bind {
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -831,6 +832,36 @@ async fn gateway_phase_oidc_bypasses_cors_preflight_requests() {
 }
 
 #[tokio::test]
+async fn gateway_phase_cors_handles_preflight_before_route_selection() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io,
+		Method::OPTIONS,
+		"http://lo/no-route-needed",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
+}
+
+#[tokio::test]
 async fn network_authorization_allow() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
@@ -1259,6 +1290,56 @@ async fn llm_openai_tokenize() {
 		want,
 	)
 	.await;
+}
+
+#[tokio::test]
+async fn llm_custom_rerank() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/cohere/rerank.json")).await;
+	let provider = crate::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(custom::Provider {
+			model: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Rerank,
+				path: None,
+			}],
+		}),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {"routes": {"/v1/rerank": "rerank"}}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/rerank",
+		include_bytes!("../llm/tests/requests/rerank/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let body: Value =
+		serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["results"][0]["index"], 2);
+	assert_eq!(body["results"][0]["relevance_score"], 0.91);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(
+		upstream_body["query"],
+		"What is the capital of the United States?"
+	);
+	assert_eq!(upstream_body["documents"].as_array().unwrap().len(), 3);
 }
 
 fn setup_custom_llm_provider_backend_mock(
@@ -3197,6 +3278,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -3529,6 +3611,7 @@ async fn auto_protocol_mixed_listeners() {
 				hostname: strng::new("*.example.com"),
 				protocol: ListenerProtocol::HTTPS(
 					types::local::LocalTLSServerConfig {
+						mode: Default::default(),
 						cert: "../../examples/tls/certs/cert.pem".into(),
 						key: "../../examples/tls/certs/key.pem".into(),
 						root: None,

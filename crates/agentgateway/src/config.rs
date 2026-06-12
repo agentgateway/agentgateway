@@ -329,6 +329,7 @@ pub fn parse_config(
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
 		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
 		.transpose()?;
+	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -499,6 +500,7 @@ pub fn parse_config(
 				.and_then(|m| m.session_ttl)
 				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
+		dynamic_ca_cert_cache,
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
@@ -560,6 +562,16 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 			durfmt::parse(&ds).map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
 		})
 		.transpose()
+}
+
+fn parse_dynamic_ca_cert_cache_config() -> anyhow::Result<crate::DynamicCaCertCacheConfig> {
+	let defaults = crate::DynamicCaCertCacheConfig::default();
+	let ttl = parse_duration("DYNAMIC_CA_CERT_CACHE_TTL")?.unwrap_or(defaults.ttl);
+	let capacity = parse::<usize>("DYNAMIC_CA_CERT_CACHE_CAPACITY")?.unwrap_or(defaults.capacity);
+	if capacity == 0 {
+		anyhow::bail!("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)");
+	}
+	Ok(crate::DynamicCaCertCacheConfig { ttl, capacity })
 }
 
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
@@ -1094,6 +1106,43 @@ config:
 			err
 				.to_string()
 				.contains("config.tracing requires otlpEndpoint"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_defaults_without_env() {
+		let _env_lock = lock_env();
+		let defaults = crate::DynamicCaCertCacheConfig::default();
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache, defaults);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_config_env_overrides() {
+		let _env_lock = lock_env();
+		let _ttl = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_TTL", "2m");
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "17");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache.ttl, Duration::from_secs(120));
+		assert_eq!(config.dynamic_ca_cert_cache.capacity, 17);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_rejects_zero_capacity() {
+		let _env_lock = lock_env();
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "0");
+
+		let err = parse_config("{}".to_string(), None).expect_err("zero capacity should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)"),
 			"unexpected error: {err}"
 		);
 	}

@@ -12,7 +12,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
@@ -157,8 +156,8 @@ func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.Agentgateway
 	return &agentgateway.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "gw-policy", Namespace: "default"},
 		Spec: agentgateway.AgentgatewayPolicySpec{
-			TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 					Group: gwv1.Group(gwv1.GroupVersion.Group),
 					Kind:  gwv1.Kind("Gateway"),
 					Name:  gwv1.ObjectName("super-gateway"),
@@ -181,8 +180,8 @@ func attachedBackendPolicy(group gwv1.Group, kind gwv1.Kind, name string, tlsPol
 	return &agentgateway.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "idp-policy", Namespace: "default"},
 		Spec: agentgateway.AgentgatewayPolicySpec{
-			TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 					Group: group,
 					Kind:  kind,
 					Name:  gwv1.ObjectName(name),

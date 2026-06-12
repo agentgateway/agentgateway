@@ -593,6 +593,8 @@ func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_
 		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
 	case agentgateway.ProviderFormatRealtime:
 		return api.AIBackend_REALTIME, nil
+	case agentgateway.ProviderFormatRerank:
+		return api.AIBackend_RERANK, nil
 	default:
 		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
 	}

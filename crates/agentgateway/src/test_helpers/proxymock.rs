@@ -677,6 +677,21 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![])
+	}
+
+	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
+	// opaque backend behind the MCP target. Those flow into the target's resolved
+	// backend policies and run on the upstream leg (e.g. a transformation reading
+	// mcpGuardrails metadata).
+	pub fn with_mcp_backend_and_target_policies(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendTrafficPolicy>,
+		target_policies: Vec<BackendTrafficPolicy>,
+	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
 			Target::Address(b),
@@ -707,7 +722,13 @@ impl TestBind {
 		);
 		{
 			let mut bw = self.pi.stores.binds.write();
-			bw.insert_backend(opb.name(), opb.into());
+			bw.insert_backend(
+				opb.name(),
+				BackendWithPolicies {
+					backend: opb,
+					inline_policies: target_policies,
+				},
+			);
 			bw.insert_backend(
 				b.name(),
 				BackendWithPolicies {
@@ -724,6 +745,16 @@ impl TestBind {
 		name: &str,
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
+	) -> Self {
+		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+	}
+
+	pub fn with_multiplex_mcp_backend_policies(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
@@ -763,7 +794,13 @@ impl TestBind {
 					Backend::Opaque(name, Target::Address(b)).into(),
 				)
 			}
-			bw.insert_backend(b.name(), b.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
 		}
 		self
 	}

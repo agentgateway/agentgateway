@@ -591,27 +591,32 @@ func ProcessParentReferences[T any](
 		allowed[k] = struct{}{}
 	}
 
-	// Aggregate per Gateway for status; also track whether any raw parent was cross-namespace.
-	type gwAgg struct {
+	// Aggregate per parentRef target for status; also track whether any raw parent was cross-namespace.
+	// A ListenerSet and its parent Gateway may resolve to the same data-plane Gateway, but their
+	// Route Accepted conditions must be evaluated independently.
+	type parentAgg struct {
 		anyAllowed bool
 		parentRefs []RouteParentReference
 	}
-	agg := make(map[types.NamespacedName]*gwAgg)
-	crossNS := sets.New[types.NamespacedName]()
-	denied := make(map[types.NamespacedName]*ParentError)
+	agg := make(map[string]*parentAgg)
+	crossNS := sets.New[string]()
+	denied := make(map[string]*ParentError)
+	parentStatusKey := func(p RouteParentReference) string {
+		return fmt.Sprintf("%s/%s/%s", p.ParentKey.Namespace, p.ParentKey.Name, p.ParentKey.Kind)
+	}
 
 	for _, p := range parentRefs {
-		gwNN := p.ParentGateway
-		if _, ok := agg[gwNN]; !ok {
-			agg[gwNN] = &gwAgg{anyAllowed: false, parentRefs: []RouteParentReference{p}}
+		statusKey := parentStatusKey(p)
+		if _, ok := agg[statusKey]; !ok {
+			agg[statusKey] = &parentAgg{anyAllowed: false, parentRefs: []RouteParentReference{p}}
 		} else {
-			agg[gwNN].parentRefs = append(agg[gwNN].parentRefs, p)
+			agg[statusKey].parentRefs = append(agg[statusKey].parentRefs, p)
 		}
 		if p.ParentKey.Namespace != routeNN.Namespace {
-			crossNS.Insert(gwNN)
+			crossNS.Insert(statusKey)
 		}
 		if p.DeniedReason != nil {
-			denied[gwNN] = p.DeniedReason
+			denied[statusKey] = p.DeniedReason
 		}
 	}
 
@@ -626,7 +631,7 @@ func ProcessParentReferences[T any](
 		_, isAllowed := allowed[keyStr]
 
 		if isAllowed {
-			if a := agg[gwNN]; a != nil {
+			if a := agg[parentStatusKey(parent)]; a != nil {
 				a.anyAllowed = true
 			}
 		}
@@ -643,8 +648,8 @@ func ProcessParentReferences[T any](
 		}
 	}
 
-	// Emit exactly ONE ParentStatus per Gateway (aggregate across listeners; no SectionName).
-	for gwNN, a := range agg {
+	// Emit exactly ONE ParentStatus per parentRef target (aggregate across listeners; no SectionName).
+	for statusKey, a := range agg {
 		for _, parent := range a.parentRefs {
 			prStatusRef := parent.OriginalReference
 			{
@@ -672,10 +677,10 @@ func ProcessParentReferences[T any](
 				// 4) Otherwise, no hostname intersection -> NoMatchingListenerHostname
 				reason := gwv1.RouteConditionReason("NoMatchingListenerHostname")
 				msg := "No route hostnames intersect any listener hostname"
-				if dr := denied[gwNN]; dr != nil {
+				if dr := denied[statusKey]; dr != nil {
 					reason = gwv1.RouteConditionReason(dr.Reason)
 					msg = dr.Message
-				} else if crossNS.Contains(gwNN) {
+				} else if crossNS.Contains(statusKey) {
 					reason = gwv1.RouteReasonNotAllowedByListeners
 					msg = "Parent listener not usable or not permitted"
 				} else if parent.OriginalReference.SectionName != nil || parent.OriginalReference.Port != nil {

@@ -36,6 +36,10 @@ func (c *requestConfig) executeNative() (*http.Response, error) {
 	fullURL := c.buildURL()
 
 	client := &http.Client{
+		Timeout: c.timeout,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

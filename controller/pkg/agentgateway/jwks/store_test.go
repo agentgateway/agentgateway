@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
@@ -481,7 +480,7 @@ func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.Agentga
 			Name:      name,
 		},
 		Spec: agentgateway.AgentgatewayPolicySpec{
-			TargetRefs: make([]shared.LocalPolicyTargetReferenceWithSectionName, 1),
+			TargetRefs: make([]agentgateway.LocalPolicyTargetReferenceWithSectionName, 1),
 			Traffic: &agentgateway.Traffic{
 				JWTAuthentication: &agentgateway.JWTAuthentication{
 					Providers: []agentgateway.JWTProvider{{

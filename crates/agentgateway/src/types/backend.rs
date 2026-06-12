@@ -6,9 +6,11 @@ use crate::{apply, *};
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HTTP {
+	/// HTTP version to use when connecting to the backend.
 	#[serde(default, with = "http_serde::option::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub version: Option<::http::Version>,
+	/// Maximum time allowed for a backend HTTP request.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -63,13 +65,15 @@ impl HTTP {
 
 #[apply(schema!)]
 pub struct Tunnel {
-	/// Reference to the proxy address
+	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
 }
 
 #[apply(schema!)]
 pub struct TCP {
+	/// TCP keepalive settings for backend connections.
 	pub keepalives: super::agent::KeepaliveConfig,
+	/// Maximum time allowed to establish a backend TCP connection.
 	pub connect_timeout: Duration,
 }
 

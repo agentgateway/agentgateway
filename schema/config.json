@@ -769,6 +769,11 @@
     "LocalTLSServerConfig": {
       "type": "object",
       "properties": {
+        "mode": {
+          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.",
+          "$ref": "#/$defs/LocalTLSServerMode",
+          "default": "static"
+        },
         "cert": {
           "type": "string"
         },
@@ -828,6 +833,13 @@
       "required": [
         "cert",
         "key"
+      ]
+    },
+    "LocalTLSServerMode": {
+      "type": "string",
+      "enum": [
+        "static",
+        "dynamicCa"
       ]
     },
     "TLSVersion": {
@@ -1079,7 +1091,7 @@
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
+          "description": "Modify request headers before forwarding.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -1091,7 +1103,7 @@
           "default": null
         },
         "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
+          "description": "Modify response headers before returning to the client.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -1103,7 +1115,7 @@
           "default": null
         },
         "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
+          "description": "Return a redirect response instead of forwarding the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/RequestRedirect"
@@ -1115,7 +1127,7 @@
           "default": null
         },
         "urlRewrite": {
-          "description": "Modify the URL path or authority.",
+          "description": "Rewrite the request path or authority before forwarding.",
           "anyOf": [
             {
               "$ref": "#/$defs/UrlRewrite"
@@ -1127,7 +1139,7 @@
           "default": null
         },
         "requestMirror": {
-          "description": "Mirror incoming requests to another destination.",
+          "description": "Send a copy of matching requests to another backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/RequestMirror"
@@ -1139,7 +1151,7 @@
           "default": null
         },
         "directResponse": {
-          "description": "Directly respond to the request with a static response.",
+          "description": "Return a configured response instead of forwarding the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional"
@@ -1162,7 +1174,7 @@
           "default": null
         },
         "mcpAuthorization": {
-          "description": "Authorization policies for MCP access.",
+          "description": "Authorization rules for MCP requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
@@ -1173,8 +1185,20 @@
           ],
           "default": null
         },
+        "mcpGuardrails": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpGuardrails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "authorization": {
-          "description": "Authorization policies for HTTP access.",
+          "description": "Authorization rules for incoming HTTP requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/Authorization"
@@ -1186,7 +1210,7 @@
           "default": null
         },
         "mcpAuthentication": {
-          "description": "Authentication for MCP clients.",
+          "description": "Authenticate MCP clients.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalMcpAuthentication"
@@ -1221,7 +1245,7 @@
           "default": null
         },
         "backendTLS": {
-          "description": "Send TLS to the backend.",
+          "description": "TLS settings used when connecting to the backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -1232,7 +1256,7 @@
           ]
         },
         "backendTunnel": {
-          "description": "Tunnel to the backend.",
+          "description": "Tunnel settings used when connecting to the backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -1244,7 +1268,7 @@
           "default": null
         },
         "backendAuth": {
-          "description": "Authenticate to the backend.",
+          "description": "Authentication credentials sent to the backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/BackendAuth"
@@ -1256,7 +1280,7 @@
           "default": null
         },
         "localRateLimit": {
-          "description": "Rate limit incoming requests. State is kept local.",
+          "description": "Local rate limits for incoming requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalRateLimitPolicy"
@@ -1267,7 +1291,7 @@
           ]
         },
         "remoteRateLimit": {
-          "description": "Rate limit incoming requests. State is managed by a remote server.",
+          "description": "Remote rate limit checks for incoming requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional2"
@@ -1278,7 +1302,7 @@
           ]
         },
         "jwtAuth": {
-          "description": "Authenticate incoming JWT requests.",
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalJwtConfig"
@@ -1289,7 +1313,7 @@
           ]
         },
         "oidc": {
-          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalOidcConfig"
@@ -1300,7 +1324,7 @@
           ]
         },
         "basicAuth": {
-          "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBasicAuth"
@@ -1311,7 +1335,7 @@
           ]
         },
         "apiKey": {
-          "description": "Authenticate incoming requests using API Keys",
+          "description": "Authenticate incoming requests with API keys.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalAPIKeys"
@@ -1322,7 +1346,7 @@
           ]
         },
         "extAuthz": {
-          "description": "Authenticate incoming requests by calling an external authorization server.",
+          "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional3"
@@ -1333,7 +1357,7 @@
           ]
         },
         "extProc": {
-          "description": "Extend agentgateway with an external processor",
+          "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional4"
@@ -1344,7 +1368,7 @@
           ]
         },
         "transformations": {
-          "description": "Modify requests and responses",
+          "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional5"
@@ -1367,7 +1391,7 @@
           "default": null
         },
         "buffer": {
-          "description": "Buffer request and response bodies before forwarding.",
+          "description": "Buffer request and response bodies.",
           "anyOf": [
             {
               "$ref": "#/$defs/Buffer"
@@ -1379,7 +1403,7 @@
           "default": null
         },
         "timeout": {
-          "description": "Timeout requests that exceed the configured duration.",
+          "description": "Set request timeout limits.",
           "anyOf": [
             {
               "$ref": "#/$defs/Policy2"
@@ -1391,7 +1415,7 @@
           "default": null
         },
         "retry": {
-          "description": "Retry matching requests.",
+          "description": "Retry matching failed upstream requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/Policy3"
@@ -1409,18 +1433,21 @@
       "type": "object",
       "properties": {
         "add": {
+          "description": "Headers to append without replacing existing values.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
         "set": {
+          "description": "Headers to set, replacing any existing values.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
         "remove": {
+          "description": "Header names to remove.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1433,12 +1460,14 @@
       "type": "object",
       "properties": {
         "scheme": {
+          "description": "Scheme to use in the redirect URL, such as `http` or `https`.",
           "type": [
             "string",
             "null"
           ]
         },
         "authority": {
+          "description": "Host or port rewrite to apply to the redirect URL.",
           "anyOf": [
             {
               "$ref": "#/$defs/HostRedirect"
@@ -1449,6 +1478,7 @@
           ]
         },
         "path": {
+          "description": "Path rewrite to apply to the redirect URL.",
           "anyOf": [
             {
               "$ref": "#/$defs/PathRedirect"
@@ -1459,6 +1489,7 @@
           ]
         },
         "status": {
+          "description": "HTTP status code to return for the redirect.",
           "type": [
             "integer",
             "null"
@@ -1473,13 +1504,7 @@
     "HostRedirect": {
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "auto",
-            "none"
-          ]
-        },
-        {
+          "description": "Replace the full authority, including host and optional port.",
           "type": "object",
           "properties": {
             "full": {
@@ -1492,6 +1517,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Replace only the host and preserve the effective port.",
           "type": "object",
           "properties": {
             "host": {
@@ -1504,6 +1530,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Replace only the port.",
           "type": "object",
           "properties": {
             "port": {
@@ -1517,12 +1544,23 @@
             "port"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "Use the selected backend host when possible.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Leave the authority unchanged.",
+          "type": "string",
+          "const": "none"
         }
       ]
     },
     "PathRedirect": {
       "oneOf": [
         {
+          "description": "Replace the full request path.",
           "type": "object",
           "properties": {
             "full": {
@@ -1535,6 +1573,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Replace only the matched path prefix.",
           "type": "object",
           "properties": {
             "prefix": {
@@ -1552,6 +1591,7 @@
       "type": "object",
       "properties": {
         "authority": {
+          "description": "Host or port rewrite to apply before forwarding the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/HostRedirect"
@@ -1562,6 +1602,7 @@
           ]
         },
         "path": {
+          "description": "Path rewrite to apply before forwarding the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/PathRedirect"
@@ -1578,9 +1619,11 @@
       "type": "object",
       "properties": {
         "backend": {
+          "description": "Backend that receives mirrored request copies.",
           "$ref": "#/$defs/SimpleLocalBackend"
         },
         "percentage": {
+          "description": "Fraction of matching requests to mirror, from 0.0 to 1.0.",
           "type": "number",
           "format": "double"
         }
@@ -1714,9 +1757,11 @@
           "default": null
         },
         "body": {
+          "description": "Static response body, encoded as bytes.",
           "$ref": "#/$defs/Bytes"
         },
         "bodyExpression": {
+          "description": "CEL expression that computes the response body.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -1727,12 +1772,14 @@
           ]
         },
         "headers": {
+          "description": "Response headers computed from CEL expressions.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
         },
         "status": {
+          "description": "HTTP status code to return.",
           "type": "integer",
           "format": "uint16",
           "minimum": 1,
@@ -1762,9 +1809,11 @@
       "type": "object",
       "properties": {
         "body": {
+          "description": "Static response body, encoded as bytes.",
           "$ref": "#/$defs/Bytes"
         },
         "bodyExpression": {
+          "description": "CEL expression that computes the response body.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -1775,12 +1824,14 @@
           ]
         },
         "headers": {
+          "description": "Response headers computed from CEL expressions.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
         },
         "status": {
+          "description": "HTTP status code to return.",
           "type": "integer",
           "format": "uint16",
           "minimum": 1,
@@ -1796,10 +1847,12 @@
       "type": "object",
       "properties": {
         "allowCredentials": {
+          "description": "Add `Access-Control-Allow-Credentials: true` on allowed CORS responses.",
           "type": "boolean",
           "default": false
         },
         "allowHeaders": {
+          "description": "Values to return in `Access-Control-Allow-Headers` for allowed preflight requests.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1807,6 +1860,7 @@
           "default": []
         },
         "allowMethods": {
+          "description": "Values to return in `Access-Control-Allow-Methods` for allowed preflight requests.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1814,6 +1868,7 @@
           "default": []
         },
         "allowOrigins": {
+          "description": "Request origins that receive CORS response headers. Use `*` to match any origin.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1821,6 +1876,7 @@
           "default": []
         },
         "exposeHeaders": {
+          "description": "Values to return in `Access-Control-Expose-Headers` for allowed CORS responses.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1828,6 +1884,7 @@
           "default": []
         },
         "maxAge": {
+          "description": "Value to return in `Access-Control-Max-Age` for allowed preflight requests.",
           "type": [
             "string",
             "null"
@@ -1838,15 +1895,17 @@
       "additionalProperties": false
     },
     "McpAuthorization": {
+      "description": "CEL authorization rules for MCP tools, prompts, and resources.",
       "$ref": "#/$defs/RuleSet"
     },
     "RuleSet": {
       "type": "object",
       "properties": {
         "rules": {
+          "description": "CEL authorization rules to evaluate for a request.",
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/RuleSerde"
           }
         }
       },
@@ -1855,607 +1914,200 @@
         "rules"
       ]
     },
-    "Authorization": {
-      "$ref": "#/$defs/RuleSet"
-    },
-    "LocalMcpAuthentication": {
-      "type": "object",
-      "properties": {
-        "issuer": {
-          "type": "string"
-        },
-        "audiences": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "provider": {
-          "anyOf": [
+    "RuleSerde": {
+      "anyOf": [
+        {
+          "type": "object",
+          "unevaluatedProperties": false,
+          "oneOf": [
             {
-              "$ref": "#/$defs/McpIDP"
+              "description": "Allow the request when this CEL expression is true.",
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "allow"
+              ]
             },
             {
-              "type": "null"
+              "description": "Deny the request when this CEL expression is true.",
+              "type": "object",
+              "properties": {
+                "deny": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "deny"
+              ]
+            },
+            {
+              "description": "Require this CEL expression to be true.",
+              "type": "object",
+              "properties": {
+                "require": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "require"
+              ]
             }
           ]
         },
-        "resourceMetadata": {
-          "$ref": "#/$defs/ResourceMetadata"
-        },
-        "jwks": {
-          "$ref": "#/$defs/FileInlineOrRemote"
-        },
-        "mode": {
-          "$ref": "#/$defs/McpAuthenticationMode",
-          "default": "strict"
-        },
-        "authorizationLocation": {
-          "$ref": "#/$defs/AuthorizationLocation",
-          "default": {
-            "header": {
-              "name": "authorization",
-              "prefix": "Bearer "
-            }
-          }
-        },
-        "jwtValidationOptions": {
-          "$ref": "#/$defs/JWTValidationOptions"
-        },
-        "clientId": {
-          "type": [
-            "string",
-            "null"
-          ]
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "McpGuardrails": {
+      "type": "object",
+      "properties": {
+        "processors": {
+          "description": "Ordered list of policy processors applied to matched methods; the first\nto reject a request short-circuits the chain. Processors may run on the\nrequest or response side, or both; see `Processor.methods`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Processor"
+          },
+          "minItems": 1
         }
       },
       "additionalProperties": false,
       "required": [
-        "issuer",
-        "audiences",
-        "resourceMetadata",
-        "jwks"
+        "processors"
       ]
     },
-    "McpIDP": {
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "auth0": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "auth0"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "keycloak": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "keycloak"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "okta": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "okta"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "ResourceMetadata": {
+    "Processor": {
       "type": "object",
-      "additionalProperties": true
-    },
-    "FileInlineOrRemote": {
-      "anyOf": [
-        {
+      "properties": {
+        "methods": {
+          "description": "Allowlist: only methods listed here run through this processor, at the\nconfigured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),\nor suffix (`*/list`) wildcards, or `*` for all methods. Methods matching\nno key bypass this processor; see [`phase::resolve`] for match precedence.",
           "type": "object",
-          "properties": {
-            "file": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "file"
-          ]
-        },
-        {
-          "type": "string"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "url"
-          ]
+          "additionalProperties": {
+            "$ref": "#/$defs/Phase"
+          }
         }
-      ]
-    },
-    "McpAuthenticationMode": {
-      "oneOf": [
-        {
-          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
-          "type": "string",
-          "const": "strict"
-        },
-        {
-          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "optional"
-        },
-        {
-          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
-          "type": "string",
-          "const": "permissive"
-        }
-      ]
-    },
-    "AuthorizationLocation": {
+      },
       "oneOf": [
         {
           "type": "object",
           "properties": {
-            "header": {
+            "policies": {
+              "description": "Policies to connect to the backend.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SimpleLocalBackendPolicies"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "failureMode": {
+              "description": "Behavior when the processor is unavailable or returns an error.",
+              "$ref": "#/$defs/FailureMode",
+              "default": "failClosed"
+            },
+            "metadata": {
+              "description": "CEL expressions evaluated per request and sent to the processor as metadata.",
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/Expression"
+              }
+            },
+            "requestHeaders": {
+              "description": "Which incoming request headers are forwarded to the policy server.",
+              "$ref": "#/$defs/HeaderFilter"
+            },
+            "kind": {
+              "type": "string",
+              "const": "remote"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "invalid"
+              ]
+            },
+            {
+              "description": "Service reference. Service must be defined in the top level services list.",
               "type": "object",
               "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "prefix": {
-                  "type": [
-                    "string",
-                    "null"
+                "service": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "$ref": "#/$defs/NamespacedHostname"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "format": "uint16",
+                      "minimum": 0,
+                      "maximum": 65535
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "port"
                   ]
                 }
               },
-              "additionalProperties": false,
               "required": [
-                "name"
+                "service"
               ]
-            }
-          },
-          "required": [
-            "header"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "queryParameter": {
+            },
+            {
+              "description": "Hostname or IP address",
               "type": "object",
               "properties": {
-                "name": {
+                "host": {
+                  "description": "Hostname or IP address",
                   "type": "string"
                 }
               },
-              "additionalProperties": false,
               "required": [
-                "name"
+                "host"
               ]
-            }
-          },
-          "required": [
-            "queryParameter"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "cookie": {
+            },
+            {
               "type": "object",
               "properties": {
-                "name": {
+                "backend": {
+                  "description": "Explicit backend reference. Backend must be defined in the top level backends list",
                   "type": "string"
                 }
               },
-              "additionalProperties": false,
               "required": [
-                "name"
+                "backend"
               ]
             }
-          },
-          "required": [
-            "cookie"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "CEL expression that evaluates to the credential string.\nOnly supported for credential extraction.",
-          "type": "object",
-          "properties": {
-            "expression": {
-              "type": "object",
-              "properties": {
-                "expression": {
-                  "$ref": "#/$defs/Expression"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "expression"
-              ]
-            }
-          },
-          "required": [
-            "expression"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
-      "type": "object",
-      "properties": {
-        "requiredClaims": {
-          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "exp"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "A2aPolicy": {
-      "type": "object",
-      "additionalProperties": false
-    },
-    "Policy": {
-      "type": "object",
-      "properties": {
-        "promptGuard": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptGuard"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "defaults": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "overrides": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
-        "transformations": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Expression"
-          }
-        },
-        "prompts": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptEnrichment"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "modelAliases": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "promptCaching": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptCachingConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "routes": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/RouteType"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PromptGuard": {
-      "type": "object",
-      "properties": {
-        "request": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RequestGuard"
-          }
-        },
-        "response": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ResponseGuard"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "RequestGuard": {
-      "type": "object",
-      "properties": {
-        "rejection": {
-          "$ref": "#/$defs/RequestRejection",
-          "default": {
-            "body": "The request was rejected due to inappropriate content",
-            "status": 403
-          }
-        }
-      },
-      "unevaluatedProperties": false,
-      "oneOf": [
-        {
-          "type": "object",
-          "properties": {
-            "regex": {
-              "$ref": "#/$defs/RegexRules"
-            }
-          },
-          "required": [
-            "regex"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "webhook": {
-              "$ref": "#/$defs/Webhook"
-            }
-          },
-          "required": [
-            "webhook"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "openAIModeration": {
-              "$ref": "#/$defs/Moderation"
-            }
-          },
-          "required": [
-            "openAIModeration"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "bedrockGuardrails": {
-              "$ref": "#/$defs/BedrockGuardrails"
-            }
-          },
-          "required": [
-            "bedrockGuardrails"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "googleModelArmor": {
-              "$ref": "#/$defs/GoogleModelArmor"
-            }
-          },
-          "required": [
-            "googleModelArmor"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "azureContentSafety": {
-              "$ref": "#/$defs/AzureContentSafety"
-            }
-          },
-          "required": [
-            "azureContentSafety"
           ]
         }
       ]
     },
-    "RequestRejection": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "$ref": "#/$defs/Bytes",
-          "default": "The request was rejected due to inappropriate content"
-        },
-        "status": {
-          "type": "integer",
-          "format": "uint16",
-          "minimum": 1,
-          "maximum": 65535,
-          "default": 403
-        },
-        "headers": {
-          "description": "Optional headers to add, set, or remove from the rejection response",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "RegexRules": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/Action",
-          "default": "mask"
-        },
-        "rules": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/RegexRule"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "rules"
-      ]
-    },
-    "Action": {
+    "Phase": {
       "type": "string",
       "enum": [
-        "mask",
-        "reject"
+        "off",
+        "request",
+        "response",
+        "full"
       ]
-    },
-    "RegexRule": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "builtin": {
-              "$ref": "#/$defs/Builtin"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "builtin"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "pattern": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "pattern"
-          ]
-        }
-      ]
-    },
-    "Builtin": {
-      "type": "string",
-      "enum": [
-        "ssn",
-        "creditCard",
-        "phoneNumber",
-        "email",
-        "caSin"
-      ]
-    },
-    "Webhook": {
-      "type": "object",
-      "properties": {
-        "target": {
-          "$ref": "#/$defs/SimpleLocalBackend"
-        },
-        "forwardHeaderMatches": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/HeaderMatch"
-          }
-        },
-        "failureMode": {
-          "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
-          "$ref": "#/$defs/FailureMode"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "target"
-      ]
-    },
-    "FailureMode": {
-      "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.",
-      "oneOf": [
-        {
-          "description": "Reject the request when the webhook guardrail is unavailable (default).",
-          "type": "string",
-          "const": "failClosed"
-        },
-        {
-          "description": "Allow the request through when the webhook guardrail is unavailable.",
-          "type": "string",
-          "const": "failOpen"
-        }
-      ]
-    },
-    "Moderation": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "description": "Model to use. Defaults to `omni-moderation-latest`",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "policies": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "SimpleLocalBackendPolicies": {
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
+          "description": "Modify request headers before forwarding to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -2467,7 +2119,7 @@
           "default": null
         },
         "transformations": {
-          "description": "Modify requests and responses sent to and from the backend.",
+          "description": "Modify request and response data for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransformationConfig"
@@ -2479,7 +2131,7 @@
           "default": null
         },
         "backendTLS": {
-          "description": "Send TLS to the backend.",
+          "description": "TLS settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -2490,7 +2142,7 @@
           ]
         },
         "backendAuth": {
-          "description": "Authenticate to the backend.",
+          "description": "Authentication credentials sent to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/BackendAuth"
@@ -2502,7 +2154,7 @@
           "default": null
         },
         "http": {
-          "description": "Specify HTTP settings for the backend",
+          "description": "HTTP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HTTP"
@@ -2514,7 +2166,7 @@
           "default": null
         },
         "tcp": {
-          "description": "Specify TCP settings for the backend",
+          "description": "TCP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
@@ -2526,7 +2178,7 @@
           "default": null
         },
         "backendTunnel": {
-          "description": "Specify a tunnel to use when connecting to the backend",
+          "description": "Tunnel settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -2544,6 +2196,7 @@
       "type": "object",
       "properties": {
         "request": {
+          "description": "Transform the request before it is forwarded.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransform"
@@ -2554,6 +2207,7 @@
           ]
         },
         "response": {
+          "description": "Transform the response before it is returned.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransform"
@@ -2570,6 +2224,7 @@
       "type": "object",
       "properties": {
         "add": {
+          "description": "Headers to append using CEL expressions for values.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -2577,6 +2232,7 @@
           "default": {}
         },
         "set": {
+          "description": "Headers to set using CEL expressions for values.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -2584,6 +2240,7 @@
           "default": {}
         },
         "remove": {
+          "description": "Header names to remove.",
           "type": "array",
           "items": {
             "type": "string"
@@ -2591,6 +2248,7 @@
           "default": []
         },
         "body": {
+          "description": "CEL expression that computes a replacement body.",
           "type": [
             "string",
             "null"
@@ -2598,6 +2256,7 @@
           "default": null
         },
         "metadata": {
+          "description": "Metadata values to add using CEL expressions.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -2611,38 +2270,45 @@
       "type": "object",
       "properties": {
         "cert": {
+          "description": "Client certificate file to present to the backend.",
           "type": [
             "string",
             "null"
           ]
         },
         "key": {
+          "description": "Private key file for the client certificate.",
           "type": [
             "string",
             "null"
           ]
         },
         "root": {
+          "description": "Root certificate bundle used to verify the backend certificate.",
           "type": [
             "string",
             "null"
           ]
         },
         "hostname": {
+          "description": "Server name to use for TLS verification and SNI.",
           "type": [
             "string",
             "null"
           ]
         },
         "insecure": {
+          "description": "Skip certificate trust verification for the backend connection.",
           "type": "boolean",
           "default": false
         },
         "insecureHost": {
+          "description": "Skip hostname verification for the backend certificate.",
           "type": "boolean",
           "default": false
         },
         "alpn": {
+          "description": "ALPN protocols to offer to the backend.",
           "type": [
             "array",
             "null"
@@ -2653,6 +2319,7 @@
           "default": null
         },
         "subjectAltNames": {
+          "description": "Additional subject alternative names accepted for the backend certificate.",
           "type": [
             "array",
             "null"
@@ -2688,18 +2355,14 @@
     "BackendAuth": {
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "copilot"
-          ]
-        },
-        {
+          "description": "Forward the validated incoming JWT to the backend.",
           "type": "object",
           "properties": {
             "passthrough": {
               "type": "object",
               "properties": {
                 "location": {
+                  "description": "Where to place the forwarded credential in the backend request.",
                   "anyOf": [
                     {
                       "$ref": "#/$defs/AuthorizationLocation"
@@ -2719,15 +2382,18 @@
           "additionalProperties": false
         },
         {
+          "description": "Send a configured secret value to the backend.",
           "type": "object",
           "properties": {
             "key": {
               "type": "object",
               "properties": {
                 "value": {
+                  "description": "Secret value to send to the backend.",
                   "$ref": "#/$defs/FileOrInline"
                 },
                 "location": {
+                  "description": "Where to place the secret in the backend request.",
                   "anyOf": [
                     {
                       "$ref": "#/$defs/AuthorizationLocation"
@@ -2750,6 +2416,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Authenticate to Google Cloud services.",
           "type": "object",
           "properties": {
             "gcp": {
@@ -2762,6 +2429,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Sign backend requests with AWS credentials.",
           "type": "object",
           "properties": {
             "aws": {
@@ -2774,6 +2442,7 @@
           "additionalProperties": false
         },
         {
+          "description": "Authenticate to Azure services.",
           "type": "object",
           "properties": {
             "azure": {
@@ -2782,6 +2451,114 @@
           },
           "required": [
             "azure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to GitHub Copilot.",
+          "type": "string",
+          "const": "copilot"
+        }
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "description": "Read the credential from an HTTP header.",
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Header name containing the credential.",
+                  "type": "string"
+                },
+                "prefix": {
+                  "description": "Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a URL query parameter.",
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Query parameter name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a request cookie.",
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Cookie name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "description": "CEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          "required": [
+            "expression"
           ],
           "additionalProperties": false
         }
@@ -3113,6 +2890,7 @@
       "type": "object",
       "properties": {
         "version": {
+          "description": "HTTP version to use when connecting to the backend.",
           "type": [
             "string",
             "null"
@@ -3120,6 +2898,7 @@
           "default": null
         },
         "requestTimeout": {
+          "description": "Maximum time allowed for a backend HTTP request.",
           "type": [
             "string",
             "null"
@@ -3132,9 +2911,11 @@
       "type": "object",
       "properties": {
         "keepalives": {
+          "description": "TCP keepalive settings for backend connections.",
           "$ref": "#/$defs/KeepaliveConfig"
         },
         "connectTimeout": {
+          "description": "Maximum time allowed to establish a backend TCP connection.",
           "$ref": "#/$defs/Duration"
         }
       },
@@ -3167,7 +2948,7 @@
       "type": "object",
       "properties": {
         "proxy": {
-          "description": "Reference to the proxy address",
+          "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackend"
         }
       },
@@ -3175,6 +2956,599 @@
       "required": [
         "proxy"
       ]
+    },
+    "FailureMode": {
+      "type": "string",
+      "enum": [
+        "failClosed",
+        "failOpen"
+      ]
+    },
+    "HeaderFilter": {
+      "description": "Allow/deny filter over request headers, mirroring ext_authz: empty `allowed`\nforwards every header plus all pseudo-headers (`:authority`, `:method`, ...);\na non-empty `allowed` forwards only the listed names. `disallowed` always\nwins. Header names match case-insensitively; pseudo-headers match exactly.",
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        },
+        "disallowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderOrPseudo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "HeaderOrPseudo": {
+      "type": "string"
+    },
+    "Authorization": {
+      "$ref": "#/$defs/RuleSet"
+    },
+    "LocalMcpAuthentication": {
+      "type": "object",
+      "properties": {
+        "issuer": {
+          "description": "Expected token issuer, matched against the JWT `iss` claim.",
+          "type": "string"
+        },
+        "audiences": {
+          "description": "Accepted token audiences, matched against the JWT `aud` claim.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "provider": {
+          "description": "Identity provider type used to derive MCP authorization metadata and default JWKS URLs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpIDP"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resourceMetadata": {
+          "description": "Protected resource metadata returned to MCP clients.",
+          "$ref": "#/$defs/ResourceMetadata"
+        },
+        "jwks": {
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
+          "$ref": "#/$defs/FileInlineOrRemote"
+        },
+        "mode": {
+          "description": "Controls whether MCP requests must include a valid JWT.",
+          "$ref": "#/$defs/McpAuthenticationMode",
+          "default": "strict"
+        },
+        "authorizationLocation": {
+          "description": "Where to read the JWT from in incoming MCP requests.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "jwtValidationOptions": {
+          "description": "Claim requirements to enforce after the token signature is verified.",
+          "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "clientId": {
+          "description": "OAuth client ID advertised to MCP clients when needed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "issuer",
+        "audiences",
+        "resourceMetadata",
+        "jwks"
+      ]
+    },
+    "McpIDP": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "auth0": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "auth0"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "keycloak": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "keycloak"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "okta": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "okta"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ResourceMetadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "FileInlineOrRemote": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      ]
+    },
+    "McpAuthenticationMode": {
+      "oneOf": [
+        {
+          "description": "A valid token, issued by a configured issuer, must be present.\nThis is the default option.",
+          "type": "string",
+          "const": "strict"
+        },
+        {
+          "description": "If a token exists, validate it.\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "optional"
+        },
+        {
+          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token! Additionally, 401 errors will not be returned,\nwhich will not trigger clients to initiate an oauth flow.",
+          "type": "string",
+          "const": "permissive"
+        }
+      ]
+    },
+    "JWTValidationOptions": {
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "type": "object",
+      "properties": {
+        "requiredClaims": {
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "exp"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "A2aPolicy": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "Policy": {
+      "type": "object",
+      "properties": {
+        "promptGuard": {
+          "description": "Prompt and response guardrails to apply to LLM traffic.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaults": {
+          "description": "Default request body values added only when the client did not provide them.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "description": "Request body values that replace client-provided values.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "transformations": {
+          "description": "Request body values computed from CEL expressions.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "prompts": {
+          "description": "Messages to add before or after the client prompt.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptEnrichment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelAliases": {
+          "description": "Model name aliases that rewrite requested model names.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "promptCaching": {
+          "description": "Prompt caching settings for providers that support cache markers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "routes": {
+          "description": "Route type overrides selected by request path suffix.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/RouteType"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PromptGuard": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "description": "Guards applied to client requests before they reach the LLM.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RequestGuard"
+          }
+        },
+        "response": {
+          "description": "Guards applied to LLM responses before they reach the client.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ResponseGuard"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequestGuard": {
+      "type": "object",
+      "properties": {
+        "rejection": {
+          "description": "Response returned when the request is rejected.",
+          "$ref": "#/$defs/RequestRejection",
+          "default": {
+            "body": "The request was rejected due to inappropriate content",
+            "status": 403
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Apply regex-based masking or rejection rules.",
+          "type": "object",
+          "properties": {
+            "regex": {
+              "$ref": "#/$defs/RegexRules"
+            }
+          },
+          "required": [
+            "regex"
+          ]
+        },
+        {
+          "description": "Call a webhook to evaluate the prompt.",
+          "type": "object",
+          "properties": {
+            "webhook": {
+              "$ref": "#/$defs/Webhook"
+            }
+          },
+          "required": [
+            "webhook"
+          ]
+        },
+        {
+          "description": "Use OpenAI moderation to evaluate the prompt.",
+          "type": "object",
+          "properties": {
+            "openAIModeration": {
+              "$ref": "#/$defs/Moderation"
+            }
+          },
+          "required": [
+            "openAIModeration"
+          ]
+        },
+        {
+          "description": "Use AWS Bedrock Guardrails to evaluate the prompt.",
+          "type": "object",
+          "properties": {
+            "bedrockGuardrails": {
+              "$ref": "#/$defs/BedrockGuardrails"
+            }
+          },
+          "required": [
+            "bedrockGuardrails"
+          ]
+        },
+        {
+          "description": "Use Google Model Armor to evaluate the prompt.",
+          "type": "object",
+          "properties": {
+            "googleModelArmor": {
+              "$ref": "#/$defs/GoogleModelArmor"
+            }
+          },
+          "required": [
+            "googleModelArmor"
+          ]
+        },
+        {
+          "description": "Use Azure Content Safety to evaluate the prompt.",
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/AzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ]
+        }
+      ]
+    },
+    "RequestRejection": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "Response body returned when content is rejected.",
+          "$ref": "#/$defs/Bytes",
+          "default": "The request was rejected due to inappropriate content"
+        },
+        "status": {
+          "description": "HTTP status code returned when content is rejected.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 403
+        },
+        "headers": {
+          "description": "Headers to add, set, or remove from the rejection response.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RegexRules": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "Action to take when a regex rule matches.",
+          "$ref": "#/$defs/Action",
+          "default": "mask"
+        },
+        "rules": {
+          "description": "Regex or built-in patterns to evaluate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RegexRule"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "rules"
+      ]
+    },
+    "Action": {
+      "oneOf": [
+        {
+          "description": "Replace matching content with masked text.",
+          "type": "string",
+          "const": "mask"
+        },
+        {
+          "description": "Reject the request or response when content matches.",
+          "type": "string",
+          "const": "reject"
+        }
+      ]
+    },
+    "RegexRule": {
+      "anyOf": [
+        {
+          "description": "Use a built-in sensitive data pattern.",
+          "type": "object",
+          "properties": {
+            "builtin": {
+              "description": "Built-in pattern name.",
+              "$ref": "#/$defs/Builtin"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "builtin"
+          ]
+        },
+        {
+          "description": "Use a custom regular expression.",
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "description": "Regular expression pattern to evaluate.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pattern"
+          ]
+        }
+      ]
+    },
+    "Builtin": {
+      "oneOf": [
+        {
+          "description": "U.S. Social Security number pattern.",
+          "type": "string",
+          "const": "ssn"
+        },
+        {
+          "description": "Credit card number pattern.",
+          "type": "string",
+          "const": "creditCard"
+        },
+        {
+          "description": "Phone number pattern.",
+          "type": "string",
+          "const": "phoneNumber"
+        },
+        {
+          "description": "Email address pattern.",
+          "type": "string",
+          "const": "email"
+        },
+        {
+          "description": "Canadian Social Insurance Number pattern.",
+          "type": "string",
+          "const": "caSin"
+        }
+      ]
+    },
+    "Webhook": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Backend that receives guardrail webhook requests.",
+          "$ref": "#/$defs/SimpleLocalBackend"
+        },
+        "forwardHeaderMatches": {
+          "description": "Incoming request headers to forward to the webhook.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/FailureMode2"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
+    },
+    "FailureMode2": {
+      "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.",
+      "oneOf": [
+        {
+          "description": "Reject the request when the webhook guardrail is unavailable (default).",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request through when the webhook guardrail is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
+      ]
+    },
+    "Moderation": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "Moderation model to use. Defaults to `omni-moderation-latest`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policies": {
+          "description": "Backend policies used when calling the moderation provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "BedrockGuardrails": {
       "description": "Configuration for AWS Bedrock Guardrails integration.",
@@ -3352,6 +3726,7 @@
       "type": "object",
       "properties": {
         "rejection": {
+          "description": "Response returned when the LLM response is rejected.",
           "$ref": "#/$defs/RequestRejection",
           "default": {
             "body": "The request was rejected due to inappropriate content",
@@ -3362,6 +3737,7 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Apply regex-based masking or rejection rules.",
           "type": "object",
           "properties": {
             "regex": {
@@ -3373,6 +3749,7 @@
           ]
         },
         {
+          "description": "Call a webhook to evaluate the response.",
           "type": "object",
           "properties": {
             "webhook": {
@@ -3384,6 +3761,7 @@
           ]
         },
         {
+          "description": "Use AWS Bedrock Guardrails to evaluate the response.",
           "type": "object",
           "properties": {
             "bedrockGuardrails": {
@@ -3395,6 +3773,7 @@
           ]
         },
         {
+          "description": "Use Google Model Armor to evaluate the response.",
           "type": "object",
           "properties": {
             "googleModelArmor": {
@@ -3406,6 +3785,7 @@
           ]
         },
         {
+          "description": "Use Azure Content Safety to evaluate the response.",
           "type": "object",
           "properties": {
             "azureContentSafety": {
@@ -3422,12 +3802,14 @@
       "type": "object",
       "properties": {
         "append": {
+          "description": "Messages appended to the end of each chat request.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SimpleChatCompletionMessage"
           }
         },
         "prepend": {
+          "description": "Messages prepended to the beginning of each chat request.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SimpleChatCompletionMessage"
@@ -3458,18 +3840,22 @@
       "type": "object",
       "properties": {
         "cacheSystem": {
+          "description": "Add cache markers to system prompts when supported by the provider.",
           "type": "boolean",
           "default": true
         },
         "cacheMessages": {
+          "description": "Add cache markers to chat messages when supported by the provider.",
           "type": "boolean",
           "default": true
         },
         "cacheTools": {
+          "description": "Add cache markers to tool definitions when supported by the provider.",
           "type": "boolean",
           "default": false
         },
         "minTokens": {
+          "description": "Minimum prompt size required before cache markers are added.",
           "type": [
             "integer",
             "null"
@@ -3479,6 +3865,7 @@
           "default": 1024
         },
         "cacheMessageOffset": {
+          "description": "Message offset used when choosing where to place cache markers.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
@@ -3533,6 +3920,11 @@
           "description": "Anthropic /v1/messages/count_tokens",
           "type": "string",
           "const": "anthropicTokenCount"
+        },
+        {
+          "description": "Cohere /v2/rerank (document reranking)",
+          "type": "string",
+          "const": "rerank"
         }
       ]
     },
@@ -3581,21 +3973,25 @@
           "default": null
         },
         "maxTokens": {
+          "description": "Maximum number of tokens that can accumulate in the local bucket.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0,
           "default": 0
         },
         "tokensPerFill": {
+          "description": "Number of tokens added to the local bucket each fill interval.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0,
           "default": 0
         },
         "fillInterval": {
+          "description": "How often the local bucket is refilled.",
           "type": "string"
         },
         "type": {
+          "description": "Whether this limit counts requests or LLM tokens.",
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
         }
@@ -3605,31 +4001,42 @@
       ]
     },
     "RateLimitType": {
-      "type": "string",
-      "enum": [
-        "requests",
-        "tokens"
+      "oneOf": [
+        {
+          "description": "Count each request as one unit.",
+          "type": "string",
+          "const": "requests"
+        },
+        {
+          "description": "Count LLM token usage.",
+          "type": "string",
+          "const": "tokens"
+        }
       ]
     },
     "RateLimitSpec": {
       "type": "object",
       "properties": {
         "maxTokens": {
+          "description": "Maximum number of tokens that can accumulate in the local bucket.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0,
           "default": 0
         },
         "tokensPerFill": {
+          "description": "Number of tokens added to the local bucket each fill interval.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0,
           "default": 0
         },
         "fillInterval": {
+          "description": "How often the local bucket is refilled.",
           "type": "string"
         },
         "type": {
+          "description": "Whether this limit counts requests or LLM tokens.",
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
         }
@@ -3681,10 +4088,11 @@
           "default": null
         },
         "domain": {
+          "description": "Rate limit domain sent to the remote rate limit service.",
           "type": "string"
         },
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the remote rate limit service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -3695,11 +4103,12 @@
           ]
         },
         "descriptors": {
+          "description": "Descriptors sent to the remote rate limit service.",
           "$ref": "#/$defs/DescriptorSet"
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         }
       },
@@ -3779,12 +4188,14 @@
       "type": "object",
       "properties": {
         "entries": {
+          "description": "Descriptor key/value entries. Values are CEL expressions evaluated from the request.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/KV"
           }
         },
         "type": {
+          "description": "Whether this descriptor limits requests or LLM tokens.",
           "$ref": "#/$defs/RateLimitType",
           "default": "requests"
         },
@@ -3820,9 +4231,11 @@
       "type": "object",
       "properties": {
         "key": {
+          "description": "Descriptor entry key sent to the remote rate limit service.",
           "type": "string"
         },
         "value": {
+          "description": "CEL expression used to compute the descriptor entry value.",
           "type": "string"
         }
       },
@@ -3831,7 +4244,7 @@
         "value"
       ]
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
       "oneOf": [
         {
@@ -3850,10 +4263,11 @@
       "type": "object",
       "properties": {
         "domain": {
+          "description": "Rate limit domain sent to the remote rate limit service.",
           "type": "string"
         },
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the remote rate limit service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -3864,11 +4278,12 @@
           ]
         },
         "descriptors": {
+          "description": "Descriptors sent to the remote rate limit service.",
           "$ref": "#/$defs/DescriptorSet"
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         }
       },
@@ -3942,13 +4357,16 @@
     "LocalJwtConfig": {
       "anyOf": [
         {
+          "description": "Validate JWTs against one or more trusted token issuers.",
           "type": "object",
           "properties": {
             "mode": {
+              "description": "Controls whether requests must include a JWT and how validation failures are handled.",
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
             "location": {
+              "description": "Where to read the JWT from in incoming requests.",
               "$ref": "#/$defs/AuthorizationLocation",
               "default": {
                 "header": {
@@ -3958,6 +4376,7 @@
               }
             },
             "providers": {
+              "description": "Trusted issuers and their signing keys.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/ProviderConfig"
@@ -3970,13 +4389,16 @@
           ]
         },
         {
+          "description": "Validate JWTs against a single trusted token issuer.",
           "type": "object",
           "properties": {
             "mode": {
+              "description": "Controls whether requests must include a JWT and how validation failures are handled.",
               "$ref": "#/$defs/Mode",
               "default": "optional"
             },
             "location": {
+              "description": "Where to read the JWT from in incoming requests.",
               "$ref": "#/$defs/AuthorizationLocation",
               "default": {
                 "header": {
@@ -3986,9 +4408,11 @@
               }
             },
             "issuer": {
+              "description": "Expected token issuer, matched against the JWT `iss` claim.",
               "type": "string"
             },
             "audiences": {
+              "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
               "type": [
                 "array",
                 "null"
@@ -3998,9 +4422,11 @@
               }
             },
             "jwks": {
+              "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
               "$ref": "#/$defs/FileInlineOrRemote"
             },
             "jwtValidationOptions": {
+              "description": "Claim requirements to enforce after the token signature is verified.",
               "$ref": "#/$defs/JWTValidationOptions"
             }
           },
@@ -4015,17 +4441,17 @@
     "Mode": {
       "oneOf": [
         {
-          "description": "A valid token, issued by a configured issuer, must be present.",
+          "description": "Require a valid JWT from a configured issuer.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "If a token exists, validate it.\nThis is the default option.\nWarning: this allows requests without a JWT token!",
+          "description": "Validate the JWT when present.\nThis is the default option.\nWarning: this allows requests without a JWT.",
           "type": "string",
           "const": "optional"
         },
         {
-          "description": "Requests are never rejected. This is useful for usage of claims in later steps (authorization, logging, etc).\nWarning: this allows requests without a JWT token!",
+          "description": "Decode valid JWTs for later policy use.\nWarning: this allows requests with missing or invalid JWTs.",
           "type": "string",
           "const": "permissive"
         }
@@ -4035,9 +4461,11 @@
       "type": "object",
       "properties": {
         "issuer": {
+          "description": "Expected token issuer, matched against the JWT `iss` claim.",
           "type": "string"
         },
         "audiences": {
+          "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
           "type": [
             "array",
             "null"
@@ -4047,9 +4475,11 @@
           }
         },
         "jwks": {
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
           "$ref": "#/$defs/FileInlineOrRemote"
         },
         "jwtValidationOptions": {
+          "description": "Claim requirements to enforce after the token signature is verified.",
           "$ref": "#/$defs/JWTValidationOptions"
         }
       },
@@ -4157,11 +4587,11 @@
       "type": "object",
       "properties": {
         "htpasswd": {
-          "description": ".htpasswd file contents/reference",
+          "description": "User database in htpasswd format. Can be inline or loaded from a file.",
           "$ref": "#/$defs/FileOrInline"
         },
         "realm": {
-          "description": "Realm name for the WWW-Authenticate header",
+          "description": "Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.",
           "type": [
             "string",
             "null"
@@ -4169,11 +4599,12 @@
           "default": null
         },
         "mode": {
-          "description": "Validation mode for basic authentication",
+          "description": "Controls whether requests must include valid Basic Auth credentials.",
           "$ref": "#/$defs/Mode2",
           "default": "optional"
         },
         "authorizationLocation": {
+          "description": "Where to read the Basic Auth credentials from in incoming requests.",
           "$ref": "#/$defs/AuthorizationLocation",
           "default": {
             "header": {
@@ -4189,15 +4620,15 @@
       ]
     },
     "Mode2": {
-      "description": "Validation mode for basic authentication",
+      "description": "Validation mode for Basic Auth.",
       "oneOf": [
         {
-          "description": "A valid username/password must be present.",
+          "description": "Require a valid username and password.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+          "description": "Validate credentials when present.\nThis is the default option.\nWarning: this allows requests without Basic Auth credentials.",
           "type": "string",
           "const": "optional"
         }
@@ -4207,18 +4638,19 @@
       "type": "object",
       "properties": {
         "keys": {
-          "description": "List of API keys",
+          "description": "API keys that are accepted by this policy.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalAPIKey"
           }
         },
         "mode": {
-          "description": "Validation mode for API keys",
+          "description": "Controls whether requests must include a valid API key.",
           "$ref": "#/$defs/Mode3",
           "default": "optional"
         },
         "location": {
+          "description": "Where to read the API key from in incoming requests.",
           "$ref": "#/$defs/AuthorizationLocation",
           "default": {
             "header": {
@@ -4237,9 +4669,12 @@
       "type": "object",
       "properties": {
         "key": {
+          "description": "API key value to accept.",
           "$ref": "#/$defs/APIKey"
         },
-        "metadata": true
+        "metadata": {
+          "description": "Optional metadata attached to requests authenticated with this key."
+        }
       },
       "additionalProperties": false,
       "required": [
@@ -4250,20 +4685,20 @@
       "type": "string"
     },
     "Mode3": {
-      "description": "Validation mode for API Key authentication",
+      "description": "Validation mode for API key authentication.",
       "oneOf": [
         {
-          "description": "A valid API Key must be present.",
+          "description": "Require a valid API key.",
           "type": "string",
           "const": "strict"
         },
         {
-          "description": "If credentials exist, validate them.\nThis is the default option.\nWarning: this allows requests without credentials!",
+          "description": "Validate the API key when present.\nThis is the default option.\nWarning: this allows requests without an API key.",
           "type": "string",
           "const": "optional"
         },
         {
-          "description": "Requests are never rejected for missing or invalid API keys.\nWarning: this allows requests without a valid API key!",
+          "description": "Decode valid API keys for later policy use.\nWarning: this allows requests with missing or invalid API keys.",
           "type": "string",
           "const": "permissive"
         }
@@ -4311,7 +4746,7 @@
           "default": null
         },
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4322,26 +4757,26 @@
           ]
         },
         "protocol": {
-          "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+          "description": "Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.",
           "$ref": "#/$defs/Protocol2",
           "default": {
             "grpc": {}
           }
         },
         "failureMode": {
-          "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "description": "Behavior when the authorization service is unavailable or returns an error.",
+          "$ref": "#/$defs/FailureMode4",
           "default": "deny"
         },
         "includeRequestHeaders": {
-          "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
+          "description": "Request headers to send to the authorization service.\nIf unset, gRPC sends all request headers and HTTP sends only `Authorization`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderOrPseudo"
           }
         },
         "includeRequestBody": {
-          "description": "Options for including the request body in the authorization request",
+          "description": "Options for sending the request body to the authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/BodyOptions"
@@ -4352,7 +4787,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -4428,13 +4863,14 @@
     "Protocol2": {
       "oneOf": [
         {
+          "description": "Call the authorization service using the gRPC authorization protocol.",
           "type": "object",
           "properties": {
             "grpc": {
               "type": "object",
               "properties": {
                 "context": {
-                  "description": "Additional context to send to the authorization service.\nThis maps to the `context_extensions` field of the request, and only allows static values.",
+                  "description": "Static context values to send to the authorization service.\nMaps to the `context_extensions` field in the request.",
                   "type": [
                     "object",
                     "null"
@@ -4444,7 +4880,7 @@
                   }
                 },
                 "metadata": {
-                  "description": "Additional metadata to send to the authorization service.\nThis maps to the `metadata_context.filter_metadata` field of the request, and allows dynamic CEL expressions.\nIf unset, by default the `envoy.filters.http.jwt_authn` key is set if the JWT policy is used as well, for compatibility.",
+                  "description": "Metadata values to send to the authorization service, computed from CEL expressions.\nMaps to the `metadata_context.filter_metadata` field in the request.\nIf unset, `envoy.filters.http.jwt_authn` is set when JWT auth is also used, for compatibility.",
                   "type": [
                     "object",
                     "null"
@@ -4463,12 +4899,14 @@
           "additionalProperties": false
         },
         {
+          "description": "Call the authorization service using HTTP.",
           "type": "object",
           "properties": {
             "http": {
               "type": "object",
               "properties": {
                 "path": {
+                  "description": "CEL expression that computes the authorization request path.",
                   "anyOf": [
                     {
                       "$ref": "#/$defs/Expression"
@@ -4479,7 +4917,7 @@
                   ]
                 },
                 "redirect": {
-                  "description": "When using the HTTP protocol, and the server returns unauthorized, redirect to the URL resolved by\nthe provided expression rather than directly returning the error.",
+                  "description": "CEL expression that computes a redirect URL when authorization fails.\nWhen the authorization service returns unauthorized, this redirects instead of returning the error directly.",
                   "anyOf": [
                     {
                       "$ref": "#/$defs/Expression"
@@ -4490,21 +4928,21 @@
                   ]
                 },
                 "includeResponseHeaders": {
-                  "description": "Specific headers from the authorization response will be copied into the request to the backend.",
+                  "description": "Authorization response headers to copy into the backend request.",
                   "type": "array",
                   "items": {
                     "type": "string"
                   }
                 },
                 "addRequestHeaders": {
-                  "description": "Specific headers to add in the authorization request (empty = all headers), based on the expression",
+                  "description": "Headers to add to the authorization request using CEL expressions. Empty means all headers.",
                   "type": "object",
                   "additionalProperties": {
                     "$ref": "#/$defs/Expression"
                   }
                 },
                 "metadata": {
-                  "description": "Metadata to include under the `extauthz` variable, based on the authorization response.",
+                  "description": "Metadata values to expose under the `extauthz` variable after authorization.",
                   "type": "object",
                   "additionalProperties": {
                     "$ref": "#/$defs/Expression"
@@ -4521,16 +4959,20 @@
         }
       ]
     },
-    "FailureMode3": {
+    "FailureMode4": {
       "oneOf": [
         {
+          "description": "Allow the request when the authorization service cannot make a decision.",
           "type": "string",
-          "enum": [
-            "allow",
-            "deny"
-          ]
+          "const": "allow"
         },
         {
+          "description": "Deny the request when the authorization service cannot make a decision.",
+          "type": "string",
+          "const": "deny"
+        },
+        {
+          "description": "Deny the request with the configured HTTP status code.",
           "type": "object",
           "properties": {
             "denyWithStatus": {
@@ -4547,26 +4989,23 @@
         }
       ]
     },
-    "HeaderOrPseudo": {
-      "type": "string"
-    },
     "BodyOptions": {
       "type": "object",
       "properties": {
         "maxRequestBytes": {
-          "description": "Maximum size of request body to buffer (default: 8192)",
+          "description": "Maximum request body size to send to the authorization service. Defaults to 8192 bytes.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
           "default": 0
         },
         "allowPartialMessage": {
-          "description": "If true, send partial body when max_request_bytes is reached",
+          "description": "Whether to send a partial body when the request exceeds `maxRequestBytes`.",
           "type": "boolean",
           "default": false
         },
         "packAsBytes": {
-          "description": "If true, pack body as raw bytes in gRPC",
+          "description": "Whether to send the body as raw bytes for gRPC authorization checks.",
           "type": "boolean",
           "default": false
         }
@@ -4606,7 +5045,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4617,26 +5056,26 @@
           ]
         },
         "protocol": {
-          "description": "The ext_authz protocol to use. Unless you need to integrate with an HTTP-only server, gRPC is recommended.",
+          "description": "Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.",
           "$ref": "#/$defs/Protocol2",
           "default": {
             "grpc": {}
           }
         },
         "failureMode": {
-          "description": "Behavior when the authorization service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode3",
+          "description": "Behavior when the authorization service is unavailable or returns an error.",
+          "$ref": "#/$defs/FailureMode4",
           "default": "deny"
         },
         "includeRequestHeaders": {
-          "description": "Specific headers to include in the authorization request.\nIf unset, the gRPC protocol sends all request headers. The HTTP protocol sends only 'Authorization'.",
+          "description": "Request headers to send to the authorization service.\nIf unset, gRPC sends all request headers and HTTP sends only `Authorization`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderOrPseudo"
           }
         },
         "includeRequestBody": {
-          "description": "Options for including the request body in the authorization request",
+          "description": "Options for sending the request body to the authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/BodyOptions"
@@ -4647,7 +5086,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results by CEL-derived request key.\n\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -4763,7 +5202,7 @@
           "default": null
         },
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the external processing service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4774,8 +5213,8 @@
           ]
         },
         "failureMode": {
-          "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode4",
+          "description": "Behavior when the external processing service is unavailable or returns an error.",
+          "$ref": "#/$defs/FailureMode5",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -4812,6 +5251,7 @@
           }
         },
         "processingOptions": {
+          "description": "Controls which request and response parts are sent to the external processing service.",
           "$ref": "#/$defs/ProcessingOptions",
           "default": {
             "requestBodyMode": "fullDuplexStreamed",
@@ -4886,42 +5326,55 @@
         }
       ]
     },
-    "FailureMode4": {
-      "type": "string",
-      "enum": [
-        "failClosed",
-        "failOpen"
+    "FailureMode5": {
+      "oneOf": [
+        {
+          "description": "Reject the request when the external processing service fails.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Continue the request when the external processing service fails.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "ProcessingOptions": {
       "type": "object",
       "properties": {
         "requestBodyMode": {
+          "description": "How request bodies are sent to the external processing service.",
           "$ref": "#/$defs/BodySendMode",
           "default": "fullDuplexStreamed"
         },
         "responseBodyMode": {
+          "description": "How response bodies are sent to the external processing service.",
           "$ref": "#/$defs/BodySendMode",
           "default": "fullDuplexStreamed"
         },
         "requestHeaderMode": {
+          "description": "Whether request headers are sent to the external processing service.",
           "$ref": "#/$defs/HeaderSendMode",
           "default": "send"
         },
         "responseHeaderMode": {
+          "description": "Whether response headers are sent to the external processing service.",
           "$ref": "#/$defs/HeaderSendMode",
           "default": "send"
         },
         "requestTrailerMode": {
+          "description": "Whether request trailers are sent to the external processing service.",
           "$ref": "#/$defs/TrailerSendMode",
           "default": "send"
         },
         "responseTrailerMode": {
+          "description": "Whether response trailers are sent to the external processing service.",
           "$ref": "#/$defs/TrailerSendMode",
           "default": "send"
         },
         "allowModeOverride": {
-          "description": "Allow ext_proc `mode_override` values from matching headers responses to update\nsubsequent request/response processing phases for this exchange.",
+          "description": "Whether the external processing service can change processing modes during a request.",
           "type": "boolean",
           "default": false
         }
@@ -4929,33 +5382,62 @@
       "additionalProperties": false
     },
     "BodySendMode": {
-      "type": "string",
-      "enum": [
-        "none",
-        "buffered",
-        "bufferedPartial",
-        "fullDuplexStreamed"
+      "oneOf": [
+        {
+          "description": "Do not send the body to the external processing service.",
+          "type": "string",
+          "const": "none"
+        },
+        {
+          "description": "Buffer and send the full body to the external processing service.",
+          "type": "string",
+          "const": "buffered"
+        },
+        {
+          "description": "Buffer and send the body up to the configured limit.",
+          "type": "string",
+          "const": "bufferedPartial"
+        },
+        {
+          "description": "Stream the body bidirectionally with the external processing service.",
+          "type": "string",
+          "const": "fullDuplexStreamed"
+        }
       ]
     },
     "HeaderSendMode": {
-      "type": "string",
-      "enum": [
-        "send",
-        "skip"
+      "oneOf": [
+        {
+          "description": "Send headers to the external processing service.",
+          "type": "string",
+          "const": "send"
+        },
+        {
+          "description": "Do not send headers to the external processing service.",
+          "type": "string",
+          "const": "skip"
+        }
       ]
     },
     "TrailerSendMode": {
-      "type": "string",
-      "enum": [
-        "send",
-        "skip"
+      "oneOf": [
+        {
+          "description": "Send trailers to the external processing service.",
+          "type": "string",
+          "const": "send"
+        },
+        {
+          "description": "Do not send trailers to the external processing service.",
+          "type": "string",
+          "const": "skip"
+        }
       ]
     },
     "ExtProc": {
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when connecting to the external processing service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4966,8 +5448,8 @@
           ]
         },
         "failureMode": {
-          "description": "Behavior when the ext_proc service is unavailable or returns an error",
-          "$ref": "#/$defs/FailureMode4",
+          "description": "Behavior when the external processing service is unavailable or returns an error.",
+          "$ref": "#/$defs/FailureMode5",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5004,6 +5486,7 @@
           }
         },
         "processingOptions": {
+          "description": "Controls which request and response parts are sent to the external processing service.",
           "$ref": "#/$defs/ProcessingOptions",
           "default": {
             "requestBodyMode": "fullDuplexStreamed",
@@ -5121,6 +5604,7 @@
           "default": null
         },
         "request": {
+          "description": "Transform the request before it is forwarded.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransform"
@@ -5131,6 +5615,7 @@
           ]
         },
         "response": {
+          "description": "Transform the response before it is returned.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransform"
@@ -5146,6 +5631,7 @@
       "type": "object",
       "properties": {
         "additionalOrigins": {
+          "description": "Additional trusted origins allowed to send state-changing requests.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -5160,6 +5646,7 @@
       "type": "object",
       "properties": {
         "request": {
+          "description": "Buffer incoming request bodies before forwarding.",
           "anyOf": [
             {
               "$ref": "#/$defs/BufferBody"
@@ -5170,6 +5657,7 @@
           ]
         },
         "response": {
+          "description": "Buffer upstream response bodies before sending them to the client.",
           "anyOf": [
             {
               "$ref": "#/$defs/BufferBody"
@@ -5186,6 +5674,7 @@
       "type": "object",
       "properties": {
         "maxBytes": {
+          "description": "Maximum body size to buffer in bytes.",
           "type": [
             "integer",
             "null"
@@ -5200,12 +5689,14 @@
       "type": "object",
       "properties": {
         "requestTimeout": {
+          "description": "Maximum time allowed for the full downstream request and response.",
           "type": [
             "string",
             "null"
           ]
         },
         "backendRequestTimeout": {
+          "description": "Maximum time allowed for the upstream backend request.",
           "type": [
             "string",
             "null"
@@ -5218,6 +5709,7 @@
       "type": "object",
       "properties": {
         "attempts": {
+          "description": "Total number of attempts, including the original request.",
           "type": "integer",
           "format": "uint8",
           "minimum": 1,
@@ -5225,12 +5717,14 @@
           "default": 1
         },
         "backoff": {
+          "description": "Delay between retry attempts.",
           "type": [
             "string",
             "null"
           ]
         },
         "codes": {
+          "description": "HTTP response status codes that should be retried.",
           "type": "array",
           "items": {
             "type": "integer",
@@ -5238,6 +5732,28 @@
             "minimum": 1,
             "maximum": 65535
           }
+        },
+        "precondition": {
+          "description": "CEL expression evaluated against the request before any attempt; when `false`,\nretries are disabled (only the initial attempt is made), e.g. `request.method == \"GET\"`.\nRetrying requires buffering the request body in memory for replay, so this lets us skip\nthat cost when the request is known to be non-retriable (e.g. streaming or websockets).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "condition": {
+          "description": "CEL expression evaluated against each response to decide whether to retry. A response\nis retried when its status code is in `codes` *or* this expression evaluates to `true`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -5406,7 +5922,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode5"
+              "$ref": "#/$defs/FailureMode6"
             },
             {
               "type": "null"
@@ -5611,7 +6127,7 @@
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
+          "description": "Modify request headers before forwarding to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -5623,7 +6139,7 @@
           "default": null
         },
         "transformations": {
-          "description": "Modify requests and responses sent to and from the backend.",
+          "description": "Modify request and response data for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransformationConfig"
@@ -5635,7 +6151,7 @@
           "default": null
         },
         "backendTLS": {
-          "description": "Send TLS to the backend.",
+          "description": "TLS settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -5646,7 +6162,7 @@
           ]
         },
         "backendAuth": {
-          "description": "Authenticate to the backend.",
+          "description": "Authentication credentials sent to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/BackendAuth"
@@ -5658,7 +6174,7 @@
           "default": null
         },
         "http": {
-          "description": "Specify HTTP settings for the backend",
+          "description": "HTTP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HTTP"
@@ -5670,7 +6186,7 @@
           "default": null
         },
         "tcp": {
-          "description": "Specify TCP settings for the backend",
+          "description": "TCP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
@@ -5682,7 +6198,7 @@
           "default": null
         },
         "backendTunnel": {
-          "description": "Specify a tunnel to use when connecting to the backend",
+          "description": "Tunnel settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -5694,10 +6210,22 @@
           "default": null
         },
         "mcpAuthorization": {
-          "description": "Authorization policies for MCP access.",
+          "description": "Authorization rules for MCP requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mcpGuardrails": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"
@@ -5722,7 +6250,7 @@
         "conditional"
       ]
     },
-    "FailureMode5": {
+    "FailureMode6": {
       "oneOf": [
         {
           "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
@@ -6109,14 +6637,15 @@
         "responses",
         "embeddings",
         "anthropicTokenCount",
-        "realtime"
+        "realtime",
+        "rerank"
       ]
     },
     "LocalBackendPolicies": {
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
-          "description": "Headers to be modified in the request.",
+          "description": "Modify request headers before forwarding to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -6128,7 +6657,7 @@
           "default": null
         },
         "transformations": {
-          "description": "Modify requests and responses sent to and from the backend.",
+          "description": "Modify request and response data for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTransformationConfig"
@@ -6140,7 +6669,7 @@
           "default": null
         },
         "backendTLS": {
-          "description": "Send TLS to the backend.",
+          "description": "TLS settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -6151,7 +6680,7 @@
           ]
         },
         "backendAuth": {
-          "description": "Authenticate to the backend.",
+          "description": "Authentication credentials sent to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/BackendAuth"
@@ -6163,7 +6692,7 @@
           "default": null
         },
         "http": {
-          "description": "Specify HTTP settings for the backend",
+          "description": "HTTP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HTTP"
@@ -6175,7 +6704,7 @@
           "default": null
         },
         "tcp": {
-          "description": "Specify TCP settings for the backend",
+          "description": "TCP protocol settings for this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/TCP"
@@ -6187,7 +6716,7 @@
           "default": null
         },
         "backendTunnel": {
-          "description": "Specify a tunnel to use when connecting to the backend",
+          "description": "Tunnel settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -6199,7 +6728,7 @@
           "default": null
         },
         "responseHeaderModifier": {
-          "description": "Headers to be modified in the response.",
+          "description": "Modify response headers returned from this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -6211,7 +6740,7 @@
           "default": null
         },
         "requestRedirect": {
-          "description": "Directly respond to the request with a redirect.",
+          "description": "Return a redirect response instead of forwarding to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/RequestRedirect"
@@ -6223,7 +6752,7 @@
           "default": null
         },
         "health": {
-          "description": "Health policy for backend outlier detection; evicts on unhealthy responses based on CEL condition and configurable duration.",
+          "description": "Detect unhealthy backend responses and temporarily remove unhealthy endpoints.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalHealthPolicy"
@@ -6234,7 +6763,7 @@
           ]
         },
         "extAuthz": {
-          "description": "Authenticate incoming requests by calling an external authorization server after this backend is selected.",
+          "description": "Authorize incoming requests by calling an external authorization service after this backend is selected.",
           "anyOf": [
             {
               "$ref": "#/$defs/ExtAuthz"
@@ -6246,10 +6775,22 @@
           "default": null
         },
         "mcpAuthorization": {
-          "description": "Authorization policies for MCP access.",
+          "description": "Authorization rules for MCP requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mcpGuardrails": {
+          "description": "External MCP policy processors.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"
@@ -6270,7 +6811,7 @@
           "default": null
         },
         "inferenceRouting": {
-          "description": "Route requests through an endpoint picker before forwarding to the selected backend.",
+          "description": "Route requests through an endpoint picker before forwarding to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/InferenceRouting"
@@ -6301,13 +6842,14 @@
       "type": "object",
       "properties": {
         "unhealthyExpression": {
-          "description": "CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.\nWhen unset, any 5xx or connection failure is treated as unhealthy.",
+          "description": "CEL expression where `true` marks the backend response as unhealthy.\nWhen unset, any 5xx response or connection failure is treated as unhealthy.",
           "type": [
             "string",
             "null"
           ]
         },
         "eviction": {
+          "description": "Settings for temporarily removing unhealthy backends.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalEviction"
@@ -6325,12 +6867,14 @@
       "type": "object",
       "properties": {
         "duration": {
+          "description": "How long to evict an unhealthy backend.",
           "type": [
             "string",
             "null"
           ]
         },
         "restoreHealth": {
+          "description": "Health score to restore when the backend returns from eviction.",
           "type": [
             "number",
             "null"
@@ -6338,6 +6882,7 @@
           "format": "double"
         },
         "consecutiveFailures": {
+          "description": "Consecutive unhealthy responses required before eviction.",
           "type": [
             "integer",
             "null"
@@ -6345,6 +6890,7 @@
           "format": "int32"
         },
         "healthThreshold": {
+          "description": "Health score threshold below which an unhealthy response can evict the backend.",
           "type": [
             "number",
             "null"
@@ -6358,9 +6904,11 @@
       "type": "object",
       "properties": {
         "endpointPicker": {
+          "description": "Endpoint picker backend that selects the destination endpoint.",
           "$ref": "#/$defs/SimpleLocalBackend"
         },
         "destinationMode": {
+          "description": "How to use the destination returned by the endpoint picker.",
           "$ref": "#/$defs/InferenceRoutingDestinationMode"
         }
       },
@@ -6587,7 +7135,7 @@
       "type": "object",
       "properties": {
         "backendTLS": {
-          "description": "Send TLS to the backend.",
+          "description": "TLS settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -6598,7 +7146,7 @@
           ]
         },
         "backendTunnel": {
-          "description": "Tunnel to the backend.",
+          "description": "Tunnel settings used when connecting to this backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -6616,7 +7164,7 @@
       "type": "object",
       "properties": {
         "oidc": {
-          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalOidcConfig"
@@ -6627,7 +7175,7 @@
           ]
         },
         "jwtAuth": {
-          "description": "Authenticate incoming JWT requests.",
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalJwtConfig"
@@ -6638,7 +7186,7 @@
           ]
         },
         "extAuthz": {
-          "description": "Authenticate incoming requests by calling an external authorization server.",
+          "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional3"
@@ -6649,7 +7197,7 @@
           ]
         },
         "extProc": {
-          "description": "Extend agentgateway with an external processor",
+          "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional4"
@@ -6659,8 +7207,20 @@
             }
           ]
         },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "transformations": {
-          "description": "Modify requests and responses",
+          "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional5"
@@ -6671,7 +7231,7 @@
           ]
         },
         "basicAuth": {
-          "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBasicAuth"
@@ -6682,7 +7242,7 @@
           ]
         },
         "apiKey": {
-          "description": "Authenticate incoming requests using API Keys",
+          "description": "Authenticate incoming requests with API keys.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalAPIKeys"
@@ -6793,6 +7353,7 @@
           "default": null
         },
         "tracing": {
+          "description": "Settings for exporting request traces.",
           "anyOf": [
             {
               "$ref": "#/$defs/TracingConfig"
@@ -6810,13 +7371,14 @@
       "type": "object",
       "properties": {
         "maxBufferSize": {
+          "description": "Maximum request or response body size buffered by the frontend.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
           "default": 2097152
         },
         "http1MaxHeaders": {
-          "description": "The maximum number of headers allowed in a request. Changing this value results in a performance\ndegradation, even if set to a lower value than the default (100)",
+          "description": "Maximum number of headers allowed in an HTTP/1 request. Changing this value causes a\nperformance degradation, even when set lower than the default of 100.",
           "type": [
             "integer",
             "null"
@@ -6826,15 +7388,17 @@
           "default": null
         },
         "http1IdleTimeout": {
+          "description": "How long an idle HTTP/1 connection may stay open.",
           "type": "string",
           "default": "10m0s"
         },
         "http1HeaderCase": {
-          "description": "Preserves the original casing of HTTP/1 request header names when encoding responses on the same connection.",
+          "description": "Header casing behavior for HTTP/1 responses.",
           "$ref": "#/$defs/HTTPHeaderCase",
           "default": "lowercase"
         },
         "http2WindowSize": {
+          "description": "HTTP/2 stream flow-control window size.",
           "type": [
             "integer",
             "null"
@@ -6844,6 +7408,7 @@
           "default": null
         },
         "http2ConnectionWindowSize": {
+          "description": "HTTP/2 connection flow-control window size.",
           "type": [
             "integer",
             "null"
@@ -6853,6 +7418,7 @@
           "default": null
         },
         "http2FrameSize": {
+          "description": "Maximum HTTP/2 frame size.",
           "type": [
             "integer",
             "null"
@@ -6862,6 +7428,7 @@
           "default": null
         },
         "http2MaxHeaderSize": {
+          "description": "Maximum size of HTTP/2 request headers.",
           "type": [
             "integer",
             "null"
@@ -6871,6 +7438,7 @@
           "default": null
         },
         "http2KeepaliveInterval": {
+          "description": "Interval between HTTP/2 keepalive pings.",
           "type": [
             "string",
             "null"
@@ -6878,6 +7446,7 @@
           "default": null
         },
         "http2KeepaliveTimeout": {
+          "description": "Time to wait for an HTTP/2 keepalive ping response.",
           "type": [
             "string",
             "null"
@@ -6885,7 +7454,7 @@
           "default": null
         },
         "maxConnectionDuration": {
-          "description": "Maximum duration a connection is allowed to remain open. After this duration,\nthe connection is gracefully closed after the current in-flight request completes.\nUseful for ensuring even traffic distribution behind load balancers during scaling events.",
+          "description": "Maximum time a connection may stay open. After this duration, the connection is gracefully\nclosed after the current in-flight request completes. Useful for even traffic distribution\nbehind load balancers during scaling events.",
           "type": [
             "string",
             "null"
@@ -6896,20 +7465,29 @@
       "additionalProperties": false
     },
     "HTTPHeaderCase": {
-      "type": "string",
-      "enum": [
-        "lowercase",
-        "preserve"
+      "oneOf": [
+        {
+          "description": "Encode HTTP/1 header names in lowercase.",
+          "type": "string",
+          "const": "lowercase"
+        },
+        {
+          "description": "Preserve original HTTP/1 request header casing when encoding responses on the same connection.",
+          "type": "string",
+          "const": "preserve"
+        }
       ]
     },
     "TLS": {
       "type": "object",
       "properties": {
         "handshakeTimeout": {
+          "description": "Maximum time allowed to complete the downstream TLS handshake.",
           "type": "string",
           "default": "15s"
         },
         "alpn": {
+          "description": "ALPN protocols advertised to downstream clients.",
           "type": [
             "array",
             "null"
@@ -6926,6 +7504,7 @@
           "default": null
         },
         "minVersion": {
+          "description": "Minimum TLS version accepted from downstream clients.",
           "anyOf": [
             {
               "$ref": "#/$defs/TLSVersion"
@@ -6936,6 +7515,7 @@
           ]
         },
         "maxVersion": {
+          "description": "Maximum TLS version accepted from downstream clients.",
           "anyOf": [
             {
               "$ref": "#/$defs/TLSVersion"
@@ -6946,6 +7526,7 @@
           ]
         },
         "cipherSuites": {
+          "description": "Cipher suites allowed for downstream TLS.",
           "type": [
             "array",
             "null"
@@ -6971,6 +7552,7 @@
       "type": "object",
       "properties": {
         "keepalives": {
+          "description": "TCP keepalive settings for downstream connections.",
           "$ref": "#/$defs/KeepaliveConfig"
         }
       },
@@ -6980,16 +7562,19 @@
       ]
     },
     "NetworkAuthorization": {
+      "description": "CEL authorization rules for downstream network connections.",
       "$ref": "#/$defs/RuleSet"
     },
     "Proxy": {
       "type": "object",
       "properties": {
         "version": {
+          "description": "PROXY protocol versions accepted from downstream clients.",
           "$ref": "#/$defs/ProxyVersion",
           "default": "v2"
         },
         "mode": {
+          "description": "Whether downstream connections must include a PROXY protocol header.",
           "$ref": "#/$defs/ProxyMode",
           "default": "strict"
         }
@@ -6997,24 +7582,43 @@
       "additionalProperties": false
     },
     "ProxyVersion": {
-      "type": "string",
-      "enum": [
-        "v1",
-        "v2",
-        "all"
+      "oneOf": [
+        {
+          "description": "Accept PROXY protocol v1.",
+          "type": "string",
+          "const": "v1"
+        },
+        {
+          "description": "Accept PROXY protocol v2.",
+          "type": "string",
+          "const": "v2"
+        },
+        {
+          "description": "Accept PROXY protocol v1 or v2.",
+          "type": "string",
+          "const": "all"
+        }
       ]
     },
     "ProxyMode": {
-      "type": "string",
-      "enum": [
-        "strict",
-        "optional"
+      "oneOf": [
+        {
+          "description": "Require a PROXY protocol header on each connection.",
+          "type": "string",
+          "const": "strict"
+        },
+        {
+          "description": "Accept connections with or without a PROXY protocol header.",
+          "type": "string",
+          "const": "optional"
+        }
       ]
     },
     "Connect": {
       "type": "object",
       "properties": {
         "mode": {
+          "description": "How downstream HTTP CONNECT requests are handled.",
           "$ref": "#/$defs/ConnectMode"
         }
       },
@@ -7024,17 +7628,29 @@
       ]
     },
     "ConnectMode": {
-      "type": "string",
-      "enum": [
-        "deny",
-        "route",
-        "tunnel"
+      "oneOf": [
+        {
+          "description": "Reject HTTP CONNECT requests.",
+          "type": "string",
+          "const": "deny"
+        },
+        {
+          "description": "Route HTTP CONNECT requests through normal route matching.",
+          "type": "string",
+          "const": "route"
+        },
+        {
+          "description": "Treat HTTP CONNECT requests as tunnels.",
+          "type": "string",
+          "const": "tunnel"
+        }
       ]
     },
     "LoggingPolicy": {
       "type": "object",
       "properties": {
         "filter": {
+          "description": "CEL expression that decides whether a request is logged.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -7045,12 +7661,14 @@
           ]
         },
         "add": {
+          "description": "Access log fields to add, computed from CEL expressions.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
         "remove": {
+          "description": "Access log field names to remove.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -7058,6 +7676,7 @@
           }
         },
         "otlp": {
+          "description": "OTLP log export settings.",
           "anyOf": [
             {
               "$ref": "#/$defs/OtlpLoggingConfig"
@@ -7074,6 +7693,7 @@
       "type": "object",
       "properties": {
         "policies": {
+          "description": "Backend policies used when exporting OTLP logs.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -7084,10 +7704,12 @@
           ]
         },
         "protocol": {
+          "description": "OTLP protocol used to export logs.",
           "$ref": "#/$defs/TracingProtocol",
           "default": "grpc"
         },
         "path": {
+          "description": "OTLP HTTP path used to export logs.",
           "type": "string"
         }
       },
@@ -7166,7 +7788,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Policies to connect to the backend",
+          "description": "Backend policies used when exporting traces.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -7219,10 +7841,12 @@
           "default": null
         },
         "path": {
+          "description": "OTLP HTTP path used to export traces.",
           "type": "string",
           "default": "/v1/traces"
         },
         "protocol": {
+          "description": "OTLP protocol used to export traces. Defaults to HTTP.",
           "$ref": "#/$defs/TracingProtocol",
           "default": "grpc"
         }
@@ -7300,17 +7924,20 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Policy name used when attaching this policy to a target.",
           "$ref": "#/$defs/ResourceName"
         },
         "target": {
+          "description": "Gateway, listener, route, or backend that this policy attaches to.",
           "$ref": "#/$defs/PolicyTarget"
         },
         "phase": {
-          "description": "phase defines at what level the policy runs at. Gateway policies run pre-routing, while\nRoute policies apply post-routing.\nOnly a subset of policies are eligible as Gateway policies.\nIn general, normal (route level) policies should be used, except you need the policy to influence\nrouting.",
+          "description": "When the policy runs. Gateway policies run before route selection, while route policies run after route selection.\nUse route policies by default unless the policy needs to affect route selection.",
           "$ref": "#/$defs/PolicyPhase",
           "default": "route"
         },
         "policy": {
+          "description": "Policy settings to apply to the selected target.",
           "$ref": "#/$defs/FilterOrPolicy"
         }
       },
@@ -8019,7 +8646,7 @@
       "type": "object",
       "properties": {
         "oidc": {
-          "description": "Authenticate incoming browser requests with OIDC authorization code flow.",
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalOidcConfig"
@@ -8030,7 +8657,7 @@
           ]
         },
         "jwtAuth": {
-          "description": "Authenticate incoming JWT requests.",
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalJwtConfig"
@@ -8041,7 +8668,7 @@
           ]
         },
         "extAuthz": {
-          "description": "Authenticate incoming requests by calling an external authorization server.",
+          "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional3"
@@ -8052,7 +8679,7 @@
           ]
         },
         "extProc": {
-          "description": "Extend agentgateway with an external processor",
+          "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalExplicitOrConditional4"
@@ -8061,51 +8688,6 @@
               "type": "null"
             }
           ]
-        },
-        "transformations": {
-          "description": "Modify requests and responses",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalExplicitOrConditional5"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "basicAuth": {
-          "description": "Authenticate incoming requests using Basic Authentication with htpasswd.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalBasicAuth"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "apiKey": {
-          "description": "Authenticate incoming requests using API Keys",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalAPIKeys"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "authorization": {
-          "description": "Authorization policies for HTTP access.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Authorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         },
         "cors": {
           "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
@@ -8119,8 +8701,53 @@
           ],
           "default": null
         },
+        "transformations": {
+          "description": "Modify request and response headers, bodies, or metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional5"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "localRateLimit": {
-          "description": "Rate limit incoming requests. State is kept local.",
+          "description": "Local rate limits for incoming requests.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/RateLimitSpec"
@@ -8128,7 +8755,7 @@
           "default": []
         },
         "remoteRateLimit": {
-          "description": "Rate limit incoming requests. State is managed by a remote server.",
+          "description": "Remote rate limit checks for incoming requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/RemoteRateLimit"
@@ -8177,7 +8804,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode5"
+              "$ref": "#/$defs/FailureMode6"
             },
             {
               "type": "null"

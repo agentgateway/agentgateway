@@ -12,8 +12,8 @@ import (
 func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "proxy",
-		Short: "Inspect and manage the Agentgateway proxy",
-		Long:  "Inspect and manage the Agentgateway proxy admin API.",
+		Short: "Inspect and manage the agentgateway proxy",
+		Long:  "Inspect and manage the agentgateway proxy admin API.",
 	}
 
 	cmd.AddCommand(flag.BuildCobra(config.Command))

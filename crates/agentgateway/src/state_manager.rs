@@ -37,7 +37,11 @@ impl StateManager {
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
-		let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
+		let stores = Stores::new_with_dynamic_ca_cert_cache(
+			config.ipv6_enabled,
+			config.threading_mode,
+			config.dynamic_ca_cert_cache.clone(),
+		);
 		let xds_client = if let Some(addr) = &xds.address {
 			let connector = control::grpc_connector(
 				client.clone(),

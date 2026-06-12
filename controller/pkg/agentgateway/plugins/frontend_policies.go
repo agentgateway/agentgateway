@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -129,14 +128,14 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var randomSampling *string
 	if tracing.RandomSampling != nil {
-		randomSampling = castCELPtr(tracing.RandomSampling, func(expr shared.CELExpression) {
+		randomSampling = castCELPtr(tracing.RandomSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing randomSampling is not a valid CEL expression: %s", expr))
 		})
 	}
 
 	var clientSampling *string
 	if tracing.ClientSampling != nil {
-		clientSampling = castCELPtr(tracing.ClientSampling, func(expr shared.CELExpression) {
+		clientSampling = castCELPtr(tracing.ClientSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing clientSampling is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -188,7 +187,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	spec := &api.FrontendPolicySpec_Logging{}
 	var errs []error
 	if f := logging.Filter; f != nil {
-		spec.Filter = castCELPtr(f, func(expr shared.CELExpression) {
+		spec.Filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -371,9 +370,9 @@ func translateFrontendConnect(policy *agentgateway.AgentgatewayPolicy, name stri
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
 	var allowPolicies, denyPolicies, requirePolicies []string
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)

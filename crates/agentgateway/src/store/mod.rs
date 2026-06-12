@@ -66,11 +66,20 @@ impl Stores {
 	}
 
 	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Stores {
+		Self::new_with_dynamic_ca_cert_cache(ipv6_enabled, threading_mode, Default::default())
+	}
+
+	pub fn new_with_dynamic_ca_cert_cache(
+		ipv6_enabled: bool,
+		threading_mode: crate::ThreadingMode,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
+	) -> Stores {
 		Stores {
 			discovery: discovery::StoreUpdater::new(Arc::new(RwLock::new(discovery::Store::new()))),
 			binds: binds::StoreUpdater::new(Arc::new(RwLock::new(binds::Store::new(
 				ipv6_enabled,
 				threading_mode,
+				dynamic_ca_cert_cache,
 			)))),
 		}
 	}

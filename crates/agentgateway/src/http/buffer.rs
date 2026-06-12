@@ -7,14 +7,17 @@ mod buffer_tests;
 #[apply(schema!)]
 #[derive(Default)]
 pub struct BufferBody {
+	/// Maximum body size to buffer in bytes.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_bytes: Option<usize>,
 }
 
 #[apply(schema!)]
 pub struct Buffer {
+	/// Buffer incoming request bodies before forwarding.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub request: Option<BufferBody>,
+	/// Buffer upstream response bodies before sending them to the client.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<BufferBody>,
 }

@@ -1,6 +1,9 @@
 package curl
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+	"time"
+)
 
 // requestConfig contains the set of options that can be used to configure a curl request
 type requestConfig struct {
@@ -11,5 +14,6 @@ type requestConfig struct {
 	body      string
 	path      string
 	scheme    string
+	timeout   time.Duration
 	tlsConfig *tls.Config
 }

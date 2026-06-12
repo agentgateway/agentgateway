@@ -52,20 +52,18 @@ func buildNotifyInitializedRequest() string {
 	return `{"jsonrpc":"2.0","method":"notifications/initialized"}`
 }
 
-// mcpHeaders returns a base set of headers for MCP requests.
-// Accept includes both JSON and SSE to support initializing responses and streaming.
-// Extra headers can be provided to include auth headers, etc.
+// mcpHeaders returns the standard MCP request headers. If extraHeaders contains
+// a "Host" entry it is forwarded as the HTTP Host header by mcpCurlOptions.
 func mcpHeaders(extraHeaders map[string]string) map[string]string {
-	baseHeaders := map[string]string{
+	h := map[string]string{
 		"Content-Type":         "application/json",
 		"Accept":               "application/json, text/event-stream",
 		"MCP-Protocol-Version": mcpProto,
 	}
-	maps.Copy(baseHeaders, extraHeaders)
-	return baseHeaders
+	maps.Copy(h, extraHeaders)
+	return h
 }
 
-// withSessionID returns a copy of headers including mcp-session-id.
 func withSessionID(headers map[string]string, sessionID string) map[string]string {
 	cp := make(map[string]string, len(headers)+1)
 	maps.Copy(cp, headers)
@@ -204,11 +202,23 @@ func sendMCP(t base.Test, match *testmatchers.HttpResponse, headers map[string]s
 }
 
 func mcpCurlOptions(headers map[string]string, body string) []curl.Option {
+	return curlPostOptions("/mcp", headers, body)
+}
+
+// curlPostOptions builds POST options for path with headers. A "Host" entry in
+// headers is applied via curl.WithHostHeader so the gateway can route on it.
+func curlPostOptions(path string, headers map[string]string, body string) []curl.Option {
 	opts := []curl.Option{
-		curl.WithPath("/mcp"),
+		curl.WithPath(path),
 		curl.WithMethod(http.MethodPost),
 	}
+	if host := headers["Host"]; host != "" {
+		opts = append(opts, curl.WithHostHeader(host))
+	}
 	for k, v := range headers {
+		if strings.EqualFold(k, "Host") {
+			continue
+		}
 		opts = append(opts, curl.WithHeader(k, v))
 	}
 	if body != "" {
@@ -217,19 +227,13 @@ func mcpCurlOptions(headers map[string]string, body string) []curl.Option {
 	return opts
 }
 
-// helper to run a request to a given path and return response and body text.
+// execCurl runs a POST to path and returns the response and body text.
 func execCurl(t base.Test, path string, headers map[string]string, body string) (*http.Response, string, error) {
-	opts := append(base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
-		curl.WithPath(path),
-		curl.WithMethod(http.MethodPost),
+	opts := append(
+		base.GatewayAddressOptions(base.BaseGateway.ResolvedAddress()),
+		curl.WithTimeout(30*time.Second),
 	)
-	for k, v := range headers {
-		opts = append(opts, curl.WithHeader(k, v))
-	}
-	if body != "" {
-		opts = append(opts, curl.WithBody(body))
-	}
-
+	opts = append(opts, curlPostOptions(path, headers, body)...)
 	resp, err := curl.ExecuteRequest(opts...)
 	if err != nil {
 		return nil, "", err
@@ -246,7 +250,6 @@ func execCurl(t base.Test, path string, headers map[string]string, body string) 
 	return resp, bodyText, nil
 }
 
-// helper to run a POST to /mcp with optional headers and body
 func execCurlMCP(t base.Test, headers map[string]string, body string) (*http.Response, string, error) {
 	return execCurl(t, "/mcp", headers, body)
 }

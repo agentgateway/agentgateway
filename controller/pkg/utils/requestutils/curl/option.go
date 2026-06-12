@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Option represents an option for a curl request.
@@ -14,6 +15,13 @@ type Option func(config *requestConfig)
 func WithMethod(method string) Option {
 	return func(config *requestConfig) {
 		config.method = method
+	}
+}
+
+// WithTimeout bounds the whole request via a context deadline.
+func WithTimeout(d time.Duration) Option {
+	return func(config *requestConfig) {
+		config.timeout = d
 	}
 }
 

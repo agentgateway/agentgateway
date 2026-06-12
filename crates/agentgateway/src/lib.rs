@@ -233,6 +233,23 @@ pub struct BackendConfig {
 	pool_max_size: Option<usize>,
 }
 
+#[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicCaCertCacheConfig {
+	#[serde(with = "serde_dur")]
+	pub ttl: Duration,
+	pub capacity: usize,
+}
+
+impl Default for DynamicCaCertCacheConfig {
+	fn default() -> Self {
+		Self {
+			ttl: Duration::from_secs(300),
+			capacity: 256,
+		}
+	}
+}
+
 impl Default for BackendConfig {
 	fn default() -> Self {
 		crate::BackendConfig {
@@ -505,6 +522,7 @@ pub struct Config {
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
+	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
 }
 
 #[apply(schema!)]
