@@ -10,16 +10,33 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/api"
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 )
 
+type ReferenceGrantChecker interface {
+	SecretAllowed(ctx krt.HandlerContext, kind schema.GroupVersionKind, secret types.NamespacedName, namespace string) bool
+	BackendAllowed(
+		ctx krt.HandlerContext,
+		k schema.GroupVersionKind,
+		backendName gwv1b1.ObjectName,
+		backendNamespace gwv1b1.Namespace,
+		sourceNamespace string,
+		refKind schema.GroupKind,
+		mode apisettings.BackendRefGrantMode,
+	) bool
+}
+
 type PolicyPluginInput struct {
 	References ReferenceIndex
+	Grants     ReferenceGrantChecker
 }
 
 type BackendPlugin struct {
@@ -68,6 +85,9 @@ type ParentInfo struct {
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
 	ServiceKey *types.NamespacedName
+	// ServicePorts are the ports on the ServiceKey; a route referencing a port not
+	// in this list is rejected. Distinct from Port, which is for single-port listeners.
+	ServicePorts []gwv1.PortNumber
 	// AllowedKinds indicates which kinds can be admitted by this Parent.
 	AllowedKinds []gwv1.RouteGroupKind
 	// Hostnames that must match to reference the Parent. Format is ns/hostname.
@@ -88,6 +108,7 @@ func (g ParentInfo) Equals(other ParentInfo) bool {
 		g.ParentGatewayClassName == other.ParentGatewayClassName &&
 		g.ListenerKey == other.ListenerKey &&
 		ptr.Equal(g.ServiceKey, other.ServiceKey) &&
+		slices.Equal(g.ServicePorts, other.ServicePorts) &&
 		g.OriginalHostname == other.OriginalHostname &&
 		g.SectionName == other.SectionName &&
 		g.Port == other.Port &&

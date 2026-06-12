@@ -21,6 +21,7 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 pub fn path(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Embeddings => "/v1beta/openai/embeddings",
+		RouteType::Rerank => "/rerank",
 		_ => "/v1beta/openai/chat/completions",
 	}
 }

@@ -38,6 +38,7 @@ message Bind {
     PROXY = 1;
     HBONE_WAYPOINT = 2;
     HBONE_GATEWAY = 3;
+    CONNECT = 4;
   }
   string key = 1;
   uint32 port = 2;
@@ -93,6 +94,8 @@ message Route {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // Key for the route group this route is a part of.
   optional string route_group_key = 10;
 
@@ -118,6 +121,8 @@ message TCPRoute {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // User facing name for this resource
   RouteName name = 3;
 
@@ -138,11 +143,19 @@ message ConditionalPolicy {
   }
 }
 message Policy {
+  enum Inheritance {
+    DEFAULT = 0;
+    OVERRIDE = 1;
+  }
+
   // Unique key for this policy
   string key = 1;
   // User facing name for this resource
   TypedResourceName name = 2;
   PolicyTarget target = 3;
+  // Controls whether more-specific child policy levels can be included when
+  // computing the effective policy.
+  Inheritance inheritance = 8;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
@@ -216,6 +229,7 @@ message TLSConfig {
   enum CertificateSource {
     INLINE = 0;
     ISTIO_WORKLOAD = 1;
+    DYNAMIC_CA = 2;
   }
 
   enum TLSVersion {
@@ -302,6 +316,13 @@ message Retry {
   repeated int32 retry_status_codes = 1;
   int32 attempts = 2;
   google.protobuf.Duration backoff = 3;
+  // CEL expression evaluated against the request before any attempt. When it evaluates
+  // to false, retries are disabled (only the initial attempt is made). This avoids
+  // buffering request bodies for replay when the request is known to be non-retriable.
+  string precondition = 4;
+  // CEL expression evaluated against each response. A response is retried when its status
+  // code is in retry_status_codes or this expression evaluates to true.
+  string condition = 5;
 }
 
 message BackendAuthPolicy {
@@ -374,6 +395,8 @@ message Aws {
   // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
   // If unset, typed AWS backends may provide this automatically.
   string service_name = 3;
+  // Optional STS role to assume before signing requests.
+  AwsAssumeRole assume_role = 4;
 }
 
 // Azure-specific backend authentication.
@@ -399,6 +422,12 @@ message AwsExplicitConfig {
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
 message AwsImplicit {}
+
+// AWS STS AssumeRole configuration.
+message AwsAssumeRole {
+  // Role ARN to assume before signing backend requests.
+  string role_arn = 1;
+}
 
 // Explicit Azure credentials configuration
 message AzureExplicitConfig {
@@ -494,6 +523,16 @@ message DirectResponse {
   string body_expression = 3;
   repeated ExpressionHeader headers = 4;
 }
+
+message BufferBody {
+  optional uint32 max_bytes = 1;
+}
+
+message Buffer {
+  optional BufferBody request = 1;
+  optional BufferBody response = 2;
+}
+
 
 message ExpressionHeader {
   string name = 1;
@@ -598,6 +637,11 @@ message KeepaliveConfig {
 
 message FrontendPolicySpec {
   message HTTP {
+    enum HTTPHeaderCase {
+      LOWERCASE = 0;
+      PRESERVE = 1;
+    }
+
     optional uint32 max_buffer_size = 1;
     optional uint32 http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
@@ -608,6 +652,8 @@ message FrontendPolicySpec {
     google.protobuf.Duration http2_keepalive_timeout = 8;
     google.protobuf.Duration max_connection_duration = 9;
     optional uint32 http2_max_header_size = 10;
+    // Controls HTTP/1 request header casing when encoding responses.
+    HTTPHeaderCase http1_header_case = 11;
   }
   message TLS {
     // TLS handshake timeout
@@ -741,6 +787,16 @@ message FrontendPolicySpec {
     Mode mode = 2;
   }
 
+  message Connect {
+    enum Mode {
+      DENY = 0;
+      ROUTE = 1;
+      TUNNEL = 2;
+    }
+
+    Mode mode = 1;
+  }
+
   // Custom Prometheus metric label configuration policy.
   // CEL expressions are evaluated per-request and added as labels to all metrics.
   message Metrics {
@@ -763,6 +819,7 @@ message FrontendPolicySpec {
     NetworkAuthorization network_authorization = 6;
     ProxyProtocol proxy_protocol = 7;
     Metrics metrics = 8;
+    Connect connect = 9;
   }
 }
 
@@ -1050,6 +1107,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    Buffer buffer = 22;
   }
 }
 
@@ -1095,6 +1153,14 @@ message BackendPolicySpec {
     message Webhook {
       BackendReference backend = 1;
       repeated HeaderMatch forward_header_matches = 3;
+
+      // Behavior when the webhook guardrail is unavailable or returns an
+      // error. Defaults to FAIL_CLOSED.
+      enum FailureMode {
+        FAIL_CLOSED = 0;
+        FAIL_OPEN = 1;
+      }
+      FailureMode failure_mode = 4;
     }
 
     message Moderation {
@@ -1244,6 +1310,8 @@ message BackendPolicySpec {
       EMBEDDINGS = 7;
       // OpenAI /v1/realtime
       REALTIME = 8;
+      // Processes Cohere /v2/rerank format requests
+      RERANK = 10;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
@@ -1387,6 +1455,66 @@ message BackendPolicySpec {
     optional string client_id = 9;
   }
 
+  // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
+  // policy processors. Today only the `remote` processor is defined — a custom
+  // gRPC policy server (the ExtMcp service) modeled on Envoy ext_authz.
+  message McpGuardrails {
+    // Phase controls whether the request side, response side, or both of a
+    // method are run through the guardrails pipeline.
+    enum Phase {
+      OFF = 0;
+      REQUEST = 1;
+      RESPONSE = 2;
+      FULL = 3;
+    }
+
+    enum FailureMode {
+      DENY = 0;
+      ALLOW = 1;
+    }
+
+    // Configuration for the custom gRPC policy server. TLS, retries, and
+    // load balancing to the policy server come from the backend referenced
+    // by `target` (same pattern as TrafficPolicySpec.ExternalAuth).
+    message Remote {
+      BackendReference target = 1;
+      FailureMode failure_mode = 2;
+      // Static or CEL-evaluated context, surfaced to the policy server as
+      // fields of the `metadata_context` google.protobuf.Struct, keyed by
+      // config key.
+      map<string, string> metadata = 3;
+      // Request headers forwarded to the policy server in `McpRequest.headers`.
+      // Empty means send all headers (modeled on Envoy ext_authz gRPC). When
+      // non-empty, only listed header names are sent. Matching is
+      // case-insensitive.
+      repeated string allowed_request_headers = 4;
+      // Header names never forwarded to the policy server, even if they appear
+      // in `allowed_request_headers`. Case-insensitive.
+      repeated string disallowed_request_headers = 5;
+    }
+
+    // Processor is a single policy processor. Today only `remote` is defined.
+    message Processor {
+      oneof kind {
+        Remote remote = 1;
+      }
+
+      // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
+      // through this processor, keyed by method name with the phase it runs in.
+      // Keys may be exact, prefix ("tools/*") or suffix ("*/list") wildcards, or
+      // "*" for all methods; the most specific match wins when a method would match
+      // multiple entries.
+      map<string, Phase> methods = 2;
+    }
+
+    // Ordered list of processors applied to matched methods. Processors run in
+    // the order listed; the first to reject a request short-circuits the chain.
+    repeated Processor processors = 3;
+
+    reserved 1, 2;
+    reserved "remote", "methods";
+  }
+
   oneof kind {
     A2a a2a = 1;
     InferenceRouting inference_routing = 2;
@@ -1405,6 +1533,7 @@ message BackendPolicySpec {
     Health health = 15;
     BackendTunnel backend_tunnel = 16;
     TrafficPolicySpec.ExternalAuth ext_authz = 17;
+    McpGuardrails mcp_guardrails = 18;
   }
 }
 
@@ -1484,6 +1613,7 @@ message AIBackend {
     EMBEDDINGS = 4;
     ANTHROPIC_TOKEN_COUNT = 5;
     REALTIME = 6;
+    RERANK = 7;
   }
   message ProviderFormatConfig {
     ProviderFormat format = 1;

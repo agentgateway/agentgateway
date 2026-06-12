@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -19,6 +18,7 @@ const (
 	frontendTlsPolicySuffix     = ":frontend-tls"
 	frontendHttpPolicySuffix    = ":frontend-http"
 	frontendProxyPolicySuffix   = ":frontend-proxy"
+	frontendConnectPolicySuffix = ":frontend-connect"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
 	frontendMetricsPolicySuffix = ":frontend-metrics"
@@ -57,6 +57,10 @@ func translateFrontendPolicyToAgw(
 		appendPolicy("proxyProtocol")(translateFrontendProxyProtocol(policy, policyName), nil)
 	}
 
+	if s := frontend.Connect; s != nil {
+		appendPolicy("connect")(translateFrontendConnect(policy, policyName), nil)
+	}
+
 	if s := frontend.TLS; s != nil {
 		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
 	}
@@ -87,7 +91,7 @@ func translateFrontendPolicyToAgw(
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
 	var errs []error
-	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
+	provider, err := BuildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
 	}
@@ -124,14 +128,14 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var randomSampling *string
 	if tracing.RandomSampling != nil {
-		randomSampling = castCELPtr(tracing.RandomSampling, func(expr shared.CELExpression) {
+		randomSampling = castCELPtr(tracing.RandomSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing randomSampling is not a valid CEL expression: %s", expr))
 		})
 	}
 
 	var clientSampling *string
 	if tracing.ClientSampling != nil {
-		clientSampling = castCELPtr(tracing.ClientSampling, func(expr shared.CELExpression) {
+		clientSampling = castCELPtr(tracing.ClientSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing clientSampling is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -183,7 +187,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	spec := &api.FrontendPolicySpec_Logging{}
 	var errs []error
 	if f := logging.Filter; f != nil {
-		spec.Filter = castCELPtr(f, func(expr shared.CELExpression) {
+		spec.Filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -205,7 +209,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
-		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
+		provider, err := BuildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
 		}
@@ -332,12 +336,43 @@ func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, nam
 	return proxyPolicy
 }
 
+func translateFrontendConnect(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	mode := api.FrontendPolicySpec_Connect_DENY
+	switch policy.Spec.Frontend.Connect.Mode {
+	case agentgateway.FrontendConnectModeRoute:
+		mode = api.FrontendPolicySpec_Connect_ROUTE
+	case agentgateway.FrontendConnectModeTunnel:
+		mode = api.FrontendPolicySpec_Connect_TUNNEL
+	case agentgateway.FrontendConnectModeDeny:
+		mode = api.FrontendPolicySpec_Connect_DENY
+	}
+	connectPolicy := &api.Policy{
+		Key:  name + frontendConnectPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Connect_{
+					Connect: &api.FrontendPolicySpec_Connect{
+						Mode: mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated frontend connect policy",
+		"policy", policy.Name,
+		"agentgateway_policy", connectPolicy.Name)
+
+	return connectPolicy
+}
+
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
 	var allowPolicies, denyPolicies, requirePolicies []string
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
@@ -490,6 +525,14 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	}
 	if v := http.HTTP1IdleTimeout; v != nil {
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
+	}
+	if v := http.HTTP1HeaderCase; v != nil {
+		switch *v {
+		case agentgateway.HTTPHeaderCasePreserve:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_PRESERVE
+		case agentgateway.HTTPHeaderCaseLowercase:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_LOWERCASE
+		}
 	}
 	if v := http.HTTP2WindowSize; v != nil {
 		spec.Http2WindowSize = quantityUint32(v)

@@ -23,6 +23,7 @@ pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
 
 /// All currently supported cipher suites.
+#[cfg(feature = "tls-aws-lc")]
 pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	// TLS 1.3 cipher suites
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
@@ -37,7 +38,21 @@ pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 ];
 
+/// All currently supported cipher suites (OpenSSL provider).
+#[cfg(feature = "tls-openssl")]
+pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	// TLS 1.3 cipher suites
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	// TLS 1.2 cipher suites
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
 // Default cipher suites to use if user does not specify cipher suites
+#[cfg(feature = "tls-aws-lc")]
 pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
@@ -47,11 +62,31 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
+#[cfg(feature = "tls-openssl")]
+pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
+#[cfg(feature = "tls-aws-lc")]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::X25519.to_supported_kx_group(),
 	KeyExchangeGroup::P256.to_supported_kx_group(),
 	KeyExchangeGroup::P384.to_supported_kx_group(),
 	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
+];
+
+#[cfg(feature = "tls-openssl")]
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
+	rustls_openssl::kx_group::X25519,
+	rustls_openssl::kx_group::SECP256R1,
+	rustls_openssl::kx_group::SECP384R1,
+	#[cfg(ossl350)]
+	rustls_openssl::kx_group::X25519MLKEM768,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -107,6 +142,7 @@ impl CipherSuite {
 		}
 	}
 
+	#[cfg(feature = "tls-aws-lc")]
 	pub const fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
 		match self {
 			// TLS 1.3 cipher suites
@@ -141,6 +177,39 @@ impl CipherSuite {
 			},
 		}
 	}
+
+	#[cfg(feature = "tls-openssl")]
+	pub fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
+		match self {
+			// TLS 1.3 cipher suites
+			CipherSuite::TLS_AES_256_GCM_SHA384 => rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+			CipherSuite::TLS_AES_128_GCM_SHA256 => rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+			// ChaCha20 is not universally available in OpenSSL; fall back to AES
+			CipherSuite::TLS_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256
+			},
+
+			// TLS 1.2 cipher suites
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+			},
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -165,12 +234,26 @@ impl KeyExchangeGroup {
 		}
 	}
 
+	#[cfg(feature = "tls-aws-lc")]
 	pub const fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
 		match self {
 			KeyExchangeGroup::X25519 => rustls::crypto::aws_lc_rs::kx_group::X25519,
 			KeyExchangeGroup::P256 => rustls::crypto::aws_lc_rs::kx_group::SECP256R1,
 			KeyExchangeGroup::P384 => rustls::crypto::aws_lc_rs::kx_group::SECP384R1,
 			KeyExchangeGroup::X25519_MLKEM768 => rustls::crypto::aws_lc_rs::kx_group::X25519MLKEM768,
+		}
+	}
+
+	#[cfg(feature = "tls-openssl")]
+	pub fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
+		match self {
+			KeyExchangeGroup::X25519 => rustls_openssl::kx_group::X25519,
+			KeyExchangeGroup::P256 => rustls_openssl::kx_group::SECP256R1,
+			KeyExchangeGroup::P384 => rustls_openssl::kx_group::SECP384R1,
+			#[cfg(ossl350)]
+			KeyExchangeGroup::X25519_MLKEM768 => rustls_openssl::kx_group::X25519MLKEM768,
+			#[cfg(not(ossl350))]
+			KeyExchangeGroup::X25519_MLKEM768 => rustls_openssl::kx_group::X25519,
 		}
 	}
 }
@@ -234,11 +317,21 @@ pub fn provider_with_options(
 			.collect()
 	};
 
-	let mut provider = rustls::crypto::aws_lc_rs::default_provider();
+	let mut provider = default_crypto_provider();
 	// Restrict negotiation to our allowlist.
 	provider.cipher_suites = cipher_suites;
 	provider.kx_groups = key_exchange_groups;
 	Arc::new(provider)
+}
+
+#[cfg(feature = "tls-aws-lc")]
+fn default_crypto_provider() -> CryptoProvider {
+	rustls::crypto::aws_lc_rs::default_provider()
+}
+
+#[cfg(feature = "tls-openssl")]
+fn default_crypto_provider() -> CryptoProvider {
+	rustls_openssl::default_provider()
 }
 
 pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoProvider> {

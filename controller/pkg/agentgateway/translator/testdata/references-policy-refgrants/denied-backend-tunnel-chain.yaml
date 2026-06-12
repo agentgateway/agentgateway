@@ -1,0 +1,124 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: denied-chain-backend
+  namespace: backend-ns
+spec:
+  static:
+    host: denied-chain.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: tunnel-target-backend
+  namespace: backend-ns
+spec:
+  static:
+    host: tunnel-target.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: denied-chain-source
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: denied-chain-backend
+        namespace: backend-ns
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: denied-chain-tunnel
+  namespace: backend-ns
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: denied-chain-backend
+      group: agentgateway.dev
+  backend:
+    tunnel:
+      backendRef:
+        name: tunnel-target-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/denied-chain-source:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: denied-chain-source
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc: {}
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: denied-chain-tunnel
+    namespace: backend-ns
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: AgentgatewayBackend backend-ns/denied-chain-backend
+          is not attached to any Gateway'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: denied-chain-source
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'failed to build extAuth: backendRef backend-ns/denied-chain-backend
+          not accessible to an AgentgatewayPolicy in namespace "default" (missing
+          a ReferenceGrant?)'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

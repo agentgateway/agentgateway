@@ -7,20 +7,17 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/protomarshal"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
-	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -51,7 +48,7 @@ func TestBuildMCP(t *testing.T) {
 									Host:     shortStringPtr("mcp-server.example.com"),
 									Port:     8080,
 									Path:     new("override-sse"),
-									Protocol: ptr.Of(agentgateway.MCPProtocolSSE),
+									Protocol: new(agentgateway.MCPProtocolSSE),
 								},
 							},
 						},
@@ -479,9 +476,9 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								BackendRef: &gwv1.BackendObjectReference{
+								BackendRef: &agentgateway.LocalBackendObjectReference{
 									Name: "llm-service",
-									Port: ptr.Of(gwv1.PortNumber(8080)),
+									Port: new(int32(8080)),
 								},
 								Formats: []agentgateway.ProviderFormatConfig{
 									{Type: agentgateway.ProviderFormatCompletions},
@@ -504,9 +501,9 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								BackendRef: &gwv1.BackendObjectReference{
-									Group: new(gwv1.Group(wellknown.InferencePoolGVK.Group)),
-									Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
+								BackendRef: &agentgateway.LocalBackendObjectReference{
+									Group: new(wellknown.InferencePoolGVK.Group),
+									Kind:  new(wellknown.InferencePoolGVK.Kind),
 									Name:  "llm-pool",
 								},
 								Formats: []agentgateway.ProviderFormatConfig{
@@ -565,7 +562,7 @@ func TestBuildAIBackend(t *testing.T) {
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Policies: &agentgateway.BackendFull{
 						BackendSimple: agentgateway.BackendSimple{
-							Auth: &agentgateway.BackendAuth{SecretRef: &shared.LocalSecretObjectRef{
+							Auth: &agentgateway.BackendAuth{SecretRef: &agentgateway.LocalSecretObjectRef{
 								Name: "openai-secret",
 							}},
 						},
@@ -755,6 +752,7 @@ func TestBuildAIBackend(t *testing.T) {
 								"/v1/embeddings":            agentgateway.RouteTypeEmbeddings,
 								"/v1/realtime":              agentgateway.RouteTypeRealtime,
 								"/v1/models":                agentgateway.RouteTypeModels,
+								"/v1/rerank":                agentgateway.RouteTypeRerank,
 							},
 						},
 					},
@@ -792,9 +790,9 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 			AI: &agentgateway.AIBackend{
 				LLM: &agentgateway.LLMProvider{
 					Custom: &agentgateway.CustomProvider{
-						BackendRef: &gwv1.BackendObjectReference{
+						BackendRef: &agentgateway.LocalBackendObjectReference{
 							Name: "llm-service",
-							Port: ptr.Of(gwv1.PortNumber(8080)),
+							Port: new(int32(8080)),
 						},
 						Formats: []agentgateway.ProviderFormatConfig{
 							{Type: agentgateway.ProviderFormatCompletions},
@@ -808,9 +806,9 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 								Name: "pool-provider",
 								LLMProvider: agentgateway.LLMProvider{
 									Custom: &agentgateway.CustomProvider{
-										BackendRef: &gwv1.BackendObjectReference{
-											Group: new(gwv1.Group(wellknown.InferencePoolGVK.Group)),
-											Kind:  new(gwv1.Kind(wellknown.InferencePoolGVK.Kind)),
+										BackendRef: &agentgateway.LocalBackendObjectReference{
+											Group: new(wellknown.InferencePoolGVK.Group),
+											Kind:  new(wellknown.InferencePoolGVK.Kind),
 											Name:  "llm-pool",
 										},
 										Formats: []agentgateway.ProviderFormatConfig{

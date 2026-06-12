@@ -15,6 +15,7 @@ use crate::llm::RequestType;
 use crate::llm::policy::GoogleModelArmor;
 use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailGoogleModelArmor};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 /// User prompt data for sanitization
@@ -386,6 +387,7 @@ async fn send_model_armor_request<T: Serialize>(
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(request_body)?))?;
 
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_resolved(req, backend, &model_armor.policies)
 		.await?;
 

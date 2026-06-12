@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package agentgateway.dev.ext_mcp;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/agentgateway/agentgateway/go/api;api";
+
+// ExtMcp is the wire protocol for an MCP-aware external policy server.
+// Modeled on Envoy ext_authz, but at the MCP method layer.
+// Covers both gating and mutation.
+service ExtMcp {
+  rpc CheckRequest(McpRequest) returns (McpRequestResult);
+  rpc CheckResponse(McpResponse) returns (McpResponseResult);
+}
+
+message McpRequest {
+  // Backend names this call targets, in their native (unmuxed) namespace.
+  // Exactly one entry for single-target methods (`tools/call`, ...); one entry
+  // per backend for fanout methods (e.g. `*/list`, ...).
+  repeated string service_names = 1;
+  // JSON-RPC method (e.g. "tools/call", "tools/list").
+  string method = 2;
+  // CEL-evaluated context from gateway config, one field per config key.
+  google.protobuf.Struct metadata_context = 3;
+  // JSON-RPC `params` as raw JSON bytes; absent when the method has none.
+  optional bytes mcp_request = 4;
+  // Incoming HTTP request headers carrying this MCP call, after gateway-side
+  // allow/deny filtering. Multi-value headers appear as repeated entries with
+  // the same key. Empty for stdio upstreams.
+  repeated McpHeader headers = 5;
+}
+
+message McpResponse {
+  // Backend names this call targets, in their native (unmuxed) namespace.
+  // Exactly one entry for single-target methods (`tools/call`, ...); one entry
+  // per backend for fanout methods (e.g. `*/list`, ...).
+  repeated string service_names = 1;
+  string method = 2;
+  google.protobuf.Struct metadata_context = 3;
+  // JSON-RPC `result` from upstream as raw JSON bytes. Errors skip this hook.
+  bytes mcp_response = 4;
+}
+
+message McpRequestResult {
+  oneof result {
+    Pass pass = 1;
+    // Replaces JSON-RPC `params` before forwarding to the upstream MCP server.
+    // The gateway does not re-run other RBAC on the mutated request.
+    bytes mutated = 2;
+    AuthorizationError error = 3;
+  }
+  // Mutations applied to the upstream HTTP request that carries this MCP call.
+  // Honored on Pass and Mutated, ignored on Error and for stdio upstreams.
+  HeaderMutation header_mutation = 4;
+  // Arbitrary key/value bag stashed in request extensions and exposed to CEL as
+  // `extMcp.<key>`. Subsequent backend filters (e.g. `transformation`) can read
+  // from it. Honored on Pass and Mutated; merged with later processors' metadata.
+  google.protobuf.Struct metadata = 5;
+}
+
+message McpResponseResult {
+  oneof result {
+    Pass pass = 1;
+    // Replaces the JSON-RPC `result`. Raw JSON bytes; must parse as a valid
+    // result for the method, else the gateway treats it as a protocol violation
+    // per `failure_mode`.
+    bytes mutated = 2;
+    AuthorizationError error = 3;
+  }
+}
+
+message HeaderMutation {
+  // Headers to overwrite (insert if absent). If the same key is listed multiple
+  // times it is treated as a list (all values replace the existing header).
+  repeated McpHeader set = 1;
+  // Header names to remove (case-insensitive).
+  repeated string remove = 2;
+}
+
+message McpHeader {
+  string key = 1;
+  // Raw value bytes: HTTP header values are not guaranteed to be UTF-8.
+  bytes value = 2;
+}
+
+message Pass {}
+
+message AuthorizationError {
+  enum Code {
+    UNKNOWN = 0;
+    PERMISSION_DENIED = 1;
+    RESOURCE_EXHAUSTED = 2;
+    INVALID = 3;
+  }
+  Code code = 1;
+  string reason = 2;
+  // Optional explicit JSON-RPC error payload, as raw JSON bytes. Overrides the
+  // code-derived default.
+  optional bytes mcp_error = 3;
+}

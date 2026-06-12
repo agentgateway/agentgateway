@@ -1,0 +1,13 @@
+{
+  "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+  "messages": [
+    { "role": "user", "content": "What is 2+2?" },
+    {
+      "role": "assistant",
+      "content": "4",
+      "reasoning_content": "Two plus two.",
+      "reasoning_signature": "SIG-replay=="
+    },
+    { "role": "user", "content": "And 3+3?" }
+  ]
+}

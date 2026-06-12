@@ -10,7 +10,10 @@ use crate::http::authorization::{RuleSet, RuleSets};
 use crate::*;
 
 #[apply(schema!)]
-pub struct McpAuthorization(RuleSet);
+pub struct McpAuthorization(
+	/// CEL authorization rules for MCP tools, prompts, and resources.
+	RuleSet,
+);
 
 impl McpAuthorization {
 	pub fn new(rule_set: RuleSet) -> Self {
@@ -31,7 +34,8 @@ impl CelExecWrapper {
 		CelExecWrapper(Arc::new(req))
 	}
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct McpAuthorizationSet(RuleSets);
 
 impl McpAuthorizationSet {

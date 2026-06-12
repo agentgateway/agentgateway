@@ -121,17 +121,19 @@ export interface Policies {
 // Top-level applied policy entries from config dump
 export interface AppliedPolicy {
   key: string;
+  // Synthetic policies (e.g. frontend/tracing) are emitted with a null name.
   name: {
     kind: string;
     name: string;
     namespace: string;
-  };
+  } | null;
   target: {
     backend?: {
       backend?: { name: string; namespace: string };
       service?: { hostname: string; namespace: string };
     };
     route?: { name: string; namespace: string };
+    gateway?: { name: string; namespace: string };
   };
   // Keep flexible to match varying shapes in dump; narrow types over time
   policy: {

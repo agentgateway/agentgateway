@@ -7,12 +7,12 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
 
@@ -32,15 +32,11 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 		}, kubeutils.NewSecretCredentialResolver(secrets))
 
 	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{}, "default")
-	if err != nil {
-		t.Fatalf("buildAwsAuthPolicy() error = %v, want nil", err)
-	}
-	if policy != nil {
-		t.Fatalf("buildAwsAuthPolicy() policy = %v, want nil", policy)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, policy != nil, true)
 
 	_, err = buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
-		SecretRef: shared.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretObjectRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
 			Name:  "file",
@@ -58,7 +54,7 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	}, kubeutils.NewSecretCredentialResolver(secrets))
 
 	_, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
-		SecretRef: &shared.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretObjectRef{
 			Group: "agentgateway.dev",
 			Kind:  "FileCredential",
 			Name:  "file",
@@ -83,7 +79,7 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 	ctx := simpleAuthPolicyCtx(nil, configMapCredentialResolver{configMaps: configMaps})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &shared.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretObjectRef{
 			Name:  "basic-auth",
 			Group: "example.agentgateway.dev",
 			Kind:  "ConfigMapCredential",
@@ -119,7 +115,7 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 	)
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &shared.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretObjectRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},
@@ -148,7 +144,7 @@ func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) 
 	}, configMapCredentialResolver{})
 
 	_, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &shared.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretObjectRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},
@@ -162,7 +158,7 @@ type configMapCredentialResolver struct {
 	configMaps krt.Collection[*corev1.ConfigMap]
 }
 
-func (r configMapCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref shared.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
+func (r configMapCredentialResolver) ResolveCredentialRef(krtctx krt.HandlerContext, ref agentgateway.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
 	if ref.Group != "example.agentgateway.dev" || ref.Kind != "ConfigMapCredential" {
 		return nil, fmt.Errorf("%w: %q/%q", kubeutils.ErrUnsupportedCredentialKind, ref.Group, ref.Kind)
 	}

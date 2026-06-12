@@ -22,6 +22,7 @@ pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Responses => "/responses",
 		RouteType::Embeddings => "/embeddings",
+		RouteType::Rerank => "/rerank",
 		RouteType::Realtime => "/realtime",
 		// All others get translated down to completions
 		_ => "/chat/completions",

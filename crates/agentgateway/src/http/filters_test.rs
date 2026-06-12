@@ -849,6 +849,24 @@ fn rewrite_test() {
 				uri: "http://test.com/v1".to_string(),
 			}),
 		),
+		(
+			"path_prefix_rewrite_rejects_partial_segment",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/apiary",
+			},
+			None,
+		),
+		(
+			"path_prefix_rewrite_rejects_encoded_slash_boundary",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/api%2Fv1",
+			},
+			None,
+		),
 		// Test hostname rewrite with HTTPS
 		(
 			"hostname_rewrite_https",

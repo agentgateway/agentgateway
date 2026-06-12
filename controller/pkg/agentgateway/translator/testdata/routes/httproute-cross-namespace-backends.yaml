@@ -179,7 +179,7 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: backendRef cross-ns-backend-without-grant/cross-ns-without-grant
+        message: backendRef cross-ns-without-grant/cross-ns-backend-without-grant
           not accessible to a HTTPRoute in namespace "default" (missing a ReferenceGrant?)
         reason: RefNotPermitted
         status: "False"

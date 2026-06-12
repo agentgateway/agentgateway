@@ -493,7 +493,7 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(content) = &choice.delta.content {
+						if let Some(content) = choice.delta.content.as_deref().filter(|s| !s.is_empty()) {
 							let index = open_text_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
@@ -501,7 +501,7 @@ pub mod from_messages {
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index,
 									delta: messages::ContentBlockDelta::TextDelta {
-										text: content.clone(),
+										text: content.to_string(),
 									},
 								},
 							);
@@ -623,6 +623,19 @@ pub mod from_messages {
 			},
 			_ => None,
 		}
+	}
+
+	fn system_message_text(content: Vec<messages::ContentBlock>) -> Option<String> {
+		let text = content
+			.into_iter()
+			.filter_map(|block| match block {
+				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => Some(text),
+				_ => None,
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+
+		(!text.is_empty()).then_some(text)
 	}
 
 	#[allow(deprecated)]
@@ -815,6 +828,18 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
+								reasoning_content: None,
+								reasoning_signature: None,
+							},
+						));
+					}
+				},
+				messages::Role::System => {
+					if let Some(text) = system_message_text(msg.content) {
+						msgs.push(completions::RequestMessage::System(
+							completions::RequestSystemMessage {
+								content: completions::RequestSystemMessageContent::Text(text),
+								name: None,
 							},
 						));
 					}
@@ -986,6 +1011,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.cached_tokens);
+								r.response.cache_creation_input_tokens = u.cache_creation_input_tokens;
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()

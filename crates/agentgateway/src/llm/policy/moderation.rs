@@ -7,6 +7,7 @@ use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailOpenAIModeration};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 /// Resolve the guardrail backend (referenced, or a synthetic OpenAI moderation backend).
@@ -66,6 +67,7 @@ pub async fn send_request(
 		}),
 	)?))?;
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_resolved(req, backend, &moderation.policies)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =

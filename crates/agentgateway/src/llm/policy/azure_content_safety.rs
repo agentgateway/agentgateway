@@ -8,6 +8,7 @@ use crate::llm::RequestType;
 use crate::llm::policy::guardrail::{GuardrailAzureContentSafety, GuardrailBackend};
 use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 // ---------------------------------------------------------------------------
@@ -246,7 +247,10 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(body)?))?;
 
-	let resp = client.call_resolved(req, backend, &root.policies).await?;
+	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+		.call_resolved(req, backend, &root.policies)
+		.await?;
 
 	let status = resp.status();
 	let lim = crate::http::response_buffer_limit(&resp);

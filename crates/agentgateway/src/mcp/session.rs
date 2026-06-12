@@ -194,6 +194,36 @@ impl Session {
 		Ok(())
 	}
 
+	#[allow(clippy::too_many_arguments)]
+	async fn authorize_with_ctx<P>(
+		&self,
+		backend: &str,
+		method: &str,
+		params: &mut P,
+		ctx: &mut IncomingRequestContext,
+		res: rbac::ResourceType,
+		resource_type: &str,
+		resource_name: &str,
+	) -> Result<(), UpstreamError>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned,
+	{
+		// run guardrails before other policies, as it may add context to CEL
+		self
+			.relay
+			.maybe_run_guardrails_call_request(backend, method, params, ctx)
+			.await?;
+		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		if self.relay.policies.validate(&res, &cel) {
+			Ok(())
+		} else {
+			Err(UpstreamError::Authorization {
+				resource_type: resource_type.to_string(),
+				resource_name: resource_name.to_string(),
+			})
+		}
+	}
+
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
@@ -282,6 +312,9 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
+			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
+				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
+			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
@@ -353,7 +386,7 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
-				let ctx = IncomingRequestContext::new(&parts);
+				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
@@ -388,7 +421,7 @@ impl Session {
 					ClientRequest::ListToolsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_tools(cel))
+							.send_fanout(r, ctx, self.relay.merge_tools())
 							.await
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
@@ -402,19 +435,19 @@ impl Session {
 					ClientRequest::ListPromptsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
+							.send_fanout(r, ctx, self.relay.merge_prompts())
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_resources(cel))
+							.send_fanout(r, ctx, self.relay.merge_resources())
 							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
+							.send_fanout(r, ctx, self.relay.merge_resource_templates())
 							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
@@ -426,21 +459,22 @@ impl Session {
 							l.set_tool(service_name.to_string(), tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							&cel,
-						) {
-							return Err(UpstreamError::Authorization {
-								resource_type: "tool".to_string(),
-								resource_name: name.to_string(),
-							});
-						}
-
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::TOOLS_CALL,
+								&mut ctr.params,
+								&mut ctx,
+								rbac::ResourceType::Tool(rbac::ResourceId::new(
+									service_name.to_string(),
+									tool.to_string(),
+								)),
+								"tool",
+								&name,
+							)
+							.await?;
 						self
 							.relay
 							.send_single(r, ctx, service_name, Some(log.clone()))
@@ -448,23 +482,50 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) =
-							self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_prompt(service_name.to_string(), prompt.to_string());
+						});
 						gpr.params.name = prompt.to_string();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::PROMPTS_GET,
+								&mut gpr.params,
+								&mut ctx,
+								rbac::ResourceType::Prompt(rbac::ResourceId::new(
+									service_name.to_string(),
+									prompt.to_string(),
+								)),
+								"prompt",
+								&name,
+							)
+							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
 						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
-							service_name,
-							&original_uri,
-							&method,
-							&mut span,
-							&log,
-							&cel,
-						)?;
-						rrr.params.uri = original_uri;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), original_uri.to_string());
+						});
+						rrr.params.uri = original_uri.clone();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::RESOURCES_READ,
+								&mut rrr.params,
+								&mut ctx,
+								rbac::ResourceType::Resource(rbac::ResourceId::new(
+									service_name.to_string(),
+									original_uri,
+								)),
+								"resource",
+								&uri,
+							)
+							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::SubscribeRequest(sr) => {

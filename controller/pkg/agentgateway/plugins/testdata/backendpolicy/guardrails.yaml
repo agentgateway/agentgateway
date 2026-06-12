@@ -1,0 +1,103 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: guardrails
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            backendRef:
+              name: guardrails-srv
+              port: 4317
+            failureMode: FailClosed
+            metadata:
+              tenant: 'jwt.sub'
+            allowedRequestHeaders:
+              - x-tenant
+              - ':authority'
+              - authorization
+            disallowedRequestHeaders:
+              - authorization
+          methods:
+            tools/call: Full
+            tools/list: Request
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrails-srv
+  namespace: default
+spec:
+  ports:
+    - port: 4317
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        mcpGuardrails:
+          processors:
+          - methods:
+              tools/call: FULL
+              tools/list: REQUEST
+            remote:
+              allowedRequestHeaders:
+              - x-tenant
+              - :authority
+              - authorization
+              disallowedRequestHeaders:
+              - authorization
+              metadata:
+                tenant: jwt.sub
+              target:
+                port: 4317
+                service:
+                  hostname: guardrails-srv.default.svc.cluster.local
+                  namespace: default
+      key: backend/default/guardrails:mcp-guardrails:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrails
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: guardrails
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

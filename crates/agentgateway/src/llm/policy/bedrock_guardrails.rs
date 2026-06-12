@@ -7,6 +7,7 @@ use crate::llm::RequestType;
 use crate::llm::policy::BedrockGuardrails;
 use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailBedrock};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{SimpleBackend, SimpleBackendWithPolicies};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -233,6 +234,7 @@ async fn send_guardrail_request(
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(&request_body)?))?;
 
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_resolved(req, backend, &guardrails.policies)
 		.await?;
 

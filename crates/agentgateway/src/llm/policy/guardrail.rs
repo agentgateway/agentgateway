@@ -138,9 +138,12 @@ impl GuardrailBackend {
 	/// auth. These are fallbacks; policies attached to the backend take precedence.
 	pub fn default_policies(&self) -> BackendPolicies {
 		let backend_auth = match self {
-			GuardrailBackend::Bedrock(_) => {
-				Some(BackendAuth::Aws(AwsAuth::Implicit { service_name: None }))
-			},
+			GuardrailBackend::Bedrock(_) => Some(BackendAuth::Aws(AwsAuth::Implicit {
+				service_name: None,
+				assume_role: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
+			})),
 			GuardrailBackend::GoogleModelArmor(_) => Some(BackendAuth::Gcp(GcpAuth::default())),
 			GuardrailBackend::AzureContentSafety(a) => Some(BackendAuth::Azure(a.cached_auth.clone())),
 			// No implicit auth for OpenAI; the user must attach an auth policy.

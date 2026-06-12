@@ -1,14 +1,17 @@
+use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ::http::{Method, StatusCode, Version, header};
+use ::http::{HeaderMap, Method, StatusCode, Version, header};
 use agent_core::strng;
 use assert_matches::assert_matches;
-use http_body_util::BodyExt;
+use http_body::Frame;
+use http_body_util::{BodyExt, StreamBody};
 use hyper::client::conn::http1;
+use hyper::service::service_fn;
 use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use ppp::v2::{
@@ -34,11 +37,12 @@ use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol, Listener,
-	ListenerProtocol, ListenerSet, PathMatch, ResourceName, Route, RouteMatch,
-	SimpleBackendReference, Target,
+	Backend, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol,
+	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch,
+	PolicyInheritance, PolicyTarget, ResourceName, Route, RouteMatch, SimpleBackendReference, Target,
+	TargetedPolicy,
 };
-use crate::types::backend;
+use crate::types::{backend, frontend};
 use crate::{read_body, *};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
@@ -142,6 +146,7 @@ fn https_bind() -> Bind {
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -243,6 +248,36 @@ fn build_proxy_v2_header(src: &str, dst: &str) -> Vec<u8> {
 	.unwrap()
 }
 
+async fn raw_header_backend() -> (std::net::SocketAddr, oneshot::Receiver<String>) {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (tx, rx) = oneshot::channel();
+	tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = stream.read(&mut chunk).await.unwrap();
+			assert!(
+				n > 0,
+				"raw header backend connection closed before request headers"
+			);
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		tx.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+		stream
+			.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+	});
+	(addr, rx)
+}
+
 async fn oidc_backend_mock() -> (MockServer, Arc<StdMutex<Option<String>>>) {
 	let token_response = Arc::new(StdMutex::new(None));
 	let mock = MockServer::start().await;
@@ -282,6 +317,42 @@ async fn basic_handling() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.version, Version::HTTP_11);
 	assert_eq!(body.method, Method::POST);
+}
+
+#[tokio::test]
+async fn http_header_case_preserve_forwards_original_case_to_backend() {
+	let (backend_addr, captured_request) = raw_header_backend().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(backend_addr)
+		.with_bind(simple_bind())
+		.with_route(basic_route(backend_addr));
+	t.attach_frontend_policy(json!({
+		"http": {
+			"http1HeaderCase": "preserve",
+		},
+	}))
+	.await;
+
+	let mut io = t.serve(BIND_KEY);
+	io.write_all(
+		b"GET / HTTP/1.1\r\nHost: lo\r\nX-Case-Probe: preserve-me\r\nConnection: close\r\n\r\n",
+	)
+	.await
+	.unwrap();
+
+	let captured_request = tokio::time::timeout(Duration::from_secs(5), captured_request)
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(
+		captured_request.contains("\r\nX-Case-Probe: preserve-me\r\n"),
+		"backend request did not preserve header case:\n{captured_request}"
+	);
+	assert!(
+		!captured_request.contains("\r\nx-case-probe: preserve-me\r\n"),
+		"backend request lowercased preserved header:\n{captured_request}"
+	);
 }
 
 #[tokio::test]
@@ -528,6 +599,78 @@ async fn basic_http2() {
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
 }
 
+async fn grpc_trailer_backend(status: &'static str) -> std::net::SocketAddr {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		loop {
+			let Ok((stream, _)) = listener.accept().await else {
+				return;
+			};
+			tokio::spawn(async move {
+				let svc = service_fn(move |_| async move {
+					let mut trailers = HeaderMap::new();
+					trailers.insert("grpc-status", status.parse().unwrap());
+					let body = StreamBody::new(tokio_stream::iter([
+						Ok::<_, Infallible>(Frame::data(bytes::Bytes::new())),
+						Ok(Frame::trailers(trailers)),
+					]));
+					Ok::<_, Infallible>(
+						::http::Response::builder()
+							.status(200)
+							.header(header::CONTENT_TYPE, "application/grpc")
+							.body(body)
+							.unwrap(),
+					)
+				});
+				let _ = hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+					.serve_connection(TokioIo::new(stream), svc)
+					.await;
+			});
+		}
+	});
+	addr
+}
+
+#[tokio::test]
+async fn grpc_status_trailer_is_available_to_access_log_cel() {
+	let backend = grpc_trailer_backend("13").await;
+	let path = format!("/grpc-{}", rand::rng().random::<u128>());
+	let t = setup_proxy_test(
+		r#"{"config":{"logging":{"fields":{"add":{"cel_grpc_status":"response.grpcStatus"}}}}}"#,
+	)
+	.unwrap()
+	.with_raw_backend(BackendWithPolicies {
+		backend: Backend::Opaque(
+			ResourceName::new(strng::format!("{}", backend), "".into()),
+			Target::Address(backend),
+		),
+		inline_policies: vec![BackendTrafficPolicy::HTTP(backend::HTTP {
+			version: Some(Version::HTTP_2),
+			..Default::default()
+		})],
+	})
+	.with_bind(simple_bind())
+	.with_route(basic_route(backend));
+	let io = t.serve_http2(strng::new("bind"));
+	let res = RequestBuilder::new(Method::POST, &format!("http://lo{path}"))
+		.version(Version::HTTP_2)
+		.header(header::CONTENT_TYPE, "application/grpc")
+		.body(Body::empty())
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+	read_body_raw(res.into_body()).await;
+
+	let log =
+		agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("http.path", &path)])
+			.await
+			.unwrap();
+	assert_eq!(log["grpc.status"].as_u64(), Some(13));
+	assert_eq!(log["cel_grpc_status"].as_u64(), Some(13));
+}
+
 #[tokio::test]
 async fn reserved_oidc_cookies_are_stripped_before_proxying() {
 	let mock = simple_mock().await;
@@ -686,6 +829,36 @@ async fn gateway_phase_oidc_bypasses_cors_preflight_requests() {
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.method, Method::OPTIONS);
+}
+
+#[tokio::test]
+async fn gateway_phase_cors_handles_preflight_before_route_selection() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_gateway_policy(json!({
+			"cors": {
+				"allowCredentials": false,
+				"allowHeaders": ["*"],
+				"allowMethods": ["GET", "POST"],
+				"allowOrigins": ["http://example.com"],
+				"exposeHeaders": [],
+			},
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io,
+		Method::OPTIONS,
+		"http://lo/no-route-needed",
+		&[
+			("origin", "http://example.com"),
+			("access-control-request-method", "GET"),
+		],
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("access-control-allow-origin"), "http://example.com");
 }
 
 #[tokio::test]
@@ -1117,6 +1290,56 @@ async fn llm_openai_tokenize() {
 		want,
 	)
 	.await;
+}
+
+#[tokio::test]
+async fn llm_custom_rerank() {
+	let mock = body_mock(include_bytes!("../llm/tests/response/cohere/rerank.json")).await;
+	let provider = crate::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(custom::Provider {
+			model: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Rerank,
+				path: None,
+			}],
+		}),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {"routes": {"/v1/rerank": "rerank"}}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/rerank",
+		include_bytes!("../llm/tests/requests/rerank/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let body: Value =
+		serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["results"][0]["index"], 2);
+	assert_eq!(body["results"][0]["relevance_score"], 0.91);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(
+		upstream_body["query"],
+		"What is the capital of the United States?"
+	);
+	assert_eq!(upstream_body["documents"].as_array().unwrap().len(), 3);
 }
 
 fn setup_custom_llm_provider_backend_mock(
@@ -1803,6 +2026,7 @@ async fn tls_connection_drains_when_listener_changes() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1835,6 +2059,7 @@ async fn tls_backend_connection() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_connection_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1876,6 +2101,7 @@ async fn tls_backend_connection_alpn() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http2_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1917,6 +2143,7 @@ async fn tls_backend_http2_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_http1_version() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -1958,6 +2185,7 @@ async fn tls_backend_http1_version() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tls_backend_version_with_alpn() {
 	let (mock, certs) = tls_mock().await;
 	let backend_tls = http::backendtls::ResolvedBackendTLS {
@@ -2275,6 +2503,7 @@ async fn tunnel_absolute_form() {
 }
 
 #[tokio::test]
+#[cfg(feature = "tls-aws-lc")]
 async fn tunnel_connect() {
 	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2356,6 +2585,367 @@ async fn tunnel_connect() {
 	assert!(connect_req.contains("Proxy-Authorization: Basic my-key\r\n"));
 
 	tunnel.abort();
+}
+
+#[tokio::test]
+async fn incoming_connect_dynamic_forward_proxy() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+	let upstream = tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let mut buf = [0; 4];
+		stream.read_exact(&mut buf).await.unwrap();
+		assert_eq!(&buf, b"ping");
+		stream.write_all(b"pong").await.unwrap();
+	});
+
+	let t = setup_dfp_bind().with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"ping").await.unwrap();
+	let mut tunneled = [0; 4];
+	io.read_exact(&mut tunneled).await.unwrap();
+	assert_eq!(&tunneled, b"pong");
+	upstream.await.unwrap();
+}
+
+#[tokio::test]
+async fn incoming_connect_requires_frontend_connect_policy() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+
+	let t = setup_dfp_bind();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 405 Method Not Allowed\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_tunnel_reenters_bind_flow() {
+	let mock = simple_mock().await;
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15008".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = "127.0.0.1:18080".parse().unwrap();
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*mock.address()))
+		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
+	let mut io = t.serve_tunnel(strng::literal!("outer"));
+	io.write_all(b"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled HTTP response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_applies_backend_tls() {
+	let (mock, certs) = tls_mock().await;
+	let backend_tls = http::backendtls::ResolvedBackendTLS {
+		root: Some(certs.root_cert.pem().into_bytes()),
+		hostname: Some("localhost".to_string()),
+		alpn: Some(vec!["http/1.1".to_string()]),
+		..Default::default()
+	}
+	.try_into()
+	.unwrap();
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_connect_enabled()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", mock.address()), "".into()),
+				Target::Address(*mock.address()),
+			),
+			inline_policies: vec![BackendTrafficPolicy::BackendTLS(backend_tls)],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+
+	let mut io = t.serve(BIND_KEY);
+	let authority = mock.address().to_string();
+	io.write_all(format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n").as_bytes())
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(
+		format!("GET /foo HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n").as_bytes(),
+	)
+	.await
+	.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled TLS backend response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_requires_authority_port() {
+	let t = setup_dfp_bind().with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	io.write_all(b"CONNECT example.com HTTP/1.1\r\nHost: example.com\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 400 Bad Request\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+}
+
+#[tokio::test]
+async fn incoming_connect_uses_backend_tunnel_proxy() {
+	let target_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = target_listener.local_addr().unwrap();
+	let target = tokio::spawn(async move {
+		let (mut stream, _) = target_listener.accept().await.unwrap();
+		let mut buf = [0; 4];
+		stream.read_exact(&mut buf).await.unwrap();
+		assert_eq!(&buf, b"ping");
+		stream.write_all(b"pong").await.unwrap();
+	});
+
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_addr = listener.local_addr().unwrap();
+	let (connect_tx, connect_rx) = oneshot::channel();
+	let proxy = tokio::spawn(async move {
+		let (mut downstream, _) = listener.accept().await.unwrap();
+		let mut buf = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = downstream.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT request unexpectedly closed");
+			buf.extend_from_slice(&chunk[..n]);
+			if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let header_end = buf.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+		connect_tx
+			.send(String::from_utf8(buf[..header_end].to_vec()).unwrap())
+			.unwrap();
+		downstream
+			.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+			.await
+			.unwrap();
+		let mut upstream = TcpStream::connect(target_addr).await.unwrap();
+		let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+	});
+
+	let mut t = setup_dfp_bind().with_connect_enabled();
+	t.with_policy(TargetedPolicy {
+		key: strng::literal!("pol/backend-tunnel"),
+		name: None,
+		inheritance: PolicyInheritance::default(),
+		target: PolicyTarget::Backend(BackendTarget::Backend {
+			name: strng::literal!("dynamic"),
+			namespace: Default::default(),
+			section: None,
+		}),
+		policy: BackendTrafficPolicy::Tunnel(backend::Tunnel {
+			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+				proxy_addr,
+			))),
+		})
+		.into(),
+	});
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	let connect_req = connect_rx.await.unwrap();
+	assert!(connect_req.starts_with(&format!("CONNECT {target_addr} HTTP/1.1\r\n")));
+	assert!(connect_req.contains(&format!("Host: {target_addr}\r\n")));
+
+	io.write_all(b"ping").await.unwrap();
+	let mut tunneled = [0; 4];
+	io.read_exact(&mut tunneled).await.unwrap();
+	assert_eq!(&tunneled, b"pong");
+	drop(io);
+	target.await.unwrap();
+	proxy.await.unwrap();
+}
+
+#[tokio::test]
+async fn incoming_connect_snapshots_request_for_cel_logging() {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let target_addr = listener.local_addr().unwrap();
+	let upstream = tokio::spawn(async move {
+		let (mut stream, _) = listener.accept().await.unwrap();
+		let _ = stream.read(&mut [0; 1]).await;
+	});
+
+	let config = serde_json::to_string(&json!({
+		"config": {
+			"logging": {
+				"fields": {
+					"add": {
+						"request": "request",
+						"backend": "backend",
+					},
+				},
+			},
+		},
+	}))
+	.unwrap();
+	let t = setup_dfp_bind_with_config(&config).with_connect_enabled();
+	let mut io = t.serve(BIND_KEY);
+	let req = format!("CONNECT {target_addr} HTTP/1.1\r\nHost: {target_addr}\r\n\r\n");
+	io.write_all(req.as_bytes()).await.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+	drop(io);
+	upstream.await.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("endpoint", &target_addr.to_string()),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["http.path"].as_str(), Some("/"));
+	assert_eq!(log["request"]["method"].as_str(), Some("CONNECT"));
+	assert_eq!(log["request"]["path"].as_str(), Some("/"));
+	assert_eq!(
+		log["request"]["host"].as_str(),
+		Some(target_addr.to_string().as_str())
+	);
+	assert_eq!(log["request"]["scheme"].as_str(), Some("http"));
+	assert!(
+		log["backend"].is_object(),
+		"backend CEL context should be populated"
+	);
 }
 
 #[tokio::test]
@@ -2615,20 +3205,58 @@ async fn assert_llm(io: Client<MemoryConnector, Body>, body: &[u8], want: Value)
 
 // --- Dynamic Forward Proxy (DFP) tests ---
 
+impl TestBind {
+	fn with_connect_enabled(self) -> Self {
+		self.with_connect_mode(frontend::ConnectMode::Route)
+	}
+
+	fn with_connect_mode(self, mode: frontend::ConnectMode) -> Self {
+		self.with_connect_policy(mode, None)
+	}
+
+	fn with_connect_mode_on_port(self, mode: frontend::ConnectMode, port: u16) -> Self {
+		self.with_connect_policy(mode, Some(port))
+	}
+
+	fn with_connect_policy(mut self, mode: frontend::ConnectMode, port: Option<u16>) -> Self {
+		self.with_policy(TargetedPolicy {
+			key: strng::literal!("pol/frontend-connect"),
+			name: None,
+			inheritance: PolicyInheritance::default(),
+			target: PolicyTarget::Gateway(ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+				port,
+			}),
+			policy: FrontendPolicy::Connect(frontend::Connect { mode }).into(),
+		});
+		self
+	}
+}
+
 /// Helper to set up a DFP test: creates a Dynamic backend and a route pointing to it.
-fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
+fn setup_dfp_bind() -> TestBind {
+	setup_dfp_bind_with_config("{}")
+}
+
+fn setup_dfp_bind_with_config(config: &str) -> TestBind {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
 	let dynamic_backend = Backend::Dynamic(backend_name, ());
 
 	let route = basic_named_route("/dynamic".into());
 
-	let t = setup_proxy_test("{}").unwrap();
+	let t = setup_proxy_test(config).unwrap();
 	let pi = t.inputs();
 	pi.stores
 		.binds
 		.write()
 		.insert_backend(dynamic_backend.name(), dynamic_backend.into());
-	let t = t.with_bind(simple_bind()).with_route(route);
+	t.with_bind(simple_bind()).with_route(route)
+}
+
+fn setup_dfp() -> (TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_dfp_bind();
 	let io = t.serve_http(BIND_KEY);
 	(t, io)
 }
@@ -2650,6 +3278,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
+					mode: Default::default(),
 					cert: "../../examples/tls/certs/cert.pem".into(),
 					key: "../../examples/tls/certs/key.pem".into(),
 					root: None,
@@ -2982,6 +3611,7 @@ async fn auto_protocol_mixed_listeners() {
 				hostname: strng::new("*.example.com"),
 				protocol: ListenerProtocol::HTTPS(
 					types::local::LocalTLSServerConfig {
+						mode: Default::default(),
 						cert: "../../examples/tls/certs/cert.pem".into(),
 						key: "../../examples/tls/certs/key.pem".into(),
 						root: None,
@@ -3083,6 +3713,74 @@ async fn waypoint_http_basic() {
 	assert_eq!(res.status(), 200);
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.method, Method::GET);
+}
+
+#[tokio::test]
+async fn waypoint_http_port_selects_distinct_backend() {
+	// Two service routes on the same (service, path "/") differ only by their referenced
+	// service_port. A request to :443 must reach the :443 backend, :80 the :80 backend.
+	async fn id_mock(id: &'static str) -> MockServer {
+		let mock = MockServer::start().await;
+		Mock::given(wiremock::matchers::path_regex("/.*"))
+			.respond_with(ResponseTemplate::new(200).insert_header("x-backend", id))
+			.mount(&mock)
+			.await;
+		mock
+	}
+	let b80 = id_mock("p80").await;
+	let b443 = id_mock("p443").await;
+
+	let svc_nh = crate::types::discovery::NamespacedHostname {
+		namespace: strng::literal!("default"),
+		hostname: strng::literal!("my-svc.default.svc.cluster.local"),
+	};
+	let route = |key: &'static str, port: u16| Route {
+		key: strng::new(key),
+		service_key: Some(svc_nh.clone()),
+		service_port: port,
+		name: crate::types::agent::RouteName {
+			name: strng::new(key),
+			namespace: strng::literal!("default"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: vec![RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/".into()),
+			method: None,
+			query: vec![],
+		}],
+		inline_policies: vec![],
+		backends: vec![crate::types::agent::RouteBackendReference {
+			weight: 1,
+			target: crate::types::agent::BackendReference::Service {
+				name: svc_nh.clone(),
+				port,
+			}
+			.into(),
+			inline_policies: vec![],
+		}],
+	};
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+		.with_waypoint_service_with_ports(&[(80, *b80.address()), (443, *b443.address())])
+		.with_service_route(route("r80", 80))
+		.with_service_route(route("r443", 443));
+
+	// Destination :443 -> the 443-scoped route -> the :443 backend.
+	let io = t.serve_waypoint_http_port(BIND_KEY, 443);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-backend"), "p443");
+
+	// Destination :80 -> the 80-scoped route -> the :80 backend.
+	let io = t.serve_waypoint_http_port(BIND_KEY, 80);
+	let res = send_request(io, Method::GET, "http://my-svc.default.svc.cluster.local").await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("x-backend"), "p80");
 }
 
 #[tokio::test]

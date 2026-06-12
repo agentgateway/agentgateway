@@ -6,6 +6,7 @@ use itertools::Itertools;
 use rmcp::model::{RequestId, ServerJsonRpcMessage, ServerResult};
 use tracing::warn;
 
+use crate::mcp::rbac::CelExecWrapper;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{ClientError, FailureMode};
 use crate::*;
@@ -24,6 +25,21 @@ impl Messages {
 
 	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
+	}
+
+	pub fn map_server_messages(
+		self,
+		mut f: impl FnMut(ServerJsonRpcMessage) -> ServerJsonRpcMessage + Send + 'static,
+	) -> Self {
+		Messages(
+			self
+				.0
+				.map(move |message| match message {
+					Ok(message) => Ok(f(message)),
+					Err(err) => Err(err),
+				})
+				.boxed(),
+		)
 	}
 }
 
@@ -86,7 +102,11 @@ impl TryFrom<StreamableHttpPostResponse> for Messages {
 	}
 }
 
-pub type MergeFn = dyn FnOnce(Vec<(Strng, ServerResult)>) -> Result<ServerResult, ClientError>
+pub type MergeFn = dyn FnOnce(
+		Vec<(Strng, ServerResult)>,
+		// Request CEL context, shared across all upstreams.
+		&CelExecWrapper,
+	) -> Result<ServerResult, ClientError>
 	+ Send
 	+ Sync
 	+ 'static;
@@ -98,25 +118,29 @@ pub struct MergeStream {
 	complete: bool,
 	req_id: RequestId,
 	merge: Option<Box<MergeFn>>,
+	// Present iff `merge` is; supplied to the merge fn for RBAC filtering.
+	cel: Option<CelExecWrapper>,
 	failure_mode: FailureMode,
 }
 
 impl MergeStream {
 	pub fn new_without_merge(streams: Vec<(Strng, Messages)>, failure_mode: FailureMode) -> Self {
-		Self::new_internal(streams, RequestId::Number(0), None, failure_mode)
+		Self::new_internal(streams, RequestId::Number(0), None, None, failure_mode)
 	}
 	pub fn new(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Box<MergeFn>,
+		cel: CelExecWrapper,
 		failure_mode: FailureMode,
 	) -> Self {
-		Self::new_internal(streams, req_id, Some(merge), failure_mode)
+		Self::new_internal(streams, req_id, Some(merge), Some(cel), failure_mode)
 	}
 	fn new_internal(
 		streams: Vec<(Strng, Messages)>,
 		req_id: RequestId,
 		merge: Option<Box<MergeFn>>,
+		cel: Option<CelExecWrapper>,
 		failure_mode: FailureMode,
 	) -> Self {
 		let terminal_messages = streams.iter().map(|_| None).collect::<Vec<_>>();
@@ -126,6 +150,7 @@ impl MergeStream {
 			req_id,
 			complete: false,
 			merge,
+			cel,
 			failure_mode,
 		}
 	}
@@ -139,10 +164,12 @@ impl MergeStream {
 			.filter_map(Option::take)
 			.collect_vec();
 
-		let res = self
+		let merge = self
 			.merge
 			.take()
-			.expect("merge_terminal_messages called twice")(msgs)?;
+			.expect("merge_terminal_messages called twice");
+		let cel = self.cel.as_ref().expect("merge is present iff cel is");
+		let res = merge(msgs, cel)?;
 		Ok(ServerJsonRpcMessage::response(res, self.req_id.clone()))
 	}
 }

@@ -128,6 +128,8 @@ pub enum RouteType {
 	Realtime,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
+	/// Cohere /v2/rerank (document reranking)
+	Rerank,
 }
 
 #[apply(schema!)]
@@ -180,6 +182,7 @@ pub enum InputFormat {
 	Realtime,
 	CountTokens,
 	Detect,
+	Rerank,
 }
 
 impl InputFormat {
@@ -192,6 +195,7 @@ impl InputFormat {
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
 			InputFormat::Detect => false,
+			InputFormat::Rerank => false,
 		}
 	}
 
@@ -204,6 +208,7 @@ impl InputFormat {
 			InputFormat::Realtime => Some(custom::ProviderFormat::Realtime),
 			InputFormat::CountTokens => Some(custom::ProviderFormat::AnthropicTokenCount),
 			InputFormat::Detect => None,
+			InputFormat::Rerank => Some(custom::ProviderFormat::Rerank),
 		}
 	}
 }
@@ -329,49 +334,58 @@ impl AIProvider {
 			AIProvider::Custom(p) => p.model.clone(),
 		}
 	}
-	pub fn default_connector(&self) -> Option<(Target, BackendPolicies)> {
+	/// Default backend policies (TLS + auth) for connecting to the provider. Split from
+	/// [`Self::default_connector_target`] so callers can compute effective policies, resolve the LLM
+	/// route from them, and only then pick the connection target. Returns `None` for custom providers,
+	/// which require an explicit host override or provider backend.
+	pub fn default_connector_policies(&self) -> Option<BackendPolicies> {
 		let btls = BackendPolicies {
 			backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 			// We will use original request for now
 			..Default::default()
 		};
 		Some(match self {
-			AIProvider::OpenAI(_) => (Target::Hostname(openai::DEFAULT_HOST, 443), btls),
-			AIProvider::Copilot(_) => {
-				let bp = BackendPolicies {
-					backend_auth: Some(BackendAuth::Copilot),
-					..btls.clone()
-				};
-				(Target::Hostname(copilot::DEFAULT_HOST, 443), bp)
+			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Anthropic(_) => btls,
+			AIProvider::Copilot(_) => BackendPolicies {
+				backend_auth: Some(BackendAuth::Copilot),
+				..btls
 			},
-			AIProvider::Gemini(_) => (Target::Hostname(gemini::DEFAULT_HOST, 443), btls),
-			AIProvider::Vertex(p) => {
-				let bp = BackendPolicies {
-					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
-					..Default::default()
-				};
-				(Target::Hostname(p.get_host(None), 443), bp)
+			AIProvider::Vertex(_) => BackendPolicies {
+				backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
+				..btls
 			},
-			AIProvider::Anthropic(_) => (Target::Hostname(anthropic::DEFAULT_HOST, 443), btls),
-			AIProvider::Bedrock(p) => {
-				let bp = BackendPolicies {
-					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit { service_name: None })),
-					..Default::default()
-				};
-				(Target::Hostname(p.get_host(), 443), bp)
+			AIProvider::Bedrock(p) => BackendPolicies {
+				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
+					service_name: None,
+					assume_role: None,
+					source_credentials_cache: p.source_credentials_cache.clone(),
+					assume_role_cache: p.assume_role_cache.clone(),
+				})),
+				..btls
 			},
-			AIProvider::Azure(p) => {
-				let bp = BackendPolicies {
-					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
-						cached_cred: p.cached_cred.clone(),
-					})),
-					..Default::default()
-				};
-				(Target::Hostname(p.get_host(), 443), bp)
+			AIProvider::Azure(p) => BackendPolicies {
+				backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
+					cached_cred: p.cached_cred.clone(),
+				})),
+				..btls
 			},
+			AIProvider::Custom(_) => return None,
+		})
+	}
+
+	/// Default connection target for the provider, for the given LLM route. Route-aware because some
+	/// providers serve routes from different hosts (Bedrock rerank uses `bedrock-agent-runtime` and
+	/// Vertex rerank uses `discoveryengine`, distinct from the chat/embeddings host). Returns `None`
+	/// for custom providers, which require an explicit host override or provider backend.
+	pub fn default_connector_target(&self, route_type: RouteType) -> Option<Target> {
+		Some(match self {
+			AIProvider::OpenAI(_) => Target::Hostname(openai::DEFAULT_HOST, 443),
+			AIProvider::Copilot(_) => Target::Hostname(copilot::DEFAULT_HOST, 443),
+			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
+			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
+			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
+			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type), 443),
+			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
 	}
@@ -394,7 +408,7 @@ impl AIProvider {
 			self.set_default_path(req, route_type, llm_request, path_prefix, has_host_override)?;
 		}
 		if !has_host_override {
-			self.set_default_authority(req, llm_request)?;
+			self.set_default_authority(req, route_type)?;
 		}
 		self.set_required_fields(req)?;
 		Ok(())
@@ -559,24 +573,21 @@ impl AIProvider {
 	pub fn set_default_authority(
 		&self,
 		req: &mut Request,
-		llm_request: Option<&LLMRequest>,
+		route_type: RouteType,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
 			AIProvider::Copilot(_) => Authority::from_static(copilot::DEFAULT_HOST_STR),
 			AIProvider::Anthropic(_) => Authority::from_static(anthropic::DEFAULT_HOST_STR),
 			AIProvider::Gemini(_) => Authority::from_static(gemini::DEFAULT_HOST_STR),
-			AIProvider::Vertex(provider) => {
-				let request_model = llm_request.map(|l| l.request_model.as_str());
-				Authority::from_str(&provider.get_host(request_model))?
-			},
+			AIProvider::Vertex(provider) => Authority::from_str(&provider.get_host(route_type))?,
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
 				// Store the region in request extensions so AWS signing can use it.
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.authority = Some(Authority::from_str(&provider.get_host())?);
+						uri.authority = Some(Authority::from_str(&provider.get_host(route_type))?);
 						Ok(())
 					})?;
 					req.extensions.insert(bedrock::AwsRegion {
@@ -713,6 +724,31 @@ impl AIProvider {
 				backend_info,
 				policies,
 				InputFormat::Embeddings,
+				req,
+				parts,
+				tokenize,
+				log,
+			)
+			.await
+	}
+
+	pub async fn process_rerank_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		let (parts, req) = self
+			.read_body_and_default_model::<types::rerank::Request>(policies, req, log)
+			.await?;
+
+		self
+			.process_request(
+				backend_info,
+				policies,
+				InputFormat::Rerank,
 				req,
 				parts,
 				tokenize,
@@ -919,6 +955,22 @@ impl AIProvider {
 			) => {
 				// OpenAI compatible, Gemini, Bedrock, or Vertex
 			},
+			(
+				AIProvider::OpenAI(_)
+				| AIProvider::Copilot(_)
+				| AIProvider::Azure(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Vertex(_),
+				InputFormat::Rerank,
+			) => {
+				// OpenAI-compatible providers (OpenAI/Copilot/Azure-Foundry) pass the
+				// Cohere-shaped request through unchanged; Bedrock & Vertex translate.
+				// Custom is already covered above. These OpenAI-compatible surfaces only
+				// actually serve rerank when pointed (e.g. via hostOverride or Azure Foundry)
+				// at a Cohere-compatible backend; otherwise the upstream returns its own 404.
+				// Anthropic and Gemini have no rerank endpoint and fall through to the
+				// unsupported arm below.
+			},
 			(p, m) => {
 				// Unsupported provider/format combination.
 				return Err(AIError::UnsupportedConversion(strng::format!(
@@ -953,6 +1005,9 @@ impl AIProvider {
 		}
 
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
+		if original_format == InputFormat::Detect {
+			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
+		}
 		llm_info.native_format = native_format;
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
@@ -984,6 +1039,7 @@ impl AIProvider {
 					(_, None) => req.to_openai()?,
 					(InputFormat::Completions, Some(custom::ProviderFormat::Completions))
 					| (InputFormat::Embeddings, Some(custom::ProviderFormat::Embeddings))
+					| (InputFormat::Rerank, Some(custom::ProviderFormat::Rerank))
 					| (InputFormat::Messages, Some(custom::ProviderFormat::Completions))
 					| (InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => req.to_openai()?,
 					(InputFormat::Completions, Some(custom::ProviderFormat::Messages))
@@ -1134,6 +1190,29 @@ impl AIProvider {
 			return Ok(resp);
 		}
 
+		// rerank has simplified response handling (like embeddings)
+		if req.input_format == InputFormat::Rerank {
+			parts.headers.remove(header::CONTENT_LENGTH);
+			if !parts.status.is_success() {
+				let body = self.process_error(&req, parts.status, &bytes)?;
+				let llm_info = LLMInfo::new(req, LLMResponse::default());
+				parts
+					.extensions
+					.insert(crate::cel::LLMContext::from(llm_info.clone()));
+				let resp = Response::from_parts(parts, body.into());
+				log.store(Some(llm_info));
+				return Ok(resp);
+			}
+			let (llm_resp, bytes) = self.process_rerank_response(bytes)?;
+			let llm_info = LLMInfo::new(req, llm_resp);
+			parts
+				.extensions
+				.insert(crate::cel::LLMContext::from(llm_info.clone()));
+			let resp = Response::from_parts(parts, bytes.into());
+			log.store(Some(llm_info));
+			return Ok(resp);
+		}
+
 		let (llm_resp, body) = if !parts.status.is_success() {
 			let body = self.process_error(&req, parts.status, &bytes)?;
 			(LLMResponse::default(), body)
@@ -1218,6 +1297,28 @@ impl AIProvider {
 			_ => {
 				let resp: types::embeddings::Response =
 					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
+				Ok((resp.to_llm_response(false), bytes))
+			},
+		}
+	}
+
+	fn process_rerank_response(&self, bytes: Bytes) -> Result<(LLMResponse, Bytes), AIError> {
+		match self {
+			AIProvider::Bedrock(_) => {
+				let translated = conversion::bedrock::from_rerank::translate_response(&bytes)?;
+				let llm_resp = translated.to_llm_response(false);
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
+			},
+			AIProvider::Vertex(_) => {
+				let translated = conversion::vertex::from_rerank::translate_response(&bytes)?;
+				let llm_resp = translated.to_llm_response(false);
+				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
+				Ok((llm_resp, Bytes::from(body)))
+			},
+			_ => {
+				let resp =
+					types::rerank::parse_response_lenient(&bytes).map_err(logged_response_parsing(&bytes))?;
 				Ok((resp.to_llm_response(false), bytes))
 			},
 		}
@@ -1372,6 +1473,9 @@ impl AIProvider {
 			(_, InputFormat::Embeddings) => {
 				unreachable!("Embeddings should be handled by process_embeddings_response")
 			},
+			(_, InputFormat::Rerank) => {
+				unreachable!("Rerank should be handled by process_rerank_response")
+			},
 		}
 	}
 
@@ -1419,6 +1523,18 @@ impl AIProvider {
 		};
 
 		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		let stream_format = match self {
+			AIProvider::Bedrock(_) => "awsEventStream",
+			_ => "sseJson",
+		};
+		crate::proxy::dtrace::trace(|trace| {
+			trace.llm_streaming_translation(
+				self.provider().to_string(),
+				format!("{input_format:?}"),
+				native_format.map(|f| format!("{f:?}")),
+				stream_format.to_string(),
+			)
+		});
 		Ok(match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
@@ -1429,13 +1545,17 @@ impl AIProvider {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Completions)) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
-				resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
 			},
 			(
 				AIProvider::Custom(_),
@@ -1460,6 +1580,9 @@ impl AIProvider {
 			(AIProvider::Vertex(_), InputFormat::Completions, _) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
 			},
+			(AIProvider::Bedrock(_), InputFormat::Detect, _) => {
+				types::detect::passthrough_aws_stream(logger, resp)
+			},
 			(_, InputFormat::Detect, _) => types::detect::passthrough_stream(logger, resp),
 			// Responses with OpenAI: just passthrough
 			(
@@ -1469,21 +1592,23 @@ impl AIProvider {
 				| AIProvider::Vertex(_),
 				InputFormat::Responses,
 				_,
-			) => resp.map(|b| conversion::responses::passthrough_stream(b, buffer, logger)),
+			) => resp.map(|b| {
+				conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Gemini(_), InputFormat::Responses, _) => {
 				resp.map(|b| conversion::openai_compat::to_responses::translate_stream(b, buffer, logger))
 			},
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
-			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			(AIProvider::Vertex(_), InputFormat::Messages, _) => {
 				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages, _) => {
-				resp.map(|b| conversion::messages::passthrough_stream(b, buffer, logger))
-			},
+			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
@@ -1506,7 +1631,14 @@ impl AIProvider {
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
-					conversion::bedrock::from_messages::translate_stream(b, buffer, logger, &model, &msg)
+					conversion::bedrock::from_messages::translate_stream(
+						b,
+						buffer,
+						logger,
+						&model,
+						&msg,
+						include_completion_in_log,
+					)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
@@ -1530,6 +1662,9 @@ impl AIProvider {
 			},
 			(_, InputFormat::Embeddings, _) => {
 				unreachable!("Embeddings should be handled by process_embeddings_response")
+			},
+			(_, InputFormat::Rerank, _) => {
+				unreachable!("Rerank should be handled by process_rerank_response")
 			},
 			(AIProvider::Custom(_), input, native) => {
 				return Err(AIError::UnsupportedConversion(strng::format!(
@@ -1559,7 +1694,11 @@ impl AIProvider {
 		if let Some(provider_model) = &self.override_model() {
 			*req.model() = Some(provider_model.to_string());
 		} else if req.model().is_none() {
-			return Err(AIError::MissingField("model not specified".into()));
+			if let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path()) {
+				*req.model() = Some(path_model.to_string());
+			} else {
+				return Err(AIError::MissingField("model not specified".into()));
+			}
 		}
 		Ok((parts, req))
 	}
@@ -1660,6 +1799,20 @@ impl AIProvider {
 			},
 			(AIProvider::Bedrock(_), InputFormat::Embeddings, _) => {
 				conversion::bedrock::from_embeddings::translate_error(bytes)
+			},
+			(AIProvider::Custom(_), InputFormat::Rerank, Some(custom::ProviderFormat::Rerank)) => {
+				Ok(bytes.clone())
+			},
+			(
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
+				InputFormat::Rerank,
+				_,
+			) => Ok(bytes.clone()),
+			(AIProvider::Bedrock(_), InputFormat::Rerank, _) => {
+				conversion::bedrock::from_rerank::translate_error(bytes)
+			},
+			(AIProvider::Vertex(_), InputFormat::Rerank, _) => {
+				conversion::vertex::from_rerank::translate_error(bytes)
 			},
 			(_, _, _) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider and format is not supported"

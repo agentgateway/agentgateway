@@ -65,7 +65,7 @@ status:
         status: "True"
         type: Accepted
       - lastTransitionTime: fake
-        message: backendRef be/other not accessible to a HTTPRoute in namespace "default"
+        message: backendRef other/be not accessible to a HTTPRoute in namespace "default"
           (missing a ReferenceGrant?)
         reason: RefNotPermitted
         status: "False"

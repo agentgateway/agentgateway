@@ -70,6 +70,13 @@ type traceEvent struct {
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
 	Details         string            `json:"details,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	RouteType       string            `json:"routeType,omitempty"`
+	InputFormat     string            `json:"inputFormat,omitempty"`
+	NativeFormat    *string           `json:"nativeFormat,omitempty"`
+	RequestModel    string            `json:"requestModel,omitempty"`
+	Streaming       *bool             `json:"streaming,omitempty"`
+	StreamFormat    string            `json:"streamFormat,omitempty"`
 }
 
 type traceAuthzRule struct {
@@ -636,6 +643,12 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "llmRouteResolved":
+		return "LLM Route"
+	case "llmRequestDetected":
+		return "LLM Request"
+	case "llmStreamingTranslation":
+		return "LLM Stream"
 	default:
 		return eventType
 	}
@@ -656,7 +669,7 @@ func summarizeEvent(event traceEvent) string {
 	case "routeSelection":
 		return summarizeRouteSelection(event.SelectedRoute, len(event.EvaluatedRoutes))
 	case "policySelection":
-		return summarizePolicySelection(event.EffectivePolicy)
+		return summarizePolicySelection(event.Phase, event.EffectivePolicy)
 	case "policy":
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
@@ -686,6 +699,45 @@ func summarizeEvent(event traceEvent) string {
 		return "request finished"
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "llmRouteResolved":
+		return strings.TrimSpace(fmt.Sprintf(
+			"%s %s",
+			event.Provider,
+			event.RouteType,
+		))
+	case "llmRequestDetected":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.RequestModel != "" {
+			parts = append(parts, "model="+event.RequestModel)
+		}
+		if event.Streaming != nil && *event.Streaming {
+			parts = append(parts, "streaming")
+		}
+		return truncate(strings.Join(parts, " "), 120)
+	case "llmStreamingTranslation":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.StreamFormat != "" {
+			parts = append(parts, "stream="+event.StreamFormat)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	default:
 		return truncate(compactJSON(event), 120)
 	}
@@ -745,7 +797,11 @@ func summarizePolicy(kind string, result json.RawMessage) string {
 	return truncate(fmt.Sprintf("%s %s", kind, compactJSON(result)), 120)
 }
 
-func summarizePolicySelection(raw json.RawMessage) string {
+func summarizePolicySelection(phase string, raw json.RawMessage) string {
+	prefix := "effective policies"
+	if phase != "" {
+		prefix = fmt.Sprintf("%s effective policies", displayPolicySelectionPhase(phase))
+	}
 	var payload map[string]json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &payload) == nil {
 		keys := make([]string, 0, len(payload))
@@ -754,11 +810,22 @@ func summarizePolicySelection(raw json.RawMessage) string {
 		}
 		sort.Strings(keys)
 		if len(keys) == 0 {
-			return "effective policies: none"
+			return prefix + ": none"
 		}
-		return truncate("effective policies: "+strings.Join(keys, ", "), 120)
+		return truncate(prefix+": "+strings.Join(keys, ", "), 120)
 	}
-	return truncate("effective="+compactJSON(raw), 120)
+	return truncate(prefix+"="+compactJSON(raw), 120)
+}
+
+func displayPolicySelectionPhase(phase string) string {
+	switch phase {
+	case "subBackend":
+		return "sub-backend"
+	case "inlineBackend":
+		return "inline backend"
+	default:
+		return phase
+	}
 }
 
 func summarizeAuthorizationResult(result json.RawMessage, rules []traceAuthzRule) string {

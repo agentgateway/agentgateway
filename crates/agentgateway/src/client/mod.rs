@@ -102,7 +102,7 @@ impl HboneSourceRole {
 		match tp {
 			TunnelProtocol::HboneWaypoint => Some(HboneSourceRole::Waypoint),
 			TunnelProtocol::HboneGateway => Some(HboneSourceRole::Gateway),
-			TunnelProtocol::Direct | TunnelProtocol::Proxy => None,
+			TunnelProtocol::Direct | TunnelProtocol::Proxy | TunnelProtocol::Connect => None,
 		}
 	}
 }
@@ -489,6 +489,7 @@ impl Client {
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
+		b.http1_preserve_header_case(true);
 		if let Some(pool_max) = backend_config.pool_max_size {
 			b.pool_max_idle_per_host(pool_max);
 		};
@@ -585,6 +586,23 @@ impl Client {
 			"completed"
 		);
 		Ok(())
+	}
+
+	pub async fn connect_raw(
+		&self,
+		target: Target,
+		transport: Transport,
+	) -> Result<Socket, ProxyError> {
+		let dest = self
+			.connector
+			.resolve_target(transport.skip_dns_resolution(), &target)
+			.await?;
+		self
+			.connector
+			.clone()
+			.connect(target, dest, transport, false)
+			.await
+			.map_err(ProxyError::UpstreamTCPCallFailed)
 	}
 
 	pub async fn call(&self, call: Call) -> Result<http::Response, ProxyError> {
@@ -716,7 +734,11 @@ mod tests {
 
 	#[test]
 	fn non_role_tunnel_protocols_have_no_source_role() {
-		for tp in [TunnelProtocol::Direct, TunnelProtocol::Proxy] {
+		for tp in [
+			TunnelProtocol::Direct,
+			TunnelProtocol::Proxy,
+			TunnelProtocol::Connect,
+		] {
 			assert_eq!(
 				HboneSourceRole::from_tunnel(tp),
 				None,

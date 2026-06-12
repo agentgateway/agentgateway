@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, ready};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
@@ -427,6 +427,7 @@ impl CelLogging {
 				inputs.llm_response,
 				inputs.mcp,
 				Some(inputs.end_time),
+				inputs.proxy,
 			)
 		};
 		CelLoggingExecutor {
@@ -444,6 +445,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub llm_response: Option<&'a LLMContext>,
 	pub mcp: Option<&'a MCPInfo>,
 	pub end_time: &'a cel::RequestTime,
+	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
 }
 
@@ -525,7 +527,6 @@ impl DropOnLog {
 	fn add_llm_metrics(
 		log: &RequestLog,
 		route_identifier: &RouteIdentifier,
-		end_time: Timestamp,
 		duration: Duration,
 		llm_response: Option<&LLMContext>,
 		custom_metric_fields: &CustomField,
@@ -584,25 +585,25 @@ impl DropOnLog {
 				.gen_ai_request_duration
 				.get_or_create(&gen_ai_labels)
 				.observe(duration.as_secs_f64());
-			if let Some(ft) = llm_response.first_token {
-				let ttft = ft.duration_since(log.start.as_instant());
-				// Duration from start of request to first token
-				// This is the start of when WE got the request, but it should probably be when we SENT the upstream.
+			if let Some(ttft) = llm_response
+				.time_to_first_token
+				.and_then(|duration| duration.0.to_std().ok())
+			{
 				log
 					.metrics
 					.gen_ai_time_to_first_token
 					.get_or_create(&gen_ai_labels)
 					.observe(ttft.as_secs_f64());
-
-				if let Some(ot) = llm_response.output_tokens {
-					let first_to_last = end_time.as_instant().duration_since(ft);
-					let throughput = first_to_last.as_secs_f64() / (ot as f64);
-					log
-						.metrics
-						.gen_ai_time_per_output_token
-						.get_or_create(&gen_ai_labels)
-						.observe(throughput);
-				}
+			}
+			if let Some(time_per_output_token) = llm_response
+				.time_per_output_token
+				.and_then(|duration| duration.0.to_std().ok())
+			{
+				log
+					.metrics
+					.gen_ai_time_per_output_token
+					.get_or_create(&gen_ai_labels)
+					.observe(time_per_output_token.as_secs_f64());
 			}
 		}
 	}
@@ -617,6 +618,38 @@ impl From<RequestLog> for DropOnLog {
 	}
 }
 
+fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
+	cel::ProxyContext {
+		bind: log.bind_name.clone(),
+		gateway: log
+			.listener_name
+			.as_ref()
+			.map(|l| cel::ProxyGatewayContext {
+				namespace: l.gateway_namespace.clone(),
+				name: l.gateway_name.clone(),
+			}),
+		listener: log
+			.listener_name
+			.as_ref()
+			.map(|l| cel::ProxyListenerContext {
+				name: l.listener_name.clone(),
+			}),
+		route: log.route_name.as_ref().map(|r| cel::ProxyRouteContext {
+			namespace: r.namespace.clone(),
+			name: r.name.clone(),
+			kind: r.kind.clone(),
+			rule: r.rule_name.clone(),
+		}),
+		request_processing_duration: log
+			.request_processing_duration
+			.and_then(cel::CelDuration::from_std),
+		upstream_duration: log.upstream_duration.and_then(cel::CelDuration::from_std),
+		response_processing_duration: log
+			.response_processing_duration
+			.and_then(cel::CelDuration::from_std),
+	}
+}
+
 impl RequestLog {
 	pub fn new(
 		cel: CelLogging,
@@ -628,6 +661,11 @@ impl RequestLog {
 			cel,
 			metrics,
 			start,
+			request_processing_start: Instant::now(),
+			request_processing_duration: None,
+			upstream_duration: None,
+			response_processing_start: None,
+			response_processing_duration: None,
 			connection_id: current_connection_id(),
 			request_id: current_request_id(),
 			tcp_info,
@@ -733,6 +771,7 @@ impl RequestLog {
 		mcp: Option<&MCPInfo>,
 	) {
 		let cel_end_time = cel::RequestTime(end_time.as_datetime());
+		let proxy_timing = proxy_context(self);
 		let cel_exec = self.cel.build(CelLoggingBuildInputs {
 			req: self.request_snapshot.as_deref(),
 			resp: response_snapshot,
@@ -740,6 +779,7 @@ impl RequestLog {
 			mcp: mcp.filter(|m| !m.is_empty()),
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
+			proxy: Some(&proxy_timing),
 		});
 		let Some(rh) = self.request_handle.take() else {
 			return;
@@ -753,6 +793,11 @@ pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
 	pub start: Timestamp,
+	pub request_processing_start: Instant,
+	pub request_processing_duration: Option<Duration>,
+	pub upstream_duration: Option<Duration>,
+	pub response_processing_start: Option<Instant>,
+	pub response_processing_duration: Option<Duration>,
 	pub connection_id: Option<u64>,
 	pub request_id: Option<u64>,
 	pub tcp_info: TCPConnectionInfo,
@@ -869,17 +914,33 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let llm_response = log.llm_response.take().map(Into::into);
+			let mut llm_response: Option<LLMContext> = log.llm_response.take().map(Into::into);
+			if let Some(llm_response) = llm_response.as_mut() {
+				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
+			}
 
 			let mcp = log.mcp_status.take();
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
+			// The response snapshot is captured before the response body is drained, so
+			// trailer-only grpc-status values are learned later by LogBody. Copy the final
+			// value back into the snapshot before evaluating access-log CEL fields.
+			if let Some(grpc_status) = log.grpc_status.load()
+				&& let Some(resp) = log.response_snapshot.as_mut()
+			{
+				resp.grpc_status = Some(grpc_status);
+			}
+			let proxy_timing = proxy_context(&log);
+			if let Some(resp) = log.response_snapshot.as_mut() {
+				resp.proxy = Some(proxy_timing.clone());
+			}
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
 				llm_response: llm_response.as_ref(),
 				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
 				end_time: &cel_end_time,
+				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
 			});
 			if let Some(rh) = request_handle {
@@ -926,11 +987,27 @@ impl Drop for DropOnLog {
 					.get_or_create(&http_labels)
 					.inc_by(retry_count as u64);
 			}
+			if !is_tcp {
+				let labels = http_labels.into();
+				if let Some(duration) = log.request_processing_duration {
+					log
+						.metrics
+						.request_processing_duration
+						.get_or_create(&labels)
+						.observe(duration.as_secs_f64());
+				}
+				if let Some(duration) = log.response_processing_duration {
+					log
+						.metrics
+						.response_processing_duration
+						.get_or_create(&labels)
+						.observe(duration.as_secs_f64());
+				}
+			}
 
 			Self::add_llm_metrics(
 				&log,
 				&route_identifier,
-				end_time,
 				duration,
 				llm_response.as_ref(),
 				&custom_metric_fields,
@@ -1354,7 +1431,7 @@ impl PolicyGrpcLogExporter {
 		let channel = GrpcReferenceChannel {
 			target,
 			policies: Arc::new(policies),
-			client: crate::proxy::httpproxy::PolicyClient { inputs },
+			client: crate::proxy::httpproxy::PolicyClient::new(inputs),
 		};
 		let tonic_client =
 			opentelemetry_proto::tonic::collector::logs::v1::logs_service_client::LogsServiceClient::new(

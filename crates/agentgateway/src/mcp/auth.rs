@@ -13,6 +13,7 @@ use crate::json;
 use crate::json::from_body_with_limit;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
 
 pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
@@ -232,7 +233,10 @@ pub(super) async fn authorization_server_metadata(
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
 		.body(Body::empty())?;
-	let upstream = client.simple_call(ureq).await?;
+	let upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
 	let limit = crate::http::response_buffer_limit(&upstream);
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
@@ -340,7 +344,10 @@ pub(super) async fn client_registration(
 		.method(Method::POST)
 		.body(body)?;
 
-	let mut upstream = client.simple_call(ureq).await?;
+	let mut upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
 
 	// Add CORS headers to the response
 	let headers = upstream.headers_mut();

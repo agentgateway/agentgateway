@@ -26,6 +26,7 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
@@ -36,6 +37,7 @@ use crate::types::proto::ProtoError;
 use crate::types::proto::agent::backend_policy_spec::ai::request_guard::Kind;
 use crate::types::proto::agent::backend_policy_spec::ai::{ActionKind, response_guard};
 use crate::types::proto::agent::backend_policy_spec::backend_http::HttpVersion;
+use crate::types::proto::agent::frontend_policy_spec::http::HttpHeaderCase;
 use crate::types::proto::agent::mcp_target::Protocol;
 use crate::types::proto::agent::traffic_policy_spec::ext_proc::{
 	BodySendMode as XdsBodySendMode, HeaderTrailerSendMode as XdsHeaderTrailerSendMode,
@@ -255,6 +257,7 @@ impl TryFrom<proto::agent::tls_config::KeyExchangeGroup>
 fn server_tls_config_from_proto(
 	value: &proto::agent::TlsConfig,
 	diagnostics: &mut Diagnostics,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 ) -> ServerTLSConfig {
 	// Defaults set here. These can be overridden by Frontend policy
 	// TODO: this default only makes sense for HTTPS, distinguish from TLS
@@ -294,6 +297,28 @@ fn server_tls_config_from_proto(
 			},
 		};
 		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
+	}
+
+	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
+		if value.root.is_some() {
+			diagnostics.add_warning("mTLS is not supported with DYNAMIC_CA certificates");
+		}
+		return match super::dynamic_ca_cert::build_dynamic_ca_tls_config_with_profile(
+			value.cert.clone(),
+			value.private_key.clone(),
+			default_alpns,
+			min_version,
+			max_version,
+			cipher_suites,
+			key_exchange_groups,
+			dynamic_ca_cert_cache,
+		) {
+			Ok(sc) => sc,
+			Err(e) => {
+				diagnostics.add_warning(format!("dynamic CA TLS CA is invalid: {e}"));
+				ServerTLSConfig::new_invalid()
+			},
+		};
 	}
 
 	match ServerTLSConfig::from_pem_with_profile(
@@ -521,6 +546,7 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::AnthropicTokenCount) => llm::RouteType::AnthropicTokenCount,
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
+		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
 		Err(_) => {
 			diagnostics.add_warning(format!(
 				"unknown proto RouteType value {}, defaulting to Completions",
@@ -529,6 +555,126 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 			llm::RouteType::Completions
 		},
 	}
+}
+
+fn convert_mcp_guardrails(
+	em: &proto::agent::backend_policy_spec::McpGuardrails,
+	diagnostics: &mut Diagnostics,
+) -> Result<crate::mcp::guardrails::McpGuardrails, ProtoError> {
+	use proto::agent::backend_policy_spec::mcp_guardrails::processor::Kind as ProtoProcessorKind;
+	use proto::agent::backend_policy_spec::mcp_guardrails::{
+		FailureMode as ProtoFailureMode, Phase as ProtoPhase, Remote as ProtoRemote,
+	};
+
+	fn convert_methods(
+		methods: &std::collections::HashMap<String, i32>,
+		diagnostics: &mut Diagnostics,
+	) -> std::collections::HashMap<String, crate::mcp::guardrails::Phase> {
+		methods
+			.iter()
+			.map(|(k, v)| {
+				let phase = match ProtoPhase::try_from(*v) {
+					Ok(ProtoPhase::Off) => crate::mcp::guardrails::Phase::Off,
+					Ok(ProtoPhase::Request) => crate::mcp::guardrails::Phase::Request,
+					Ok(ProtoPhase::Response) => crate::mcp::guardrails::Phase::Response,
+					Ok(ProtoPhase::Full) => crate::mcp::guardrails::Phase::Full,
+					Err(_) => {
+						diagnostics.add_warning(format!(
+							"mcpGuardrails method {k}: unknown phase value {v}; disabling (Off)"
+						));
+						crate::mcp::guardrails::Phase::Off
+					},
+				};
+				(k.clone(), phase)
+			})
+			.collect()
+	}
+
+	fn convert_remote(
+		r: &ProtoRemote,
+		diagnostics: &mut Diagnostics,
+	) -> Result<crate::mcp::guardrails::Remote, ProtoError> {
+		let failure_mode = match ProtoFailureMode::try_from(r.failure_mode).ok() {
+			Some(ProtoFailureMode::Allow) => crate::mcp::guardrails::FailureMode::FailOpen,
+			_ => crate::mcp::guardrails::FailureMode::FailClosed,
+		};
+		let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
+		let metadata = r
+			.metadata
+			.iter()
+			.map(|(k, v)| {
+				let ve = permissive_cel_expression_arc(
+					diagnostics,
+					format!("backend.mcpGuardrails.remote.metadata.{k}"),
+					v,
+				);
+				Ok::<_, ProtoError>((k.to_owned(), ve))
+			})
+			.collect::<Result<HashMap<_, _>, _>>()?;
+		let request_headers = crate::mcp::guardrails::HeaderFilter {
+			allowed: parse_header_names(
+				diagnostics,
+				"backend.mcpGuardrails.remote.allowedRequestHeaders",
+				&r.allowed_request_headers,
+			),
+			disallowed: parse_header_names(
+				diagnostics,
+				"backend.mcpGuardrails.remote.disallowedRequestHeaders",
+				&r.disallowed_request_headers,
+			),
+		};
+		Ok(crate::mcp::guardrails::Remote {
+			target,
+			policies: Vec::new(),
+			failure_mode,
+			metadata,
+			request_headers,
+		})
+	}
+
+	let mut processors = Vec::with_capacity(em.processors.len());
+	for processor in &em.processors {
+		let kind = match processor.kind.as_ref() {
+			Some(ProtoProcessorKind::Remote(r)) => {
+				crate::mcp::guardrails::ProcessorKind::Remote(convert_remote(r, diagnostics)?)
+			},
+			None => {
+				diagnostics.add_warning("mcpGuardrails processor has no kind set; ignoring");
+				continue;
+			},
+		};
+		let methods = convert_methods(&processor.methods, diagnostics);
+		if methods.is_empty() {
+			diagnostics
+				.add_warning("mcpGuardrails processor configured with no methods; it will never run");
+		}
+		processors.push(crate::mcp::guardrails::Processor { methods, kind });
+	}
+
+	let ext = crate::mcp::guardrails::McpGuardrails { processors };
+	for w in ext.load_warnings() {
+		diagnostics.add_warning(w);
+	}
+	Ok(ext)
+}
+
+// Parse configured header names, dropping (with a warning) any that aren't valid
+// HTTP header names rather than failing the whole config.
+fn parse_header_names(
+	diagnostics: &mut Diagnostics,
+	field: &str,
+	names: &[String],
+) -> Vec<HeaderOrPseudo> {
+	names
+		.iter()
+		.filter_map(|n| match HeaderOrPseudo::try_from(n.as_str()) {
+			Ok(h) => Some(h),
+			Err(_) => {
+				diagnostics.add_warning(format!("{field}: invalid header name {n:?}; ignoring"));
+				None
+			},
+		})
+		.collect()
 }
 
 fn convert_provider_format(
@@ -547,6 +693,7 @@ fn convert_provider_format(
 		Ok(ProtoFormat::Embeddings) => Ok(llm::custom::ProviderFormat::Embeddings),
 		Ok(ProtoFormat::AnthropicTokenCount) => Ok(llm::custom::ProviderFormat::AnthropicTokenCount),
 		Ok(ProtoFormat::Realtime) => Ok(llm::custom::ProviderFormat::Realtime),
+		Ok(ProtoFormat::Rerank) => Ok(llm::custom::ProviderFormat::Rerank),
 		Err(_) => Err(ProtoError::Generic(format!(
 			"AI backend custom provider at index {provider_idx} has unknown supported format value {proto_format}"
 		))),
@@ -843,19 +990,34 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
+			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
+				role_arn: assume_role.role_arn,
+			});
 			let aws_auth = match a.kind {
-				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => AwsAuth::ExplicitConfig {
-					access_key_id: config.access_key_id.into(),
-					secret_access_key: config.secret_access_key.into(),
-					region: if config.region.is_empty() {
-						None
-					} else {
-						Some(config.region.clone())
-					},
-					session_token: config.session_token.map(|token| token.into()),
-					service_name,
+				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
+					if assume_role.is_some() {
+						return Err(ProtoError::Generic(
+							"explicit AWS credentials cannot be combined with assumeRole".to_string(),
+						));
+					}
+					AwsAuth::ExplicitConfig {
+						access_key_id: config.access_key_id.into(),
+						secret_access_key: config.secret_access_key.into(),
+						region: if config.region.is_empty() {
+							None
+						} else {
+							Some(config.region.clone())
+						},
+						session_token: config.session_token.map(|token| token.into()),
+						service_name,
+					}
 				},
-				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit { service_name },
+				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
+					service_name,
+					assume_role,
+					source_credentials_cache: Default::default(),
+					assume_role_cache: Default::default(),
+				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
 			BackendAuth::Aws(aws_auth)
@@ -920,6 +1082,7 @@ fn listener_protocol_from_proto(
 	protocol: proto::agent::Protocol,
 	tls: Option<&proto::agent::TlsConfig>,
 	diagnostics: &mut Diagnostics,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 ) -> Result<ListenerProtocol, ProtoError> {
 	use crate::types::proto::agent::Protocol;
 	match (protocol, tls) {
@@ -928,11 +1091,13 @@ fn listener_protocol_from_proto(
 		(Protocol::Https, Some(tls)) => Ok(ListenerProtocol::HTTPS(server_tls_config_from_proto(
 			tls,
 			diagnostics,
+			dynamic_ca_cert_cache,
 		))),
 		// TLS termination
 		(Protocol::Tls, Some(tls)) => Ok(ListenerProtocol::TLS(Some(server_tls_config_from_proto(
 			tls,
 			diagnostics,
+			dynamic_ca_cert_cache,
 		)))),
 		// TLS passthrough
 		(Protocol::Tls, None) => Ok(ListenerProtocol::TLS(None)),
@@ -975,6 +1140,7 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::HboneGateway => TunnelProtocol::HboneGateway,
 				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
+				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
 			},
 		})
 	}
@@ -984,10 +1150,12 @@ impl Listener {
 	pub fn from_xds(
 		s: &proto::agent::Listener,
 		diagnostics: &mut Diagnostics,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	) -> Result<(Self, BindKey), ProtoError> {
 		let proto = proto::agent::Protocol::try_from(s.protocol)?;
-		let protocol = listener_protocol_from_proto(proto, s.tls.as_ref(), diagnostics)
-			.map_err(|e| ProtoError::Generic(format!("{e}")))?;
+		let protocol =
+			listener_protocol_from_proto(proto, s.tls.as_ref(), diagnostics, dynamic_ca_cert_cache)
+				.map_err(|e| ProtoError::Generic(format!("{e}")))?;
 		let l = Listener {
 			key: strng::new(&s.key),
 			name: s
@@ -1021,6 +1189,8 @@ impl TCPRoute {
 		let r = TCPRoute {
 			key: strng::new(&s.key),
 			service_key: service_key_from_proto(s.service_key.as_ref()),
+			service_port: u16::try_from(s.service_port)
+				.map_err(|_| ProtoError::Generic(format!("invalid service_port {}", s.service_port)))?,
 			name: s
 				.name
 				.as_ref()
@@ -1054,6 +1224,8 @@ impl Route {
 		let r = Route {
 			key: strng::new(&s.key),
 			service_key: service_key_from_proto(s.service_key.as_ref()),
+			service_port: u16::try_from(s.service_port)
+				.map_err(|_| ProtoError::Generic(format!("invalid service_port {}", s.service_port)))?,
 			name,
 			hostnames: s.hostnames.iter().map(strng::new).collect(),
 			matches: s
@@ -1165,6 +1337,8 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								source_credentials_cache: Default::default(),
+								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1606,6 +1780,9 @@ fn backend_policy_from_proto(
 		Some(bps::Kind::ExtAuthz(ea)) => {
 			BackendTrafficPolicy::ExtAuthz(Arc::new(external_auth_from_proto(ea, diagnostics)?))
 		},
+		Some(bps::Kind::McpGuardrails(em)) => {
+			BackendTrafficPolicy::McpGuardrails(Arc::new(convert_mcp_guardrails(em, diagnostics)?))
+		},
 		Some(bps::Kind::Transformation(tp)) => {
 			BackendTrafficPolicy::Transformation(Arc::new(transformation_from_proto(tp, diagnostics)?))
 		},
@@ -1742,10 +1919,30 @@ fn traffic_policy_from_proto(
 				.iter()
 				.map(|c| StatusCode::from_u16(*c as u16).map_err(|e| ProtoError::Generic(e.to_string())))
 				.collect::<Result<Vec<_>, _>>()?;
+			let precondition = if r.precondition.is_empty() {
+				None
+			} else {
+				Some(permissive_cel_expression_arc(
+					diagnostics,
+					"retry.precondition",
+					&r.precondition,
+				))
+			};
+			let condition = if r.condition.is_empty() {
+				None
+			} else {
+				Some(permissive_cel_expression_arc(
+					diagnostics,
+					"retry.condition",
+					&r.condition,
+				))
+			};
 			TrafficPolicy::Retry(http::retry::Policy {
 				attempts,
 				backoff,
 				codes: codes.into_boxed_slice(),
+				precondition,
+				condition,
 			})
 		},
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
@@ -2041,7 +2238,7 @@ fn traffic_policy_from_proto(
 			}))
 		},
 		Some(tps::Kind::ResponseHeaderModifier(rhm)) => {
-			TrafficPolicy::ResponseHeaderModifier(Arc::new(http::filters::HeaderModifier {
+			TrafficPolicy::ResponseHeaderModifier(RequestPolicy::single(http::filters::HeaderModifier {
 				add: rhm
 					.add
 					.iter()
@@ -2208,6 +2405,17 @@ fn traffic_policy_from_proto(
 				Mode::None => agent::HostRedirectOverride::None,
 				Mode::Auto => agent::HostRedirectOverride::Auto,
 			})
+		},
+		Some(tps::Kind::Buffer(buffer)) => {
+			let to_body = |b: Option<proto::agent::BufferBody>| {
+				b.map(|bb| BufferBody {
+					max_bytes: bb.max_bytes.map(|v| v as usize),
+				})
+			};
+			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
+				request: to_body(buffer.request),
+				response: to_body(buffer.response),
+			}))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
@@ -2455,6 +2663,12 @@ fn frontend_policy_from_proto(
 				.http1_idle_timeout
 				.map(convert_duration)
 				.unwrap_or_else(crate::defaults::http1_idle_timeout),
+			http1_header_case: HttpHeaderCase::try_from(h.http1_header_case).map(|header_case| {
+				match header_case {
+					HttpHeaderCase::Lowercase => frontend::HTTPHeaderCase::Lowercase,
+					HttpHeaderCase::Preserve => frontend::HTTPHeaderCase::Preserve,
+				}
+			})?,
 			http2_window_size: h.http2_window_size,
 			http2_connection_window_size: h.http2_connection_window_size,
 			http2_frame_size: h.http2_frame_size,
@@ -2540,6 +2754,19 @@ fn frontend_policy_from_proto(
 					_ => frontend::ProxyMode::Strict,
 				};
 			FrontendPolicy::Proxy(frontend::Proxy { version, mode })
+		},
+		Some(fps::Kind::Connect(c)) => {
+			let mode =
+				match crate::types::proto::agent::frontend_policy_spec::connect::Mode::try_from(c.mode) {
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Route) => {
+						frontend::ConnectMode::Route
+					},
+					Ok(crate::types::proto::agent::frontend_policy_spec::connect::Mode::Tunnel) => {
+						frontend::ConnectMode::Tunnel
+					},
+					_ => frontend::ConnectMode::Deny,
+				};
+			FrontendPolicy::Connect(frontend::Connect { mode })
 		},
 		Some(fps::Kind::Logging(p)) => {
 			let (add, rm) = p
@@ -2803,8 +3030,16 @@ pub(crate) fn targeted_policy_from_proto(
 		key: strng::new(&p.key),
 		name: p.name.as_ref().map(Into::into),
 		target,
+		inheritance: policy_inheritance_from_proto(p.inheritance),
 		policy,
 	})
+}
+
+fn policy_inheritance_from_proto(inheritance: i32) -> PolicyInheritance {
+	match proto::agent::policy::Inheritance::try_from(inheritance) {
+		Ok(proto::agent::policy::Inheritance::Override) => PolicyInheritance::Override,
+		_ => PolicyInheritance::Default,
+	}
 }
 
 fn conditional_policy_from_proto(
@@ -2899,10 +3134,12 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::Transformation(_) => build!(Transformation),
 		TrafficPolicy::Csrf(_) => build!(Csrf),
 		TrafficPolicy::RequestHeaderModifier(_) => build!(RequestHeaderModifier),
+		TrafficPolicy::ResponseHeaderModifier(_) => build!(ResponseHeaderModifier),
 		TrafficPolicy::RequestRedirect(_) => build!(RequestRedirect),
 		TrafficPolicy::UrlRewrite(_) => build!(UrlRewrite),
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
+		TrafficPolicy::Buffer(_) => build!(Buffer),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -2933,6 +3170,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::HostRewrite(_) => "hostRewrite",
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
+		TrafficPolicy::Buffer(_) => "buffer",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }
@@ -3060,9 +3298,19 @@ fn convert_webhook(
 		&w.forward_header_matches,
 	)?;
 
+	let failure_mode =
+		match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(w.failure_mode) {
+			Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
+				llm::policy::FailureMode::FailOpen
+			},
+			// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+			_ => llm::policy::FailureMode::FailClosed,
+		};
+
 	Ok(llm::policy::Webhook {
 		target,
 		forward_header_matches,
+		failure_mode,
 	})
 }
 
@@ -3232,6 +3480,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3271,6 +3520,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3312,6 +3562,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![conditional_traffic_policy(
@@ -3364,6 +3615,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![
@@ -3392,6 +3644,7 @@ mod tests {
 			key: "policy".to_string(),
 			name: None,
 			target: Some(test_policy_target()),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
 			kind: Some(proto::agent::policy::Kind::Conditional(
 				proto::agent::ConditionalPolicies {
 					policies: vec![

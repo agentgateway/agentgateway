@@ -12,6 +12,7 @@ import (
 // DnsLookupFamily controls the DNS lookup family for all static clusters created via Backend resources.
 type DnsLookupFamily string
 type XdsMode string
+type BackendRefGrantMode string
 
 const (
 	// DnsLookupFamilyV4Preferred is the default value for DnsLookupFamily.
@@ -38,6 +39,10 @@ const (
 	XdsModePlaintext XdsMode = "plaintext"
 	XdsModeTLS       XdsMode = "tls"
 	XdsModeEither    XdsMode = "either"
+
+	BackendRefGrantModeRouteAndPolicy BackendRefGrantMode = "route-and-policy"
+	BackendRefGrantModeRoute          BackendRefGrantMode = "route"
+	BackendRefGrantModeNone           BackendRefGrantMode = "none"
 )
 
 // Decode implements envconfig.Decoder.
@@ -68,6 +73,26 @@ func (m *XdsMode) Decode(value string) error {
 	default:
 		return fmt.Errorf("invalid xDS mode: %q (supported: plaintext, tls, either)", value)
 	}
+}
+
+// Decode implements envconfig.Decoder.
+func (m *BackendRefGrantMode) Decode(value string) error {
+	mode := BackendRefGrantMode(strings.ToLower(value))
+	switch mode {
+	case BackendRefGrantModeRouteAndPolicy, BackendRefGrantModeRoute, BackendRefGrantModeNone:
+		*m = mode
+		return nil
+	default:
+		return fmt.Errorf("invalid backend ReferenceGrant mode: %q (supported: route-and-policy, route, none)", value)
+	}
+}
+
+func (m BackendRefGrantMode) RequireRouteBackendGrant() bool {
+	return m == "" || m == BackendRefGrantModeRouteAndPolicy || m == BackendRefGrantModeRoute
+}
+
+func (m BackendRefGrantMode) RequirePolicyBackendGrant() bool {
+	return m == BackendRefGrantModeRouteAndPolicy
 }
 
 // GatewayClassParametersRefs maps GatewayClass names to ParametersReference
@@ -178,6 +203,13 @@ type Settings struct {
 	// - tls: serve only TLS xDS
 	// - either: serve both TLS and plaintext xDS
 	XdsMode XdsMode `split_words:"true" default:"plaintext"`
+
+	// BackendRefGrantMode controls when ReferenceGrant is required for cross-namespace backend refs.
+	// Secret refs always require ReferenceGrant.
+	// - route-and-policy: require ReferenceGrant for Route -> Backend and AgentgatewayPolicy -> Backend
+	// - route: require ReferenceGrant only for Route -> Backend
+	// - none: do not require ReferenceGrant for backend refs
+	BackendRefGrantMode BackendRefGrantMode `split_words:"true" default:"route"`
 
 	// AgentgatewayXdsServicePort is the port of the Kubernetes Service that serves xDS config for agentgateway.
 	// This is the primary xDS port and is used for TLS mode and for plaintext when mode=plaintext.

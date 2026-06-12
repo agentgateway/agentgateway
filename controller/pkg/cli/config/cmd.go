@@ -11,13 +11,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
-	defaultProxyAdminPort = 15000
-	shortOutput           = "short"
-	jsonOutput            = "json"
-	yamlOutput            = "yaml"
+	shortOutput = "short"
+	jsonOutput  = "json"
+	yamlOutput  = "yaml"
 )
 
 type commonFlags struct {
@@ -37,15 +37,15 @@ type configDumpSource struct {
 
 func Command() flag.Command {
 	common := &commonFlags{
-		proxyAdminPort: defaultProxyAdminPort,
+		proxyAdminPort: wellknown.ProxyAdminPort,
 		outputFormat:   shortOutput,
 	}
 
 	return flag.Command{
 		Use:     "config",
 		Aliases: []string{"c", "cfg"},
-		Short:   "Retrieve Agentgateway configuration for a resource",
-		Long:    "Retrieve Agentgateway configuration for a resource.",
+		Short:   "Retrieve agentgateway configuration for a resource",
+		Long:    "Retrieve agentgateway configuration for a resource, such as the agentgateway controller or proxy.",
 		AddPersistentFlags: func(cmd *cobra.Command) {
 			common.attach(cmd)
 		},

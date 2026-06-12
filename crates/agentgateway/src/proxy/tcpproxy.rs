@@ -225,7 +225,7 @@ impl TCPProxy {
 		let backend_call = match &selected_backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
 				inputs,
-				backend_policies,
+				backend_policies.into(),
 				log,
 				httpproxy::ServiceCallOverride::default(),
 				svc,
@@ -233,32 +233,24 @@ impl TCPProxy {
 				sni.as_deref(),
 				hbone_source,
 			)?,
-			SimpleBackend::Opaque(_, target) => BackendCall {
-				target: target.clone(),
-				http_version_override: None,
-				transport_override: None,
-				hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-				network_gateway: None,
-				waypoint: None,
-				backend_policies,
-			},
+			SimpleBackend::Opaque(_, target) => BackendCall::new(target.clone(), backend_policies),
 			SimpleBackend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit { service_name: None },
+						http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							source_credentials_cache: Default::default(),
+							assume_role_cache: Default::default(),
+						},
 					)),
 					..Default::default()
 				};
-				BackendCall {
-					target: Target::Hostname(config.get_host().into(), 443),
-					http_version_override: None,
-					transport_override: None,
-					hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-					network_gateway: None,
-					waypoint: None,
-					backend_policies: default_policies.merge(backend_policies),
-				}
+				BackendCall::new(
+					Target::Hostname(config.get_host().into(), 443),
+					default_policies.merge(backend_policies),
+				)
 			},
 			// Guardrail backends are only callable from prompt guard policies, not TCP routes
 			SimpleBackend::Guardrail(_, _) => return Err(ProxyError::InvalidBackendType),
@@ -335,7 +327,12 @@ fn select_best_route(
 		};
 		if let Some(svc_tcp_routes) = svc_tcp_routes {
 			for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-				if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
+				// Match port-agnostic routes (service_port == 0) and those scoped to
+				// this port; being port-scoped is not itself a precedence tiebreaker.
+				if let Some(r) = svc_tcp_routes
+					.get_hostname_routes(&hnm)
+					.find(|r| r.service_port == 0 || r.service_port == dst.port())
+				{
 					return Some(Arc::new(r.clone()));
 				}
 			}
@@ -347,6 +344,7 @@ fn select_best_route(
 		return Some(Arc::new(TCPRoute {
 			key: strng::literal!("_waypoint-default-tcp"),
 			service_key: None,
+			service_port: 0,
 			name: crate::types::agent::RouteName {
 				name: strng::literal!("_waypoint-default-tcp"),
 				namespace: svc.namespace.clone(),
@@ -791,6 +789,7 @@ mod tests {
 				crate::types::agent::TCPRoute {
 					key: strng::literal!("mysql-tcp-route"),
 					service_key: Some(svc_key.clone()),
+					service_port: 0,
 					name: Default::default(),
 					hostnames: vec![],
 					backends: vec![],
@@ -812,6 +811,61 @@ mod tests {
 		);
 		assert!(route.is_some(), "should match service TCP route");
 		assert_eq!(route.unwrap().key.as_str(), "mysql-tcp-route");
+	}
+
+	#[tokio::test]
+	async fn test_service_tcp_route_port_scoping() {
+		// Two service TCP routes differ only by service_port. A connection selects
+		// the route scoped to its port; a port with no matching route is rejected.
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let svc_key = NamespacedHostname {
+			namespace: strng::new("default"),
+			hostname: strng::new("mysql-db.default.svc.cluster.local"),
+		};
+		let route = |key: &'static str, port: u16| crate::types::agent::TCPRoute {
+			key: strng::new(key),
+			service_key: Some(svc_key.clone()),
+			service_port: port,
+			name: Default::default(),
+			hostnames: vec![],
+			backends: vec![],
+		};
+		{
+			let mut binds = stores.binds.write();
+			binds.insert_service_tcp_route(route("tcp-3306", 3306), svc_key.clone());
+			binds.insert_service_tcp_route(route("tcp-5432", 5432), svc_key.clone());
+		}
+		let network = strng::literal!("network");
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+		let pick = |port: u16| {
+			super::select_best_route(
+				None,
+				hbone_listener(),
+				&stores,
+				&network,
+				SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), port),
+				Some(&self_addr),
+			)
+		};
+
+		assert_eq!(pick(3306).unwrap().key.as_str(), "tcp-3306");
+		assert_eq!(pick(5432).unwrap().key.as_str(), "tcp-5432");
+		// Routes exist but none match this port -> reject (GAMMA).
+		assert!(pick(9999).is_none());
 	}
 
 	#[tokio::test]
@@ -924,7 +978,11 @@ mod tests {
 			matches!(
 				&result.backend_policies.backend_auth,
 				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit { service_name: None }
+					crate::http::auth::AwsAuth::Implicit {
+						service_name: None,
+						assume_role: None,
+						..
+					}
 				))
 			),
 			"should default to AWS implicit auth"
@@ -961,7 +1019,10 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+					service_name: None,
+					..
+				}))
 			),
 			"user-provided auth should override default implicit auth"
 		);

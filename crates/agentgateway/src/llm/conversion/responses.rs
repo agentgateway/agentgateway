@@ -6,13 +6,27 @@ use crate::http::Body;
 use crate::llm::{AmendOnDrop, types};
 use crate::parse;
 
-pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
+pub fn passthrough_stream(
+	b: Body,
+	buffer_limit: usize,
+	log: AmendOnDrop,
+	include_completion_in_log: bool,
+) -> Body {
 	let mut saw_token = false;
+	let mut completion = include_completion_in_log.then(String::new);
 	parse::sse::json_passthrough::<types::responses::typed::ResponseStreamEvent>(
 		b,
 		buffer_limit,
 		move |event| {
 			let Some(Ok(event)) = event else {
+				// Stream ended ([DONE]): flush completion if not already set via ResponseCompleted
+				if event.is_none() {
+					log.non_atomic_mutate(|r| {
+						if let Some(c) = completion.take() {
+							r.response.completion = Some(vec![c]);
+						}
+					});
+				}
 				return;
 			};
 
@@ -36,11 +50,16 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 						}
 					});
 				},
-				types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(_) if !saw_token => {
-					saw_token = true;
-					log.non_atomic_mutate(|r| {
-						r.response.first_token = Some(Instant::now());
-					});
+				types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(ref delta) => {
+					if !saw_token {
+						saw_token = true;
+						log.non_atomic_mutate(|r| {
+							r.response.first_token = Some(Instant::now());
+						});
+					}
+					if let Some(c) = completion.as_mut() {
+						c.push_str(&delta.delta);
+					}
 				},
 				types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
 					log.non_atomic_mutate(|r| {
@@ -58,6 +77,9 @@ pub fn passthrough_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Bod
 								Some(usage.input_tokens_details.cached_tokens as u64);
 							r.response.reasoning_tokens =
 								Some(usage.output_tokens_details.reasoning_tokens as u64);
+						}
+						if let Some(c) = completion.take() {
+							r.response.completion = Some(vec![c]);
 						}
 					});
 				},

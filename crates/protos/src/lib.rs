@@ -70,6 +70,12 @@ pub mod agent {
 	pub use crate::agentgateway::dev::resource::*;
 }
 
+#[allow(warnings)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+pub mod ext_mcp {
+	tonic::include_proto!("agentgateway.dev.ext_mcp");
+}
+
 pub mod workload {
 	pub use crate::istio::workload::*;
 }
