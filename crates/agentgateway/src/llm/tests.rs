@@ -281,8 +281,7 @@ mod requests {
 		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
 		("reasoning_replay", &[BEDROCK]),
 		("reasoning_replay_unsigned", &[BEDROCK]),
-		// Gemini-only fixtures: behaviors with no shared-fixture equivalent. `generation-config`
-		// stands in for `full` (whose remote http image the Gemini path rejects).
+		// `generation-config` stands in for `full`, whose remote http image the Gemini path rejects.
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI]),
@@ -528,6 +527,7 @@ mod response {
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
 	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
+	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 
@@ -587,6 +587,15 @@ mod response {
 		("response/openai/embeddings.json", &[OPENAI]),
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
+
+	const VERTEX_GEMINI_RESPONSES: &[(&str, &[&str])] = &[
+		("basic", &[VERTEX_GEMINI_TO_COMPLETIONS]),
+		("tool", &[VERTEX_GEMINI_TO_COMPLETIONS]),
+		("reasoning", &[VERTEX_GEMINI_TO_COMPLETIONS]),
+		("blocked", &[VERTEX_GEMINI_TO_COMPLETIONS]),
+	];
+	const VERTEX_GEMINI_STREAM_RESPONSES: &[(&str, &[&str])] =
+		&[("stream", &[VERTEX_GEMINI_TO_COMPLETIONS])];
 
 	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
@@ -670,6 +679,23 @@ mod response {
 	}
 
 	#[tokio::test]
+	async fn from_vertex_gemini() {
+		for (name, providers) in VERTEX_GEMINI_RESPONSES {
+			let test = &format!("response/vertex-gemini/{name}.json");
+			for provider in *providers {
+				test_response_for_provider(provider, test)
+			}
+		}
+
+		for (name, providers) in VERTEX_GEMINI_STREAM_RESPONSES {
+			let test = &format!("response/vertex-gemini/{name}.json");
+			for provider in *providers {
+				test_streaming_response_for_provider(provider, test).await
+			}
+		}
+	}
+
+	#[tokio::test]
 	async fn detect() {
 		for (name, providers) in DETECT_RESPONSES {
 			let test = &format!("response/detect/{name}");
@@ -741,6 +767,17 @@ mod response {
 			RESPONSES_TO_DETECT => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Detect),
+			),
+			VERTEX_GEMINI_TO_COMPLETIONS => (
+				AIProvider::Vertex(vertex::Provider {
+					model: Some(strng::new("gemini-2.5-pro")),
+					region: Some(strng::new("us-central1")),
+					project_id: strng::new("test-project-123"),
+				}),
+				LLMRequest {
+					request_model: "gemini-2.5-pro".into(),
+					..dummy_llm_req(InputFormat::Completions)
+				},
 			),
 			// No other ones are supported.
 			// We do not have Responses<-->Completions
