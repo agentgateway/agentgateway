@@ -1,11 +1,11 @@
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
-use catalog::{Breakdown, Catalog, Rates, Usage};
+use catalog::{Breakdown, Catalog as CatalogData, Rates, Usage};
 use notify::RecursiveMode;
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::prelude::ToPrimitive;
@@ -16,11 +16,77 @@ use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 
 mod catalog;
 
-static CATALOG: LazyLock<ArcSwap<CatalogSnapshot>> =
-	LazyLock::new(|| ArcSwap::from_pointee(CatalogSnapshot::empty()));
+pub struct ModelCatalog {
+	snapshot: ArcSwap<CatalogSnapshot>,
+}
+
+impl fmt::Debug for ModelCatalog {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("ModelCatalog")
+			.field("snapshot", &*self.snapshot.load())
+			.finish()
+	}
+}
+
+impl Default for ModelCatalog {
+	fn default() -> Self {
+		Self {
+			snapshot: ArcSwap::from_pointee(CatalogSnapshot::empty()),
+		}
+	}
+}
+
+impl ModelCatalog {
+	pub fn new(paths: Vec<PathBuf>) -> anyhow::Result<Arc<Self>> {
+		let catalog = Arc::new(Self::default());
+		if paths.is_empty() {
+			return Ok(catalog);
+		}
+		tokio::spawn({
+			let paths = paths.clone();
+			let catalog = catalog.clone();
+			async move {
+				match load_files(&paths).await {
+					Ok(snap) => {
+						info!(count = paths.len(), "loaded model catalog");
+						catalog.snapshot.store(Arc::new(snap));
+					},
+					Err(e) => {
+						warn!("model catalog load failed; will load when the files become valid: {e:#}")
+					},
+				}
+			}
+		});
+		watch_catalog_files(paths, catalog.clone())?;
+		Ok(catalog)
+	}
+
+	pub fn empty() -> Arc<Self> {
+		Arc::new(Self::default())
+	}
+
+	pub fn snapshot(&self) -> Arc<CatalogSnapshot> {
+		self.snapshot.load_full()
+	}
+
+	pub fn project(&self, info: &LLMInfo) -> CostProjection {
+		let provider = info.request.provider.as_str();
+		let model = info
+			.response
+			.provider_model
+			.as_ref()
+			.unwrap_or(&info.request.request_model);
+		self.snapshot.load().project(
+			provider,
+			model.as_str(),
+			&info.response,
+			info.request.cache_convention,
+		)
+	}
+}
 
 pub struct CatalogSnapshot {
-	catalog: Option<Catalog>,
+	catalog: Option<CatalogData>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -32,14 +98,15 @@ impl fmt::Debug for CatalogSnapshot {
 }
 
 impl CatalogSnapshot {
+	#[cfg(test)]
 	pub fn parse(json: &str) -> anyhow::Result<Self> {
 		Ok(Self::from_catalogs([catalog::from_json(json)?]))
 	}
 
-	fn from_catalogs(catalogs: impl IntoIterator<Item = Catalog>) -> Self {
+	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
 		let merged = catalogs
 			.into_iter()
-			.fold(Catalog::default(), Catalog::override_with);
+			.fold(CatalogData::default(), CatalogData::override_with);
 		CatalogSnapshot {
 			catalog: Some(merged),
 		}
@@ -191,46 +258,6 @@ impl From<&Breakdown> for CostBreakdown {
 	}
 }
 
-pub fn snapshot() -> Arc<CatalogSnapshot> {
-	CATALOG.load_full()
-}
-
-pub fn project(info: &LLMInfo) -> CostProjection {
-	let provider = info.request.provider.as_str();
-	let model = info
-		.response
-		.provider_model
-		.as_ref()
-		.unwrap_or(&info.request.request_model);
-	CATALOG.load().project(
-		provider,
-		model.as_str(),
-		&info.response,
-		info.request.cache_convention,
-	)
-}
-
-pub fn init(paths: Vec<PathBuf>) -> anyhow::Result<()> {
-	if paths.is_empty() {
-		return Ok(());
-	}
-	tokio::spawn({
-		let paths = paths.clone();
-		async move {
-			match load_files(&paths).await {
-				Ok(snap) => {
-					info!(count = paths.len(), "loaded model catalog");
-					CATALOG.store(Arc::new(snap));
-				},
-				Err(e) => {
-					warn!("model catalog load failed; will load when the files become valid: {e:#}")
-				},
-			}
-		}
-	});
-	watch_catalog_files(paths)
-}
-
 async fn load_files(paths: &[PathBuf]) -> anyhow::Result<CatalogSnapshot> {
 	let mut catalogs = Vec::with_capacity(paths.len());
 	for path in paths {
@@ -244,7 +271,7 @@ async fn load_files(paths: &[PathBuf]) -> anyhow::Result<CatalogSnapshot> {
 	Ok(CatalogSnapshot::from_catalogs(catalogs))
 }
 
-fn watch_catalog_files(paths: Vec<PathBuf>) -> anyhow::Result<()> {
+fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
 	let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 	let mut watcher =
 		notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res| {
@@ -305,7 +332,7 @@ fn watch_catalog_files(paths: Vec<PathBuf>) -> anyhow::Result<()> {
 				Ok(_) => match load_files(&abspaths).await {
 					Ok(snap) => {
 						info!("model catalog reloaded");
-						CATALOG.store(Arc::new(snap));
+						catalog.snapshot.store(Arc::new(snap));
 					},
 					Err(e) => {
 						error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
@@ -501,12 +528,13 @@ mod tests {
 	}
 
 	#[test]
-	fn global_snapshot_reports_no_catalog_until_configured() {
+	fn empty_model_catalog_reports_no_catalog() {
+		let catalog = ModelCatalog::default();
 		let resp = LLMResponse {
 			input_tokens: Some(1000),
 			..Default::default()
 		};
-		let (cost, status) = snapshot().price(
+		let (cost, status) = catalog.snapshot().price(
 			"openai",
 			"my-model",
 			&resp,

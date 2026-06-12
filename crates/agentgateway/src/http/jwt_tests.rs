@@ -660,7 +660,13 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		start: start.as_instant(),
 		raw_peer_addr: None,
 	};
-	RequestLog::new(cel, metrics, start, tcp_info)
+	RequestLog::new(
+		cel,
+		metrics,
+		crate::llm::cost::ModelCatalog::empty(),
+		start,
+		tcp_info,
+	)
 }
 
 fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {

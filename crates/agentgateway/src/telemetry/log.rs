@@ -33,6 +33,7 @@ use tracing::{Level, trace};
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
+use crate::llm::cost::ModelCatalog;
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
@@ -678,12 +679,14 @@ impl RequestLog {
 	pub fn new(
 		cel: CelLogging,
 		metrics: Arc<Metrics>,
+		model_catalog: Arc<ModelCatalog>,
 		start: Timestamp,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
 			cel,
 			metrics,
+			model_catalog,
 			start,
 			request_processing_start: Instant::now(),
 			request_processing_duration: None,
@@ -816,6 +819,7 @@ impl RequestLog {
 pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
+	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
 	pub request_processing_start: Instant,
 	pub request_processing_duration: Option<Duration>,
@@ -938,7 +942,10 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let mut llm_response: Option<LLMContext> = log.llm_response.take().map(Into::into);
+			let mut llm_response: Option<LLMContext> = log
+				.llm_response
+				.take()
+				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
@@ -1837,6 +1844,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
+			ModelCatalog::empty(),
 			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),

@@ -728,6 +728,7 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
+	use crate::llm::cost::ModelCatalog;
 	use crate::telemetry::log::{
 		CelLogging, CelLoggingExecutor, LoggingFields, MetricFields, RequestLog,
 	};
@@ -783,6 +784,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
+			ModelCatalog::empty(),
 			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),

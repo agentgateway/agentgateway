@@ -51,6 +51,7 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 			..Default::default()
 		},
 		None,
+		None,
 	);
 	amend.report_rate_limit();
 
@@ -724,7 +725,7 @@ mod response {
 	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
-			p.process_streaming(r, LLMResponsePolicies::default(), None, log, false, i)
+			p.process_streaming(r, LLMResponsePolicies::default(), None, log, false, None, i)
 				.await
 		};
 		test_streaming(provider, test, test_fn).await
@@ -1318,6 +1319,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			None,
 			AsyncLog::default(),
 			false,
+			None,
 			resp,
 		)
 		.await
@@ -1386,6 +1388,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			None,
 			AsyncLog::default(),
 			false,
+			None,
 			resp,
 		)
 		.await
@@ -1646,7 +1649,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::bedrock::from_messages::translate_stream(
 		body,
@@ -1692,7 +1695,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::bedrock::from_messages::translate_stream(
 		body,
@@ -1734,7 +1737,7 @@ async fn messages_passthrough_stream_captures_completion() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
 	// Consume the body to drive the stream to completion
@@ -1774,7 +1777,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
 	let _ = body.collect().await.unwrap();
@@ -1809,7 +1812,7 @@ async fn responses_passthrough_stream_captures_completion() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
 	let _ = body.collect().await.unwrap();
@@ -1845,7 +1848,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
 	let _ = body.collect().await.unwrap();

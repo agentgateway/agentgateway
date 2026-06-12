@@ -13,10 +13,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type warnFn = func(format string, args ...any)
+var modelsDevSourceName = "models.dev"
 
 func init() {
-	importSources["models.dev"] = func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error) {
+	importSources[modelsDevSourceName] = func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error) {
 		api, err := modelsDevFetchAPI(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -165,7 +165,7 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 	return cat, warns, nil
 }
 
-func modelsDevBuildModel(provider, model string, m modelsDevModel, warn warnFn) (Model, error) {
+func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(format string, args ...any)) (Model, error) {
 	label := provider + "/" + model
 	var entry Model
 
@@ -186,7 +186,7 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn warnFn) 
 	return entry, nil
 }
 
-func modelsDevBuildTiers(src []modelsDevTier, label string, warn warnFn) ([]Tier, error) {
+func modelsDevBuildTiers(src []modelsDevTier, label string, warn func(format string, args ...any)) ([]Tier, error) {
 	var tiers []Tier
 	for _, t := range src {
 		if t.Tier.Type != "context" {
