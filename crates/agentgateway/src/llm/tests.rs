@@ -265,21 +265,29 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const VERTEX_GEMINI: &str = "vertex-gemini";
 
 mod requests {
 	use super::*;
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK]),
+		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("full", &[ANTHROPIC, BEDROCK]),
-		("tool-call", &[ANTHROPIC, BEDROCK]),
-		("parallel-tool-call", &[BEDROCK]),
-		("reasoning", &[ANTHROPIC, BEDROCK]),
-		("reasoning_max", &[ANTHROPIC]),
+		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
+		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
 		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
 		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
 		("reasoning_replay", &[BEDROCK]),
 		("reasoning_replay_unsigned", &[BEDROCK]),
+		// Gemini-only fixtures: behaviors with no shared-fixture equivalent. `generation-config`
+		// stands in for `full` (whose remote http image the Gemini path rejects).
+		("image-inline", &[VERTEX_GEMINI]),
+		("image-file", &[VERTEX_GEMINI]),
+		("structured-output", &[VERTEX_GEMINI]),
+		("multi-turn-tools", &[VERTEX_GEMINI]),
+		("generation-config", &[VERTEX_GEMINI]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
@@ -320,6 +328,8 @@ mod requests {
 		let bedrock =
 			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
 		let anthropic = |i| conversion::messages::from_completions::translate(&i);
+		let vertex_gemini =
+			|i| conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"));
 
 		for (name, providers) in COMPLETION_REQUESTS {
 			for provider in *providers {
@@ -333,6 +343,11 @@ mod requests {
 						ANTHROPIC,
 						&format!("requests/completions/{name}.json"),
 						anthropic,
+					),
+					VERTEX_GEMINI => test_request(
+						VERTEX_GEMINI,
+						&format!("requests/completions/{name}.json"),
+						vertex_gemini,
 					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}
