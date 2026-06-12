@@ -1105,6 +1105,7 @@ impl AIProvider {
 		if req.streaming && resp.status().is_success() {
 			return self
 				.process_streaming(
+					client,
 					req,
 					rate_limit,
 					req_snapshot,
@@ -1479,10 +1480,12 @@ impl AIProvider {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn process_streaming(
 		&self,
+		client: PolicyClient,
 		req: LLMRequest,
-		rate_limit: LLMResponsePolicies,
+		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
@@ -1515,6 +1518,13 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
+
+		// Build headers for guardrail evaluation (same as buffered path).
+		let prompt_guard_headers = response_prompt_guard_headers(
+			&parts.headers,
+			response_policies.request_traceparent.as_ref(),
+		);
+
 		let resp = Response::from_parts(parts, body);
 		let resp = if matches!(input_format, InputFormat::Detect) {
 			resp
@@ -1522,7 +1532,24 @@ impl AIProvider {
 			normalize_sse_response_headers(resp)
 		};
 
-		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		// Build evaluators before format translation so guardrails run against translated
+		// SSE output, not raw upstream bytes. Applying them before translation silently
+		// breaks Bedrock (AWS Event Stream is binary, not SSE) and any provider whose
+		// wire format differs from SSE. Detect paths are raw pass-throughs; skip them.
+		let evaluators = if !response_policies.prompt_guard.is_empty()
+			&& !matches!(input_format, InputFormat::Detect)
+		{
+			use policy::PromptGuard;
+			let temp_guard = PromptGuard {
+				request: vec![],
+				response: response_policies.prompt_guard.clone(),
+			};
+			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+		} else {
+			vec![]
+		};
+
+		let logger = AmendOnDrop::new(log, response_policies, req_snapshot);
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
 			_ => "sseJson",
@@ -1535,7 +1562,7 @@ impl AIProvider {
 				stream_format.to_string(),
 			)
 		});
-		Ok(match (self, input_format, native_format) {
+		let translated = match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
 				InputFormat::Completions,
@@ -1671,7 +1698,14 @@ impl AIProvider {
 					"custom provider cannot translate {native:?} stream to {input:?}"
 				)));
 			},
-		})
+		};
+
+		if !evaluators.is_empty() {
+			use policy::streaming_guardrails::GuardedSseBody;
+			// `logger` is owned by the translated body; pass None to avoid double-logging.
+			return Ok(translated.map(|b| GuardedSseBody::new(b, evaluators, buffer, None)));
+		}
+		Ok(translated)
 	}
 
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
