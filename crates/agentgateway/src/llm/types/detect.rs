@@ -292,7 +292,6 @@ impl ResponseType for Response {
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
-			upstream_finish_reason: None,
 			// TODO: we could probably derive this
 			first_token: None,
 		}

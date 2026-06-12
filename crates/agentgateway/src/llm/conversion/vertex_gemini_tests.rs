@@ -22,7 +22,7 @@ fn resp(v: Value) -> Value {
 }
 
 /// Run a Gemini response through `translate_response` and return the `LLMResponse` used to
-/// populate CEL/log fields (where `llm.upstreamFinishReason` lives).
+/// populate CEL/log fields.
 fn llm_resp(v: Value) -> crate::llm::LLMResponse {
 	let bytes = bytes::Bytes::from(serde_json::to_vec(&v).expect("serialize gemini response"));
 	to_completions::translate_response(&bytes)
@@ -1139,31 +1139,6 @@ fn finish_reason_mapping_table() {
 			"{gemini} should map to {openai}"
 		);
 	}
-}
-
-#[test]
-fn upstream_finish_reason_preserves_raw_gemini_value() {
-	// MALFORMED_FUNCTION_CALL collapses to OpenAI "stop" on the wire, but the raw Gemini value
-	// is preserved out-of-band for CEL/log (llm.upstreamFinishReason).
-	let body = json!({
-		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
-			"finishReason": "MALFORMED_FUNCTION_CALL" }]
-	});
-	assert_eq!(resp(body.clone())["choices"][0]["finish_reason"], "stop");
-	assert_eq!(
-		llm_resp(body).upstream_finish_reason,
-		Some(strng::new("MALFORMED_FUNCTION_CALL"))
-	);
-}
-
-#[test]
-fn upstream_finish_reason_uses_prompt_block_reason() {
-	// Prompt-level block: no candidates, blockReason on promptFeedback.
-	let r = llm_resp(json!({
-		"candidates": [],
-		"promptFeedback": { "blockReason": "SAFETY" }
-	}));
-	assert_eq!(r.upstream_finish_reason, Some(strng::new("SAFETY")));
 }
 
 #[test]

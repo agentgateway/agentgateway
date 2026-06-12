@@ -852,58 +852,10 @@ pub mod to_completions {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-		let upstream_finish_reason = raw_finish_reason(&resp);
-
-		// TODO Consider implementing `ResponseType` for `typed::Response` directly.
 		let typed = build_response(&resp);
 		let inner =
 			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(NativeResponse {
-			inner,
-			upstream_finish_reason,
-		}))
-	}
-
-	/// The raw Gemini finish reason (candidate `finishReason`, or the prompt-level `blockReason`
-	/// when the prompt itself was blocked) before it is collapsed onto an OpenAI value.
-	pub(super) fn raw_finish_reason(resp: &vg::GenerateContentResponse) -> Option<Strng> {
-		resp
-			.candidates
-			.first()
-			.and_then(|c| c.finish_reason.as_deref())
-			.or_else(|| {
-				resp
-					.prompt_feedback
-					.as_ref()
-					.and_then(|pf| pf.block_reason.as_deref())
-			})
-			.map(strng::new)
-	}
-	struct NativeResponse {
-		inner: types::completions::Response,
-		upstream_finish_reason: Option<Strng>,
-	}
-
-	impl ResponseType for NativeResponse {
-		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
-			let mut base = self.inner.to_llm_response(include_completion_in_log);
-			if self.upstream_finish_reason.is_some() {
-				base.upstream_finish_reason = self.upstream_finish_reason.clone();
-			}
-			base
-		}
-		fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
-			self.inner.to_webhook_choices()
-		}
-		fn set_webhook_choices(
-			&mut self,
-			resp: Vec<crate::llm::policy::webhook::ResponseChoice>,
-		) -> anyhow::Result<()> {
-			self.inner.set_webhook_choices(resp)
-		}
-		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
-			self.inner.serialize()
-		}
+		Ok(Box::new(inner))
 	}
 
 	#[derive(Default)]
@@ -1298,9 +1250,6 @@ pub mod to_completions {
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
 				});
-			}
-			if let Some(reason) = raw_finish_reason(&chunk) {
-				log.non_atomic_mutate(|r| r.response.upstream_finish_reason = Some(reason.clone()));
 			}
 
 			match state.translate(&chunk) {

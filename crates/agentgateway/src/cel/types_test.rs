@@ -71,7 +71,6 @@ fn build_test_request() -> crate::http::Request {
 		cached_input_tokens: None,
 		prompt: None,
 		completion: Some(vec!["Hello world".to_string()]),
-		upstream_finish_reason: None,
 		params: llm::LLMRequestParams::default(),
 	};
 	req.extensions_mut().insert(llm);

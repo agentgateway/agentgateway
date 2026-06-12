@@ -291,11 +291,6 @@ pub struct LLMResponse {
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
-	/// The raw upstream finish reason before any OpenAI-spec collapsing (e.g. Gemini's
-	/// `MALFORMED_FUNCTION_CALL`). Exposed to CEL as `llm.upstreamFinishReason`.
-	/// Populated only on the Gemini native path (see vertex_gemini::to_completions)
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub upstream_finish_reason: Option<Strng>,
 
 	#[serde(skip)]
 	// Time to get the first token. Only used for streaming.
