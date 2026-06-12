@@ -76,7 +76,7 @@ impl NetworkAuthorizationSet {
 pub struct RuleSet {
 	/// CEL authorization rules to evaluate for a request.
 	#[serde(serialize_with = "se_policies", deserialize_with = "de_policies")]
-	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<RuleSerde>"))]
 	pub rules: PolicySet,
 }
 

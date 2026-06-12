@@ -1905,13 +1905,62 @@
           "description": "CEL authorization rules to evaluate for a request.",
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/RuleSerde"
           }
         }
       },
       "additionalProperties": false,
       "required": [
         "rules"
+      ]
+    },
+    "RuleSerde": {
+      "anyOf": [
+        {
+          "type": "object",
+          "unevaluatedProperties": false,
+          "oneOf": [
+            {
+              "description": "Allow the request when this CEL expression is true.",
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "allow"
+              ]
+            },
+            {
+              "description": "Deny the request when this CEL expression is true.",
+              "type": "object",
+              "properties": {
+                "deny": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "deny"
+              ]
+            },
+            {
+              "description": "Require this CEL expression to be true.",
+              "type": "object",
+              "properties": {
+                "require": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "require"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "string"
+        }
       ]
     },
     "McpGuardrails": {
