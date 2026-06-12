@@ -32,7 +32,7 @@ use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response, ext_proc};
-use crate::llm::{AIProvider, custom, openai};
+use crate::llm::{AIProvider, custom, gemini, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
@@ -1703,6 +1703,101 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	let upstream = &requests[0];
 	assert_eq!(
 		&upstream.url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+#[rstest::rstest]
+#[case::preserves_path(None, "/v1/models", "/v1/models")]
+#[case::path_prefix(Some("/openai/v1"), "/v1/models", "/openai/v1/models")]
+#[case::path_prefix_with_query(
+	Some("/openai/v1"),
+	"/v1/models?foo=bar",
+	"/openai/v1/models?foo=bar"
+)]
+#[tokio::test]
+async fn llm_openai_passthrough_applies_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = crate::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+	);
+	let provider = crate::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/models": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+// Providers without a DEFAULT_BASE_PATH (e.g. Gemini) prepend pathPrefix to the
+// full incoming path rather than replacing /v1.
+#[rstest::rstest]
+#[case::preserves_path(None, "/some/path", "/some/path")]
+#[case::path_prefix(Some("/my/prefix"), "/some/path", "/my/prefix/some/path")]
+#[tokio::test]
+async fn llm_non_openai_passthrough_prepends_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = crate::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		false,
+	);
+	let provider = crate::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/some/path": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
 		expected_url
 	);
 }
