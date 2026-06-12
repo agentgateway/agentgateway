@@ -298,6 +298,9 @@ pub struct LocalLLMConfig {
 	port: Option<u16>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	tls: Option<LocalTLSServerConfig>,
+	/// guardrails defines named prompt and response guardrails that can be reused by models.
+	#[serde(default, skip_serializing_if = "HashMap::is_empty")]
+	guardrails: HashMap<String, PromptGuard>,
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
@@ -305,6 +308,25 @@ pub struct LocalLLMConfig {
 	/// policies defines policies for handling incoming requests, before a model is selected
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalLLMPolicy>,
+}
+
+#[apply(schema_de!)]
+#[serde(untagged)]
+enum LocalLLMGuardrails {
+	Named(String),
+	Inline(PromptGuard),
+}
+
+impl LocalLLMGuardrails {
+	fn resolve(self, guardrails: &HashMap<String, PromptGuard>) -> anyhow::Result<PromptGuard> {
+		match self {
+			LocalLLMGuardrails::Inline(guardrail) => Ok(guardrail),
+			LocalLLMGuardrails::Named(name) => guardrails
+				.get(&name)
+				.cloned()
+				.with_context(|| format!("llm.models.guardrails references unknown guardrail '{name}'")),
+		}
+	}
 }
 
 #[apply(schema_de!)]
@@ -537,7 +559,7 @@ pub struct LocalLLMModels {
 	backend_tunnel: Option<backend::Tunnel>,
 	/// guardrails to apply to the request or response
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	guardrails: Option<PromptGuard>,
+	guardrails: Option<LocalLLMGuardrails>,
 	/// promptCaching configures cache point insertion for supported LLM providers.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	prompt_caching: Option<PromptCachingConfig>,
@@ -2101,6 +2123,7 @@ async fn convert_llm_config(
 	let LocalLLMConfig {
 		port,
 		tls,
+		guardrails,
 		models,
 		policies,
 	} = llm_config;
@@ -2413,11 +2436,16 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
+		let prompt_guard = model_config
+			.guardrails
+			.clone()
+			.map(|guardrail| guardrail.resolve(&guardrails))
+			.transpose()?;
 		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
 			transformations: model_config.transformation.clone(),
-			prompt_guard: model_config.guardrails.clone(),
+			prompt_guard,
 			prompts: None,
 			model_aliases: Default::default(),
 			wildcard_patterns: Arc::new(vec![]),

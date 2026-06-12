@@ -90,6 +90,7 @@ fn dedupe_lines(input: &str) -> String {
 pub fn make<T: JsonSchema>(inline_subschemas: bool) -> anyhow::Result<String> {
 	let settings = schemars::generate::SchemaSettings::default().with(|s| {
 		s.inline_subschemas = inline_subschemas;
+		s.contract = schemars::generate::Contract::Deserialize;
 	});
 	let gens = schemars::SchemaGenerator::new(settings);
 	let schema = gens.into_root_schema_for::<T>();

@@ -4,6 +4,15 @@ frontendPolicies:
       user: request.headers["user-agent"]
 
 llm:
+  guardrails:
+    sharedPii:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: email
+        rejection:
+          status: 400
   policies:
     cors:
       allowOrigins:
@@ -60,3 +69,4 @@ llm:
       azureApiVersion: v1
   - name: gpt-3.5-turbo
     provider: openAI
+    guardrails: sharedPii

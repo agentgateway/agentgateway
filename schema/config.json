@@ -8300,6 +8300,13 @@
             }
           ]
         },
+        "guardrails": {
+          "description": "guardrails defines named prompt and response guardrails that can be reused by models.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/PromptGuard"
+          }
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -8461,7 +8468,7 @@
           "description": "guardrails to apply to the request or response",
           "anyOf": [
             {
-              "$ref": "#/$defs/PromptGuard"
+              "$ref": "#/$defs/LocalLLMGuardrails"
             },
             {
               "type": "null"
@@ -8650,6 +8657,16 @@
           "description": "Pass through the request without interpreting it as LLM traffic.",
           "type": "string",
           "const": "opaque"
+        }
+      ]
+    },
+    "LocalLLMGuardrails": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/PromptGuard"
         }
       ]
     },

@@ -18981,6 +18981,7 @@
 |`llm.tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`llm.tls.maxTLSVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`llm.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
+|`llm.guardrails`|object|guardrails defines named prompt and response guardrails that can be reused by models.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
@@ -19098,7 +19099,7 @@
 |`llm.models[].backendTunnel.proxy.service.port`|integer||
 |`llm.models[].backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails`|object|guardrails to apply to the request or response|
+|`llm.models[].guardrails`|string|guardrails to apply to the request or response|
 |`llm.models[].guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`llm.models[].guardrails.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`llm.models[].guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
