@@ -6,3 +6,6 @@ pub mod openai_compat;
 pub mod responses;
 pub mod vertex;
 pub mod vertex_gemini;
+
+#[cfg(test)]
+mod rerank_tests;

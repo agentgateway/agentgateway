@@ -20,6 +20,17 @@
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.bind`|string|The bind that accepted the request.|
+|`proxy.gateway`|object|The selected Gateway.|
+|`proxy.gateway.namespace`|string|The namespace of the selected Gateway.|
+|`proxy.gateway.name`|string|The name of the selected Gateway.|
+|`proxy.listener`|object|The selected listener.|
+|`proxy.listener.name`|string|The name of the selected listener.|
+|`proxy.route`|object|The selected route.|
+|`proxy.route.namespace`|string|The namespace of the selected route.|
+|`proxy.route.name`|string|The name of the selected route.|
+|`proxy.route.kind`|string|The kind of the selected route.|
+|`proxy.route.rule`|string|The selected route rule name, when available.|
 |`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
 |`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
 |`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
@@ -51,6 +62,8 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of tokens for the request.|
 |`llm.serviceTier`|string|The service tier the provider served the request under.|
+|`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
+|`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|[]object|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
 |`llm.prompt[].role`|string||
@@ -105,4 +118,5 @@
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
+|`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

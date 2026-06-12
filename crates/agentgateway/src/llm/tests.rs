@@ -265,6 +265,7 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 
 mod requests {
@@ -311,6 +312,10 @@ mod requests {
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
+	];
+	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
+		("basic", &[COHERE, BEDROCK, VERTEX]),
+		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
 	];
 
 	#[test]
@@ -483,6 +488,40 @@ mod requests {
 	}
 
 	#[tokio::test]
+	async fn from_rerank() {
+		let bedrock_provider = bedrock::Provider {
+			model: Some(strng::new("cohere.rerank-v3-5:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		};
+		let vertex_provider = vertex::Provider {
+			model: Some(strng::new("semantic-ranker-default@latest")),
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
+
+		let bedrock_request = |i: types::rerank::Request| {
+			conversion::bedrock::from_rerank::translate(&i, &bedrock_provider)
+		};
+		let vertex_request = |i: types::rerank::Request| i.to_vertex(&vertex_provider);
+		let cohere_request = |i: types::rerank::Request| i.to_openai();
+		for (name, providers) in RERANK_REQUESTS {
+			for provider in *providers {
+				let path = format!("requests/rerank/{name}.json");
+				match *provider {
+					BEDROCK => test_request(BEDROCK, &path, bedrock_request),
+					VERTEX => test_request(VERTEX, &path, vertex_request),
+					COHERE => test_request(COHERE, &path, cohere_request),
+					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
 	async fn from_count_tokens() {
 		let mut headers = http::HeaderMap::new();
 		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
@@ -578,7 +617,10 @@ mod response {
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[("stream", ALL_COMPLETIONS)];
+	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("stream", ALL_COMPLETIONS),
+		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
+	];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
@@ -587,6 +629,12 @@ mod response {
 		("response/openai/embeddings.json", &[OPENAI]),
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
+	const RERANK_RESPONSES: &[(&str, &[&str])] = &[
+		("response/bedrock/rerank.json", &[BEDROCK]),
+		("response/vertex/rerank.json", &[VERTEX]),
+		("response/vertex/rerank-no-details.json", &[VERTEX]),
+		("response/cohere/rerank.json", &[COHERE]),
+	];
 
 	const VERTEX_GEMINI_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", &[VERTEX_GEMINI_TO_COMPLETIONS]),
@@ -831,6 +879,28 @@ mod response {
 					VERTEX => test_response(VERTEX, test, vertex),
 					OPENAI => test_response(OPENAI, test, openai),
 					other => panic!("unsupported provider in EMBEDDING_RESPONSES: {other}"),
+				}
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn from_rerank() {
+		let bedrock = |i: Bytes| conversion::bedrock::from_rerank::translate_response(&i);
+		let vertex = |i: Bytes| conversion::vertex::from_rerank::translate_response(&i);
+		let cohere = |i: Bytes| {
+			types::rerank::parse_response_lenient(&i)
+				.map(|e| Box::new(e) as Box<dyn ResponseType>)
+				.map_err(AIError::ResponseParsing)
+		};
+
+		for (test, providers) in RERANK_RESPONSES {
+			for provider in *providers {
+				match *provider {
+					BEDROCK => test_response(BEDROCK, test, bedrock),
+					VERTEX => test_response(VERTEX, test, vertex),
+					COHERE => test_response(COHERE, test, cohere),
+					other => panic!("unsupported provider in RERANK_RESPONSES: {other}"),
 				}
 			}
 		}

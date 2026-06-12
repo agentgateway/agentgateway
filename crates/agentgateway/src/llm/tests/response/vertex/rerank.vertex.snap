@@ -1,0 +1,25 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/vertex/rerank.json
+info:
+  records:
+    - id: "2"
+      score: 0.97
+    - id: "0"
+      score: 0.3
+---
+{
+  "response": {
+    "results": [
+      {
+        "index": 2,
+        "relevance_score": 0.97
+      },
+      {
+        "index": 0,
+        "relevance_score": 0.3
+      }
+    ]
+  },
+  "parsed": {}
+}

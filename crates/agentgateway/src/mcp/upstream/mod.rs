@@ -25,6 +25,8 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
+	method: ::http::Method,
+	uri: ::http::Uri,
 	headers: http::HeaderMap,
 	ext: ::http::Extensions,
 	authority: Option<::http::uri::Authority>,
@@ -34,6 +36,8 @@ impl IncomingRequestContext {
 	#[cfg(test)]
 	pub fn empty() -> Self {
 		Self {
+			method: ::http::Method::GET,
+			uri: ::http::Uri::from_static("/"),
 			headers: http::HeaderMap::new(),
 			ext: ::http::Extensions::new(),
 			authority: None,
@@ -41,10 +45,18 @@ impl IncomingRequestContext {
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
+			method: parts.method.clone(),
+			uri: parts.uri.clone(),
 			headers: parts.headers.clone(),
 			ext: parts.extensions.clone(),
 			authority: parts.uri.authority().cloned(),
 		}
+	}
+	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+		&mut self.headers
+	}
+	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
+		&mut self.ext
 	}
 	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
 		req.extensions_mut().extend(self.ext.clone());
@@ -83,6 +95,15 @@ impl IncomingRequestContext {
 			Ok(())
 		})
 	}
+	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
+	pub fn as_request(&self) -> crate::http::Request {
+		let mut req = ::http::Request::new(crate::http::Body::empty());
+		*req.method_mut() = self.method.clone();
+		*req.uri_mut() = self.uri.clone();
+		*req.headers_mut() = self.headers.clone();
+		*req.extensions_mut() = self.ext.clone();
+		req
+	}
 }
 
 #[derive(Debug, Error)]
@@ -92,6 +113,8 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
+	#[error("mcpGuardrails rejected: {}", .0.message)]
+	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]

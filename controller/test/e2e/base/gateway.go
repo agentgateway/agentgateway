@@ -203,7 +203,11 @@ func (g *Gateway) SendWithResponse(t test.Failer, match *matchers.HttpResponse, 
 	t.Helper()
 
 	address := g.ResolvedAddress()
-	fullOpts := append(GatewayAddressOptions(address), opts...)
+	// Per-attempt timeout must stay well below the retry budget below: otherwise a
+	// single hung request (e.g. a cold upstream connection) eats the whole budget and
+	// the retry loop never gets a second attempt.
+	fullOpts := append(GatewayAddressOptions(address), curl.WithTimeout(8*time.Second))
+	fullOpts = append(fullOpts, opts...)
 	var passedRes http.Response
 	start := time.Now()
 	attempts := 0

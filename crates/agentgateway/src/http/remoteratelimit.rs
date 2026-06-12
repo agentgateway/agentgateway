@@ -50,10 +50,12 @@ pub enum FailureMode {
 
 #[apply(schema!)]
 pub struct RemoteRateLimit {
+	/// Rate limit domain sent to the remote rate limit service.
 	pub domain: String,
+	/// Backend that receives rate limit checks.
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Policies to connect to the backend
+	/// Backend policies used when connecting to the remote rate limit service.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -61,6 +63,7 @@ pub struct RemoteRateLimit {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
+	/// Descriptors sent to the remote rate limit service.
 	pub descriptors: Arc<DescriptorSet>,
 	/// Behavior when the remote rate limit service is unavailable or returns an error.
 	/// Defaults to failClosed, denying requests with a 500 status on service failure.
@@ -77,9 +80,11 @@ pub struct DescriptorSet(pub Vec<DescriptorEntry>);
 
 #[apply(schema!)]
 pub struct DescriptorEntry {
+	/// Descriptor key/value entries. Values are CEL expressions evaluated from the request.
 	#[serde(deserialize_with = "de_descriptors")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<KV>"))]
 	pub entries: Arc<Vec<Descriptor>>,
+	/// Whether this descriptor limits requests or LLM tokens.
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
@@ -110,7 +115,9 @@ struct DescriptorLimitOverride {
 #[derive(serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 struct KV {
+	/// Descriptor entry key sent to the remote rate limit service.
 	key: String,
+	/// CEL expression used to compute the descriptor entry value.
 	value: String,
 }
 

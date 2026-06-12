@@ -1,0 +1,61 @@
+# Regenerate this intentionally invalid Dynamic CA certificate source fixture with a leaf cert/key:
+#   openssl ecparam -name prime256v1 -genkey -noout -out dynamic-ca-cert-root.key
+#   openssl req -x509 -new -key dynamic-ca-cert-root.key -sha256 -days 3650 -subj "/CN=agentgateway.dev" \
+#     -addext "keyUsage=critical,keyCertSign" \
+#     -addext "basicConstraints=critical,CA:TRUE,pathlen:1" \
+#     -out dynamic-ca-cert-root.crt
+#   openssl ecparam -name prime256v1 -genkey -noout -out dynamic-ca-cert-invalid-ca.key
+#   openssl req -new -key dynamic-ca-cert-invalid-ca.key -subj "/CN=localhost" -out dynamic-ca-cert-invalid-ca.csr
+#   printf '%s\n' \
+#     'keyUsage=critical,digitalSignature,keyEncipherment' \
+#     'extendedKeyUsage=serverAuth,clientAuth' \
+#     'subjectAltName=DNS:localhost' > dynamic-ca-cert-invalid-ca.ext
+#   openssl x509 -req -in dynamic-ca-cert-invalid-ca.csr -CA dynamic-ca-cert-root.crt -CAkey dynamic-ca-cert-root.key -CAcreateserial \
+#     -days 3650 -sha256 -extfile dynamic-ca-cert-invalid-ca.ext -out dynamic-ca-cert-invalid-ca.crt
+# Then paste dynamic-ca-cert-invalid-ca.crt into stringData.tls.crt and dynamic-ca-cert-invalid-ca.key into stringData.tls.key.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dynamic-ca-cert-invalid-ca
+  namespace: agentgateway-base
+type: kubernetes.io/tls
+stringData:
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBtzCCAV2gAwIBAgIRANAmlhw5GoqtXdXz3qe5nLwwCgYIKoZIzj0EAwIwGzEZ
+    MBcGA1UEAxMQYWdlbnRnYXRld2F5LmRldjAeFw0yNTEwMTYyMDE1NTZaFw0zNTEw
+    MTQyMDE1NTZaMBQxEjAQBgNVBAMTCWxvY2FsaG9zdDBZMBMGByqGSM49AgEGCCqG
+    SM49AwEHA0IABGTKsEvVv6sXcBmM4pbrldhzt2V504Q//w28GQWSFu/a76oGz9qd
+    T9OvQoNtngPcloERvSUcaWsyj/5WqbK8LAijgYgwgYUwDgYDVR0PAQH/BAQDAgeA
+    MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAdBgNVHQ4EFgQUIRJcUAQA
+    BIHIrDPgSUJpCY1KBYcwHwYDVR0jBBgwFoAUcwtMh/9FfJvcR9JUbISOus7YDMow
+    FAYDVR0RBA0wC4IJbG9jYWxob3N0MAoGCCqGSM49BAMCA0gAMEUCIQCTTXv6XEMh
+    oYIlnp8DKVeRGYGP3Z19EECPbNzdaYel4QIgLbfJbYUvpZBkAUiArMHI+JTILHhK
+    WOixK/cGJfjm1RE=
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEILERHUfgJDnnUdOd4JvwAURLG/V4TJjSS7Ng8+xcmk1+oAoGCCqGSM49
+    AwEHoUQDQgAEZMqwS9W/qxdwGYziluuV2HO3ZXnThD//DbwZBZIW79rvqgbP2p1P
+    069Cg22eA9yWgRG9JRxpazKP/lapsrwsCA==
+    -----END EC PRIVATE KEY-----
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: dynamic-ca-cert-invalid-ca-gateway
+  namespace: agentgateway-base
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTPS
+      port: 443
+      name: https
+      hostname: invalid.dynamic-ca-cert.example.com
+      tls:
+        mode: Terminate
+        options:
+          agentgateway.dev/tls-certificate-source: DYNAMIC_CA
+        certificateRefs:
+          - name: dynamic-ca-cert-invalid-ca
+            kind: Secret

@@ -265,6 +265,8 @@ async fn apply_backend_policies(
 		mcp_authorization: _,
 		// Applied elsewhere
 		mcp_authentication: _,
+		// Applied elsewhere (in mcp/handler.rs + mcp/session.rs)
+		mcp_guardrails: _,
 		// Applied elsewhere
 		inference_routing: _,
 		ext_authz,
@@ -341,6 +343,13 @@ async fn apply_gateway_policies(
 ) -> Result<(), ProxyResponse> {
 	let c = &client;
 
+	// CORS must run before authentication so preflight requests can short-circuit
+	// and rejected browser requests still receive the configured response headers.
+	policies
+		.cors
+		.apply_without_response("gateway cors", c, l, req, response_policies.headers())
+		.await?;
+
 	policies
 		.oidc
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
@@ -363,6 +372,17 @@ async fn apply_gateway_policies(
 	policies
 		.ext_authz
 		.apply_without_response("gateway ext authz", c, l, req, response_policies.headers())
+		.await?;
+
+	policies
+		.authorization
+		.apply_without_response(
+			"gateway authorization",
+			c,
+			l,
+			req,
+			response_policies.headers(),
+		)
 		.await?;
 
 	// ExtProc uses RequestPolicy for conditional selection and CEL registration only.
@@ -621,6 +641,10 @@ impl HTTPProxy {
 		let Some(bind) = inputs.stores.read_binds().bind(&bind_name) else {
 			return Err(ProxyResponse::Error(ProxyError::BindNotFound)).snapshot_on_err(log, &mut req);
 		};
+		log.bind_name = Some(bind_name.clone());
+		cel::ProxyContext::mutate(&mut req, |ctx| {
+			ctx.bind = Some(bind_name.clone());
+		});
 
 		sensitive_headers(&mut req);
 		normalize_uri(log.tls_info.as_ref(), &mut req)
@@ -659,6 +683,16 @@ impl HTTPProxy {
 		let selected_listener = match selected_listener {
 			Ok(l) => {
 				debug!(bind=%bind_name, listener=%l.key, "selected listener");
+				log.listener_name = Some(l.name.clone());
+				cel::ProxyContext::mutate(&mut req, |ctx| {
+					ctx.gateway = Some(cel::ProxyGatewayContext {
+						namespace: l.name.gateway_namespace.clone(),
+						name: l.name.gateway_name.clone(),
+					});
+					ctx.listener = Some(cel::ProxyListenerContext {
+						name: l.name.listener_name.clone(),
+					});
+				});
 				let frontend_policies = inputs.stores.read_binds().listener_frontend_policies(
 					&l.name,
 					Some(bind.address.port()),
@@ -698,8 +732,6 @@ impl HTTPProxy {
 				return Err(ProxyResponse::Error(e)).snapshot_on_err(log, &mut req);
 			},
 		};
-		log.bind_name = Some(bind_name.clone());
-		log.listener_name = Some(selected_listener.name.clone());
 
 		let gateway_policies = inputs
 			.stores
@@ -747,6 +779,14 @@ impl HTTPProxy {
 			PathMatch::Regex(r) => r.as_str().into(),
 			PathMatch::Invalid => strng::literal!("<invalid>"),
 		});
+		cel::ProxyContext::mutate(&mut req, |ctx| {
+			ctx.route = Some(cel::ProxyRouteContext {
+				namespace: selected_route.name.namespace.clone(),
+				name: selected_route.name.name.clone(),
+				kind: selected_route.name.kind.clone(),
+				rule: selected_route.name.rule_name.clone(),
+			});
+		});
 		req.extensions_mut().insert(path_match);
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
@@ -775,8 +815,18 @@ impl HTTPProxy {
 			.route_policies(&route_path, &route_inline_policies);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		let route_retry = route_policies.retry.select("retry", &req);
+		let mut route_retry = route_policies.retry.select("retry", &req);
 		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
+		// Evaluate the retry precondition (if any) against the request before it is consumed.
+		if let Some(retry) = route_retry.as_ref()
+			&& let Some(pre) = retry.precondition.as_ref()
+		{
+			let exec = cel::Executor::new_request(&req);
+			if !exec.eval_bool(pre.as_ref()) {
+				debug!("retry precondition not met, disabling retries");
+				route_retry = None;
+			}
+		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
@@ -942,7 +992,12 @@ impl HTTPProxy {
 					req,
 				)
 				.await;
-			if last || !should_retry(&res, retries.as_ref().unwrap()) {
+			if last
+				|| !should_retry(
+					&res,
+					retries.as_ref().unwrap(),
+					log.request_snapshot.as_deref(),
+				) {
 				if !last {
 					debug!("response not retry-able");
 				}
@@ -1865,17 +1920,20 @@ async fn make_backend_call(
 				)
 				.await?
 			} else {
-				let (target, provider_defaults) = match &provider.host_override {
-					Some(target) => (target.clone(), provider_defaults),
+				let provider_defaults = match &provider.host_override {
+					Some(_) => provider_defaults,
 					None => {
-						let (tgt, mut pol) = provider.provider.default_connector().ok_or_else(|| {
-							ProxyError::ProcessingString(
-								"custom providers require an explicit host override or provider backend"
-									.to_string(),
-							)
-						})?;
+						let mut pol = provider
+							.provider
+							.default_connector_policies()
+							.ok_or_else(|| {
+								ProxyError::ProcessingString(
+									"custom providers require an explicit host override or provider backend"
+										.to_string(),
+								)
+							})?;
 						pol.llm_provider = Some(provider.clone());
-						(tgt, pol)
+						pol
 					},
 				};
 				// Defaults for the provider < Backend level policies < Sub Backend
@@ -1884,6 +1942,27 @@ async fn make_backend_call(
 						.merge(policies.as_ref().clone())
 						.merge(sub_backend_policies),
 				);
+				// Resolve the LLM route before picking the connection target: some providers serve
+				// routes from different hosts (e.g. Bedrock rerank uses bedrock-agent-runtime).
+				let route_type = route_policies
+					.clone()
+					.merge_backend_policies(effective_policies.llm.clone())
+					.llm
+					.as_ref()
+					.map(|policy| policy.resolve_route(req.uri().path()))
+					.unwrap_or(llm::RouteType::Completions);
+				let target = match &provider.host_override {
+					Some(target) => target.clone(),
+					None => provider
+						.provider
+						.default_connector_target(route_type)
+						.ok_or_else(|| {
+							ProxyError::ProcessingString(
+								"custom providers require an explicit host override or provider backend"
+									.to_string(),
+							)
+						})?,
+				};
 				let (maybe_inference, _) = apply_inference_routing(
 					&effective_policies,
 					policy_client.clone(),
@@ -2033,6 +2112,7 @@ async fn make_backend_call(
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
 				| RouteType::Embeddings
+				| RouteType::Rerank
 				| RouteType::Detect => {
 					let request_body_limit = crate::http::buffer_limit(&req);
 					let req = req.map(|b| {
@@ -2067,6 +2147,15 @@ async fn make_backend_call(
 						.await
 						.map_err(|e| ProxyError::Processing(e.into()))?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(|e| ProxyError::Processing(e.into()))?,
+						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
 							req,
@@ -2728,7 +2817,11 @@ fn finalize_attempt_for_retry(
 	};
 	let end_time = agent_core::Timestamp::now();
 	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
-	let llm_response = log.llm_response.load_clone().map(Into::into);
+	let mut llm_response: Option<crate::cel::LLMContext> =
+		log.llm_response.load_clone().map(Into::into);
+	if let Some(llm_response) = llm_response.as_mut() {
+		llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
+	}
 	let mcp = log.mcp_status.load_clone();
 	log.finalize_request_handle_for_attempt(
 		end_time,
@@ -2740,9 +2833,24 @@ fn finalize_attempt_for_retry(
 	);
 }
 
-fn should_retry(res: &Result<Response, SnapshottedProxyResponse>, pol: &retry::Policy) -> bool {
+fn should_retry(
+	res: &Result<Response, SnapshottedProxyResponse>,
+	pol: &retry::Policy,
+	req_snapshot: Option<&cel::RequestSnapshot>,
+) -> bool {
 	match res {
-		Ok(resp) => pol.codes.contains(&resp.status()),
+		Ok(resp) => {
+			if pol.codes.contains(&resp.status()) {
+				return true;
+			}
+			// A condition can match responses that status codes alone cannot, e.g. APIs that
+			// return a 200 but signal failure via a header.
+			if let Some(cond) = pol.condition.as_ref() {
+				let exec = cel::Executor::new_response(req_snapshot, resp);
+				return exec.eval_bool(cond.as_ref());
+			}
+			false
+		},
 		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
 	}
@@ -2767,6 +2875,56 @@ mod tests {
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
+
+	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
+		crate::http::retry::Policy {
+			attempts: std::num::NonZeroU8::new(2).unwrap(),
+			backoff: None,
+			codes: codes
+				.iter()
+				.map(|c| ::http::StatusCode::from_u16(*c).unwrap())
+				.collect(),
+			precondition: None,
+			condition: condition
+				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
+		}
+	}
+
+	#[test]
+	fn should_retry_matches_status_codes() {
+		let pol = retry_policy(&[503], None);
+		let resp = ::http::Response::builder()
+			.status(503)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(super::should_retry(&Ok(resp), &pol, None));
+
+		let pol = retry_policy(&[503], None);
+		let resp = ::http::Response::builder()
+			.status(200)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(!super::should_retry(&Ok(resp), &pol, None));
+	}
+
+	#[test]
+	fn should_retry_condition_matches_on_200() {
+		// Simulate an API that returns 200 but signals failure via a header.
+		let pol = retry_policy(&[], Some(r#"response.headers["x-req-failed"] == "true""#));
+		let failed = ::http::Response::builder()
+			.status(200)
+			.header("x-req-failed", "true")
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(super::should_retry(&Ok(failed), &pol, None));
+
+		let pol = retry_policy(&[], Some(r#"response.headers["x-req-failed"] == "true""#));
+		let ok = ::http::Response::builder()
+			.status(200)
+			.body(http::Body::empty())
+			.unwrap();
+		assert!(!super::should_retry(&Ok(ok), &pol, None));
+	}
 
 	#[test]
 	fn apply_auto_hostname_rewrites_authority_when_enabled() {
@@ -3583,6 +3741,7 @@ mod route_chain_tests {
 		Route {
 			key: strng::new(name),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::new(name),
 				namespace: strng::EMPTY,
@@ -3609,6 +3768,7 @@ mod route_chain_tests {
 		Route {
 			key: strng::new(name),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::new(name),
 				namespace: strng::EMPTY,

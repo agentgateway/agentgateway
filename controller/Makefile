@@ -440,6 +440,17 @@ agctl-linux-amd64: ## Build agctl for linux/amd64
 agctl-linux-arm64: ## Build agctl for linux/arm64
 	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-arm64 ./cmd/agctl
 
+.PHONY: agctl-darwin-arm64
+agctl-darwin-arm64: ## Build agctl for darwin/arm64
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=darwin go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-darwin-arm64 ./cmd/agctl
+
+.PHONY: agctl-windows-amd64
+agctl-windows-amd64: ## Build agctl for windows/amd64
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-windows-amd64.exe ./cmd/agctl
+
+.PHONY: agctl-release
+agctl-release: agctl-linux-amd64 agctl-linux-arm64 agctl-darwin-arm64 agctl-windows-amd64 ## Build agctl for all release targets
+
 $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/agentgateway/Dockerfile.agentgateway
 	cp $< $@
 
@@ -575,8 +586,8 @@ CLUSTER_NAME ?= kind
 INSTALL_NAMESPACE ?= agentgateway-system
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
-# This version should stay in sync with `hack/kind/setup-kind.sh`.
-CLUSTER_NODE_VERSION ?= v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
+# This version should stay in sync with the default node version in (controller)`test/setup/setup-kind-ci.sh`.
+CLUSTER_NODE_VERSION ?= v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
 
 .PHONY: kind-create
 kind-create: ## Create a KinD cluster

@@ -15,7 +15,7 @@ use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::handler::Relay;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
-use crate::mcp::{FailureMode, McpAuthorization};
+use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
@@ -1464,6 +1464,30 @@ async fn setup_proxy_policies(
 	(t, io)
 }
 
+// Like `setup_proxy_policies`, but also attaches `target_policies` to the opaque
+// backend behind the MCP target so they run on the upstream leg.
+async fn setup_proxy_policies_with_target(
+	mock: &MockServer,
+	stateful: bool,
+	legacy_sse: bool,
+	policies: Vec<BackendTrafficPolicy>,
+	target_policies: Vec<BackendTrafficPolicy>,
+) -> (TestBind, SocketAddr) {
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(
+			mock.addr,
+			stateful,
+			legacy_sse,
+			policies,
+			target_policies,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	(t, io)
+}
+
 pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
@@ -1567,6 +1591,21 @@ impl MockServer {
 }
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
+	mock_streamable_http_server_inner(stateful, None).await
+}
+
+type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;
+
+async fn mock_streamable_http_server_with_capture(stateful: bool) -> (MockServer, HeaderCapture) {
+	let capture: HeaderCapture = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let server = mock_streamable_http_server_inner(stateful, Some(capture.clone())).await;
+	(server, capture)
+}
+
+async fn mock_streamable_http_server_inner(
+	stateful: bool,
+	capture: Option<HeaderCapture>,
+) -> MockServer {
 	use mockserver::Counter;
 	use rmcp::transport::streamable_http_server::StreamableHttpService;
 	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
@@ -1587,7 +1626,18 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	);
 
 	let (tx, rx) = tokio::sync::oneshot::channel();
-	let router = axum::Router::new().nest_service("/mcp", service);
+	let mut router = axum::Router::new().nest_service("/mcp", service);
+	if let Some(cap) = capture {
+		router = router.layer(axum::middleware::from_fn(
+			move |req: axum::extract::Request, next: axum::middleware::Next| {
+				let cap = cap.clone();
+				async move {
+					cap.lock().unwrap().push(req.headers().clone());
+					next.run(req).await
+				}
+			},
+		));
+	}
 	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let addr = tcp_listener.local_addr().unwrap();
 	tokio::spawn(async move {
@@ -2373,6 +2423,10 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 	crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()))
 }
 
+fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
+	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
+}
+
 fn persisted_session(
 	target_name: &str,
 	session: &str,
@@ -2661,7 +2715,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		),
 	];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2720,7 +2774,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2769,7 +2823,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		),
 	)];
 
-	let result = merge_fn(results).unwrap();
+	let result = merge_fn(results, &empty_cel()).unwrap();
 	let info = match result {
 		ServerResult::InitializeResult(ir) => ir,
 		other => panic!("expected InitializeResult, got: {:?}", other),
@@ -2806,12 +2860,20 @@ async fn test_runtime_fanout_fail_open() {
 
 	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
 
-	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
-		// Just return the first one for simplicity in this test
-		Ok(results.into_iter().next().unwrap().1)
-	});
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+			// Just return the first one for simplicity in this test
+			Ok(results.into_iter().next().unwrap().1)
+		},
+	);
 
-	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		empty_cel(),
+		FailureMode::FailOpen,
+	);
 
 	let res = ms.next().await;
 	assert!(res.is_some());
@@ -2835,20 +2897,28 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 
 	let streams = vec![("bad1".into(), err_stream1), ("bad2".into(), err_stream2)];
 
-	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>| {
-		// All failed, so results should be empty.
-		// Return an empty success result (idiomatic for FailOpen).
-		assert!(results.is_empty());
-		Ok(rmcp::model::ServerResult::ListToolsResult(
-			ListToolsResult {
-				tools: vec![],
-				next_cursor: None,
-				meta: None,
-			},
-		))
-	});
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+			// All failed, so results should be empty.
+			// Return an empty success result (idiomatic for FailOpen).
+			assert!(results.is_empty());
+			Ok(rmcp::model::ServerResult::ListToolsResult(
+				ListToolsResult {
+					tools: vec![],
+					next_cursor: None,
+					meta: None,
+				},
+			))
+		},
+	);
 
-	let mut ms = MergeStream::new(streams, RequestId::Number(1), merge, FailureMode::FailOpen);
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		empty_cel(),
+		FailureMode::FailOpen,
+	);
 
 	let res = ms.next().await;
 	assert!(res.is_some());
@@ -3026,4 +3096,1157 @@ async fn mcp_remote_ratelimit_deny() {
 		err_msg.contains("429") && err_msg.contains("rate limit exceeded by mock"),
 		"Expected 429 rate limit from remote service, got: {err_msg}"
 	);
+}
+
+// =========================== mcpGuardrails test helpers ============================
+
+mod guardrails_test_support {
+	use std::collections::HashMap;
+	use std::net::SocketAddr;
+	use std::sync::Arc;
+
+	use rmcp::model::{CallToolResult, RawContent};
+
+	use crate::mcp::guardrails;
+	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
+
+	// Default test allowlist: every method exercised in this module's tests,
+	// all at Phase::Full. Tests that need narrower coverage build their own.
+	pub fn default_methods() -> HashMap<String, guardrails::Phase> {
+		["tools/call", "tools/list", "prompts/get", "resources/read"]
+			.into_iter()
+			.map(|m| (m.to_string(), guardrails::Phase::Full))
+			.collect()
+	}
+
+	pub fn policy(addr: SocketAddr) -> BackendTrafficPolicy {
+		policy_with(
+			addr,
+			guardrails::FailureMode::FailClosed,
+			default_methods(),
+			HashMap::new(),
+		)
+	}
+
+	pub fn policy_with(
+		addr: SocketAddr,
+		failure_mode: guardrails::FailureMode,
+		methods: HashMap<String, guardrails::Phase>,
+		metadata: HashMap<String, Arc<crate::cel::Expression>>,
+	) -> BackendTrafficPolicy {
+		let remote = guardrails::Remote {
+			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
+			policies: Vec::new(),
+			failure_mode,
+			metadata,
+			request_headers: Default::default(),
+		};
+		BackendTrafficPolicy::McpGuardrails(Arc::new(guardrails::McpGuardrails {
+			processors: vec![guardrails::Processor {
+				methods,
+				kind: guardrails::ProcessorKind::Remote(remote),
+			}],
+		}))
+	}
+
+	pub fn echo_text(r: &CallToolResult) -> String {
+		r.content
+			.iter()
+			.find_map(|c| match c.raw {
+				RawContent::Text(ref t) => Some(t.text.clone()),
+				_ => None,
+			})
+			.expect("echo returned text")
+	}
+}
+
+// ============================== mcpGuardrails tests ===============================
+
+#[tokio::test]
+async fn mcp_guardrails_pass_through() {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+
+	let (req_n, resp_n) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+	let extmcp_mock = {
+		let (r, p) = (req_n.clone(), resp_n.clone());
+		closure_mock(
+			move |_| {
+				r.fetch_add(1, Ordering::SeqCst);
+				pass_request()
+			},
+			move |_| {
+				p.fetch_add(1, Ordering::SeqCst);
+				pass_response()
+			},
+		)
+		.spawn()
+		.await
+	};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed when mcpGuardrails returns Pass");
+
+	assert!(!result.content.is_empty());
+	assert!(req_n.load(Ordering::SeqCst) >= 1);
+	assert!(resp_n.load(Ordering::SeqCst) >= 1);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
+
+	let extmcp_mock = closure_mock(
+		|_| reject_request(Code::PermissionDenied, "denied by mock mcpGuardrails"),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail when mcpGuardrails rejects");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+	assert_eq!(e.message.as_ref(), "denied by mock mcpGuardrails");
+}
+
+#[tokio::test]
+async fn mcp_guardrails_denies_tool_by_name() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_request,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			let name = req
+				.mcp_request
+				.as_deref()
+				.and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+				.and_then(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_owned))
+				.unwrap_or_default();
+			if name.contains("forbidden") {
+				reject_request(Code::PermissionDenied, format!("tool {name} is forbidden"))
+			} else {
+				pass_request()
+			}
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	// Forbidden tool is rejected at the request phase, before reaching upstream.
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("forbidden-tool")
+				.with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect_err("forbidden tool call should be denied by mcpGuardrails");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+	assert!(
+		e.message.contains("forbidden-tool"),
+		"deny message should name the tool: {}",
+		e.message
+	);
+
+	// An allowed tool passes the request phase through to the upstream.
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("allowed tool call should pass through mcpGuardrails");
+	assert!(!result.content.is_empty(), "echo should return content");
+}
+
+#[tokio::test]
+async fn mcp_guardrails_mutated_request_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method != "tools/call" {
+				return pass_request();
+			}
+			mutated_request_json(serde_json::json!({
+				"name": "echo",
+				"arguments": { "rewritten": true, "limit": 10, "ratio": 2.5 },
+			}))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	// echo serializes its arguments verbatim; rewritten args ⇒ rewrite reached upstream.
+	let text = guardrails_test_support::echo_text(&result);
+	assert!(text.contains("rewritten") && text.contains("true"));
+	assert!(!text.contains("\"hi\""));
+	// Mutated numbers keep their JSON form: integers don't become 10.0.
+	assert!(text.contains("\"limit\":10,"), "got: {text}");
+	assert!(text.contains("\"ratio\":2.5"), "got: {text}");
+}
+
+#[tokio::test]
+async fn mcp_guardrails_metadata_cel_evaluated_per_request() {
+	use std::collections::HashMap;
+	use std::sync::Mutex as StdMutex;
+
+	use crate::cel::Expression;
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+
+	let captured: Arc<StdMutex<Option<prost_wkt_types::Struct>>> = Arc::new(StdMutex::new(None));
+	let extmcp_mock = {
+		let store = captured.clone();
+		closure_mock(
+			move |req| {
+				if req.method == "tools/call"
+					&& let Some(md) = req.metadata_context.as_ref()
+				{
+					*store.lock().unwrap() = Some(md.clone());
+				}
+				pass_request()
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await
+	};
+
+	let mut metadata = HashMap::new();
+	metadata.insert(
+		"tenant.io".to_string(),
+		Arc::new(Expression::new_strict(r#"{"path": request.path}"#).unwrap()),
+	);
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		guardrails::FailureMode::FailClosed,
+		guardrails_test_support::default_methods(),
+		metadata,
+	);
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("call should succeed");
+
+	let md = captured.lock().unwrap().clone().expect("metadata captured");
+	let entry = md.fields.get("tenant.io").expect("tenant.io key present");
+	assert_eq!(
+		serde_json::to_value(entry).unwrap(),
+		serde_json::json!({"path": "/mcp"}),
+	);
+}
+
+// mcpGuardrails returns metadata in its request result; an MCP authorization rule then
+// denies a tool based on that metadata (the inbound metadata -> CEL authz path).
+#[tokio::test]
+async fn mcp_guardrails_metadata_consumed_by_authz() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"tier": "free"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && mcpGuardrails.tier == "free""#)
+				.unwrap(),
+		)],
+		vec![],
+	)));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_free_tier),
+			guardrails_test_support::policy(extmcp_mock.address),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect_err("echo should be denied when mcpGuardrails marks the caller free-tier");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
+	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+}
+
+// Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.
+#[tokio::test]
+async fn mcp_guardrails_metadata_consumed_by_list_authz() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"tier": "free"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let deny_free_tier = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo" && mcpGuardrails.tier == "free""#)
+				.unwrap(),
+		)],
+		vec![],
+	)));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_free_tier),
+			guardrails_test_support::policy(extmcp_mock.address),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let tool_names: Vec<String> = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed")
+		.tools
+		.into_iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect();
+
+	// `echo` is filtered only because list authz saw mcpGuardrails's `tier=free` metadata;
+	// without it the deny rule would not match and `echo` would remain.
+	assert!(
+		!tool_names.contains(&"echo".to_string()),
+		"echo should be filtered when mcpGuardrails marks the caller free-tier: {tool_names:?}"
+	);
+	assert!(
+		tool_names.contains(&"increment".to_string()),
+		"non-denied tools should remain: {tool_names:?}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_filtered_list_via_response_mutation() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_response_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|_| pass_request(),
+		|req| {
+			if req.method != "tools/list" {
+				return pass_response();
+			}
+			mutated_response_json(serde_json::json!({
+				"tools": [{
+					"name": "echo",
+					"description": "Repeat what you say",
+					"inputSchema": { "type": "object" },
+				}],
+			}))
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed");
+	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
+	assert_eq!(names, vec!["echo".to_string()]);
+}
+
+// Fanout (multi-backend) runs the response hook ONCE on the merged, muxed result
+// rather than once per upstream: the processor sees a single checkResponse carrying
+// the prefixed (`a_echo`, `b_echo`) tools and every backend in service_names.
+#[tokio::test]
+async fn mcp_guardrails_fanout_runs_once_on_merged_muxed_result() {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::{Arc, Mutex};
+
+	use protos::ext_mcp::McpResponse;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, mutated_response_json, pass_request};
+
+	type Captured = Arc<Mutex<Option<(Vec<String>, Vec<String>)>>>;
+
+	let resp_count = Arc::new(AtomicUsize::new(0));
+	let captured: Captured = Arc::new(Mutex::new(None));
+	let rc = resp_count.clone();
+	let cap = captured.clone();
+	let extmcp_mock = closure_mock(
+		move |_| pass_request(),
+		move |req: &McpResponse| {
+			if req.method != "tools/list" {
+				return crate::test_helpers::extmcpmock::pass_response();
+			}
+			rc.fetch_add(1, Ordering::SeqCst);
+			let names: Vec<String> = serde_json::from_slice::<serde_json::Value>(&req.mcp_response)
+				.ok()
+				.and_then(|v| {
+					v.get("tools").and_then(|t| t.as_array()).map(|arr| {
+						arr
+							.iter()
+							.filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
+							.collect()
+					})
+				})
+				.unwrap_or_default();
+			*cap.lock().unwrap() = Some((req.service_names.clone(), names));
+			// Mutating the merged list proves the hook operates on the aggregate.
+			mutated_response_json(serde_json::json!({
+				"tools": [{
+					"name": "a_echo",
+					"description": "Repeat what you say",
+					"inputSchema": { "type": "object" },
+				}],
+			}))
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![guardrails_test_support::policy(extmcp_mock.address)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("list_tools should succeed");
+	let names: Vec<String> = tools.tools.iter().map(|t| t.name.to_string()).collect();
+
+	// One RPC for the whole fanout, not one per backend.
+	assert_eq!(
+		resp_count.load(Ordering::SeqCst),
+		1,
+		"response hook should run exactly once for the merged fanout result"
+	);
+
+	let (service_names, seen) = captured
+		.lock()
+		.unwrap()
+		.clone()
+		.expect("processor saw tools/list");
+	// Aggregate identity = every fanned-out backend.
+	assert_eq!(service_names, vec!["a".to_string(), "b".to_string()]);
+	// The processor saw the merged, muxed list (prefixed names from both backends).
+	assert!(
+		seen.iter().any(|n| n == "a_echo") && seen.iter().any(|n| n == "b_echo"),
+		"processor should see muxed names from both backends, got: {seen:?}"
+	);
+
+	// The mutation on the merged result is what reaches the client.
+	assert_eq!(names, vec!["a_echo".to_string()]);
+}
+
+// A mutated `tools/call` result must round-trip back through `ServerResult` and
+// reach the client (the `*/list` case above exercises a different variant).
+#[tokio::test]
+async fn mcp_guardrails_mutated_tool_call_response_reaches_client() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_response_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|_| pass_request(),
+		|req| {
+			if req.method != "tools/call" {
+				return pass_response();
+			}
+			mutated_response_json(serde_json::json!({
+				"content": [{ "type": "text", "text": "scrubbed-by-guardrails" }],
+			}))
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let text = guardrails_test_support::echo_text(&result);
+	assert_eq!(text, "scrubbed-by-guardrails");
+	assert!(!text.contains("world"));
+}
+
+#[tokio::test]
+async fn mcp_guardrails_fail_open_on_grpc_error() {
+	use std::collections::HashMap;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| Err(tonic::Status::internal("simulated mcpGuardrails failure")),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		guardrails::FailureMode::FailOpen,
+		guardrails_test_support::default_methods(),
+		HashMap::new(),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed under failure_mode=Allow");
+
+	let text = guardrails_test_support::echo_text(&result);
+	assert!(text.contains("\"hi\"") && text.contains("\"world\""));
+}
+
+#[tokio::test]
+async fn mcp_guardrails_fail_closed_on_grpc_error() {
+	use std::collections::HashMap;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| Err(tonic::Status::internal("simulated mcpGuardrails failure")),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		guardrails::FailureMode::FailClosed,
+		guardrails_test_support::default_methods(),
+		HashMap::new(),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![policy]).await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail under failure_mode=Deny when mcpGuardrails errors");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(
+		e.code,
+		rmcp::model::ErrorCode::INTERNAL_ERROR,
+		"gRPC failure should map to internal error"
+	);
+	assert!(
+		e.message.contains("mcpGuardrails checkRequest failed"),
+		"unexpected message: {}",
+		e.message
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_response_reject_surfaces_jsonrpc_error() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request, pass_response, reject_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|_| pass_request(),
+		|req| {
+			if req.method != "tools/call" {
+				return pass_response();
+			}
+			reject_response(Code::PermissionDenied, "blocked on response")
+		},
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("tool call should fail when mcpGuardrails rejects the response");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+	assert_eq!(e.message.as_ref(), "blocked on response");
+}
+
+#[tokio::test]
+async fn mcp_guardrails_protocol_violation_fails_closed() {
+	use crate::mcp::guardrails::wire;
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response};
+
+	// A response with no `result` oneof set is a contract violation; under
+	// failure_mode=Deny it must reject rather than pass through.
+	let extmcp_mock = closure_mock(
+		|_| {
+			Ok(wire::McpRequestResult {
+				result: None,
+				header_mutation: None,
+				metadata: None,
+			})
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err(
+			"tool call should fail on mcpGuardrails protocol violation under failure_mode=Deny",
+		);
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(
+		e.code,
+		rmcp::model::ErrorCode::INTERNAL_ERROR,
+		"protocol violation should map to internal error"
+	);
+	assert!(
+		e.message.contains("protocol violation"),
+		"unexpected message: {}",
+		e.message
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_non_object_mutation_is_protocol_violation() {
+	use crate::test_helpers::extmcpmock::{closure_mock, mutated_request_json, pass_response};
+
+	// Mutated payloads must parse as the method's params; valid-but-wrong-shape
+	// JSON must hit the protocol-violation path, not surface later as a
+	// malformed MCP request.
+	let extmcp_mock = closure_mock(
+		|_| mutated_request_json(serde_json::json!([1, 2])),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect_err("non-object mutation should reject under failure_mode=Deny");
+
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert!(
+		e.message.contains("protocol violation"),
+		"unexpected message: {}",
+		e.message
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_header_mutation_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				vec![("x-guardrails-test", "from-policy"), ("x-tenant", "acme")],
+				vec!["user-agent"],
+				None,
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone();
+	let saw_injected = headers.iter().any(|h| {
+		h.get("x-guardrails-test").map(|v| v.as_bytes()) == Some(b"from-policy")
+			&& h.get("x-tenant").map(|v| v.as_bytes()) == Some(b"acme")
+	});
+	assert!(
+		saw_injected,
+		"expected x-guardrails-test+x-tenant headers on upstream request; saw {headers:?}"
+	);
+	let tools_call_req = headers
+		.iter()
+		.rev()
+		.find(|h| h.contains_key("x-guardrails-test"))
+		.expect("found upstream request with injected header");
+	assert!(
+		!tools_call_req.contains_key("user-agent"),
+		"expected user-agent to be removed by header_mutation.remove",
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_request_headers_visible_to_policy_server() {
+	use std::sync::Mutex as StdMutex;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+
+	let captured: Arc<StdMutex<Option<Vec<crate::mcp::guardrails::wire::McpHeader>>>> =
+		Arc::new(StdMutex::new(None));
+	let extmcp_mock = {
+		let store = captured.clone();
+		closure_mock(
+			move |req| {
+				if req.method == "tools/call" {
+					*store.lock().unwrap() = Some(req.headers.clone());
+				}
+				pass_request()
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await
+	};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone().expect("headers captured");
+	// The inbound POST's headers reach the policy server without per-header CEL config.
+	assert!(
+		headers
+			.iter()
+			.any(|h| h.key.eq_ignore_ascii_case("content-type")),
+		"expected incoming request headers forwarded to policy server; saw {headers:?}"
+	);
+}
+
+// mcpGuardrails processor metadata is readable as `guardrails.*` in an upstream-leg transformation.
+#[tokio::test]
+async fn mcp_guardrails_request_metadata_usable_in_backend_transformation() {
+	use crate::http::transformation_cel::{
+		LocalTransform, LocalTransformationConfig, Transformation,
+	};
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let extmcp_mock = closure_mock(
+		|_| {
+			let md = serde_json::from_value(serde_json::json!({ "tenant": "acme" })).unwrap();
+			pass_request_with(Vec::<(&str, &str)>::new(), Vec::<&str>::new(), Some(md))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let xfm = Transformation::try_from_local_config(
+		LocalTransformationConfig {
+			request: Some(LocalTransform {
+				set: vec![(
+					strng::new("x-from-guardrails"),
+					strng::new("mcpGuardrails.tenant"),
+				)],
+				..Default::default()
+			}),
+			response: None,
+		},
+		true,
+	)
+	.unwrap();
+	let target_policy = BackendTrafficPolicy::Transformation(Arc::new(xfm));
+
+	let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
+	let (_bind, io) = setup_proxy_policies_with_target(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+		vec![target_policy],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("tool call should succeed");
+
+	let headers = captured.lock().unwrap().clone();
+	let saw_metadata = headers
+		.iter()
+		.any(|h| h.get("x-from-guardrails").map(|v| v.as_bytes()) == Some(b"acme"));
+	assert!(
+		saw_metadata,
+		"expected x-from-guardrails:acme set by a backend transformation reading guardrails.tenant; saw {headers:?}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_mutated_prompt_request_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method != "prompts/get" {
+				return pass_request();
+			}
+			mutated_request_json(serde_json::json!({
+				"name": "example_prompt",
+				"arguments": { "message": "rewritten-by-guardrails" },
+			}))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({"message": "original-message"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("get_prompt should succeed");
+
+	// example_prompt echoes `message` into its text body.
+	let text = result
+		.messages
+		.iter()
+		.find_map(|m| match &m.content {
+			rmcp::model::PromptMessageContent::Text { text } => Some(text.clone()),
+			_ => None,
+		})
+		.expect("prompt should have text content");
+	assert!(text.contains("rewritten-by-guardrails"));
+	assert!(!text.contains("original-message"));
+}
+
+#[tokio::test]
+async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method != "resources/read" {
+				return pass_request();
+			}
+			// Redirect the client's "cwd" request to the "memo" resource.
+			mutated_request_json(serde_json::json!({ "uri": "memo://insights" }))
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"str:////Users/to/some/path/",
+		))
+		.await
+		.expect("read_resource should succeed after URI rewrite");
+
+	let text = result
+		.contents
+		.iter()
+		.find_map(|c| match c {
+			rmcp::model::ResourceContents::TextResourceContents { text, .. } => Some(text.clone()),
+			_ => None,
+		})
+		.expect("resource should return text");
+	assert!(text.contains("Business Intelligence Memo"));
 }

@@ -1,0 +1,68 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: cors-pre-routing
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    phase: PreRouting
+    cors:
+      allowOrigins:
+      - "https://example.com"
+      allowMethods:
+      - GET
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/cors-pre-routing:cors:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: cors-pre-routing
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        cors:
+          allowMethods:
+          - GET
+          allowOrigins:
+          - https://example.com
+          maxAge: 0s
+        phase: GATEWAY
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: cors-pre-routing
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

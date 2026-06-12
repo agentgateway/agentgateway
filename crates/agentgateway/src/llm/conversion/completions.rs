@@ -493,7 +493,7 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(content) = &choice.delta.content {
+						if let Some(content) = choice.delta.content.as_deref().filter(|s| !s.is_empty()) {
 							let index = open_text_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
@@ -501,7 +501,7 @@ pub mod from_messages {
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index,
 									delta: messages::ContentBlockDelta::TextDelta {
-										text: content.clone(),
+										text: content.to_string(),
 									},
 								},
 							);

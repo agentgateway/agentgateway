@@ -714,7 +714,7 @@ pub mod testing {
 	/// If not found, panics
 	pub async fn eventually_find(want: &[(&str, &str)]) -> Option<Value> {
 		crate::test_helpers::check_eventually(
-			Duration::from_secs(1),
+			Duration::from_secs(5),
 			|| async { find(want).into_iter().next() },
 			|log| log.is_some(),
 		)

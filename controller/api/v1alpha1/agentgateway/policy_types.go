@@ -1,4 +1,4 @@
-package shared
+package agentgateway
 
 // PolicyConditionType is a type of condition for a policy. This type should be
 // used with a Policy resource `Status.Conditions` field.

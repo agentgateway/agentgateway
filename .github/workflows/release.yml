@@ -597,6 +597,37 @@ jobs:
           target/${{ matrix.target }}/release/agentgateway
           target/${{ matrix.target }}/release/agentgateway.exe
 
+  build-agctl:
+    if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
+    needs:
+      - setup
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: controller
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+    - name: Set up Go
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: "${{ env.GO_VERSION }}"
+        cache: false
+    - name: Build agctl
+      run: make agctl-release
+    - name: Upload Artifact
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: release-binary-agctl
+        path: controller/_output/pkg/agctl/agctl-*
+        if-no-files-found: error
+
   release:
     if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
     needs:
@@ -606,6 +637,7 @@ jobs:
     - push-controller-image
     - push-helm-charts
     - build
+    - build-agctl
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
@@ -629,10 +661,24 @@ jobs:
         sha256sum outputs/agentgateway-linux-arm64 > outputs/agentgateway-linux-arm64.sha256
         mv release-binary-windows/agentgateway.exe outputs/agentgateway-windows-amd64.exe
         sha256sum outputs/agentgateway-windows-amd64.exe > outputs/agentgateway-windows-amd64.exe.sha256
+        shopt -s nullglob
+        agctl_bins=(release-binary-agctl/agctl-*)
+        shopt -u nullglob
+        if [ ${#agctl_bins[@]} -eq 0 ]; then
+          echo "No agctl binaries found in release-binary-agctl/" >&2
+          exit 1
+        fi
+        for agctl in "${agctl_bins[@]}"; do
+          name="$(basename "$agctl")"
+          mv "$agctl" "outputs/${name}"
+          sha256sum "outputs/${name}" > "outputs/${name}.sha256"
+        done
     - name: Create GitHub Release
       uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
       with:
-        files: outputs/agentgateway-*
+        files: |
+          outputs/agentgateway-*
+          outputs/agctl-*
         tag_name: ${{ github.ref_name }}
         generate_release_notes: true
         body: |
@@ -648,7 +694,7 @@ jobs:
           * `cr.agentgateway.dev/charts/agentgateway:v${{ env.VERSION }}`
           * `cr.agentgateway.dev/charts/agentgateway-crds:v${{ env.VERSION }}`
 
-          **Binaries** are available below.
+          **Binaries** for `agentgateway` and the `agctl` CLI are available below.
 
           ## Quick Start
 

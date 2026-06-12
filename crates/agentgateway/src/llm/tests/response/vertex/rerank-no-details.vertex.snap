@@ -1,0 +1,23 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/vertex/rerank-no-details.json
+info:
+  records:
+    - id: "1"
+    - id: "0"
+---
+{
+  "response": {
+    "results": [
+      {
+        "index": 1,
+        "relevance_score": 1.0
+      },
+      {
+        "index": 0,
+        "relevance_score": 1.0
+      }
+    ]
+  },
+  "parsed": {}
+}

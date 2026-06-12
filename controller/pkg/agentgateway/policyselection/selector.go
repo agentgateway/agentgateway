@@ -10,7 +10,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 )
 
@@ -227,7 +226,7 @@ func bestMatchingBackendTLSPolicy(
 }
 
 func bestMatchingPolicyTargetRank(
-	targetRefs []shared.LocalPolicyTargetReferenceWithSectionName,
+	targetRefs []agentgateway.LocalPolicyTargetReferenceWithSectionName,
 	group, kind, name string,
 	matcher sectionMatcher,
 ) sectionMatchRank {

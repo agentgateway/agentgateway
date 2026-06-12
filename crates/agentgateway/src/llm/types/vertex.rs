@@ -45,3 +45,35 @@ pub struct EmbeddingsResult {
 pub struct Statistics {
 	pub token_count: u64,
 }
+
+// ---- Vertex Discovery Engine Ranking API ----
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RankRequest {
+	pub model: String,
+	pub query: String,
+	pub records: Vec<RankRecord>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub top_n: Option<u32>,
+	pub ignore_record_details_in_response: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RankRecord {
+	pub id: String,
+	pub content: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RankResponse {
+	#[serde(default)]
+	pub records: Vec<RankResponseRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RankResponseRecord {
+	pub id: String,
+	#[serde(default)]
+	pub score: Option<f64>,
+}

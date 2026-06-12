@@ -198,6 +198,22 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: ext-mcp
+  namespace: agentgateway-base
+  labels:
+    app: ext-mcp
+spec:
+  ports:
+    - port: 4445
+      targetPort: 9001
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: a2a-helloworld
   namespace: agentgateway-base
 spec:

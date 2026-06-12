@@ -111,14 +111,17 @@ pub enum InferenceRoutingDestinationMode {
 
 #[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
+	/// Endpoint picker backend that selects the destination endpoint.
 	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	/// How to use the destination returned by the endpoint picker.
 	#[serde(
 		default,
 		rename = "destinationMode",
 		skip_serializing_if = "crate::serdes::is_default"
 	)]
 	pub destination_mode: InferenceRoutingDestinationMode,
+	/// Behavior when endpoint picking fails.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
@@ -127,7 +130,9 @@ pub struct InferenceRouting {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InferenceRoutingConfig {
+	/// Endpoint picker backend that selects the destination endpoint.
 	endpoint_picker: Arc<SimpleBackendReference>,
+	/// How to use the destination returned by the endpoint picker.
 	#[serde(default)]
 	destination_mode: InferenceRoutingDestinationMode,
 }
@@ -233,10 +238,10 @@ impl InferencePoolRouter {
 
 #[apply(schema!)]
 pub struct ExtProc {
-	/// Reference to the external processing service backend
+	/// Backend that receives external processing calls.
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Policies to connect to the backend
+	/// Backend policies used when connecting to the external processing service.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -244,7 +249,7 @@ pub struct ExtProc {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
-	/// Behavior when the ext_proc service is unavailable or returns an error
+	/// Behavior when the external processing service is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
 
@@ -259,6 +264,7 @@ pub struct ExtProc {
 	/// Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// Controls which request and response parts are sent to the external processing service.
 	#[serde(default)]
 	pub processing_options: ProcessingOptions,
 }

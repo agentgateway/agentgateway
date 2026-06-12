@@ -22,13 +22,21 @@ listener_routes:
               set:
                 Content-Type: application/json
           - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
               status: 200
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
+              authorizationFilteredModelList:
+                entries:
+                  - id: claude-3-haiku
+                    created: 0
+                    authorization: ~
+                  - id: "*"
+                    created: 0
+                    authorization: ~
+                  - id: gpt-7-max
+                    created: 0
+                    authorization: ~
+                  - id: gpt-3.5-turbo
+                    created: 0
+                    authorization: ~
         key: "llm:admin:model-list"
         matches:
           - path:
@@ -50,15 +58,12 @@ listener_routes:
                 /v1/images/generations: detect
                 /v1/images/variations: detect
                 /v1/messages: messages
+                /v1/rerank: rerank
                 /v1/responses: responses
                 /v1/responses/compact: detect
+                /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
         key: "llm:model:000000:claude-3-haiku"
         matches:
           - headers:
@@ -73,7 +78,7 @@ listener_routes:
         name: "model:claude-3-haiku"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gemini-0.5-pro:1"
+          - backend: "/llm:model:gpt-3.5-turbo:1"
             weight: 1
         inlinePolicies:
           - ai:
@@ -85,24 +90,21 @@ listener_routes:
                 /v1/images/generations: detect
                 /v1/images/variations: detect
                 /v1/messages: messages
+                /v1/rerank: rerank
                 /v1/responses: responses
                 /v1/responses/compact: detect
+                /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
-        key: "llm:model:000001:gemini-0.5-pro"
+        key: "llm:model:000001:gpt-3.5-turbo"
         matches:
           - headers:
               - name: x-gateway-model-name
                 value:
-                  exact: gemini-0.5-pro
+                  exact: gpt-3.5-turbo
             path:
               pathPrefix: /
-        name: "model:gemini-0.5-pro"
+        name: "model:gpt-3.5-turbo"
         namespace: internal
       - backends:
           - backend: "/llm:model:gpt-7-max:2"
@@ -117,15 +119,12 @@ listener_routes:
                 /v1/images/generations: detect
                 /v1/images/variations: detect
                 /v1/messages: messages
+                /v1/rerank: rerank
                 /v1/responses: responses
                 /v1/responses/compact: detect
+                /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
         key: "llm:model:000002:gpt-7-max"
         matches:
           - headers:
@@ -137,7 +136,7 @@ listener_routes:
         name: "model:gpt-7-max"
         namespace: internal
       - backends:
-          - backend: "/llm:model:gpt-3.5-turbo:3"
+          - backend: "/llm:model:*:3"
             weight: 1
         inlinePolicies:
           - ai:
@@ -149,24 +148,21 @@ listener_routes:
                 /v1/images/generations: detect
                 /v1/images/variations: detect
                 /v1/messages: messages
+                /v1/rerank: rerank
                 /v1/responses: responses
                 /v1/responses/compact: detect
+                /v2/rerank: rerank
                 ":rawPredict": messages
                 ":streamRawPredict": messages
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
-        key: "llm:model:000003:gpt-3.5-turbo"
+        key: "llm:model:000003:*"
         matches:
           - headers:
               - name: x-gateway-model-name
                 value:
-                  exact: gpt-3.5-turbo
+                  regex: ".*"
             path:
               pathPrefix: /
-        name: "model:gpt-3.5-turbo"
+        name: "model:*"
         namespace: internal
       - inlinePolicies:
           - responseHeaderModifier:
@@ -175,11 +171,6 @@ listener_routes:
           - directResponse:
               bodyExpression: "\n\"x-gateway-model-name\" in request.headers ?\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"Model \" + request.headers[\"x-gateway-model-name\"] + \" not found\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t} :\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"No model set\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t}\n"
               status: 404
-          - cors:
-              allowCredentials: false
-              allowOrigins:
-                - "http://localhost:15000"
-              maxAge: ~
         key: "llm:model:fallback"
         matches:
           - path:
@@ -199,6 +190,21 @@ policies:
         listenerName: llm
     policy:
       traffic:
+        cors:
+          allowCredentials: false
+          allowOrigins:
+            - "http://localhost:15000"
+          maxAge: ~
+        phase: gateway
+  - key: listener/1
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
         jwtAuth:
           location:
             header:
@@ -209,7 +215,7 @@ policies:
             - issuer: agentgateway.dev
               keys: []
         phase: gateway
-  - key: listener/1
+  - key: listener/2
     name: ~
     target:
       gateway:
@@ -222,8 +228,8 @@ policies:
           rules:
             allow:
               - "jwt.email.endsWith(\"@example.com\")"
-        phase: route
-  - key: listener/2
+        phase: gateway
+  - key: listener/3
     name: ~
     target:
       gateway:
@@ -314,30 +320,29 @@ backends:
           unhealthyExpression: response.code >= 500 || response.code == 429
           eviction:
             duration: 30s
-      - ai: {}
+      - ai:
+          promptCaching:
+            cacheSystem: true
+            cacheMessages: true
+            cacheTools: false
+            minTokens: 1
+            cacheMessageOffset: 0
   - backend:
       ai:
-        name: "llm:model:gemini-0.5-pro:1"
+        name: "llm:model:gpt-3.5-turbo:1"
         namespace: ""
         target:
           providers:
             - active:
-                gemini-0.5-pro:
+                gpt-3.5-turbo:
                   endpoint:
-                    name: gemini-0.5-pro
+                    name: gpt-3.5-turbo
                     provider:
-                      vertex:
-                        model: claude-haiku-4-5-20251001
-                        region: global
-                        projectId: my-vertex-project
+                      openAI: {}
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
-                    inlinePolicies:
-                      - backendAuth:
-                          key:
-                            value: "<redacted>"
                   info:
                     health: 1
                     requestLatency: 0
@@ -390,20 +395,27 @@ backends:
       - ai: {}
   - backend:
       ai:
-        name: "llm:model:gpt-3.5-turbo:3"
+        name: "llm:model:*:3"
         namespace: ""
         target:
           providers:
             - active:
-                gpt-3.5-turbo:
+                "*":
                   endpoint:
-                    name: gpt-3.5-turbo
+                    name: "*"
                     provider:
-                      openAI: {}
+                      vertex:
+                        model: claude-haiku-4-5-20251001
+                        region: global
+                        projectId: my-vertex-project
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
                   info:
                     health: 1
                     requestLatency: 0
