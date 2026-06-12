@@ -112,6 +112,7 @@ rmcp = { version = "1.5", features = [
     "base64",
     "transport-child-process",
 ] }
+rust_decimal.workspace = true
 rustls-native-certs.workspace = true
 rustls-pki-types.workspace = true
 rustls.workspace = true

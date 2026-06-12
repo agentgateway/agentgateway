@@ -91,6 +91,15 @@
             "null"
           ]
         },
+        "modelCatalogPaths": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "caAddress": {
           "type": [
             "string",

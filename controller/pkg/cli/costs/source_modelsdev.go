@@ -42,17 +42,10 @@ type modelsDevProvider struct {
 }
 
 type modelsDevModel struct {
-	ID     string          `json:"id"`
-	Name   string          `json:"name"`
-	Status string          `json:"status"`
-	Limit  *modelsDevLimit `json:"limit"`
-	Cost   *modelsDevCost  `json:"cost"`
-}
-
-type modelsDevLimit struct {
-	Context uint64 `json:"context"`
-	Input   uint64 `json:"input"`
-	Output  uint64 `json:"output"`
+	ID     string         `json:"id"`
+	Name   string         `json:"name"`
+	Status string         `json:"status"`
+	Cost   *modelsDevCost `json:"cost"`
 }
 
 type modelsDevRates struct {
@@ -190,7 +183,6 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn warnFn) 
 		entry.Tiers = tiers
 	}
 
-	entry.Limits = modelsDevBuildLimits(m.Limit)
 	return entry, nil
 }
 
@@ -255,19 +247,4 @@ func modelsDevNormalizeMoney(n json.Number, label string) (Money, error) {
 		d = d.Round(maxFractionalDigits)
 	}
 	return Money(d.String()), nil
-}
-
-func modelsDevBuildLimits(l *modelsDevLimit) *Limits {
-	if l == nil {
-		return nil
-	}
-	lim := Limits{
-		ContextWindow:   l.Context,
-		MaxInputTokens:  l.Input,
-		MaxOutputTokens: l.Output,
-	}
-	if lim == (Limits{}) {
-		return nil
-	}
-	return &lim
 }

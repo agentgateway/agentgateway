@@ -54,6 +54,16 @@ pub fn parse_config(
 		.map(ConfigSource::File)
 		.or(local_config_source);
 
+	let model_catalog_paths = parse::<String>("MODEL_CATALOG_PATHS")?
+		.map(|s| {
+			s.split(',')
+				.map(|p| PathBuf::from(p.trim()))
+				.filter(|p| !p.as_os_str().is_empty())
+				.collect::<Vec<_>>()
+		})
+		.or(raw.model_catalog_paths)
+		.unwrap_or_default();
+
 	let dns = raw.dns.unwrap_or_default();
 	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {
 		Ok(val) => Some(DnsLookupFamily::from_env_str(&val)?),
@@ -501,6 +511,9 @@ pub fn parse_config(
 				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
 		dynamic_ca_cert_cache,
+		model_catalog: crate::ModelCatalogConfig {
+			paths: model_catalog_paths,
+		},
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {

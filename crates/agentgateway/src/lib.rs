@@ -143,6 +143,8 @@ pub struct RawConfig {
 	/// Local XDS path. If not specified, the current configuration file will be used.
 	local_xds_path: Option<PathBuf>,
 
+	model_catalog_paths: Option<Vec<PathBuf>>,
+
 	ca_address: Option<String>,
 	ca_auth_token: Option<String>,
 	xds_address: Option<String>,
@@ -523,6 +525,13 @@ pub struct Config {
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
+	pub model_catalog: ModelCatalogConfig,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelCatalogConfig {
+	pub paths: Vec<PathBuf>,
 }
 
 #[apply(schema!)]

@@ -35,6 +35,7 @@ pub mod openai;
 pub mod vertex;
 
 mod conversion;
+pub mod cost;
 pub mod policy;
 mod types;
 
