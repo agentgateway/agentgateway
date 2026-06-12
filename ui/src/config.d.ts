@@ -67,6 +67,22 @@ export type Bytes = number[] | string;
  * Static response body, encoded as bytes.
  */
 export type Bytes1 = number[] | string;
+export type RuleSerde =
+  | (
+      | {
+          allow: string;
+          [k: string]: unknown;
+        }
+      | {
+          deny: string;
+          [k: string]: unknown;
+        }
+      | {
+          require: string;
+          [k: string]: unknown;
+        }
+    )
+  | string;
 export type Processor = {
   /**
    * Allowlist: only methods listed here run through this processor, at the
@@ -1765,7 +1781,7 @@ export interface McpAuthorization {
   /**
    * CEL authorization rules to evaluate for a request.
    */
-  rules: string[];
+  rules: RuleSerde[];
 }
 export interface McpGuardrails {
   /**
@@ -1781,7 +1797,7 @@ export interface RuleSet {
   /**
    * CEL authorization rules to evaluate for a request.
    */
-  rules: string[];
+  rules: RuleSerde[];
 }
 export interface LocalMcpAuthentication {
   /**
@@ -3273,7 +3289,7 @@ export interface NetworkAuthorization {
   /**
    * CEL authorization rules to evaluate for a request.
    */
-  rules: string[];
+  rules: RuleSerde[];
 }
 export interface Proxy {
   /**
