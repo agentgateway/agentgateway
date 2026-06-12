@@ -340,14 +340,24 @@ fn usage_for(
 	let reasoning = resp.reasoning_tokens.unwrap_or(0);
 
 	let mut input = resp.input_tokens.unwrap_or(0).saturating_sub(input_audio);
-	if matches!(convention, CacheTokenConvention::InputIncludesCache) {
-		if prices_cache_read {
+	match (convention, prices_cache_read) {
+		(CacheTokenConvention::InputIncludesCache, true) => {
 			input = input.saturating_sub(cache_read);
-		} else {
-			// Inclusive providers keep cached tokens in input unless cache reads have
-			// their own rate; otherwise cached tokens would become unrated.
+		},
+		(CacheTokenConvention::InputIncludesCache, false) => {
+			// Cached tokens are already included in input_tokens; zero the separate
+			// bucket so they aren't double-counted or left unrated.
 			cache_read = 0;
-		}
+		},
+		(CacheTokenConvention::InputExcludesCache, true) => {
+			// cache_read is already separate from input; keep as-is.
+		},
+		(CacheTokenConvention::InputExcludesCache, false) => {
+			// No cache_read rate in the catalog: fold cached tokens into input so
+			// they're billed at the input rate rather than going unrated ($0).
+			input = input.saturating_add(cache_read);
+			cache_read = 0;
+		},
 	}
 	let output = resp
 		.output_tokens
@@ -591,6 +601,45 @@ mod tests {
 		assert_eq!(rates.input, Some(2.5));
 		assert_eq!(rates.output, Some(10.0));
 		assert_eq!(rates.cache_read, Some(0.25));
+	}
+
+	#[test]
+	fn exclusive_convention_folds_cache_into_input_when_unpriced() {
+		let resp = LLMResponse {
+			input_tokens: Some(1000),
+			cached_input_tokens: Some(300),
+			output_tokens: Some(500),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, false);
+		assert_eq!(u.input, 1300, "cached tokens folded into input for billing");
+		assert_eq!(u.cache_read, 0, "no separate cache bucket");
+		assert_eq!(u.output, 500);
+	}
+
+	#[test]
+	fn exclusive_unpriced_cache_is_billed_at_input_rate_not_zero() {
+		// Anthropic-style provider whose catalog entry has no cacheRead rate.
+		let snap = CatalogSnapshot::parse(
+			r#"{"providers":{"anthropic":{"models":{
+				"m":{"rates":{"input":"10","output":"30"}}
+			}}}}"#,
+		)
+		.unwrap();
+		let resp = LLMResponse {
+			input_tokens: Some(600_000),
+			cached_input_tokens: Some(400_000),
+			output_tokens: Some(0),
+			..Default::default()
+		};
+		let (cost, status) = snap.price(
+			"anthropic",
+			"m",
+			&resp,
+			CacheTokenConvention::InputExcludesCache,
+		);
+		assert_eq!(status, CostLookupStatus::Exact);
+		assert_eq!(cost, Some(10.0), "1M tokens @ $10/M = $10");
 	}
 
 	#[test]
