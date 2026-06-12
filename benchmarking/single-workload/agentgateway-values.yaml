@@ -1,0 +1,8 @@
+# Overrides for the agentgateway benchmark target.
+# Base values are defined in benchmarking/values.yaml.
+config:
+  server:
+    base_url: ""
+    model_name: meta-llama/Llama-3.1-8B-Instruct
+  tokenizer:
+    pretrained_model_name_or_path: gpt2
