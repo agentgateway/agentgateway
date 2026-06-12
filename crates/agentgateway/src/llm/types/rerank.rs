@@ -109,6 +109,7 @@ impl RequestType for Request {
 			input_tokens: None,
 			input_format: InputFormat::Rerank,
 			native_format: Some(crate::llm::custom::ProviderFormat::Rerank),
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,

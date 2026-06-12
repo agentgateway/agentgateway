@@ -15,6 +15,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		input_tokens,
 		input_format: InputFormat::Completions,
 		native_format: Some(custom::ProviderFormat::Completions),
+		cache_convention: CacheTokenConvention::pending(),
 		request_model: "test-model".into(),
 		provider: "test-provider".into(),
 		streaming: true,
@@ -787,6 +788,7 @@ mod response {
 			input_tokens: None,
 			input_format,
 			native_format: input_format.provider_format(),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
@@ -1290,6 +1292,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
 		native_format: Some(custom::ProviderFormat::Completions),
+		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: true,
@@ -1372,6 +1375,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				input_tokens: None,
 				input_format: InputFormat::Completions,
 				native_format: Some(custom::ProviderFormat::Completions),
+				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
 				provider: Default::default(),
 				streaming: true,
@@ -1470,6 +1474,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
 		native_format: Some(custom::ProviderFormat::Messages),
+		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: false,
@@ -1502,6 +1507,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Messages,
 		native_format: Some(custom::ProviderFormat::Messages),
+		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
 		provider: Default::default(),
 		streaming: false,
@@ -1630,6 +1636,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
 			native_format: Some(custom::ProviderFormat::Messages),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
 			provider: "bedrock".into(),
 			streaming: true,
@@ -1675,6 +1682,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
 			native_format: Some(custom::ProviderFormat::Messages),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
 			provider: "bedrock".into(),
 			streaming: true,
@@ -1716,6 +1724,7 @@ async fn messages_passthrough_stream_captures_completion() {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
 			native_format: Some(custom::ProviderFormat::Messages),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
 			provider: "anthropic".into(),
 			streaming: true,
@@ -1755,6 +1764,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
 			native_format: Some(custom::ProviderFormat::Messages),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
 			provider: "anthropic".into(),
 			streaming: true,
@@ -1789,6 +1799,7 @@ async fn responses_passthrough_stream_captures_completion() {
 			input_tokens: None,
 			input_format: InputFormat::Responses,
 			native_format: Some(custom::ProviderFormat::Responses),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
 			provider: "openai".into(),
 			streaming: true,
@@ -1824,6 +1835,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 			input_tokens: None,
 			input_format: InputFormat::Responses,
 			native_format: Some(custom::ProviderFormat::Responses),
+			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
 			provider: "openai".into(),
 			streaming: true,
@@ -1843,5 +1855,84 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	assert!(
 		info.response.completion.is_none(),
 		"completion should not be set when include_completion_in_log is false"
+	);
+}
+
+fn vertex_provider(model: &str) -> AIProvider {
+	AIProvider::Vertex(vertex::Provider {
+		model: Some(strng::new(model)),
+		region: None,
+		project_id: strng::new("test-project"),
+	})
+}
+
+fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
+	AIProvider::Custom(custom::Provider {
+		model: None,
+		formats: vec![custom::ProviderFormatConfig { format, path: None }],
+	})
+}
+
+#[test]
+fn vertex_anthropic_model_uses_exclusive_convention() {
+	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
+	assert_eq!(
+		cache_convention_for(&provider, None, "anthropic/claude-sonnet-4-5"),
+		CacheTokenConvention::InputExcludesCache,
+	);
+}
+
+#[test]
+fn vertex_non_anthropic_model_uses_inclusive_convention() {
+	let provider = vertex_provider("gemini-2.0-flash");
+	assert_eq!(
+		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+#[test]
+fn custom_messages_backend_uses_exclusive_convention() {
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+	assert_eq!(
+		cache_convention_for(
+			&provider,
+			Some(custom::ProviderFormat::Messages),
+			"some-model"
+		),
+		CacheTokenConvention::InputExcludesCache,
+	);
+}
+
+#[test]
+fn custom_completions_backend_uses_inclusive_convention() {
+	let provider = custom_provider(custom::ProviderFormat::Completions);
+	assert_eq!(
+		cache_convention_for(
+			&provider,
+			Some(custom::ProviderFormat::Completions),
+			"some-model"
+		),
+		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+#[test]
+fn fixed_providers_classify_by_family() {
+	assert_eq!(
+		cache_convention_for(
+			&AIProvider::Anthropic(anthropic::Provider { model: None }),
+			None,
+			"claude-sonnet-4-5"
+		),
+		CacheTokenConvention::InputExcludesCache,
+	);
+	assert_eq!(
+		cache_convention_for(
+			&AIProvider::OpenAI(openai::Provider { model: None }),
+			Some(custom::ProviderFormat::Completions),
+			"gpt-4o"
+		),
+		CacheTokenConvention::InputIncludesCache,
 	);
 }

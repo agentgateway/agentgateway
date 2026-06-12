@@ -167,11 +167,52 @@ pub struct LLMRequest {
 	pub input_tokens: Option<u64>,
 	pub input_format: InputFormat,
 	pub native_format: Option<custom::ProviderFormat>,
+	pub cache_convention: CacheTokenConvention,
 	pub request_model: Strng,
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
+}
+
+/// Whether an upstream's reported `input_tokens` already includes cached tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CacheTokenConvention {
+	/// OpenAI-style: cached tokens are a subset of `input_tokens`
+	#[default]
+	InputIncludesCache,
+	/// Anthropic-style: `input_tokens` is already fresh
+	InputExcludesCache,
+}
+
+impl CacheTokenConvention {
+	/// Placeholder used while request conversion lacks provider/native-format
+	/// context. `process_request` replaces this with the classified convention.
+	pub(crate) fn pending() -> Self {
+		Self::InputIncludesCache
+	}
+}
+
+/// Classify how the upstream reports cached tokens, from the source wire format the
+/// gateway is about to parse — not the provider name, which can carry another
+/// provider's native semantics (e.g. Vertex serving Anthropic models).
+fn cache_convention_for(
+	provider: &AIProvider,
+	native_format: Option<custom::ProviderFormat>,
+	request_model: &str,
+) -> CacheTokenConvention {
+	use CacheTokenConvention::*;
+	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	match provider {
+		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
+		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
+		AIProvider::Custom(_) => match native_format {
+			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
+			// TODO(mk): Detect/passthrough mode has native_format = None. Need to confirm if there is a issue with classifcation
+			_ => InputIncludesCache,
+		},
+		_ => InputIncludesCache, // openai, azure, copilot, gemini, vertex non-anthropic
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1010,6 +1051,7 @@ impl AIProvider {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
 		llm_info.native_format = native_format;
+		llm_info.cache_convention = cache_convention_for(self, native_format, &llm_info.request_model);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
 			&& original_format.supports_prompt_guard()

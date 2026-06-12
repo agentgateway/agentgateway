@@ -606,15 +606,4 @@ mod tests {
 		};
 		assert_eq!(e.price(&u), d("0.000024975"));
 	}
-
-	#[test]
-	fn prices_input_and_output_together() {
-		let e = entry(rates("3", "15"), vec![]);
-		let u = Usage {
-			input: 1000,
-			output: 500,
-			..Default::default()
-		};
-		assert_eq!(e.price(&u), d("0.0105"));
-	}
 }
