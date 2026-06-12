@@ -208,7 +208,7 @@ fn cache_convention_for(
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
 		AIProvider::Custom(_) => match native_format {
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
-			// TODO(mk): Detect/passthrough mode has native_format = None. Need to confirm if there is a issue with classifcation
+			// TODO(mk): Detect/passthrough mode has native_format = None. Need to confirm if there is an issue with classification
 			_ => InputIncludesCache,
 		},
 		_ => InputIncludesCache, // openai, azure, copilot, gemini, vertex non-anthropic
