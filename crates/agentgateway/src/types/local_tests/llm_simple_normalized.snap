@@ -321,6 +321,30 @@ backends:
           eviction:
             duration: 30s
       - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: creditCard
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 403
+            response:
+              - regex:
+                  action: mask
+                  rules:
+                    - builtin: phoneNumber
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 403
           promptCaching:
             cacheSystem: true
             cacheMessages: true
@@ -401,7 +425,16 @@ backends:
       - requestHeaderModifier:
           remove:
             - x-gateway-model-name
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
   - backend:
       ai:
         name: "llm:model:*:3"
@@ -439,7 +472,16 @@ backends:
       - requestHeaderModifier:
           remove:
             - x-gateway-model-name
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
 route_groups: []
 workloads: []
 services: []
