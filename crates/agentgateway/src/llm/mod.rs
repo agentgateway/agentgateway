@@ -1063,6 +1063,10 @@ impl AIProvider {
 					if p.is_anthropic_model(Some(request_model)) {
 						let body = req.to_anthropic()?;
 						p.prepare_anthropic_message_body(body)?
+					} else if original_format == InputFormat::Completions
+						&& p.is_gemini_model(Some(request_model))
+					{
+						req.to_vertex_gemini(p)?
 					} else {
 						req.to_vertex(p)?
 					}
@@ -1451,6 +1455,8 @@ impl AIProvider {
 			(AIProvider::Vertex(p), InputFormat::Completions) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {
 					conversion::messages::from_completions::translate_response(bytes)
+				} else if p.is_gemini_model(Some(&req.request_model)) {
+					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				} else {
 					Ok(Box::new(
 						serde_json::from_slice::<types::completions::Response>(bytes)
@@ -1490,6 +1496,10 @@ impl AIProvider {
 	) -> Result<Response, AIError> {
 		let is_vertex_anthropic = match self {
 			AIProvider::Vertex(p) => p.is_anthropic_model(Some(&req.request_model)),
+			_ => false,
+		};
+		let is_vertex_gemini = match self {
+			AIProvider::Vertex(p) => p.is_gemini_model(Some(&req.request_model)),
 			_ => false,
 		};
 		let model = req.request_model.clone();
@@ -1577,6 +1587,9 @@ impl AIProvider {
 			(AIProvider::Vertex(_), InputFormat::Completions, _) if is_vertex_anthropic => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
+			(AIProvider::Vertex(_), InputFormat::Completions, _) if is_vertex_gemini => resp.map(|b| {
+				conversion::vertex_gemini::to_completions::translate_stream(b, buffer, model, logger)
+			}),
 			(AIProvider::Vertex(_), InputFormat::Completions, _) => {
 				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
 			},

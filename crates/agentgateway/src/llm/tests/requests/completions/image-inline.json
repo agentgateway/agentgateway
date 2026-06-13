@@ -1,0 +1,17 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "What's in this image?" },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/jpg;base64,/9j/4AAQSkZJRgABAQ=="
+          }
+        }
+      ]
+    }
+  ]
+}

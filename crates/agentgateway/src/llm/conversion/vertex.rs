@@ -93,6 +93,12 @@ pub mod from_embeddings {
 			.unwrap_or("RETRIEVAL_QUERY")
 			.to_string();
 
+		let title = req
+			.rest
+			.get("title")
+			.and_then(|v| v.as_str())
+			.map(str::to_string);
+
 		// Vertex natively supports batching via the instances array,
 		// so we map each input string to an Instance directly.
 		let instances = input
@@ -100,10 +106,7 @@ pub mod from_embeddings {
 			.map(|content| types::vertex::Instance {
 				content,
 				task_type: Some(task_type.clone()),
-				title: req
-					.rest
-					.get("title")
-					.and_then(|v| v.as_str().map(|s| s.to_string())),
+				title: title.clone(),
 			})
 			.collect();
 
@@ -134,15 +137,13 @@ pub mod from_embeddings {
 		let mut data = Vec::new();
 
 		for (i, pred) in resp.predictions.into_iter().enumerate() {
-			let mut embeddings = pred.embeddings;
+			let embeddings = pred.embeddings;
 			if let Some(stats) = &embeddings.statistics {
 				total_prompt_tokens += stats.token_count;
 			}
 			data.push(types::embeddings::typed::Embedding {
 				object: "embedding".to_string(),
-				// Zero-clone optimization: Move the large vector out of the response body
-				// to avoid expensive re-allocations during translation.
-				embedding: std::mem::take(&mut embeddings.values),
+				embedding: embeddings.values,
 				index: i as u32,
 			});
 		}
@@ -156,7 +157,6 @@ pub mod from_embeddings {
 				total_tokens: total_prompt_tokens as u32,
 			},
 		};
-		// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
 		let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
 			.map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(openai_resp))

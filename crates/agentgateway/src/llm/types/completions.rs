@@ -271,6 +271,10 @@ impl super::RequestType for Request {
 		}
 	}
 
+	fn to_vertex_gemini(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		conversion::vertex_gemini::from_completions::translate(self, provider.model.as_deref())
+	}
+
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
