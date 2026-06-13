@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 207
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -326,6 +327,7 @@ policies:
             set:
               - - x-gateway-model-name
                 - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\n\trequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\n\t(request.path.endsWith(\"/invoke-with-response-stream\") || request.path.endsWith(\"/invoke\") ?\n\trequest.path.regexReplace(\"^.*/model/(.+?)/invoke.*\", \"${1}\") :\n\tjson(request.body).model)\n"
+            body: "coalesce(json(request.body).merge({\"model\": request.headers[\"x-gateway-model-name\"]}), request.body)"
           response: {}
   - key: frontend/accessLog
     name: ~

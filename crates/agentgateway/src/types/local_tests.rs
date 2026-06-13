@@ -239,6 +239,108 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_virtual_model_config() {
+	test_config_parsing("llm_virtual_model").await;
+}
+
+#[tokio::test]
+async fn test_llm_virtual_model_failover_config() {
+	test_config_parsing("llm_virtual_model_failover").await;
+}
+
+#[tokio::test]
+async fn test_llm_virtual_model_conditional_config() {
+	test_config_parsing("llm_virtual_model_conditional").await;
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_requires_fallback_last() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+        - when: json(request.body).route == "fast"
+          model: concrete
+"#,
+	)
+	.await
+	.expect_err("fallback target must be last");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model smart conditional fallback target must be last"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_rejects_unknown_target() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: missing
+"#,
+	)
+	.await
+	.expect_err("unknown target should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model target missing does not match any llm.models entry"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_rejects_unknown_target_before_expression_compile() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+  - name: simple
+    routing:
+      conditional:
+        targets:
+        - when: json(request.body).route == "legacy"
+          model: concrete
+        - model: missing
+"#,
+	)
+	.await
+	.expect_err("unknown target should fail before expression compilation");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model target missing does not match any llm.models entry"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_llm_custom_provider_config() {
 	let normalized = normalize_test_config(
 		r#"
