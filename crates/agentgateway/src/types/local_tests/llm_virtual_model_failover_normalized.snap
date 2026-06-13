@@ -1,0 +1,322 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 207
+description: "Config normalization test for llm_virtual_model_failover: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+listener_routes:
+  - - llm
+    - - inlinePolicies:
+          - responseHeaderModifier:
+              set:
+                Content-Type: application/json
+          - directResponse:
+              status: 200
+              authorizationFilteredModelList:
+                entries:
+                  - id: openai/gpt-5-mini
+                    created: 0
+                    authorization: ~
+                  - id: anthropic/*
+                    created: 0
+                    authorization: ~
+                  - id: resilient
+                    created: 0
+                    authorization: ~
+        key: "llm:admin:model-list"
+        matches:
+          - path:
+              pathPrefix: /v1/models
+          - path:
+              pathPrefix: /models
+        name: "admin:model-list"
+        namespace: internal
+      - backends:
+          - backend: "/llm:model:openai/gpt-5-mini:0"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/rerank: rerank
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                /v2/rerank: rerank
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:model:000000:openai/gpt-5-mini"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: openai/gpt-5-mini
+            path:
+              pathPrefix: /
+        name: "model:openai/gpt-5-mini"
+        namespace: internal
+      - backends:
+          - backend: "/llm:virtual-model:resilient:0"
+            weight: 1
+        inlinePolicies:
+          - ai:
+              routes:
+                "*": passthrough
+                /v1/chat/completions: completions
+                /v1/embeddings: embeddings
+                /v1/images/edits: detect
+                /v1/images/generations: detect
+                /v1/images/variations: detect
+                /v1/messages: messages
+                /v1/rerank: rerank
+                /v1/responses: responses
+                /v1/responses/compact: detect
+                /v2/rerank: rerank
+                ":rawPredict": messages
+                ":streamRawPredict": messages
+        key: "llm:virtual-model:000000:resilient"
+        matches:
+          - headers:
+              - name: x-gateway-model-name
+                value:
+                  exact: resilient
+            path:
+              pathPrefix: /
+        name: "virtual-model:resilient"
+        namespace: internal
+      - inlinePolicies:
+          - responseHeaderModifier:
+              set:
+                Content-Type: application/json
+          - directResponse:
+              bodyExpression: "\n\"x-gateway-model-name\" in request.headers ?\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"Model \" + request.headers[\"x-gateway-model-name\"] + \" not found\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t} :\n\t{\n\t\t\"error\": {\n\t\t\t\"message\": \"No model set\",\n\t\t\t\"type\": \"invalid_request_error\",\n\t\t\t\"code\": \"model_not_found\"\n\t\t}\n\t}\n"
+              status: 404
+        key: "llm:model:fallback"
+        matches:
+          - path:
+              pathPrefix: /
+        name: "model:fallback"
+        namespace: internal
+listener_tcp_routes:
+  - - llm
+    - []
+policies:
+  - key: "llm:transformation"
+    name:
+      kind: Local
+      name: "llm:transformation"
+      namespace: internal
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        phase: gateway
+        transformation:
+          request:
+            set:
+              - - x-gateway-model-name
+                - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\n\trequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\n\t(request.path.endsWith(\"/invoke-with-response-stream\") || request.path.endsWith(\"/invoke\") ?\n\trequest.path.regexReplace(\"^.*/model/(.+?)/invoke.*\", \"${1}\") :\n\tjson(request.body).model)\n"
+            body: "coalesce(json(request.body).merge({\"model\": request.headers[\"x-gateway-model-name\"]}), request.body)"
+          response: {}
+backends:
+  - backend:
+      ai:
+        name: "llm:model:openai/gpt-5-mini:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                openai/gpt-5-mini:
+                  endpoint:
+                    name: openai/gpt-5-mini
+                    provider:
+                      openAI:
+                        model: gpt-5-mini
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai: {}
+  - backend:
+      ai:
+        name: "llm:model:anthropic/*:1"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                anthropic/*:
+                  endpoint:
+                    name: anthropic/*
+                    provider:
+                      anthropic: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - requestHeaderModifier:
+          remove:
+            - x-gateway-model-name
+      - ai:
+          transformations:
+            model: "llmRequest.model.stripPrefix(\"anthropic/\")"
+  - backend:
+      ai:
+        name: "llm:virtual-model:resilient:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                openai/gpt-5-mini:
+                  endpoint:
+                    name: openai/gpt-5-mini
+                    provider:
+                      openAI:
+                        model: gpt-5-mini
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                      - requestHeaderModifier:
+                          remove:
+                            - x-gateway-model-name
+                      - ai: {}
+                      - transformation:
+                          request:
+                            body: "coalesce(json(request.body).merge({\"model\": \"openai/gpt-5-mini\"}), request.body)"
+                          response: {}
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+            - active:
+                anthropic/haiku:
+                  endpoint:
+                    name: anthropic/haiku
+                    provider:
+                      anthropic: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                      - requestHeaderModifier:
+                          remove:
+                            - x-gateway-model-name
+                      - ai:
+                          transformations:
+                            model: "llmRequest.model.stripPrefix(\"anthropic/\")"
+                      - transformation:
+                          request:
+                            body: "coalesce(json(request.body).merge({\"model\": \"anthropic/haiku\"}), request.body)"
+                          response: {}
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+                anthropic/sonnet:
+                  endpoint:
+                    name: anthropic/sonnet
+                    provider:
+                      anthropic: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                      - requestHeaderModifier:
+                          remove:
+                            - x-gateway-model-name
+                      - ai:
+                          transformations:
+                            model: "llmRequest.model.stripPrefix(\"anthropic/\")"
+                      - transformation:
+                          request:
+                            body: "coalesce(json(request.body).merge({\"model\": \"anthropic/sonnet\"}), request.body)"
+                          response: {}
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+route_groups: []
+workloads: []
+services: []

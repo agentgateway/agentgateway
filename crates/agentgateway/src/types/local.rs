@@ -300,9 +300,79 @@ pub struct LocalLLMConfig {
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
 	models: Vec<LocalLLMModels>,
+	/// virtualModels defines a set of models that can be served from the gateway. The model name refers to the
+	/// model in the users request that is matched. However, unlike the `models` field, virtual models will
+	/// dynamically route to a specific model (configured in `models`) based on the configured logic.
+	#[serde(
+		default,
+		rename = "virtualModels",
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	virtual_models: Vec<LocalLLMVirtualModel>,
 	/// policies defines policies for handling incoming requests, before a model is selected
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalLLMPolicy>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMVirtualModel {
+	/// name is the public model name clients request.
+	name: String,
+	/// routing selects an existing LLM model backend for each request.
+	routing: LocalLLMVirtualModelRouting,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMVirtualModelRouting {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	weighted: Option<LocalLLMWeightedRouting>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	failover: Option<LocalLLMFailoverRouting>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	conditional: Option<LocalLLMConditionalRouting>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMWeightedRouting {
+	/// targets are existing model names or names matched by wildcard model entries.
+	targets: Vec<LocalLLMWeightedTarget>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMWeightedTarget {
+	/// model is resolved against llm.models using the same wildcard matching as client requests.
+	model: String,
+	#[serde(default = "default_weight")]
+	weight: usize,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMFailoverRouting {
+	/// targets are grouped by priority. Lower priority values are tried first.
+	targets: Vec<LocalLLMFailoverTarget>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMFailoverTarget {
+	/// model is resolved against llm.models using the same wildcard matching as client requests.
+	model: String,
+	/// priority groups targets for failover. Lower values are preferred.
+	priority: usize,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMConditionalRouting {
+	/// targets are evaluated in order. The first matching condition selects the model.
+	targets: Vec<LocalLLMConditionalTarget>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalLLMConditionalTarget {
+	/// when must evaluate to true for this target to be selected. Omit only on the final fallback target.
+	#[serde(default)]
+	when: Option<Arc<cel::Expression>>,
+	/// model is resolved against llm.models using the same wildcard matching as client requests.
+	model: String,
 }
 
 #[apply(schema_de!)]
@@ -489,6 +559,9 @@ pub struct LocalLLMModels {
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
+	/// visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).
+	#[serde(default, skip_serializing_if = "LocalLLMModelVisibility::is_public")]
+	visibility: LocalLLMModelVisibility,
 	/// params customizes parameters for the outgoing request
 	#[serde(default)]
 	params: LocalLLMParams,
@@ -543,6 +616,22 @@ pub struct LocalLLMModels {
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	matches: Vec<LLMRouteMatch>,
+}
+
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum LocalLLMModelVisibility {
+	/// Public models can be requested directly by clients and are included in the model list.
+	#[default]
+	Public,
+	/// Internal models can be targeted by virtual models but cannot be requested directly.
+	Internal,
+}
+
+impl LocalLLMModelVisibility {
+	fn is_public(&self) -> bool {
+		matches!(self, Self::Public)
+	}
 }
 
 #[apply(schema_de!)]
@@ -2236,6 +2325,269 @@ fn merge_prompt_guards(
 	}
 }
 
+#[derive(Clone)]
+struct ResolvedLLMModelTarget {
+	name: String,
+	backend_key: Strng,
+	provider: NamedAIProvider,
+	inline_policies: Vec<BackendTrafficPolicy>,
+}
+
+fn llm_model_matches(pattern: &str, model: &str) -> anyhow::Result<bool> {
+	if pattern == "*" {
+		return Ok(true);
+	}
+	if let Some(prefix) = pattern.strip_suffix('*') {
+		return Ok(model.starts_with(prefix));
+	}
+	if let Some(suffix) = pattern.strip_prefix('*') {
+		return Ok(model.ends_with(suffix));
+	}
+	if pattern.contains('*') {
+		bail!("model name wildcard must be either at the beginning or the end: '{pattern}'");
+	}
+	Ok(pattern == model)
+}
+
+fn resolve_llm_model_target(
+	models: &[ResolvedLLMModelTarget],
+	target: &str,
+) -> anyhow::Result<ResolvedLLMModelTarget> {
+	for model in models {
+		if llm_model_matches(&model.name, target)? {
+			return Ok(model.clone());
+		}
+	}
+	bail!("virtual model target {target} does not match any llm.models entry")
+}
+
+fn validate_llm_virtual_model_target(
+	models: &[LocalLLMModels],
+	target: &str,
+) -> anyhow::Result<()> {
+	for model in models {
+		if llm_model_matches(&model.name, target)? {
+			return Ok(());
+		}
+	}
+	bail!("virtual model target {target} does not match any llm.models entry")
+}
+
+fn validate_llm_virtual_models(
+	virtual_models: &[LocalLLMVirtualModel],
+	models: &[LocalLLMModels],
+) -> anyhow::Result<()> {
+	for virtual_model in virtual_models {
+		let strategy_count = usize::from(virtual_model.routing.weighted.is_some())
+			+ usize::from(virtual_model.routing.failover.is_some())
+			+ usize::from(virtual_model.routing.conditional.is_some());
+		if strategy_count != 1 {
+			bail!(
+				"virtual model {} must specify exactly one routing strategy",
+				virtual_model.name
+			);
+		}
+		if let Some(conditional) = virtual_model.routing.conditional.as_ref() {
+			if conditional.targets.is_empty() {
+				bail!(
+					"virtual model {} must specify at least one conditional target",
+					virtual_model.name
+				);
+			}
+			if let Some(unconditional_idx) = conditional
+				.targets
+				.iter()
+				.position(|target| target.when.is_none())
+				&& unconditional_idx + 1 != conditional.targets.len()
+			{
+				bail!(
+					"virtual model {} conditional fallback target must be last",
+					virtual_model.name
+				);
+			}
+			for target in &conditional.targets {
+				validate_llm_virtual_model_target(models, &target.model)?;
+			}
+			continue;
+		}
+		if let Some(weighted) = virtual_model.routing.weighted.as_ref() {
+			if weighted.targets.is_empty() {
+				bail!(
+					"virtual model {} must specify at least one weighted target",
+					virtual_model.name
+				);
+			}
+			for target in &weighted.targets {
+				validate_llm_virtual_model_target(models, &target.model)?;
+			}
+			continue;
+		}
+		let failover = virtual_model
+			.routing
+			.failover
+			.as_ref()
+			.expect("strategy count checked");
+		if failover.targets.is_empty() {
+			bail!(
+				"virtual model {} must specify at least one failover target",
+				virtual_model.name
+			);
+		}
+		for target in &failover.targets {
+			validate_llm_virtual_model_target(models, &target.model)?;
+		}
+	}
+	Ok(())
+}
+
+fn llm_route_types(
+	passthrough: Option<&LocalLLMPassthrough>,
+) -> Vec<(Strng, crate::llm::RouteType)> {
+	if let Some(passthrough) = passthrough {
+		return vec![(strng::new("*"), passthrough.route_type())];
+	}
+	vec![
+		(
+			strng::new("/v1/chat/completions"),
+			crate::llm::RouteType::Completions,
+		),
+		(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
+		// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
+		(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
+		(
+			strng::new(":streamRawPredict"),
+			crate::llm::RouteType::Messages,
+		),
+		(
+			strng::new("/v1/responses"),
+			crate::llm::RouteType::Responses,
+		),
+		(
+			strng::new("/v1/images/generations"),
+			crate::llm::RouteType::Detect,
+		),
+		(
+			strng::new("/v1/images/edits"),
+			crate::llm::RouteType::Detect,
+		),
+		(
+			strng::new("/v1/images/variations"),
+			crate::llm::RouteType::Detect,
+		),
+		(
+			strng::new("/v1/responses/compact"),
+			crate::llm::RouteType::Detect,
+		),
+		(
+			strng::new("/v1/embeddings"),
+			crate::llm::RouteType::Embeddings,
+		),
+		(strng::new("/v1/rerank"), crate::llm::RouteType::Rerank),
+		(strng::new("/v2/rerank"), crate::llm::RouteType::Rerank),
+		(strng::new("*"), crate::llm::RouteType::Passthrough),
+	]
+}
+
+fn virtual_target_model_body_transform_backend_policy(
+	target: &str,
+) -> anyhow::Result<BackendTrafficPolicy> {
+	let target = serde_json::to_string(target)?;
+	let body = format!(r#"coalesce(json(request.body).merge({{"model": {target}}}), request.body)"#);
+	let transformation = http::transformation_cel::Transformation::try_from_local_config(
+		LocalTransformationConfig {
+			request: Some(http::transformation_cel::LocalTransform {
+				metadata: Vec::new(),
+				set: vec![],
+				add: vec![],
+				remove: vec![],
+				body: Some(strng::new(body)),
+			}),
+			response: None,
+		},
+		true,
+	)?;
+	Ok(BackendTrafficPolicy::Transformation(Arc::new(
+		transformation,
+	)))
+}
+
+fn virtual_model_match_cel(pattern: &str, model_expr: &str) -> anyhow::Result<String> {
+	if pattern == "*" {
+		return Ok("true".to_string());
+	}
+	if let Some(prefix) = pattern.strip_suffix('*') {
+		return Ok(format!(
+			"{model_expr}.startsWith({})",
+			serde_json::to_string(prefix)?
+		));
+	}
+	if let Some(suffix) = pattern.strip_prefix('*') {
+		return Ok(format!(
+			"{model_expr}.endsWith({})",
+			serde_json::to_string(suffix)?
+		));
+	}
+	if pattern.contains('*') {
+		bail!("model name wildcard must be either at the beginning or the end: '{pattern}'");
+	}
+	Ok(format!(
+		"{model_expr} == {}",
+		serde_json::to_string(pattern)?
+	))
+}
+
+fn conditional_virtual_model_target_expr(
+	virtual_models: &[LocalLLMVirtualModel],
+) -> anyhow::Result<Option<String>> {
+	let mut branches = Vec::new();
+	let requested_model = "requestedModel";
+	for virtual_model in virtual_models {
+		let Some(conditional) = virtual_model.routing.conditional.as_ref() else {
+			continue;
+		};
+		let model_match = virtual_model_match_cel(&virtual_model.name, requested_model)?;
+		let mut target_expr = requested_model.to_string();
+		for target in conditional.targets.iter().rev() {
+			let target_model = serde_json::to_string(&target.model)?;
+			target_expr = match &target.when {
+				Some(condition) => format!(
+					"({}) ? {target_model} : ({target_expr})",
+					condition.original_expression
+				),
+				None => target_model,
+			};
+		}
+		branches.push(format!("({model_match}) ? ({target_expr})"));
+	}
+	if branches.is_empty() {
+		return Ok(None);
+	}
+	let body = {
+		let mut expr = requested_model.to_string();
+		for branch in branches.into_iter().rev() {
+			expr = format!("{branch} : ({expr})");
+		}
+		expr
+	};
+	// Conditional virtual models are selected before route matching. Bind the
+	// original requested model once, then compare every virtual model against
+	// that stable value.
+	Ok(Some(format!(
+		"({}).with({requested_model}, {body})",
+		llm_request_model_expression()
+	)))
+}
+
+fn llm_request_model_expression() -> &'static str {
+	r#"
+request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
+	request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
+	(request.path.endsWith("/invoke-with-response-stream") || request.path.endsWith("/invoke") ?
+	request.path.regexReplace("^.*/model/(.+?)/invoke.*", "${1}") :
+	json(request.body).model)
+"#
+}
+
 #[allow(deprecated)]
 async fn convert_llm_config(
 	client: client::Client,
@@ -2253,6 +2605,7 @@ async fn convert_llm_config(
 		port,
 		tls,
 		models,
+		virtual_models,
 		policies,
 	} = llm_config;
 	let port = port.unwrap_or(DEFAULT_LLM_PORT);
@@ -2296,26 +2649,28 @@ async fn convert_llm_config(
 		(vec![], vec![])
 	};
 
-	// Create transformation policy to set x-gateway-model-name header from request body
+	validate_llm_virtual_models(&virtual_models, &models)?;
+
+	let llm_model_expression = conditional_virtual_model_target_expr(&virtual_models)?
+		.unwrap_or_else(|| llm_request_model_expression().to_string());
+	let llm_model_body_expression = r#"coalesce(json(request.body).merge({"model": request.headers["x-gateway-model-name"]}), request.body)"#;
+
+	// Create transformation policy to set x-gateway-model-name header from request body.
+	// Conditional virtual models use this same pre-routing transform to select the
+	// concrete target. The header makes route matching choose that concrete model
+	// route; the body rewrite makes downstream LLM policy/transformation logic see
+	// the selected target instead of the public virtual model name.
 	let transformation = http::transformation_cel::Transformation::try_from_local_config(
 		LocalTransformationConfig {
 			request: Some(http::transformation_cel::LocalTransform {
 				metadata: Vec::new(),
 				set: vec![(
 					strng::new("x-gateway-model-name"),
-					strng::new(
-						r#"
-request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict") ?
-	request.path.regexReplace("^.*/publishers/anthropic/models/(.+?):.*", "${1}") :
-	(request.path.endsWith("/invoke-with-response-stream") || request.path.endsWith("/invoke") ?
-	request.path.regexReplace("^.*/model/(.+?)/invoke.*", "${1}") :
-	json(request.body).model)
-"#,
-					),
+					strng::new(llm_model_expression),
 				)],
 				add: vec![],
 				remove: vec![],
-				body: None,
+				body: Some(strng::new(llm_model_body_expression)),
 			}),
 			response: None,
 		},
@@ -2339,6 +2694,15 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				created: startup_timestamp,
 				authorization: model.authorization.clone(),
 			})
+			.chain(
+				virtual_models
+					.iter()
+					.map(|model| filters::AuthorizationFilteredModelListEntry {
+						id: model.name.clone(),
+						created: startup_timestamp,
+						authorization: None,
+					}),
+			)
 			.collect::<Vec<_>>(),
 	);
 
@@ -2402,6 +2766,8 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 		})
 		.collect_vec();
 
+	let mut resolved_models = Vec::new();
+
 	// Create routes and backends for each model
 	for (idx, (_, model_config)) in ordered_models.into_iter().enumerate() {
 		let mut model_config = model_config;
@@ -2412,50 +2778,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
 		let p = model_config.params.clone();
 		let model = p.model;
-		let llm_routes = if let Some(passthrough) = model_config.passthrough.as_ref() {
-			vec![(strng::new("*"), passthrough.route_type())]
-		} else {
-			vec![
-				(
-					strng::new("/v1/chat/completions"),
-					crate::llm::RouteType::Completions,
-				),
-				(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
-				// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
-				(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-				(
-					strng::new(":streamRawPredict"),
-					crate::llm::RouteType::Messages,
-				),
-				(
-					strng::new("/v1/responses"),
-					crate::llm::RouteType::Responses,
-				),
-				(
-					strng::new("/v1/images/generations"),
-					crate::llm::RouteType::Detect,
-				),
-				(
-					strng::new("/v1/images/edits"),
-					crate::llm::RouteType::Detect,
-				),
-				(
-					strng::new("/v1/images/variations"),
-					crate::llm::RouteType::Detect,
-				),
-				(
-					strng::new("/v1/responses/compact"),
-					crate::llm::RouteType::Detect,
-				),
-				(
-					strng::new("/v1/embeddings"),
-					crate::llm::RouteType::Embeddings,
-				),
-				(strng::new("/v1/rerank"), crate::llm::RouteType::Rerank),
-				(strng::new("/v2/rerank"), crate::llm::RouteType::Rerank),
-				(strng::new("*"), crate::llm::RouteType::Passthrough),
-			]
-		};
+		let llm_routes = llm_route_types(model_config.passthrough.as_ref());
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
@@ -2644,6 +2967,7 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			tokenize: p.tokenize,
 			inline_policies: pols,
 		};
+		let resolved_provider = named_provider.clone();
 
 		let ai_backend = AIBackend {
 			providers: crate::types::loadbalancer::EndpointSet::new(vec![vec![(
@@ -2695,11 +3019,22 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			prompt_caching: model_config.prompt_caching.clone(),
 			routes: Default::default(),
 		})));
+		let resolved_inline_policies = pols.clone();
 		let backend_with_policies = BackendWithPolicies {
 			backend: Backend::AI(local_name(backend_key.clone()), ai_backend),
 			inline_policies: pols,
 		};
 		all_backends.push(backend_with_policies);
+		resolved_models.push(ResolvedLLMModelTarget {
+			name: model_config.name.clone(),
+			backend_key: backend_key.clone(),
+			provider: resolved_provider,
+			inline_policies: resolved_inline_policies,
+		});
+
+		if !model_config.visibility.is_public() {
+			continue;
+		}
 
 		// Create route for this model
 		// Index is needed because the same name can be used with different match criteria
@@ -2766,6 +3101,150 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 			inline_policies: model_route_inline_policies,
 		};
 		routes.push(model_route);
+	}
+
+	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
+		let strategy_count = usize::from(virtual_model.routing.weighted.is_some())
+			+ usize::from(virtual_model.routing.failover.is_some())
+			+ usize::from(virtual_model.routing.conditional.is_some());
+		if strategy_count != 1 {
+			bail!(
+				"virtual model {} must specify exactly one routing strategy",
+				virtual_model.name
+			);
+		}
+		if let Some(conditional) = virtual_model.routing.conditional.as_ref() {
+			if conditional.targets.is_empty() {
+				bail!(
+					"virtual model {} must specify at least one conditional target",
+					virtual_model.name
+				);
+			}
+			if let Some(unconditional_idx) = conditional
+				.targets
+				.iter()
+				.position(|target| target.when.is_none())
+				&& unconditional_idx + 1 != conditional.targets.len()
+			{
+				bail!(
+					"virtual model {} conditional fallback target must be last",
+					virtual_model.name
+				);
+			}
+			for target in &conditional.targets {
+				resolve_llm_model_target(&resolved_models, &target.model)?;
+			}
+			continue;
+		}
+		let backends = if let Some(weighted) = virtual_model.routing.weighted.as_ref() {
+			if weighted.targets.is_empty() {
+				bail!(
+					"virtual model {} must specify at least one weighted target",
+					virtual_model.name
+				);
+			}
+			weighted
+				.targets
+				.iter()
+				.map(|target| {
+					let resolved = resolve_llm_model_target(&resolved_models, &target.model)?;
+					Ok(RouteBackendReference {
+						weight: target.weight,
+						target: BackendReference::Backend(strng::format!("/{}", resolved.backend_key)).into(),
+						// Weighted selection happens after the pre-routing transform, so rewrite
+						// the body model here to the concrete target picked by this backend ref.
+						inline_policies: vec![virtual_target_model_body_transform_backend_policy(
+							&target.model,
+						)?],
+					})
+				})
+				.collect::<anyhow::Result<Vec<_>>>()?
+		} else {
+			let failover = virtual_model
+				.routing
+				.failover
+				.as_ref()
+				.expect("strategy count checked");
+			if failover.targets.is_empty() {
+				bail!(
+					"virtual model {} must specify at least one failover target",
+					virtual_model.name
+				);
+			}
+			let provider_groups = failover
+				.targets
+				.iter()
+				.sorted_by_key(|target| target.priority)
+				.chunk_by(|target| target.priority)
+				.into_iter()
+				.map(|(_, targets)| {
+					targets
+						.map(|target| {
+							let resolved = resolve_llm_model_target(&resolved_models, &target.model)?;
+							let mut provider = resolved.provider.clone();
+							provider.name = strng::new(&target.model);
+							provider
+								.inline_policies
+								.extend(resolved.inline_policies.clone());
+							// Failover chooses a provider from these groups after route matching.
+							// Attach the target rewrite to each provider so the upstream request
+							// uses the concrete model that actually won failover selection.
+							provider
+								.inline_policies
+								.push(virtual_target_model_body_transform_backend_policy(
+									&target.model,
+								)?);
+							Ok((strng::new(&target.model), provider))
+						})
+						.collect::<anyhow::Result<Vec<_>>>()
+				})
+				.collect::<anyhow::Result<Vec<_>>>()?;
+			let backend_key = strng::format!("llm:virtual-model:{}:{idx}", virtual_model.name);
+			all_backends.push(BackendWithPolicies {
+				backend: Backend::AI(
+					local_name(backend_key.clone()),
+					AIBackend {
+						providers: crate::types::loadbalancer::EndpointSet::new(provider_groups),
+					},
+				),
+				inline_policies: vec![],
+			});
+			vec![RouteBackendReference {
+				weight: 1,
+				target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
+				inline_policies: vec![],
+			}]
+		};
+
+		let matches = vec![RouteMatch {
+			path: PathMatch::PathPrefix(strng::new("/")),
+			method: None,
+			headers: vec![HeaderMatch {
+				name: HeaderOrPseudo::Header(HeaderName::from_static("x-gateway-model-name")),
+				value: llm_model_name_header_match(&virtual_model.name)?,
+			}],
+			query: vec![],
+		}];
+		let route_key = strng::format!("llm:virtual-model:{idx:06}:{}", virtual_model.name);
+		let virtual_model_route = Route {
+			key: route_key,
+			service_key: None,
+			service_port: 0,
+			name: RouteName {
+				name: strng::format!("virtual-model:{}", virtual_model.name),
+				namespace: strng::new("internal"),
+				rule_name: None,
+				kind: None,
+			},
+			hostnames: vec![],
+			matches,
+			backends,
+			inline_policies: vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+				routes: llm_route_types(None).into_iter().collect(),
+				..Default::default()
+			}))],
+		};
+		routes.push(virtual_model_route);
 	}
 
 	let fallback_inline_policies = vec![
