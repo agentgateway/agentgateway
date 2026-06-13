@@ -1294,7 +1294,7 @@ pub struct LLMContext {
 	/// The realized USD cost of the request from the model cost catalog.
 	/// Unset when the model could not be priced.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cost: Option<llm::cost::CostBreakdown>,
+	pub cost: Option<llm::cost::Breakdown>,
 	/// Effective model catalog rates in USD per 1M tokens after tier selection.
 	/// Unset when the model could not be priced.
 	#[dynamic(rename = "costRates")]

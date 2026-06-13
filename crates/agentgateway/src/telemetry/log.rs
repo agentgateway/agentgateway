@@ -1072,6 +1072,23 @@ impl Drop for DropOnLog {
 			let grpc = log.grpc_status.load();
 
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
+			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
+			let usage_cost_total = cost.map(|b| b.total().to_string());
+			let trace_cost_fields = if enable_trace {
+				cost.map(|b| {
+					[
+						("agw.ai.usage.cost.input", b.input.to_string()),
+						("agw.ai.usage.cost.output", b.output.to_string()),
+						("agw.ai.usage.cost.cache_read", b.cache_read.to_string()),
+						("agw.ai.usage.cost.cache_write", b.cache_write.to_string()),
+						("agw.ai.usage.cost.reasoning", b.reasoning.to_string()),
+						("agw.ai.usage.cost.input_audio", b.input_audio.to_string()),
+						("agw.ai.usage.cost.output_audio", b.output_audio.to_string()),
+					]
+				})
+			} else {
+				None
+			};
 
 			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
@@ -1226,11 +1243,8 @@ impl Drop for DropOnLog {
 						.map(Into::into),
 				),
 				(
-					"gen_ai.usage.cost",
-					llm_response
-						.as_ref()
-						.and_then(|l| l.cost.as_ref())
-						.map(|c| c.total.into()),
+					"agw.ai.usage.cost.total",
+					usage_cost_total.as_deref().map(Into::into),
 				),
 				// Not part of official semconv
 				(
@@ -1317,8 +1331,23 @@ impl Drop for DropOnLog {
 				("duration", Some(dur.as_str().into())),
 			];
 
+			let mut extra_kv_capacity = trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
+			if enable_logs {
+				extra_kv_capacity += fields.add.len();
+			}
+			kv.reserve_exact(extra_kv_capacity);
+
 			if enable_trace && let Some(t) = &log.tracer {
+				let base_len = kv.len();
+				if let Some(trace_cost_fields) = &trace_cost_fields {
+					kv.extend(
+						trace_cost_fields
+							.iter()
+							.map(|(key, value)| (*key, Some(value.as_str().into()))),
+					);
+				}
 				t.send(&log, &end_time, &cel_exec, kv.as_slice());
+				kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
 				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
@@ -1330,7 +1359,6 @@ impl Drop for DropOnLog {
 				}
 			};
 			if enable_logs {
-				kv.reserve(fields.add.len());
 				for (k, v) in &mut kv {
 					// Remove filtered lines, or things we are about to add
 					if fields.has(k) {
@@ -1915,5 +1943,81 @@ mod tests {
 		let _ = tracer.provider.force_flush();
 
 		assert!(exporter.finished_spans().is_empty());
+	}
+
+	#[tokio::test]
+	async fn llm_cost_breakdown_is_span_attributes_under_agw_ai_namespace() {
+		let catalog_file = tempfile::NamedTempFile::new().unwrap();
+		fs_err::write(
+			catalog_file.path(),
+			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2"}}}}}}"#,
+		)
+		.unwrap();
+		let catalog = ModelCatalog::new(vec![catalog_file.path().to_path_buf()]).unwrap();
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Completions,
+			native_format: None,
+			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
+			request_model: strng::literal!("my-model"),
+			provider: strng::literal!("openai"),
+			streaming: false,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+		};
+		let response = llm::LLMResponse {
+			input_tokens: Some(1_000_000),
+			output_tokens: Some(0),
+			..Default::default()
+		};
+		for _ in 0..20 {
+			let projection = catalog.project(&llm::LLMInfo::new(request.clone(), response.clone()));
+			if projection.cost.is_some() {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(25)).await;
+		}
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.model_catalog = catalog;
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		for expected in [
+			"agw.ai.usage.cost.total", // lossless decimal total (also on the structured log)
+			"agw.ai.usage.cost.input", // a span-only exact breakdown component
+		] {
+			assert!(has(expected), "expected {expected} span attribute");
+		}
+		assert!(
+			span
+				.attributes
+				.iter()
+				.all(|attr| attr.key.as_str() != "gen_ai.usage.cost"),
+			"cost must not be emitted under the GenAI semantic convention namespace"
+		);
+		assert!(
+			span
+				.attributes
+				.iter()
+				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
+			"cost should use the AGW AI usage namespace"
+		);
 	}
 }

@@ -130,6 +130,29 @@ fn test_request_start_time_is_native_timestamp() {
 }
 
 #[test]
+fn llm_cost_is_exposed_to_cel_as_floats() {
+	use std::str::FromStr;
+	let dec = |s: &str| rust_decimal::Decimal::from_str(s).unwrap();
+
+	let mut req = build_test_request();
+	// The exact Decimal breakdown is projected to f64 lazily, per field, on CEL access.
+	req.extensions_mut().get_mut::<LLMContext>().unwrap().cost = Some(llm::cost::Breakdown {
+		input: dec("0.5"),
+		output: dec("0.025"),
+		cache_read: dec("0"),
+		cache_write: dec("0"),
+		reasoning: dec("0"),
+		input_audio: dec("0"),
+		output_audio: dec("0"),
+	});
+	let executor = Executor::new_request(&req);
+
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.525").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+}
+
+#[test]
 fn test_route_metadata_context() {
 	let req = build_test_request();
 	let executor = Executor::new_request(&req);

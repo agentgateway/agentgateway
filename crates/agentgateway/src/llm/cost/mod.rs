@@ -5,9 +5,11 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
-use catalog::{Breakdown, Catalog as CatalogData, Rates, Usage};
+pub use catalog::Breakdown;
+use catalog::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
-use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
@@ -115,17 +117,6 @@ impl CatalogSnapshot {
 		CatalogSnapshot { catalog: None }
 	}
 
-	pub fn price(
-		&self,
-		provider: &str,
-		model: &str,
-		resp: &LLMResponse,
-		convention: CacheTokenConvention,
-	) -> (Option<f64>, CostLookupStatus) {
-		let p = self.project(provider, model, resp, convention);
-		(p.amount(), p.status)
-	}
-
 	fn project(
 		&self,
 		provider: &str,
@@ -155,9 +146,10 @@ impl CatalogSnapshot {
 		} else {
 			usage_for(convention, resp, false)
 		};
+		let breakdown = rates.breakdown(&usage);
 		CostProjection {
 			status: CostLookupStatus::Exact,
-			cost: Some(CostBreakdown::from(&rates.breakdown(&usage))),
+			cost: Some(breakdown),
 			cost_rates: Some(CostRates::from(&rates)),
 		}
 	}
@@ -166,7 +158,7 @@ impl CatalogSnapshot {
 #[derive(Debug, Clone)]
 pub struct CostProjection {
 	pub status: CostLookupStatus,
-	pub cost: Option<CostBreakdown>,
+	pub cost: Option<Breakdown>,
 	pub cost_rates: Option<CostRates>,
 }
 
@@ -177,10 +169,6 @@ impl CostProjection {
 			cost: None,
 			cost_rates: None,
 		}
-	}
-
-	pub fn amount(&self) -> Option<f64> {
-		self.cost.map(|c| c.total)
 	}
 }
 
@@ -223,6 +211,26 @@ impl From<&Rates> for CostRates {
 	}
 }
 
+fn breakdown_f64(d: Decimal) -> f64 {
+	d.to_f64().unwrap_or_default()
+}
+
+impl Breakdown {
+	// (CEL field name, value) pairs. `total` is computed, the rest are stored.
+	fn components(&self) -> [(&'static str, Decimal); 8] {
+		[
+			("total", self.total()),
+			("input", self.input),
+			("output", self.output),
+			("cacheRead", self.cache_read),
+			("cacheWrite", self.cache_write),
+			("reasoning", self.reasoning),
+			("inputAudio", self.input_audio),
+			("outputAudio", self.output_audio),
+		]
+	}
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, ::cel::DynamicType)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -243,17 +251,76 @@ pub struct CostBreakdown {
 
 impl From<&Breakdown> for CostBreakdown {
 	fn from(b: &Breakdown) -> Self {
-		let f = |d: rust_decimal::Decimal| d.to_f64().unwrap_or_default();
 		CostBreakdown {
-			total: f(b.total()),
-			input: f(b.input),
-			output: f(b.output),
-			cache_read: f(b.cache_read),
-			cache_write: f(b.cache_write),
-			reasoning: f(b.reasoning),
-			input_audio: f(b.input_audio),
-			output_audio: f(b.output_audio),
+			total: breakdown_f64(b.total()),
+			input: breakdown_f64(b.input),
+			output: breakdown_f64(b.output),
+			cache_read: breakdown_f64(b.cache_read),
+			cache_write: breakdown_f64(b.cache_write),
+			reasoning: breakdown_f64(b.reasoning),
+			input_audio: breakdown_f64(b.input_audio),
+			output_audio: breakdown_f64(b.output_audio),
 		}
+	}
+}
+
+impl From<CostBreakdown> for Breakdown {
+	fn from(b: CostBreakdown) -> Self {
+		let d = |v| Decimal::from_f64(v).unwrap_or_default();
+		Breakdown {
+			input: d(b.input),
+			output: d(b.output),
+			cache_read: d(b.cache_read),
+			cache_write: d(b.cache_write),
+			reasoning: d(b.reasoning),
+			input_audio: d(b.input_audio),
+			output_audio: d(b.output_audio),
+		}
+	}
+}
+
+impl ::cel::types::dynamic::DynamicType for Breakdown {
+	fn materialize(&self) -> ::cel::Value<'_> {
+		let mut map = vector_map::VecMap::with_capacity(8);
+		for (name, value) in self.components() {
+			map.insert(
+				::cel::objects::KeyRef::from(name),
+				::cel::Value::from(breakdown_f64(value)),
+			);
+		}
+		::cel::Value::Map(::cel::objects::MapValue::Borrow(map))
+	}
+
+	// Lazy: a field is only converted to f64 when a CEL expression reads it.
+	fn field(&self, field: &str) -> Option<::cel::Value<'_>> {
+		self
+			.components()
+			.into_iter()
+			.find(|(name, _)| *name == field)
+			.map(|(_, value)| ::cel::Value::from(breakdown_f64(value)))
+	}
+}
+
+impl Serialize for Breakdown {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		CostBreakdown::from(self).serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for Breakdown {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		CostBreakdown::deserialize(deserializer).map(Into::into)
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Breakdown {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"CostBreakdown".into()
+	}
+
+	fn json_schema(schema_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		CostBreakdown::json_schema(schema_gen)
 	}
 }
 
@@ -408,12 +475,27 @@ fn usage_for(
 
 #[cfg(test)]
 mod tests {
+	use rust_decimal::prelude::ToPrimitive;
+
 	use super::*;
 
 	fn test_catalog(input_rate: &str) -> String {
 		format!(
 			r#"{{"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{input_rate}","output":"2"}}}}}}}}}}}}"#
 		)
+	}
+
+	impl CatalogSnapshot {
+		fn price(
+			&self,
+			provider: &str,
+			model: &str,
+			resp: &LLMResponse,
+			convention: CacheTokenConvention,
+		) -> (Option<f64>, CostLookupStatus) {
+			let p = self.project(provider, model, resp, convention);
+			(p.cost.and_then(|c| c.total().to_f64()), p.status)
+		}
 	}
 
 	#[test]
@@ -669,6 +751,11 @@ mod tests {
 			CacheTokenConvention::InputIncludesCache,
 		);
 		assert_eq!(p.status, CostLookupStatus::Exact);
+		assert_eq!(
+			p.cost.expect("priced projection has cost").total().to_f64(),
+			Some(0.525),
+			"tier rates apply to the whole request"
+		);
 		let rates = p.cost_rates.expect("priced projection has rates");
 		assert_eq!(rates.input, Some(2.5));
 		assert_eq!(rates.output, Some(10.0));
