@@ -55,6 +55,7 @@ impl TCPProxy {
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.model_catalog.clone(),
 			start,
 			tcp.clone(),
 		)
@@ -448,6 +449,7 @@ mod tests {
 
 	use agent_core::strng;
 
+	use crate::llm::cost::ModelCatalog;
 	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::gatewayaddress::Destination;
@@ -927,6 +929,7 @@ mod tests {
 				metrics::sub_registry(&mut Registry::default()),
 				Default::default(),
 			)),
+			model_catalog: ModelCatalog::empty(),
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),

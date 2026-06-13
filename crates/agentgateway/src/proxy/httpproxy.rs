@@ -546,6 +546,7 @@ impl HTTPProxy {
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.model_catalog.clone(),
 			start,
 			tcp.clone(),
 		);
@@ -2263,6 +2264,7 @@ async fn make_backend_call(
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
 								native_format: Some(llm::custom::ProviderFormat::Realtime),
+								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
@@ -2379,6 +2381,7 @@ async fn make_backend_call(
 				log.as_ref().expect("must be set").request_snapshot.clone(),
 				llm_response_log.expect("must be set"),
 				include_completion_in_log,
+				Some(&inputs.model_catalog),
 				resp,
 			)
 			.await
@@ -2818,7 +2821,9 @@ fn finalize_attempt_for_retry(
 	let end_time = agent_core::Timestamp::now();
 	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
 	let mut llm_response: Option<crate::cel::LLMContext> =
-		log.llm_response.load_clone().map(Into::into);
+		log.llm_response.load_clone().map(|llm_info| {
+			crate::cel::LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref()))
+		});
 	if let Some(llm_response) = llm_response.as_mut() {
 		llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 	}

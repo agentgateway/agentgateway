@@ -331,6 +331,17 @@ pub fn parse_config(
 		.transpose()?;
 	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
 
+	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
+		.map(|s| {
+			s.split(',')
+				.map(|p| PathBuf::from(p.trim()))
+				.filter(|p| !p.as_os_str().is_empty())
+				.map(|file| crate::ModelCatalogSource::File { file })
+				.collect::<Vec<_>>()
+		})
+		.or(raw.model_catalog)
+		.unwrap_or_default();
+
 	Ok(crate::Config {
 		ipv6_enabled,
 		network: network.clone().into(),
@@ -501,6 +512,9 @@ pub fn parse_config(
 				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
 		dynamic_ca_cert_cache,
+		model_catalog: crate::ModelCatalogConfig {
+			sources: model_catalog_sources,
+		},
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {

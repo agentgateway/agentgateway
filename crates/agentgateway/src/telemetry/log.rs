@@ -33,10 +33,12 @@ use tracing::{Level, trace};
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
+use crate::llm::cost::ModelCatalog;
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
-	GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics, RouteIdentifier,
+	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
+	RouteIdentifier,
 };
 use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
@@ -553,6 +555,16 @@ impl DropOnLog {
 				custom: custom_metric_fields.clone(),
 				route: route_identifier.clone(),
 			});
+			if let Some(status) = llm_response.cost_status {
+				log
+					.metrics
+					.cost_catalog_lookups
+					.get_or_create(&CostCatalogLookupLabels {
+						status,
+						common: gen_ai_labels.clone().into(),
+					})
+					.inc();
+			}
 			if let Some(it) = llm_response.input_tokens {
 				log
 					.metrics
@@ -667,12 +679,14 @@ impl RequestLog {
 	pub fn new(
 		cel: CelLogging,
 		metrics: Arc<Metrics>,
+		model_catalog: Arc<ModelCatalog>,
 		start: Timestamp,
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
 			cel,
 			metrics,
+			model_catalog,
 			start,
 			request_processing_start: Instant::now(),
 			request_processing_duration: None,
@@ -805,6 +819,7 @@ impl RequestLog {
 pub struct RequestLog {
 	pub cel: CelLogging,
 	pub metrics: Arc<Metrics>,
+	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
 	pub request_processing_start: Instant,
 	pub request_processing_duration: Option<Duration>,
@@ -927,7 +942,10 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let mut llm_response: Option<LLMContext> = log.llm_response.take().map(Into::into);
+			let mut llm_response: Option<LLMContext> = log
+				.llm_response
+				.take()
+				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
@@ -1206,6 +1224,13 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
+				),
+				(
+					"gen_ai.usage.cost",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.cost.as_ref())
+						.map(|c| c.total.into()),
 				),
 				// Not part of official semconv
 				(
@@ -1819,6 +1844,7 @@ mod tests {
 		RequestLog::new(
 			cel,
 			metrics,
+			ModelCatalog::empty(),
 			Timestamp::now(),
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),

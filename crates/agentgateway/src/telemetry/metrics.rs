@@ -110,6 +110,14 @@ pub struct GenAILabelsTokenUsage {
 	pub common: EncodeArc<GenAILabels>,
 }
 
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct CostCatalogLookupLabels {
+	pub status: crate::llm::cost::CostLookupStatus,
+
+	#[prometheus(flatten)]
+	pub common: EncodeArc<GenAILabels>,
+}
+
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPCall {
 	pub method: DefaultedUnknown<RichStrng>,
@@ -210,6 +218,8 @@ pub struct Metrics {
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
+
+	pub cost_catalog_lookups: Family<CostCatalogLookupLabels, counter::Counter>,
 
 	// metrics for request retries
 	pub retries: Counter,
@@ -341,6 +351,15 @@ impl Metrics {
 				registry.register(
 					"guardrail_checks",
 					"Total number of guardrail checks",
+					m.clone(),
+				);
+				m
+			},
+			cost_catalog_lookups: {
+				let m = Family::<CostCatalogLookupLabels, _>::default();
+				registry.register(
+					"cost_catalog_lookups",
+					"Total number of model cost catalog lookups by resolution status",
 					m.clone(),
 				);
 				m

@@ -8,6 +8,8 @@
 |`config.dns.lookupFamily`|enum|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
 |`config.dns.edns0`|boolean|Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.<br>When `None`, the system-provided resolver setting is preserved.<br>Can also be set via the `DNS_EDNS0` environment variable.|
 |`config.localXdsPath`|string|Local XDS path. If not specified, the current configuration file will be used.|
+|`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
+|`config.modelCatalog[].file`|string||
 |`config.caAddress`|string||
 |`config.caAuthToken`|string||
 |`config.xdsAddress`|string||

@@ -8,6 +8,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	controllercmd "github.com/agentgateway/agentgateway/controller/pkg/cli/controller"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/costs"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	proxycmd "github.com/agentgateway/agentgateway/controller/pkg/cli/proxy"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
@@ -24,6 +25,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(flag.BuildCobra(cliversion.Command))
 	rootCmd.AddCommand(proxycmd.Command())
 	rootCmd.AddCommand(controllercmd.Command())
+	rootCmd.AddCommand(costs.Command())
 
 	// Deprecated top-level aliases — delegate to the canonical subcommands.
 	rootCmd.AddCommand(deprecatedAlias("config", "agctl proxy config", flag.BuildCobra(config.Command)))

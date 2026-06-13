@@ -81,6 +81,7 @@ impl RequestType for Request {
 			input_tokens: None,
 			input_format: InputFormat::Detect,
 			native_format: None,
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: self
 				.lookup(lookups::MODEL, |v| v.as_str())
 				.map(Into::into)
@@ -191,6 +192,7 @@ mod tests {
 			input_tokens: None,
 			input_format: crate::llm::InputFormat::Detect,
 			native_format: None,
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
 			provider: strng::new("aws.bedrock"),
 			streaming: false,

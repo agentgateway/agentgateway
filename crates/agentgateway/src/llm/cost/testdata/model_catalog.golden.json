@@ -1,0 +1,56 @@
+{
+  "providers": {
+    "anthropic": {
+      "models": {
+        "claude-sonnet-4-5": {
+          "rates": {
+            "input": "3",
+            "output": "15",
+            "cacheRead": "0.3",
+            "cacheWrite": "3.75"
+          }
+        }
+      }
+    },
+    "gcp.gemini": {
+      "models": {
+        "gemini-2.5-pro": {
+          "rates": {
+            "input": "1.25",
+            "output": "10",
+            "cacheRead": "0.125"
+          },
+          "tiers": [
+            {
+              "contextOver": 200000,
+              "rates": {
+                "input": "2.5",
+                "output": "15",
+                "cacheRead": "0.25"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "openai": {
+      "models": {
+        "gpt-4o-mini": {
+          "rates": {
+            "input": "0.15",
+            "output": "0.6",
+            "cacheRead": "0.075"
+          }
+        },
+        "gpt-4o-mini-audio-preview": {
+          "rates": {
+            "input": "0.15",
+            "output": "0.6",
+            "inputAudio": "10",
+            "outputAudio": "20"
+          }
+        }
+      }
+    }
+  }
+}
