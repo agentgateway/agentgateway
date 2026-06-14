@@ -21,6 +21,7 @@
 |`config.clusterId`|string||
 |`config.network`|string||
 |`config.adminAddr`|string|Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
+|`config.adminAllowedIps`|[]string|Source IPs allowed to access the admin server.<br>Defaults to loopback addresses (127.0.0.1 and ::1) only.|
 |`config.statsAddr`|string|Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|

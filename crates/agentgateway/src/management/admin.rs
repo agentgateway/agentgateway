@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +23,11 @@ use tracing_subscriber::filter;
 use super::hyper_helpers::{Server, empty_response, plaintext_response};
 use crate::Config;
 use crate::http::Response;
+use crate::transport::stream::TCPConnectionInfo;
+
+#[cfg(test)]
+#[path = "admin_tests.rs"]
+mod tests;
 
 // Constants for pprof profiling
 #[cfg(target_os = "linux")]
@@ -129,6 +134,15 @@ impl Service {
 
 	pub fn spawn(self) {
 		self.s.spawn(|state, req| async move {
+			// The admin server exposes sensitive state (config dump) and controls (shutdown),
+			// so reject peers outside the allowlist. Use 403 rather than 404 so operators can
+			// tell the restriction is active.
+			if !peer_ip_allowed(&state.config.admin_allowed_ips, &req) {
+				return Ok(plaintext_response(
+					hyper::StatusCode::FORBIDDEN,
+					"peer IP is not allowed to access the admin server\n".to_string(),
+				));
+			}
 			match req.uri().path() {
 				#[cfg(target_os = "linux")]
 				"/debug/pprof/profile" => handle_pprof(req).await,
@@ -167,6 +181,16 @@ impl Service {
 				},
 			}
 		})
+	}
+}
+
+/// Returns true if the request's peer IP is permitted to access the admin server.
+/// Connections without TCP peer info (Unix domain sockets) are allowed; access to those is
+/// governed by filesystem permissions instead.
+fn peer_ip_allowed<B>(allowed_ips: &[IpAddr], req: &Request<B>) -> bool {
+	match req.extensions().get::<TCPConnectionInfo>() {
+		Some(info) => allowed_ips.contains(&info.peer_addr.ip()),
+		None => true,
 	}
 }
 
