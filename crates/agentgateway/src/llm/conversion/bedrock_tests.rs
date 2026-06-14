@@ -1497,3 +1497,125 @@ fn test_insert_cache_point_empty_messages_noop() {
 	helpers::insert_message_cache_point(&mut msgs, 0);
 	assert!(msgs.is_empty());
 }
+
+fn make_tool_use_message(call_id: &str, tool_name: &str) -> types::bedrock::Message {
+	types::bedrock::Message {
+		role: types::bedrock::Role::Assistant,
+		content: vec![types::bedrock::ContentBlock::ToolUse(
+			types::bedrock::ToolUseBlock {
+				tool_use_id: call_id.to_string(),
+				name: tool_name.to_string(),
+				input: json!({}),
+			},
+		)],
+	}
+}
+
+fn make_tool_result_message(call_id: &str) -> types::bedrock::Message {
+	types::bedrock::Message {
+		role: types::bedrock::Role::User,
+		content: vec![types::bedrock::ContentBlock::ToolResult(
+			types::bedrock::ToolResultBlock {
+				tool_use_id: call_id.to_string(),
+				content: vec![types::bedrock::ToolResultContentBlock::Text(
+					"done".to_string(),
+				)],
+				status: None,
+			},
+		)],
+	}
+}
+
+fn request_with(messages: Vec<types::bedrock::Message>) -> types::bedrock::ConverseRequest {
+	types::bedrock::ConverseRequest {
+		model_id: "amazon.nova-pro-v1:0".to_string(),
+		messages,
+		system: None,
+		inference_config: None,
+		output_config: None,
+		tool_config: None,
+		guardrail_config: None,
+		additional_model_request_fields: None,
+		prompt_variables: None,
+		additional_model_response_field_paths: None,
+		request_metadata: None,
+		performance_config: None,
+	}
+}
+
+#[test]
+fn test_ensure_tool_config_reconstructs_from_history() {
+	// A tools-less follow-up turn that still carries tool history (an assistant `toolUse`
+	// plus its `toolResult`). Bedrock requires `toolConfig` here, so it must be reconstructed.
+	let mut req = request_with(vec![
+		make_message(types::bedrock::Role::User, "list the pods"),
+		make_tool_use_message("call_1", "get_pods"),
+		make_tool_result_message("call_1"),
+	]);
+
+	helpers::ensure_tool_config_for_history(&mut req);
+
+	let tool_config = req
+		.tool_config
+		.expect("toolConfig must be reconstructed when messages carry tool history");
+	assert_eq!(tool_config.tools.len(), 1);
+	match &tool_config.tools[0] {
+		types::bedrock::Tool::ToolSpec(spec) => assert_eq!(spec.name, "get_pods"),
+		_ => panic!("expected a reconstructed ToolSpec"),
+	}
+}
+
+#[test]
+fn test_ensure_tool_config_dedups_repeated_tools() {
+	let mut req = request_with(vec![
+		make_tool_use_message("call_1", "get_pods"),
+		make_tool_result_message("call_1"),
+		make_tool_use_message("call_2", "get_pods"),
+		make_tool_result_message("call_2"),
+	]);
+
+	helpers::ensure_tool_config_for_history(&mut req);
+
+	let tool_config = req.tool_config.expect("toolConfig must be reconstructed");
+	assert_eq!(
+		tool_config.tools.len(),
+		1,
+		"repeated tool names must be de-duplicated"
+	);
+}
+
+#[test]
+fn test_ensure_tool_config_noop_without_tool_history() {
+	let mut req = request_with(vec![make_message(types::bedrock::Role::User, "hello")]);
+
+	helpers::ensure_tool_config_for_history(&mut req);
+
+	assert!(
+		req.tool_config.is_none(),
+		"toolConfig must not be added when there is no tool history"
+	);
+}
+
+#[test]
+fn test_ensure_tool_config_preserves_existing() {
+	let mut req = request_with(vec![make_tool_use_message("call_1", "get_pods")]);
+	req.tool_config = Some(types::bedrock::ToolConfiguration {
+		tools: vec![types::bedrock::Tool::ToolSpec(
+			types::bedrock::ToolSpecification {
+				name: "existing".to_string(),
+				description: None,
+				input_schema: None,
+			},
+		)],
+		tool_choice: None,
+	});
+
+	helpers::ensure_tool_config_for_history(&mut req);
+
+	let tool_config = req.tool_config.expect("existing toolConfig must be kept");
+	assert_eq!(tool_config.tools.len(), 1);
+	match &tool_config.tools[0] {
+		types::bedrock::Tool::ToolSpec(spec) => assert_eq!(spec.name, "existing"),
+		_ => panic!("expected the original ToolSpec"),
+	}
+}
