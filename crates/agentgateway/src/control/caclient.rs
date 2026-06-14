@@ -65,6 +65,8 @@ pub struct Config {
 	pub identity: Identity,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	// CA headers can carry credentials for the CA server, so never serialize them
+	#[serde(serialize_with = "ser_redact")]
 	pub ca_headers: Vec<(String, String)>,
 	pub allowed_trust_domains: Arc<[Strng]>,
 	pub skip_validate_trust_domain: bool,

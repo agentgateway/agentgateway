@@ -172,6 +172,17 @@
             "null"
           ]
         },
+        "adminAllowedIps": {
+          "description": "Source IPs allowed to access the admin server.\nDefaults to loopback addresses (127.0.0.1 and ::1) only.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "format": "ip"
+          }
+        },
         "statsAddr": {
           "description": "Stats/metrics server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [

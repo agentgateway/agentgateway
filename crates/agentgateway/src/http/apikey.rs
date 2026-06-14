@@ -3,6 +3,7 @@ use std::hash::Hash;
 use ::cel::Value;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
+use subtle::ConstantTimeEq;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
@@ -81,7 +82,14 @@ impl Hash for APIKey {
 
 impl PartialEq for APIKey {
 	fn eq(&self, other: &Self) -> bool {
-		self.0.expose_secret() == other.0.expose_secret()
+		// Use a constant-time comparison; a short-circuiting comparison would leak how many
+		// leading bytes of a candidate key match a configured key through response timing.
+		self
+			.0
+			.expose_secret()
+			.as_bytes()
+			.ct_eq(other.0.expose_secret().as_bytes())
+			.into()
 	}
 }
 
