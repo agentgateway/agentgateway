@@ -410,7 +410,7 @@ impl AIProvider {
 		if !has_host_override {
 			self.set_default_authority(req, route_type)?;
 		}
-		self.set_required_fields(req)?;
+		self.set_required_fields(req, route_type, llm_request)?;
 		Ok(())
 	}
 
@@ -606,7 +606,12 @@ impl AIProvider {
 		})
 	}
 
-	pub fn set_required_fields(&self, req: &mut Request) -> anyhow::Result<()> {
+	pub fn set_required_fields(
+		&self,
+		req: &mut Request,
+		route_type: RouteType,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
@@ -637,6 +642,23 @@ impl AIProvider {
 						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
 					Ok(())
 				})
+			},
+			AIProvider::Azure(p) => {
+				// Foundry's Anthropic-native endpoint requires the anthropic-version header,
+				// but only for Claude models — GPT models use the OpenAI-compatible path.
+				let model = llm_request.map(|r| r.request_model.as_str()).unwrap_or("");
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(model))
+					&& matches!(route_type, RouteType::Messages | RouteType::AnthropicTokenCount)
+				{
+					http::modify_req(req, |req| {
+						req.headers
+							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+						Ok(())
+					})
+				} else {
+					Ok(())
+				}
 			},
 			_ => Ok(()),
 		}
@@ -1058,7 +1080,19 @@ impl AIProvider {
 						)));
 					},
 				},
-				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_) => req.to_openai()?,
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) => req.to_openai()?,
+				AIProvider::Azure(p) => {
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& original_format == InputFormat::Messages
+						&& p.is_anthropic_model(Some(request_model))
+					{
+						// Foundry's Anthropic-native endpoint requires the Anthropic wire format,
+						// but only for Claude models; GPT models use the OpenAI completions format.
+						req.to_anthropic()?
+					} else {
+						req.to_openai()?
+					}
+				},
 				AIProvider::Vertex(p) => {
 					if p.is_anthropic_model(Some(request_model)) {
 						let body = req.to_anthropic()?;
@@ -1427,12 +1461,20 @@ impl AIProvider {
 			},
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages) => Self::parse_messages_response(bytes),
-			// OpenAI/Gemini/Azure messages: translate from chat completions
+			// Azure messages: Foundry+Claude uses Anthropic-native passthrough;
+			// all other Azure (OpenAI resource or GPT models) translate from chat completions.
+			(AIProvider::Azure(p), InputFormat::Messages) => {
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(&req.request_model))
+				{
+					Self::parse_messages_response(bytes)
+				} else {
+					conversion::completions::from_messages::translate_response(bytes)
+				}
+			},
+			// OpenAI/Gemini messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Copilot(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_),
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Gemini(_),
 				InputFormat::Messages,
 			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
@@ -1490,6 +1532,13 @@ impl AIProvider {
 	) -> Result<Response, AIError> {
 		let is_vertex_anthropic = match self {
 			AIProvider::Vertex(p) => p.is_anthropic_model(Some(&req.request_model)),
+			_ => false,
+		};
+		let is_foundry_anthropic = match self {
+			AIProvider::Azure(p) => {
+				matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(&req.request_model))
+			},
 			_ => false,
 		};
 		let model = req.request_model.clone();
@@ -1609,6 +1658,12 @@ impl AIProvider {
 			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
 				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
 			}),
+			// Foundry + Claude model: Anthropic-native SSE stream, passthrough as-is
+			(AIProvider::Azure(_), InputFormat::Messages, _) if is_foundry_anthropic => {
+				resp.map(|b| {
+					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				})
+			},
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
