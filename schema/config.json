@@ -2490,6 +2490,18 @@
           "description": "Authenticate to GitHub Copilot.",
           "type": "string",
           "const": "copilot"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tokenExchange": {
+              "$ref": "#/$defs/TokenExchangeAuth"
+            }
+          },
+          "required": [
+            "tokenExchange"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -2916,6 +2928,54 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "TokenExchangeAuth": {
+      "type": "object",
+      "properties": {
+        "tokenEndpoint": {
+          "description": "RFC 8693 token endpoint URL.",
+          "type": "string"
+        },
+        "audience": {
+          "description": "`audience` parameter naming the target service at the authorization server.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "description": "Space-delimited `scope` parameter for the requested token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resource": {
+          "description": "`resource` parameter with the target service URI.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requestedTokenType": {
+          "description": "`requested_token_type` parameter; the server picks when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientId": {
+          "description": "`client_id` parameter identifying the gateway at the authorization server.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tokenEndpoint"
       ]
     },
     "HTTP": {
