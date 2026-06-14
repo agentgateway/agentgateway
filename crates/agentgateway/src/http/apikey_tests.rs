@@ -1,5 +1,25 @@
 use super::*;
 
+#[test]
+fn test_apikey_equality() {
+	// APIKey equality must use a constant-time comparison (subtle::ConstantTimeEq): the gateway
+	// compares attacker-controlled keys against configured secrets, and a short-circuiting
+	// comparison would let an attacker recover a key byte-by-byte via response timing.
+	// These assertions verify the constant-time implementation is behaviorally correct.
+	assert_eq!(APIKey::new("test-api-key"), APIKey::new("test-api-key"));
+	// Same length, differing only in the last byte
+	assert_ne!(APIKey::new("test-api-key"), APIKey::new("test-api-kez"));
+	// Matching prefix but different length
+	assert_ne!(APIKey::new("test-api-key"), APIKey::new("test-api"));
+	assert_ne!(APIKey::new(""), APIKey::new("test-api-key"));
+
+	// Hash must stay consistent with PartialEq to keep the HashMap<APIKey, _> invariant
+	let mut map = HashMap::new();
+	map.insert(APIKey::new("test-api-key"), ());
+	assert!(map.contains_key(&APIKey::new("test-api-key")));
+	assert!(!map.contains_key(&APIKey::new("other-key")));
+}
+
 #[tokio::test]
 async fn test_apikey_query_parameter_extracts_and_strips() {
 	let auth = APIKeyAuthentication::new(

@@ -14,3 +14,4 @@ bcrypt.workspace = true
 md-5.workspace = true
 pwhash.workspace = true
 sha1.workspace = true
+subtle.workspace = true

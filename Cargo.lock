@@ -269,6 +269,7 @@ dependencies = [
  "sqlx",
  "sse-stream",
  "stacker",
+ "subtle",
  "tempfile",
  "thiserror 2.0.18",
  "tiktoken-rs",
@@ -3262,6 +3263,7 @@ dependencies = [
  "md-5 0.11.0",
  "pwhash",
  "sha1 0.11.0",
+ "subtle",
 ]
 
 [[package]]

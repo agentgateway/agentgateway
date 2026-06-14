@@ -198,6 +198,7 @@ sqlx = { version = "0.9", default-features = false, features = [
     "uuid",
 ] }
 stacker = "0.1"
+subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken-rs = "0.12"

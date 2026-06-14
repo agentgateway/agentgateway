@@ -301,6 +301,10 @@ pub fn parse_config(
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
 		.transpose()?
 		.unwrap_or(Address::Localhost(ipv6_localhost_enabled, 15000));
+	// Source IPs allowed to reach the admin server; defaults to loopback only
+	let admin_allowed_ips = raw
+		.admin_allowed_ips
+		.unwrap_or_else(crate::defaults::admin_allowed_ips);
 	// Parse stats_addr from environment variable or config file
 	let stats_addr = parse::<String>("STATS_ADDR")?
 		.or(raw.stats_addr)
@@ -354,6 +358,7 @@ pub fn parse_config(
 		network: network.clone().into(),
 		self_identity,
 		admin_addr,
+		admin_allowed_ips,
 		stats_addr,
 		readiness_addr,
 		self_addr,
