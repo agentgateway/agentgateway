@@ -1,0 +1,43 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/messages/reasoning-opus-48-enabled.json
+info:
+  model: us.anthropic.claude-opus-4-8-v1
+  max_tokens: 100
+  thinking:
+    type: enabled
+    budget_tokens: 20000
+  temperature: 0.4
+  top_k: 20
+  top_p: 0.9
+  messages:
+    - role: user
+      content: Hello
+---
+{
+  "modelId": "us.anthropic.claude-opus-4-8-v1",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Hello"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 100,
+    "temperature": 0.4,
+    "top_p": 0.9,
+    "topK": 20
+  },
+  "additionalModelRequestFields": {
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "high"
+    }
+  }
+}

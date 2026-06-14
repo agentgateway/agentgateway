@@ -1,0 +1,11 @@
+{
+  "model": "gpt-5",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Deeply analyze this topic."
+    }
+  ],
+  "max_completion_tokens": 64,
+  "reasoning_effort": "medium"
+}
