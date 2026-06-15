@@ -80,7 +80,7 @@ pub fn md5_apr1_encode(pw: &str, salt: &str) -> String {
 	let mut digest = ctx1.finalize_reset();
 
 	for pl in (0..pw.len()).rev().step_by(Md5::output_size()) {
-		let digest_pl = pl.min(Md5::output_size()) + 1;
+		let digest_pl = (pl + 1).min(Md5::output_size());
 		ctx.update(&digest[..digest_pl]);
 	}
 
