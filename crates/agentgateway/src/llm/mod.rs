@@ -962,10 +962,14 @@ impl AIProvider {
 				// OpenAI/Gemini/Azure support messages via translation to chat completions
 			},
 			(
-				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
+				AIProvider::Anthropic(_)
+				| AIProvider::Bedrock(_)
+				| AIProvider::Vertex(_)
+				| AIProvider::Azure(_),
 				InputFormat::CountTokens,
 			) => {
-				// Anthropic supports count_tokens natively (Bedrock & Vertex assumes its serving Anthropic models)
+				// Anthropic supports count_tokens natively (Bedrock & Vertex assumes its serving Anthropic
+				// models; Azure only when Foundry is serving a Claude model, enforced during translation).
 			},
 			(
 				AIProvider::OpenAI(_)
@@ -1048,6 +1052,14 @@ impl AIProvider {
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
 					provider.prepare_anthropic_count_tokens_body(body)?
+				},
+				AIProvider::Azure(p)
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& p.is_anthropic_model(Some(request_model)) =>
+				{
+					// Foundry's Anthropic-native count_tokens endpoint accepts the Anthropic wire format
+					// as-is (the model stays in the body, unlike Vertex which strips it).
+					req.to_anthropic()?
 				},
 				_ => {
 					return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -1175,6 +1187,13 @@ impl AIProvider {
 		if req.input_format == InputFormat::CountTokens {
 			let (bytes, count) = match self {
 				AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
+					types::count_tokens::Response::translate_response(bytes)?
+				},
+				AIProvider::Azure(p)
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& p.is_anthropic_model(Some(&req.request_model)) =>
+				{
+					// Foundry returns the Anthropic-native count_tokens shape for Claude models.
 					types::count_tokens::Response::translate_response(bytes)?
 				},
 				AIProvider::Custom(p) if p.supports(custom::ProviderFormat::AnthropicTokenCount) => {
