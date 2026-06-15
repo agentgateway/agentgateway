@@ -175,7 +175,6 @@ message Backend {
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
     AwsBackend aws = 8;
-    // Not yet implemented. Reserved for a future release.
     GuardrailBackend guardrail = 9;
   }
   repeated BackendPolicySpec inline_policies = 7;
@@ -1167,38 +1166,56 @@ message BackendPolicySpec {
     message Moderation {
       // Model to use. Defaults to `omni-moderation-latest`
       optional string model = 1;
+      // Policies (auth, TLS, timeouts) for the outbound moderation call.
+      // Mutually exclusive with backend_ref; when backend_ref is set, attach policies to the
+      // GuardrailBackend resource instead.
       repeated BackendPolicySpec inline_policies = 2;
-      // Not yet implemented. Reserved for a future release.
+      // Reference to a GuardrailBackend with an openai_moderation provider.
+      // Mutually exclusive with inline_policies.
       BackendReference backend_ref = 3;
     }
 
     message BedrockGuardrails {
+      // Deprecated: set identifier on a GuardrailBackend with a bedrock provider and reference it via backend_ref.
       string identifier = 1;
+      // Deprecated: set version on a GuardrailBackend with a bedrock provider and reference it via backend_ref.
       string version = 2;
+      // Deprecated: set region on a GuardrailBackend with a bedrock provider and reference it via backend_ref.
       // AWS region where the guardrail is deployed (e.g., "us-west-2")
       string region = 3;
 
+      // Policies (auth, TLS, timeouts) for the outbound guardrail call.
+      // Mutually exclusive with backend_ref; when backend_ref is set, attach policies to the
+      // GuardrailBackend resource instead.
       repeated BackendPolicySpec inline_policies = 4;
 
-      // Not yet implemented. Reserved for a future release.
+      // Reference to a GuardrailBackend with a bedrock provider.
+      // Mutually exclusive with the inline provider fields (identifier, version, region) above.
       BackendReference backend_ref = 5;
     }
 
     message GoogleModelArmor {
+      // Deprecated: set template_id on a GuardrailBackend with a google_model_armor provider and reference it via backend_ref.
       string template_id = 1;
+      // Deprecated: set project_id on a GuardrailBackend with a google_model_armor provider and reference it via backend_ref.
       string project_id = 2;
-
+      // Deprecated: set location on a GuardrailBackend with a google_model_armor provider and reference it via backend_ref.
       // default: us-central1
       optional string location = 3;
 
+      // Policies (auth, TLS, timeouts) for the outbound guardrail call.
+      // Mutually exclusive with backend_ref; when backend_ref is set, attach policies to the
+      // GuardrailBackend resource instead.
       repeated BackendPolicySpec inline_policies = 4;
 
-      // Not yet implemented. Reserved for a future release.
+      // Reference to a GuardrailBackend with a google_model_armor provider.
+      // Mutually exclusive with the inline provider fields (template_id, project_id, location) above.
       BackendReference backend_ref = 5;
     }
 
     message AzureContentSafety {
       // The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
+      // Deprecated: set endpoint or resource_name on a GuardrailBackend with an azure_content_safety provider and reference it via backend_ref.
       string endpoint = 1;
 
       // Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
@@ -1213,9 +1230,13 @@ message BackendPolicySpec {
       // When true, further analysis stops if a blocklist is hit
       optional bool halt_on_blocklist_hit = 5;
 
+      // Policies (auth, TLS, timeouts) for the outbound guardrail call.
+      // Mutually exclusive with backend_ref; when backend_ref is set, attach policies to the
+      // GuardrailBackend resource instead.
       repeated BackendPolicySpec inline_policies = 6;
 
-      // Not yet implemented. Reserved for a future release.
+      // Reference to a GuardrailBackend with an azure_content_safety provider.
+      // Mutually exclusive with endpoint (inline provider fields) above.
       BackendReference backend_ref = 7;
     }
 
