@@ -28,12 +28,12 @@ use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
-use tracing::{Level, trace};
+use tracing::{Level, debug, trace};
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::ModelCatalog;
+use crate::llm::cost::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
@@ -564,6 +564,24 @@ impl DropOnLog {
 						common: gen_ai_labels.clone().into(),
 					})
 					.inc();
+				// Pair the lookup metric with a debug line so an operator can see *why* a
+				// request wasn't priced (e.g. response model "gpt-5.5-2026-04-23" vs catalog
+				// "gpt-5.5") without scraping metrics.
+				match status {
+					CostLookupStatus::Missing => debug!(
+						provider = %llm_response.provider,
+						request_model = %llm_response.request_model,
+						response_model = ?llm_response.response_model,
+						"no model cost: model not found in catalog"
+					),
+					CostLookupStatus::Unpriced => debug!(
+						provider = %llm_response.provider,
+						request_model = %llm_response.request_model,
+						response_model = ?llm_response.response_model,
+						"no model cost: model found but has no rates"
+					),
+					CostLookupStatus::Exact | CostLookupStatus::NoCatalog => {},
+				}
 			}
 			if let Some(it) = llm_response.input_tokens {
 				log
@@ -1946,7 +1964,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn llm_cost_breakdown_is_span_attributes_under_agw_ai_namespace() {
+	async fn llm_cost_breakdown_span_attributes() {
 		let catalog_file = tempfile::NamedTempFile::new().unwrap();
 		fs_err::write(
 			catalog_file.path(),
