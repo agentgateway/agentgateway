@@ -53,7 +53,7 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.40", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.41", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
@@ -189,7 +189,7 @@ sse-stream = "0.2"
 stacker = "0.1"
 tempfile = "3.27"
 thiserror = "2.0"
-tiktoken-rs = "0.11"
+tiktoken-rs = "0.12"
 tokio = { version = "1.52", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
