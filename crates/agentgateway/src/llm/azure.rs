@@ -141,21 +141,81 @@ mod tests {
 
 	#[rstest::rstest]
 	// Foundry + Claude model: Anthropic-native paths
-	#[case::foundry_claude_messages(AzureResourceType::Foundry, RouteType::Messages, None, "claude-haiku-4-5", "/anthropic/v1/messages")]
-	#[case::foundry_claude_token_count(AzureResourceType::Foundry, RouteType::AnthropicTokenCount, None, "claude-haiku-4-5", "/anthropic/v1/messages/count_tokens")]
+	#[case::foundry_claude_messages(
+		AzureResourceType::Foundry,
+		RouteType::Messages,
+		None,
+		"claude-haiku-4-5",
+		"/anthropic/v1/messages"
+	)]
+	#[case::foundry_claude_token_count(
+		AzureResourceType::Foundry,
+		RouteType::AnthropicTokenCount,
+		None,
+		"claude-haiku-4-5",
+		"/anthropic/v1/messages/count_tokens"
+	)]
 	// Foundry + Claude model: completions still goes to OpenAI-compatible path
-	#[case::foundry_claude_completions(AzureResourceType::Foundry, RouteType::Completions, None, "claude-haiku-4-5", "/api/projects/my-resource/openai/v1/chat/completions")]
+	#[case::foundry_claude_completions(
+		AzureResourceType::Foundry,
+		RouteType::Completions,
+		None,
+		"claude-haiku-4-5",
+		"/api/projects/my-resource/openai/v1/chat/completions"
+	)]
 	// Foundry + GPT model: all routes use OpenAI-compatible path
-	#[case::foundry_gpt_messages(AzureResourceType::Foundry, RouteType::Messages, None, "gpt-4o-mini", "/api/projects/my-resource/openai/v1/chat/completions")]
-	#[case::foundry_gpt_token_count(AzureResourceType::Foundry, RouteType::AnthropicTokenCount, None, "gpt-4o-mini", "/api/projects/my-resource/openai/v1/chat/completions")]
-	#[case::foundry_gpt_completions(AzureResourceType::Foundry, RouteType::Completions, None, "gpt-4o-mini", "/api/projects/my-resource/openai/v1/chat/completions")]
+	#[case::foundry_gpt_messages(
+		AzureResourceType::Foundry,
+		RouteType::Messages,
+		None,
+		"gpt-4o-mini",
+		"/api/projects/my-resource/openai/v1/chat/completions"
+	)]
+	#[case::foundry_gpt_token_count(
+		AzureResourceType::Foundry,
+		RouteType::AnthropicTokenCount,
+		None,
+		"gpt-4o-mini",
+		"/api/projects/my-resource/openai/v1/chat/completions"
+	)]
+	#[case::foundry_gpt_completions(
+		AzureResourceType::Foundry,
+		RouteType::Completions,
+		None,
+		"gpt-4o-mini",
+		"/api/projects/my-resource/openai/v1/chat/completions"
+	)]
 	// Foundry: project name override
-	#[case::foundry_project_name(AzureResourceType::Foundry, RouteType::Completions, Some("my-project"), "gpt-4o-mini", "/api/projects/my-project/openai/v1/chat/completions")]
+	#[case::foundry_project_name(
+		AzureResourceType::Foundry,
+		RouteType::Completions,
+		Some("my-project"),
+		"gpt-4o-mini",
+		"/api/projects/my-project/openai/v1/chat/completions"
+	)]
 	// Foundry: embeddings
-	#[case::foundry_embeddings(AzureResourceType::Foundry, RouteType::Embeddings, None, "text-embedding-3-small", "/api/projects/my-resource/openai/v1/embeddings")]
+	#[case::foundry_embeddings(
+		AzureResourceType::Foundry,
+		RouteType::Embeddings,
+		None,
+		"text-embedding-3-small",
+		"/api/projects/my-resource/openai/v1/embeddings"
+	)]
 	// OpenAI resource: standard v1 paths (model irrelevant)
-	#[case::openai_completions(AzureResourceType::OpenAI, RouteType::Completions, None, "gpt-4o-mini", "/openai/v1/chat/completions")]
-	#[case::openai_messages(AzureResourceType::OpenAI, RouteType::Messages, None, "gpt-4o-mini", "/openai/v1/chat/completions")]
+	#[case::openai_completions(
+		AzureResourceType::OpenAI,
+		RouteType::Completions,
+		None,
+		"gpt-4o-mini",
+		"/openai/v1/chat/completions"
+	)]
+	#[case::openai_messages(
+		AzureResourceType::OpenAI,
+		RouteType::Messages,
+		None,
+		"gpt-4o-mini",
+		"/openai/v1/chat/completions"
+	)]
 	fn test_get_path_for_model(
 		#[case] resource_type: AzureResourceType,
 		#[case] route: RouteType,

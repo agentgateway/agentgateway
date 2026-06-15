@@ -249,7 +249,11 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 		String::new()
 	};
 	// "foundry" is an alias for the "azure" YAML provider key with Foundry-specific config.
-	let yaml_provider = if provider == "foundry" { "azure" } else { provider };
+	let yaml_provider = if provider == "foundry" {
+		"azure"
+	} else {
+		provider
+	};
 	format!(
 		r#"
 config: {{}}

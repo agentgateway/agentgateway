@@ -649,10 +649,13 @@ impl AIProvider {
 				let model = llm_request.map(|r| r.request_model.as_str()).unwrap_or("");
 				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
 					&& p.is_anthropic_model(Some(model))
-					&& matches!(route_type, RouteType::Messages | RouteType::AnthropicTokenCount)
-				{
+					&& matches!(
+						route_type,
+						RouteType::Messages | RouteType::AnthropicTokenCount
+					) {
 					http::modify_req(req, |req| {
-						req.headers
+						req
+							.headers
 							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
 						Ok(())
 					})
@@ -1678,11 +1681,9 @@ impl AIProvider {
 				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
 			}),
 			// Foundry + Claude model: Anthropic-native SSE stream, passthrough as-is
-			(AIProvider::Azure(_), InputFormat::Messages, _) if is_foundry_anthropic => {
-				resp.map(|b| {
-					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
-				})
-			},
+			(AIProvider::Azure(_), InputFormat::Messages, _) if is_foundry_anthropic => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
