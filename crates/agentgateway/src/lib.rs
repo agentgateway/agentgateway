@@ -31,6 +31,7 @@ pub mod http;
 pub mod json;
 pub mod llm;
 pub mod management;
+pub mod qurl;
 pub mod mcp;
 pub mod parse;
 pub mod proxy;

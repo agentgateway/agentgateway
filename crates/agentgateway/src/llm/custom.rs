@@ -1,7 +1,9 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
+use std::time::Duration;
 
 use crate::llm::{InputFormat, RouteType};
+use crate::qurl::QurlProviderConfig;
 use crate::*;
 
 #[apply(schema!)]
@@ -9,6 +11,9 @@ pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 	pub formats: Vec<ProviderFormatConfig>,
+	/// qURL-specific configuration for providers that use qURL/OpenNHP
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub qurl_config: Option<QurlProviderConfig>,
 }
 
 impl Provider {
@@ -43,6 +48,11 @@ impl Provider {
 			.find(|supported| supported.format == format)
 			.and_then(|supported| supported.path.as_deref())
 	}
+
+	/// Check if this provider uses qURL/OpenNHP for dynamic endpoint resolution
+	pub fn uses_qurl(&self) -> bool {
+		self.formats.iter().any(|f| f.format == ProviderFormat::QurlNHP)
+	}
 }
 
 impl super::Provider for Provider {
@@ -66,6 +76,9 @@ pub enum ProviderFormat {
 	AnthropicTokenCount,
 	Realtime,
 	Rerank,
+	/// qURL + OpenNHP: resolves access token via qURL API (triggers NHP knock),
+	/// then uses the resolved target_url as the backend endpoint
+	QurlNHP,
 }
 
 impl ProviderFormat {
@@ -78,6 +91,7 @@ impl ProviderFormat {
 			Self::AnthropicTokenCount => InputFormat::CountTokens,
 			Self::Realtime => InputFormat::Realtime,
 			Self::Rerank => InputFormat::Rerank,
+			Self::QurlNHP => InputFormat::Completions, // qURL uses OpenAI-compatible format
 		}
 	}
 
@@ -90,6 +104,7 @@ impl ProviderFormat {
 			Self::AnthropicTokenCount => RouteType::AnthropicTokenCount,
 			Self::Realtime => RouteType::Realtime,
 			Self::Rerank => RouteType::Rerank,
+			Self::QurlNHP => RouteType::Completions,
 		}
 	}
 }
@@ -105,6 +120,7 @@ mod tests {
 				.into_iter()
 				.map(|format| ProviderFormatConfig { format, path: None })
 				.collect(),
+			qurl_config: None,
 		}
 	}
 
@@ -147,6 +163,7 @@ mod tests {
 					path: Some(strng::literal!("/api/messages")),
 				},
 			],
+			qurl_config: None,
 		};
 
 		assert_eq!(
@@ -154,5 +171,19 @@ mod tests {
 			Some("/api/messages")
 		);
 		assert_eq!(provider.path_for(ProviderFormat::Responses), None);
+	}
+
+	#[test]
+	fn qurl_nhp_format_recognized() {
+		let provider = provider(vec![ProviderFormat::QurlNHP]);
+		assert!(provider.supports(ProviderFormat::QurlNHP));
+		assert!(provider.uses_qurl());
+		assert_eq!(provider.native_format_for(InputFormat::Completions), Some(ProviderFormat::QurlNHP));
+	}
+
+	#[test]
+	fn qurl_nhp_input_format_is_completions() {
+		assert_eq!(ProviderFormat::QurlNHP.input_format(), InputFormat::Completions);
+		assert_eq!(ProviderFormat::QurlNHP.route_type(), RouteType::Completions);
 	}
 }

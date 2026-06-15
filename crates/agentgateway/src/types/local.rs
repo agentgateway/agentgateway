@@ -581,6 +581,9 @@ pub enum LocalModelAIProvider {
 	Azure,
 	Copilot,
 	Custom(custom::Provider),
+	/// qURL + OpenNHP: resolves access token via qURL API (triggers NHP knock),
+	/// then uses the resolved target_url as the backend endpoint
+	QurlNHP(custom::QurlProviderConfig),
 	// Providers below are synthetic conversions to custom with preconfigured defaults.
 	Cohere,
 	Ollama,
@@ -2479,6 +2482,19 @@ request.path.endsWith(":streamRawPredict") || request.path.endsWith(":rawPredict
 				AIProvider::Custom(crate::llm::custom::Provider {
 					model: model.or_else(|| custom_provider.model.clone()),
 					..custom_provider.clone()
+				})
+			},
+			LocalModelAIProvider::QurlNHP(qurl_config) => {
+				// qURL + OpenNHP provider: resolves token at request time
+				// Uses custom provider with QurlNHP format
+				let qurl_formats = qurl_config.formats.clone().unwrap_or_else(|| vec![custom::ProviderFormatConfig {
+					format: custom::ProviderFormat::QurlNHP,
+					path: None,
+				}]);
+				AIProvider::Custom(crate::llm::custom::Provider {
+					model: model.or(qurl_config.model.clone()),
+					formats: qurl_formats,
+					qurl_config: Some(qurl_config.clone()),
 				})
 			},
 			LocalModelAIProvider::Cohere => AIProvider::Custom(custom::Provider {

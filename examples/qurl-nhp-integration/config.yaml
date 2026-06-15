@@ -1,0 +1,238 @@
+# Example: qURL + OpenNHP Integration with agentgateway
+#
+# This configuration demonstrates how to use qURL access tokens with OpenNHP
+# network hiding to provide just-in-time access to AI models and MCP servers.
+#
+# Prerequisites:
+# 1. qURL API key with qurl:resolve scope from layerv.ai
+# 2. qURL Resource (r_*) created for your target model/MCP server
+# 3. OpenNHP infrastructure (NHP-Server, NHP-AC) protecting the target
+#
+# The gateway will:
+# 1. Receive request for model/MCP server
+# 2. Call qURL API to resolve access token (triggers NHP knock)
+# 3. Get resolved target_url + network access grant
+# 4. Forward request to the temporarily accessible target
+# 5. Network access auto-expires per qURL session_duration
+
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+
+binds:
+  - port: 3000
+    listeners:
+      # LLM Gateway with qURL-protected model
+      - name: qurl-llm-gateway
+        routes:
+          - backends:
+              - ai:
+                  name: gpt-4o-hidden
+                  provider:
+                    # Using qURL + OpenNHP for just-in-time model access
+                    qurlNHP:
+                      model: gpt-4o
+                      api_url: https://api.layerv.ai
+                      api_key: ${QURL_API_KEY}  # API key with qurl:resolve scope
+                      resource_id: "r_abc123def456"  # Your qURL resource ID
+                      nhp_agent_id: "agentgateway-prod-us-east-1"
+                      cache_ttl: 300s  # Cache resolved URL for 5 minutes
+                  policies:
+                    ai:
+                      routes:
+                        /v1/chat/completions: completions
+                        /v1/responses: responses
+                        /v1/embeddings: embeddings
+                    # Optional: rate limiting, prompt guards, etc.
+                    rateLimit:
+                      local:
+                        - requests: 100
+                          window: 1m
+              - ai:
+                  name: claude-3-hidden
+                  provider:
+                    qurlNHP:
+                      model: claude-3-5-sonnet-20241022
+                      api_url: https://api.layerv.ai
+                      api_key: ${QURL_API_KEY}
+                      resource_id: "r_claude_resource_789"
+                      nhp_agent_id: "agentgateway-prod-us-east-1"
+                      formats:
+                        - type: messages
+                          path: /v1/messages
+                        - type: completions
+                          path: /v1/completions
+                  policies:
+                    ai:
+                      routes:
+                        /v1/messages: messages
+
+      # MCP Gateway with qURL-protected tools
+      - name: qurl-mcp-gateway
+        routes:
+          - backends:
+              - mcp:
+                  targets:
+                    - name: secure-tools
+                      # qURL reference - gateway resolves at connection time
+                      host: "qurl://r_mcp_tools_789"
+                      transport: streamableHttp
+                      auth:
+                        qurl:
+                          api_key: ${QURL_API_KEY}
+                          resource_id: "r_mcp_tools_789"
+                      policies:
+                        mcp:
+                          # Optional: tool authorization
+                          authorization:
+                            rules:
+                              - 'mcp.tool.name == "read_file"'
+                              - 'jwt.sub == "admin" && mcp.tool.name == "write_file"'
+
+# A2A Gateway with qURL-protected agent discovery
+a2a:
+  agents:
+    - name: hidden-data-analyst
+      # Agent card is behind qURL - gateway resolves before discovery
+      card_url: "qurl://r_agent_card_456/.well-known/agent-card.json"
+      auth:
+        qurl:
+          api_key: ${QURL_API_KEY}
+          resource_id: "r_agent_card_456"
+      policies:
+        a2a:
+          # Skill-based routing
+          skills:
+            - data-analysis
+            - sql-query
+          task_routing:
+            default: hidden-data-analyst
+
+# Production hardening configuration for qURL
+qurl:
+  # Multi-region failover
+  regions:
+    - region_id: "us-east-1"
+      api_url: "https://api-us-east-1.layerv.ai"
+      priority: 10
+      health_endpoint: "/v1/health"
+      health_interval: 30s
+      timeout: 10s
+      enabled: true
+    - region_id: "us-west-2"
+      api_url: "https://api-us-west-2.layerv.ai"
+      priority: 20
+      health_endpoint: "/v1/health"
+      health_interval: 30s
+      timeout: 10s
+      enabled: true
+    - region_id: "eu-west-1"
+      api_url: "https://api-eu-west-1.layerv.ai"
+      priority: 30
+      health_endpoint: "/v1/health"
+      health_interval: 30s
+      timeout: 10s
+      enabled: true
+  failover_enabled: true
+  max_retries_per_region: 2
+
+  # Circuit breaker
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 30s
+    minimum_requests: 10
+    failure_rate_threshold: 0.5
+
+  # Retry policy
+  retry:
+    max_attempts: 3
+    initial_backoff: 100ms
+    max_backoff: 10s
+    multiplier: 2.0
+    jitter_factor: 0.1
+    retryable_status_codes: [429, 500, 502, 503, 504]
+    retry_on_timeout: true
+    retry_on_connection_error: true
+
+  # Request hedging
+  hedging:
+    enabled: true
+    hedge_delay: 100ms
+    max_hedged_requests: 2
+
+  # Advanced caching (L1 memory + L2 Redis)
+  cache:
+    max_entries: 10000
+    default_ttl: 300s
+    stale_while_revalidate: 60s
+    warm_on_start: true
+    cleanup_interval: 60s
+    # Redis L2 cache (optional)
+    redis:
+      enabled: false
+      url: "redis://localhost:6379"
+      key_prefix: "qurl:cache:"
+      pool_size: 10
+      connect_timeout: 5s
+      operation_timeout: 2s
+      tls: false
+
+  # Distributed tracing
+  tracing:
+    enabled: true
+    service_name: "agentgateway-qurl"
+    sample_rate: 1.0
+    otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+
+  # Prometheus metrics
+  metrics:
+    enabled: true
+
+# Health checks for qURL-protected backends
+health:
+  checks:
+    - name: qurl-resolve
+      type: http
+      interval: 30s
+      timeout: 10s
+      # Custom health check that verifies qURL resolution works
+      http:
+        path: /health/qurl
+        method: GET
+        expected_status: 200
+    - name: qurl-cache
+      type: http
+      interval: 60s
+      timeout: 5s
+      http:
+        path: /health/cache
+        method: GET
+        expected_status: 200
+    - name: qurl-circuit-breaker
+      type: http
+      interval: 30s
+      timeout: 5s
+      http:
+        path: /health/circuit-breaker
+        method: GET
+        expected_status: 200
+
+# Observability
+telemetry:
+  metrics:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  tracing:
+    enabled: true
+    exporter:
+      otlp:
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+  logging:
+    level: info
+    format: json
+
+# Environment variables needed:
+# QURL_API_KEY=qurl_sk_...  # API key with qurl:resolve scope
+# OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector:4318
+# REDIS_URL=redis://localhost:6379  # Optional for L2 cache
