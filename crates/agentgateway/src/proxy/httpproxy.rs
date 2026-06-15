@@ -29,7 +29,9 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
 	merge_in_headers, retry,
 };
-use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
+use crate::llm::{
+	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
+};
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
 	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
@@ -792,6 +794,22 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
+		let selected_llm_backend = if let Some(router) = &selected_route.llm_router {
+			match router
+				.resolve(&mut req)
+				.await
+				.map_err(|err| ProxyError::Processing(err.into()))
+				.snapshot_on_err(log, &mut req)?
+			{
+				model_router::ResolveResult::DirectResponse(resp) => {
+					return Err(ProxyResponse::DirectResponse(Box::new(resp))).snapshot_on_err(log, &mut req);
+				},
+				model_router::ResolveResult::Backend(backend) => Some(backend),
+			}
+		} else {
+			None
+		};
+
 		let route_path = RoutePath {
 			listener: &selected_listener.name,
 			service: selected_route_chain
@@ -804,16 +822,18 @@ impl HTTPProxy {
 				.map(|route| &route.name)
 				.collect(),
 		};
-		let route_inline_policies = selected_route_chain
-			.routes
-			.iter()
-			.map(|route| route.inline_policies.as_slice())
-			.collect::<Vec<_>>();
-
-		let route_policies = inputs
-			.stores
-			.read_binds()
-			.route_policies(&route_path, &route_inline_policies);
+		let route_policies = inputs.stores.read_binds().route_policies(
+			&route_path,
+			selected_route_chain
+				.routes
+				.iter()
+				.flat_map(|route| route.inline_policies.iter())
+				.chain(
+					selected_llm_backend
+						.iter()
+						.flat_map(|backend| backend.route_policies.iter()),
+				),
+		);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let mut route_retry = route_policies.retry.select("retry", &req);
@@ -849,8 +869,9 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 
-		let selected_backend_ref = selected_route_chain
-			.backend
+		let selected_backend_ref = selected_llm_backend
+			.map(|selected| selected.backend)
+			.or(selected_route_chain.backend)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
@@ -3765,6 +3786,7 @@ mod route_chain_tests {
 				target,
 				inline_policies: Vec::new(),
 			}],
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}
@@ -3788,6 +3810,7 @@ mod route_chain_tests {
 				query: Vec::new(),
 			}],
 			backends: Vec::new(),
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}

@@ -726,7 +726,11 @@ impl Store {
 		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
-	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[&[TrafficPolicy]]) -> RoutePolicies {
+	pub fn route_policies<'a>(
+		&self,
+		path: &RoutePath<'_>,
+		inline: impl IntoIterator<Item = &'a TrafficPolicy>,
+	) -> RoutePolicies {
 		let listener = &path.listener;
 		let gateway = self
 			.policies_by_target
@@ -739,7 +743,7 @@ impl Store {
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 
 		let mut route_rules = Vec::new();
-		for (idx, route) in path.routes.iter().enumerate() {
+		for route in &path.routes {
 			route_rules.extend(
 				self
 					.policies_by_target
@@ -766,15 +770,8 @@ impl Store {
 							.map(|inner| (p.inheritance, inner))
 					}),
 			);
-			route_rules.extend(
-				inline
-					.get(idx)
-					.copied()
-					.unwrap_or_default()
-					.iter()
-					.map(|p| (PolicyInheritance::Default, p)),
-			);
 		}
+		route_rules.extend(inline.into_iter().map(|p| (PolicyInheritance::Default, p)));
 
 		let shared_rules = gateway
 			.iter()
@@ -2064,6 +2061,7 @@ mod tests {
 			},
 			hostnames: vec![],
 			matches: vec![],
+			llm_router: None,
 			inline_policies: vec![],
 			backends: vec![],
 		};

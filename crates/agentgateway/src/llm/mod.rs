@@ -31,6 +31,7 @@ pub mod bedrock;
 pub mod copilot;
 pub mod custom;
 pub mod gemini;
+pub mod model_router;
 pub mod openai;
 pub mod vertex;
 

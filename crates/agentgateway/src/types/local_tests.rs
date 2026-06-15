@@ -7,8 +7,8 @@ use secrecy::SecretString;
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, HeaderValueMatch, ListenerTarget, PolicyPhase, PolicyTarget,
-	PolicyType, ResourceName, RouteBackendTarget, Target, TrafficPolicy,
+	Backend, BackendTrafficPolicy, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType,
+	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
@@ -337,6 +337,111 @@ llm:
 			.to_string()
 			.contains("virtual model target missing does not match any llm.models entry"),
 		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_weighted_virtual_model_rejects_authorized_target() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      weighted:
+        targets:
+        - model: concrete
+"#,
+	)
+	.await
+	.expect_err("weighted target authorization cannot be enforced after backend selection");
+	assert!(
+		err.to_string().contains(
+			"virtual model target concrete has authorization; only conditional virtual models can target authorized models"
+		),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_failover_virtual_model_rejects_authorized_target() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      failover:
+        targets:
+        - model: concrete
+          priority: 0
+"#,
+	)
+	.await
+	.expect_err("failover target authorization cannot be enforced after provider selection");
+	assert!(
+		err.to_string().contains(
+			"virtual model target concrete has authorization; only conditional virtual models can target authorized models"
+		),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_allows_authorized_internal_target() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    visibility: internal
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+"#,
+	)
+	.await
+	.expect("conditional virtual model should preserve target authorization");
+
+	let routes = &normalized.listener_routes[0].1;
+	assert!(
+		!routes
+			.iter()
+			.any(|route| route.key.contains("model:concrete")),
+		"internal concrete model should not have a direct route"
+	);
+	let llm_route = routes
+		.iter()
+		.find(|route| route.key == "llm:request")
+		.expect("expected single LLM request route");
+	assert!(
+		llm_route.llm_router.is_some(),
+		"LLM request route should carry the native model router"
+	);
+	assert!(
+		!routes
+			.iter()
+			.any(|route| route.key.contains("virtual-model")),
+		"virtual model routing should not generate HTTP routes"
 	);
 }
 
@@ -881,35 +986,6 @@ binds:
 		),
 		"unexpected error: {err}"
 	);
-}
-
-#[test]
-fn test_llm_model_name_header_match_valid_patterns() {
-	match super::llm_model_name_header_match("*").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*"),
-		other => panic!("expected regex for '*', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("*gpt-4.1").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*gpt\\-4\\.1"),
-		other => panic!("expected regex for '*gpt-4.1', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("gpt-4.1*").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), "gpt\\-4\\.1.*"),
-		other => panic!("expected regex for 'gpt-4.1*', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("gpt-4.1").unwrap() {
-		HeaderValueMatch::Exact(v) => assert_eq!(v, ::http::HeaderValue::from_static("gpt-4.1")),
-		other => panic!("expected exact header value for 'gpt-4.1', got {other:?}"),
-	}
-}
-
-#[test]
-fn test_llm_model_name_header_match_invalid_patterns() {
-	assert!(super::llm_model_name_header_match("*gpt*").is_err());
-	assert!(super::llm_model_name_header_match("g*pt").is_err());
 }
 
 #[test]

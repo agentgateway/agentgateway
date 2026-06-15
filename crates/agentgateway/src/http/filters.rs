@@ -288,7 +288,7 @@ pub struct AuthorizationFilteredModelListEntry {
 }
 
 impl AuthorizationFilteredModelList {
-	fn body(&self, req: &Request) -> Result<Bytes, Error> {
+	pub(crate) fn body(&self, req: &Request) -> Result<Bytes, Error> {
 		let data = self
 			.entries
 			.iter()

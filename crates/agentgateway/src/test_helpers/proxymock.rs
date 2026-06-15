@@ -241,6 +241,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,

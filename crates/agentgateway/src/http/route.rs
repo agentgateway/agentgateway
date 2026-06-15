@@ -186,6 +186,7 @@ pub fn select_best_route(
 				hostnames: vec![],
 				matches: vec![],
 				inline_policies: vec![],
+				llm_router: None,
 				backends: vec![RouteBackendReference {
 					weight: 1,
 					target: BackendReference::Service {
@@ -291,7 +292,13 @@ fn compare_route_match(a: &agent::RouteMatch, b: &agent::RouteMatch) -> cmp::Ord
 		return header_count1.cmp(&header_count2);
 	}
 
-	a.query.len().cmp(&b.query.len())
+	let query_count1 = a.query.len();
+	let query_count2 = b.query.len();
+	if query_count1 != query_count2 {
+		return query_count1.cmp(&query_count2);
+	}
+
+	cmp::Ordering::Equal
 }
 
 fn get_path_rank(path: &PathMatch) -> u8 {
