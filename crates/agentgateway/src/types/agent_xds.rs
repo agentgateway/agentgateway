@@ -1451,9 +1451,7 @@ pub(crate) fn backend_with_policies_from_proto(
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
-			diagnostics.add_warning(
-				"guardrail backends are not yet implemented and will be ignored",
-			);
+			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
 			Backend::Invalid
 		},
 		None => {
