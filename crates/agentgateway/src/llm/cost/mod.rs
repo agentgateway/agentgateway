@@ -11,7 +11,7 @@ use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 
@@ -74,14 +74,22 @@ impl ModelCatalog {
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
-		let model = info
-			.response
-			.provider_model
-			.as_ref()
-			.unwrap_or(&info.request.request_model);
-		self.snapshot.load().project(
+		let snapshot = self.snapshot.load();
+		if let Some(provider_model) = &info.response.provider_model {
+			let projection = snapshot.project_with_missing_trace(
+				provider,
+				provider_model.as_str(),
+				&info.response,
+				info.request.cache_convention,
+				false,
+			);
+			if projection.status != CostLookupStatus::Missing {
+				return projection;
+			}
+		}
+		snapshot.project(
 			provider,
-			model.as_str(),
+			info.request.request_model.as_str(),
 			&info.response,
 			info.request.cache_convention,
 		)
@@ -126,6 +134,17 @@ impl CatalogSnapshot {
 		resp: &LLMResponse,
 		convention: CacheTokenConvention,
 	) -> CostProjection {
+		self.project_with_missing_trace(provider, model, resp, convention, true)
+	}
+
+	fn project_with_missing_trace(
+		&self,
+		provider: &str,
+		model: &str,
+		resp: &LLMResponse,
+		convention: CacheTokenConvention,
+		trace_missing: bool,
+	) -> CostProjection {
 		let Some(catalog) = self.catalog.as_ref() else {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -141,16 +160,18 @@ impl CatalogSnapshot {
 		};
 		let entry = catalog.resolve(provider, model);
 		let Some(entry) = entry else {
-			crate::proxy::dtrace::pol_event!(
-				TRACE_POLICY_KIND,
-				crate::proxy::dtrace::Severity::Warn,
-				details = serde_json::json!({
-					"provider": provider,
-					"model": model,
-					"status": status_name(CostLookupStatus::Missing),
-					"reason": "no catalog entry for provider/model",
-				}),
-			);
+			if trace_missing {
+				crate::proxy::dtrace::pol_event!(
+					TRACE_POLICY_KIND,
+					crate::proxy::dtrace::Severity::Warn,
+					details = serde_json::json!({
+						"provider": provider,
+						"model": model,
+						"status": status_name(CostLookupStatus::Missing),
+						"reason": "no catalog entry for provider/model",
+					}),
+				);
+			}
 			return CostProjection::unpriced(CostLookupStatus::Missing);
 		};
 
@@ -380,7 +401,6 @@ impl schemars::JsonSchema for Breakdown {
 #[derive(Debug)]
 struct LoadedCatalog {
 	snapshot: CatalogSnapshot,
-	loaded: usize,
 	missing: Vec<PathBuf>,
 }
 
@@ -418,7 +438,6 @@ async fn load_files(paths: &[PathBuf]) -> anyhow::Result<LoadedCatalog> {
 	}
 	Ok(LoadedCatalog {
 		snapshot: CatalogSnapshot::from_catalogs(catalogs),
-		loaded: paths.len() - missing.len(),
 		missing,
 	})
 }
@@ -429,13 +448,10 @@ fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
 	let models = catalog.map_or(0, |catalog| {
 		catalog.providers.values().map(|p| p.models.len()).sum()
 	});
-	info!(
-		providers,
-		models,
-		missing_files = ?loaded.missing,
-		"{}",
-		message
-	);
+	info!(providers, models, "{}", message);
+	if !loaded.missing.is_empty() {
+		debug!(files = ?loaded.missing, "{} configured but missing", message);
+	}
 }
 
 fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
@@ -546,6 +562,34 @@ mod tests {
 		format!(
 			r#"{{"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{input_rate}","output":"2"}}}}}}}}}}}}"#
 		)
+	}
+
+	fn test_llm_info(request_model: &str, provider_model: Option<&str>) -> LLMInfo {
+		LLMInfo {
+			request: crate::llm::LLMRequest {
+				input_tokens: None,
+				input_format: crate::llm::InputFormat::Completions,
+				native_format: None,
+				cache_convention: CacheTokenConvention::InputIncludesCache,
+				request_model: request_model.into(),
+				provider: "openai".into(),
+				streaming: false,
+				params: Default::default(),
+				prompt: None,
+			},
+			response: LLMResponse {
+				input_tokens: Some(1_000_000),
+				output_tokens: Some(500_000),
+				provider_model: provider_model.map(Into::into),
+				..Default::default()
+			},
+		}
+	}
+
+	fn model_catalog(json: &str) -> ModelCatalog {
+		ModelCatalog {
+			snapshot: ArcSwap::from_pointee(CatalogSnapshot::parse(json).unwrap()),
+		}
 	}
 
 	impl CatalogSnapshot {
@@ -710,6 +754,36 @@ mod tests {
 	}
 
 	#[test]
+	fn project_falls_back_to_request_model_when_provider_model_is_missing() {
+		let catalog = model_catalog(&test_catalog("1"));
+		let projection = catalog.project(&test_llm_info("my-model", Some("unknown-provider-model")));
+
+		assert_eq!(projection.status, CostLookupStatus::Exact);
+		assert_eq!(
+			projection.cost.and_then(|c| c.total().to_f64()),
+			Some(2.0),
+			"request model should price when provider model is absent from catalog"
+		);
+	}
+
+	#[test]
+	fn project_keeps_unpriced_provider_model_result() {
+		let catalog = model_catalog(
+			r#"{"providers":{"openai":{"models":{
+				"my-model":{"rates":{"input":"1","output":"2"}},
+				"provider-model":{"rates":{}}
+			}}}}"#,
+		);
+		let projection = catalog.project(&test_llm_info("my-model", Some("provider-model")));
+
+		assert_eq!(projection.status, CostLookupStatus::Unpriced);
+		assert!(
+			projection.cost.is_none(),
+			"provider model was found, so request model fallback must not hide unpriced rates"
+		);
+	}
+
+	#[test]
 	fn later_layer_overrides_earlier() {
 		let base = catalog::from_json(&test_catalog("1")).unwrap();
 		let overlay = catalog::from_json(&test_catalog("9")).unwrap();
@@ -737,7 +811,6 @@ mod tests {
 			.unwrap();
 
 		let loaded = load_files(&[base, override_file]).await.unwrap();
-		assert_eq!(loaded.loaded, 1);
 		assert_eq!(loaded.missing.len(), 1);
 		assert_eq!(loaded.missing[0].file_name().unwrap(), "overrides.json");
 
