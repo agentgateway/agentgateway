@@ -320,10 +320,17 @@ pub struct LocalLLMVirtualModel {
 
 #[apply(schema_de!)]
 pub struct LocalLLMVirtualModelRouting {
+	/// weighted enables weight-based selection of the target model.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	weighted: Option<LocalLLMWeightedRouting>,
+	/// failover enables priority-based selection of the target model.
+	/// Within a priority level, the best provider is selected by a composite score factoring in health
+	/// and latency.
+	/// If all models within a priority level are degraded, requests will move onto the next priority group.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	failover: Option<LocalLLMFailoverRouting>,
+	/// Conditional enables condition-based selection of the target model. Each condition is evaluated
+	/// in order until the best match is found.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	conditional: Option<LocalLLMConditionalRouting>,
 }
@@ -556,8 +563,11 @@ pub struct LocalLLMModels {
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
 	/// visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).
-	#[serde(default, skip_serializing_if = "LocalLLMModelVisibility::is_public")]
-	visibility: LocalLLMModelVisibility,
+	#[serde(
+		default,
+		skip_serializing_if = "llm::model_router::ModelVisibility::is_public"
+	)]
+	visibility: llm::model_router::ModelVisibility,
 	/// params customizes parameters for the outgoing request
 	#[serde(default)]
 	params: LocalLLMParams,
@@ -612,22 +622,6 @@ pub struct LocalLLMModels {
 	/// matches specifies the conditions under which this model should be used in addition to matching the model name.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	matches: Vec<LLMRouteMatch>,
-}
-
-#[apply(schema_enum!)]
-#[derive(Default)]
-pub enum LocalLLMModelVisibility {
-	/// Public models can be requested directly by clients and are included in the model list.
-	#[default]
-	Public,
-	/// Internal models can be targeted by virtual models but cannot be requested directly.
-	Internal,
-}
-
-impl LocalLLMModelVisibility {
-	fn is_public(&self) -> bool {
-		matches!(self, Self::Public)
-	}
 }
 
 #[apply(schema_de!)]
@@ -2476,11 +2470,12 @@ impl ResolvedLLMModelRegistry {
 		bail!("virtual model target {target} does not match any llm.models entry")
 	}
 
-	fn resolve_without_authorization(&self, target: &str) -> anyhow::Result<ResolvedLLMModelTarget> {
+	fn resolve_failover_target(&self, target: &str) -> anyhow::Result<ResolvedLLMModelTarget> {
 		let resolved = self.resolve(target)?;
 		if resolved.authorization.is_some() {
+			// Technically this is possible but would require us to move authorization down into post-LB.
 			bail!(
-				"virtual model target {target} has authorization; only conditional virtual models can target authorized models"
+				"virtual model target {target} has authorization; failover virtual models cannot target authorized models"
 			);
 		}
 		Ok(resolved)
@@ -2584,7 +2579,9 @@ async fn convert_llm_config(
 			local_rate_limit,
 			remote_rate_limit,
 		} = pol;
+		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
+		// Rate limit is applied per-route as well. Resolve them here.
 		let route_policies = split_policies(
 			client.clone(),
 			FilterOrPolicy {
@@ -2596,6 +2593,8 @@ async fn convert_llm_config(
 			None,
 		)
 		.await?;
+
+		// Rest of policies are PreRoute gateway policies; resolve these to our listener.
 		let gateway_policies: FilterOrPolicy = gateway.into();
 		let gateway_policies = split_policies(
 			client.clone(),
@@ -2775,7 +2774,6 @@ async fn convert_llm_config(
 			}),
 			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
 				model,
-
 				region: p.vertex_region,
 				project_id: p.vertex_project.context("vertex requires vertex_project")?,
 			}),
@@ -2887,11 +2885,7 @@ async fn convert_llm_config(
 		}
 		router_models.push(llm::model_router::ModelRoute {
 			name: model_config.name.clone(),
-			visibility: if model_config.visibility.is_public() {
-				llm::model_router::ModelVisibility::Public
-			} else {
-				llm::model_router::ModelVisibility::Internal
-			},
+			visibility: model_config.visibility,
 			header_matches: model_config
 				.matches
 				.iter()
@@ -2928,7 +2922,7 @@ async fn convert_llm_config(
 			},
 			LocalLLMVirtualRoutingStrategy::Weighted(weighted) => {
 				for target in &weighted.targets {
-					resolved_models.resolve_without_authorization(&target.model)?;
+					resolved_models.resolve(&target.model)?;
 				}
 				llm::model_router::VirtualModelRouting::Weighted(
 					weighted
@@ -2951,7 +2945,7 @@ async fn convert_llm_config(
 					.map(|(_, targets)| {
 						targets
 							.map(|target| {
-								let resolved = resolved_models.resolve_without_authorization(&target.model)?;
+								let resolved = resolved_models.resolve_failover_target(&target.model)?;
 								let mut provider = resolved.provider.clone();
 								provider.name = strng::new(&target.model);
 								ensure_ai_provider_model(&mut provider.provider, &target.model);

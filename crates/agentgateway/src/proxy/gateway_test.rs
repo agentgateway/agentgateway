@@ -1319,28 +1319,6 @@ async fn llm_openai_tokenize() {
 	.await;
 }
 
-async fn setup_local_llm_config(yaml: &str) -> TestBind {
-	let t = setup_proxy_test("{}").unwrap();
-	let normalized = crate::types::local::NormalizedLocalConfig::from(
-		t.pi.cfg.as_ref(),
-		t.pi.upstream.clone(),
-		t.pi.cfg.gateway(),
-		yaml,
-	)
-	.await
-	.expect("local config normalizes");
-	t.pi.stores.binds.sync_local(
-		normalized.binds,
-		normalized.listener_routes,
-		normalized.listener_tcp_routes,
-		normalized.policies,
-		normalized.backends,
-		normalized.route_groups,
-		Default::default(),
-	);
-	t
-}
-
 async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
 	let t = setup_proxy_test("{}").unwrap();
 	let mut normalized = crate::types::local::NormalizedLocalConfig::from(
@@ -1374,7 +1352,7 @@ async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
 	route
 		.inline_policies
 		.push(crate::types::agent::TrafficPolicy::Transformation(
-			Arc::new(transformation),
+			crate::store::RequestPolicy::single(transformation),
 		));
 	t.pi.stores.binds.sync_local(
 		normalized.binds,

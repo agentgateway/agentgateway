@@ -341,8 +341,8 @@ llm:
 }
 
 #[tokio::test]
-async fn test_llm_weighted_virtual_model_rejects_authorized_target() {
-	let err = normalize_test_config(
+async fn test_llm_weighted_virtual_model_allows_authorized_target() {
+	let normalized = normalize_test_config(
 		r#"
 llm:
   models:
@@ -360,12 +360,16 @@ llm:
 "#,
 	)
 	.await
-	.expect_err("weighted target authorization cannot be enforced after backend selection");
+	.expect("weighted target authorization should be preserved on selected target");
+
+	let routes = &normalized.listener_routes[0].1;
+	let llm_route = routes
+		.iter()
+		.find(|route| route.key == "llm:request")
+		.expect("expected single LLM request route");
 	assert!(
-		err.to_string().contains(
-			"virtual model target concrete has authorization; only conditional virtual models can target authorized models"
-		),
-		"{err:?}"
+		llm_route.llm_router.is_some(),
+		"LLM request route should carry the native model router"
 	);
 }
 
@@ -393,7 +397,7 @@ llm:
 	.expect_err("failover target authorization cannot be enforced after provider selection");
 	assert!(
 		err.to_string().contains(
-			"virtual model target concrete has authorization; only conditional virtual models can target authorized models"
+			"virtual model target concrete has authorization; failover virtual models cannot target authorized models"
 		),
 		"{err:?}"
 	);

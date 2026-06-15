@@ -798,7 +798,7 @@ impl HTTPProxy {
 			match router
 				.resolve(&mut req)
 				.await
-				.map_err(|err| ProxyError::Processing(err.into()))
+				.map_err(ProxyError::Processing)
 				.snapshot_on_err(log, &mut req)?
 			{
 				model_router::ResolveResult::DirectResponse(resp) => {

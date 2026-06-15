@@ -686,7 +686,6 @@ pub struct Route {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub backends: Vec<RouteBackendReference>,
 	#[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub llm_router: Option<Arc<llm::model_router::ModelRouter>>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<TrafficPolicy>,

@@ -8406,7 +8406,7 @@
         },
         "visibility": {
           "description": "visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).",
-          "$ref": "#/$defs/LocalLLMModelVisibility"
+          "$ref": "#/$defs/ModelVisibility"
         },
         "params": {
           "description": "params customizes parameters for the outgoing request",
@@ -8591,7 +8591,7 @@
         }
       ]
     },
-    "LocalLLMModelVisibility": {
+    "ModelVisibility": {
       "oneOf": [
         {
           "description": "Public models can be requested directly by clients and are included in the model list.",
@@ -8813,6 +8813,7 @@
       "type": "object",
       "properties": {
         "weighted": {
+          "description": "weighted enables weight-based selection of the target model.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalLLMWeightedRouting"
@@ -8823,6 +8824,7 @@
           ]
         },
         "failover": {
+          "description": "failover enables priority-based selection of the target model.\nWithin a priority level, the best provider is selected by a composite score factoring in health\nand latency.\nIf all models within a priority level are degraded, requests will move onto the next priority group.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalLLMFailoverRouting"
@@ -8833,6 +8835,7 @@
           ]
         },
         "conditional": {
+          "description": "Conditional enables condition-based selection of the target model. Each condition is evaluated\nin order until the best match is found.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalLLMConditionalRouting"

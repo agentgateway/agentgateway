@@ -2,18 +2,18 @@ use std::sync::Arc;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use anyhow::{Context, bail};
+use anyhow::Context;
 use bytes::Bytes;
 use rand::seq::IndexedRandom;
 use serde_json::Value;
 
-use crate::cel;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
 	BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, RouteBackendReference,
 	TrafficPolicy,
 };
+use crate::{apply, cel, schema_enum};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,11 +26,20 @@ pub struct ModelRoute {
 	pub backend_policies: Vec<BackendTrafficPolicy>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_enum!)]
+#[derive(Default)]
 pub enum ModelVisibility {
+	/// Public models can be requested directly by clients and are included in the model list.
+	#[default]
 	Public,
+	/// Internal models can be targeted by virtual models but cannot be requested directly.
 	Internal,
+}
+
+impl ModelVisibility {
+	pub fn is_public(&self) -> bool {
+		matches!(self, Self::Public)
+	}
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -121,28 +130,10 @@ impl ModelRouter {
 			.iter()
 			.find(|model| model.name == requested_model)
 		{
-			if let VirtualModelRouting::Failover { backend_key } = &virtual_model.routing {
-				return Ok(ResolveResult::Backend(ResolvedBackend {
-					backend: RouteBackendReference {
-						weight: 1,
-						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
-						inline_policies: vec![],
-					},
-					route_policies: virtual_model.route_policies.clone(),
-				}));
-			}
-			let target = match self.resolve_virtual_model(virtual_model, req) {
-				Ok(target) => target,
+			return Ok(match self.resolve_virtual_model(virtual_model, req).await {
+				Ok(backend) => ResolveResult::Backend(backend),
 				Err(err) => {
 					tracing::debug!(%err, "failed to resolve LLM virtual model");
-					return Ok(ResolveResult::DirectResponse(model_not_found_response()));
-				},
-			};
-			rewrite_body_model(req, &target).await?;
-			return Ok(match self.resolve_concrete_model(&target, true, req) {
-				Ok(route) => ResolveResult::Backend(route),
-				Err(err) => {
-					tracing::debug!(%err, "failed to resolve LLM virtual model target");
 					ResolveResult::DirectResponse(model_not_found_response())
 				},
 			});
@@ -185,32 +176,45 @@ impl ModelRouter {
 		)
 	}
 
-	fn resolve_virtual_model(
+	async fn resolve_virtual_model(
 		&self,
 		virtual_model: &VirtualModelRoute,
-		req: &Request,
-	) -> anyhow::Result<String> {
-		match &virtual_model.routing {
+		req: &mut Request,
+	) -> anyhow::Result<ResolvedBackend> {
+		let target = match &virtual_model.routing {
 			VirtualModelRouting::Weighted(targets) => targets
 				.choose_weighted(&mut rand::rng(), |target| target.weight)
 				.map(|target| target.model.clone())
-				.context("virtual model has no valid weighted targets"),
-			VirtualModelRouting::Failover { .. } => unreachable!("handled before target resolution"),
+				.context("virtual model has no valid weighted targets")?,
+			VirtualModelRouting::Failover { backend_key } => {
+				return Ok(ResolvedBackend {
+					backend: RouteBackendReference {
+						weight: 1,
+						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
+						inline_policies: vec![],
+					},
+					route_policies: virtual_model.route_policies.clone(),
+				});
+			},
 			VirtualModelRouting::Conditional(targets) => {
 				let exec = cel::Executor::new_request(req);
-				for target in targets {
-					let matched = target
-						.when
-						.as_ref()
-						.map(|expr| exec.eval_bool(expr))
-						.unwrap_or(true);
-					if matched {
-						return Ok(target.model.clone());
-					}
-				}
-				bail!("virtual model did not match any conditional target")
+				targets
+					.iter()
+					.find(|target| {
+						target
+							.when
+							.as_ref()
+							.map(|expr| exec.eval_bool(expr))
+							.unwrap_or(true)
+					})
+					.map(|target| target.model.clone())
+					.context("virtual model did not match any conditional target")?
 			},
-		}
+		};
+		rewrite_body_model(req, &target).await?;
+		self
+			.resolve_concrete_model(&target, true, req)
+			.with_context(|| format!("failed to resolve LLM virtual model target {target}"))
 	}
 
 	fn resolve_concrete_model(
