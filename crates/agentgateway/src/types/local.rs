@@ -2315,6 +2315,7 @@ async fn convert(
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
 			| Backend::Aws(n, _)
+			| Backend::Guardrail(n, _)
 			| Backend::Dynamic(n, _) => n == &name,
 			Backend::Service(_, _) | Backend::Invalid => false,
 		}) {
