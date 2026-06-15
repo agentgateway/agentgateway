@@ -497,6 +497,7 @@ pub struct RoutePath<'a> {
 	// the originally intended service, pre-routing
 	pub service: Option<&'a NamespacedHostname>,
 	pub routes: Vec<&'a RouteName>,
+	pub route_inlines: Vec<&'a [TrafficPolicy]>,
 }
 
 impl<'a> RoutePath<'a> {
@@ -726,11 +727,7 @@ impl Store {
 		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
-	pub fn route_policies<'a>(
-		&self,
-		path: &RoutePath<'_>,
-		inline: impl IntoIterator<Item = &'a TrafficPolicy>,
-	) -> RoutePolicies {
+	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
 		let listener = &path.listener;
 		let gateway = self
 			.policies_by_target
@@ -743,7 +740,7 @@ impl Store {
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 
 		let mut route_rules = Vec::new();
-		for route in &path.routes {
+		for (idx, route) in path.routes.iter().enumerate() {
 			route_rules.extend(
 				self
 					.policies_by_target
@@ -770,8 +767,10 @@ impl Store {
 							.map(|inner| (p.inheritance, inner))
 					}),
 			);
+			if let Some(inline) = path.route_inlines.get(idx) {
+				route_rules.extend(inline.iter().map(|p| (PolicyInheritance::Default, p)));
+			}
 		}
-		route_rules.extend(inline.into_iter().map(|p| (PolicyInheritance::Default, p)));
 
 		let shared_rules = gateway
 			.iter()
@@ -2170,14 +2169,12 @@ mod tests {
 			"route with route_group_key must not also live in service-keyed routes",
 		);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: in_group.service_key.as_ref(),
-				routes: vec![&in_group.name],
-			},
-			&[],
-		);
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: in_group.service_key.as_ref(),
+			routes: vec![&in_group.name],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			pols
 				.timeout
@@ -2320,14 +2317,12 @@ mod tests {
 		let http_timeout = insert_route_timeout_policy(&mut store, "p-http", http_route.clone(), 1);
 		let grpc_timeout = insert_route_timeout_policy(&mut store, "p-grpc", grpc_route.clone(), 2);
 
-		let http_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&http_route],
-			},
-			&[],
-		);
+		let http_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&http_route],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			http_pols
 				.timeout
@@ -2337,14 +2332,12 @@ mod tests {
 			Some(http_timeout)
 		);
 
-		let grpc_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&grpc_route],
-			},
-			&[],
-		);
+		let grpc_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&grpc_route],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			grpc_pols
 				.timeout
@@ -2366,14 +2359,44 @@ mod tests {
 			insert_route_timeout_policy(&mut store, "p-parent", parent_route.clone(), 1);
 		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&parent_route, &child_route],
-			},
-			&[],
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&[], &[]],
+		});
+
+		assert_ne!(parent_timeout, child_timeout);
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(child_timeout)
 		);
+	}
+
+	#[test]
+	fn route_policies_preserve_inline_policy_route_specificity() {
+		let mut store = Store::default();
+		let listener = listener();
+		let parent_route = route("parent", "ns", Some("HTTPRoute"));
+		let child_route = route("child", "ns", Some("HTTPRoute"));
+
+		let parent_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
+		let parent_inline = [TrafficPolicy::Timeout(parent_timeout.clone())];
+
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&parent_inline, &[]],
+		});
 
 		assert_ne!(parent_timeout, child_timeout);
 		assert_eq!(
@@ -2428,14 +2451,12 @@ mod tests {
 			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::Auto),
 		);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&route],
-			},
-			&[],
-		);
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&route],
+			route_inlines: vec![&[]],
+		});
 
 		assert_ne!(gateway_timeout, route_timeout);
 		assert_eq!(

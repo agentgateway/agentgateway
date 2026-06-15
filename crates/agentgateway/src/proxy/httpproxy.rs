@@ -805,6 +805,31 @@ impl HTTPProxy {
 			None
 		};
 
+		let mut route_inline_policy_storage;
+		let route_inlines = if let Some(selected_llm_backend) = &selected_llm_backend {
+			// LLM routing may add route policies to the final selected route. Clone the
+			// inline policy lists so we can append those policies without mutating config.
+			route_inline_policy_storage = selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.clone())
+				.collect::<Vec<_>>();
+			if let Some(inline_policies) = route_inline_policy_storage.last_mut() {
+				inline_policies.extend(selected_llm_backend.route_policies.clone());
+			}
+			route_inline_policy_storage
+				.iter()
+				.map(Vec::as_slice)
+				.collect::<Vec<_>>()
+		} else {
+			// Most requests do not use LLM routing, so borrow the existing inline policy
+			// lists directly and avoid cloning policy config.
+			selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.as_slice())
+				.collect()
+		};
 		let route_path = RoutePath {
 			listener: &selected_listener.name,
 			service: selected_route_chain
@@ -816,19 +841,9 @@ impl HTTPProxy {
 				.iter()
 				.map(|route| &route.name)
 				.collect(),
+			route_inlines,
 		};
-		let route_policies = inputs.stores.read_binds().route_policies(
-			&route_path,
-			selected_route_chain
-				.routes
-				.iter()
-				.flat_map(|route| route.inline_policies.iter())
-				.chain(
-					selected_llm_backend
-						.iter()
-						.flat_map(|backend| backend.route_policies.iter()),
-				),
-		);
+		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let mut route_retry = route_policies.retry.select("retry", &req);

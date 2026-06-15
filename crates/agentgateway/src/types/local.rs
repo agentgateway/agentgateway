@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+#[cfg(not(test))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::http::Uri;
 use agent_core::prelude::Strng;
@@ -2628,6 +2630,9 @@ async fn convert_llm_config(
 	};
 
 	// Get static startup unix timestamp
+	#[cfg(test)]
+	let startup_timestamp = 0;
+	#[cfg(not(test))]
 	let startup_timestamp = *STARTUP_TIMESTAMP.get_or_init(|| {
 		SystemTime::now()
 			.duration_since(UNIX_EPOCH)

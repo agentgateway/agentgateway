@@ -159,6 +159,7 @@ impl TCPProxy {
 			routes: vec![&selected_route.name],
 			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
+			route_inlines: vec![&[]],
 		};
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");

@@ -91,6 +91,8 @@ pub enum ResolveResult {
 	Backend(ResolvedBackend),
 }
 
+type RouterResult<T> = Result<T, Box<Response>>;
+
 struct RequestedModel {
 	model: String,
 	location: RequestedModelLocation,
@@ -120,7 +122,7 @@ impl ModelRouter {
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
-			Err(resp) => return ResolveResult::DirectResponse(resp),
+			Err(resp) => return ResolveResult::DirectResponse(*resp),
 		};
 		req
 			.extensions_mut()
@@ -139,6 +141,11 @@ impl ModelRouter {
 				.resolve_virtual_model(virtual_model, req, requested_model.location)
 				.await;
 		}
+		tracing::trace!(
+			requested_model = %requested_model.model,
+			virtual_model_count = self.virtual_models.len(),
+			"unable to find declared virtual model; trying concrete model routes",
+		);
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
 			Some(route) => ResolveResult::Backend(route),
@@ -226,18 +233,25 @@ impl ModelRouter {
 			},
 		};
 		if let Err(resp) = rewrite_request_model(req, location, &target) {
-			return ResolveResult::DirectResponse(resp);
+			return ResolveResult::DirectResponse(*resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
 			Some(route) => ResolveResult::Backend(route),
-			None => ResolveResult::DirectResponse(llm_error_response(
-				::http::StatusCode::NOT_FOUND,
-				&format!(
-					"Virtual model {} selected target {target}, but no matching model was found",
-					virtual_model.name
-				),
-				"virtual_model_target_not_found",
-			)),
+			None => {
+				tracing::debug!(
+					virtual_model = %virtual_model.name,
+					target_model = %target,
+					"virtual model selected target with no declared concrete model",
+				);
+				ResolveResult::DirectResponse(llm_error_response(
+					::http::StatusCode::NOT_FOUND,
+					&format!(
+						"Virtual model {} selected target {target}, but no matching model was found",
+						virtual_model.name
+					),
+					"virtual_model_target_not_found",
+				))
+			},
 		}
 	}
 
@@ -378,7 +392,7 @@ fn model_name_matches(pattern: &str, model: &str) -> bool {
 	pattern == model
 }
 
-async fn requested_model(req: &mut Request) -> Result<RequestedModel, Response> {
+async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 	let path = req.uri().path();
 	if let Some(model) = crate::llm::types::detect::extract_model_from_path(path) {
 		return Ok(RequestedModel {
@@ -390,22 +404,22 @@ async fn requested_model(req: &mut Request) -> Result<RequestedModel, Response> 
 	let body = body_bytes(req).await?;
 	let body: Value = serde_json::from_slice(&body).map_err(|err| {
 		tracing::debug!(%err, "failed to parse LLM request body");
-		llm_error_response(
+		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
 			"LLM request body must be valid JSON",
 			"invalid_request_body",
-		)
+		))
 	})?;
 	let model = body
 		.get("model")
 		.and_then(Value::as_str)
 		.map(ToString::to_string)
 		.ok_or_else(|| {
-			llm_error_response(
+			Box::new(llm_error_response(
 				::http::StatusCode::BAD_REQUEST,
 				"LLM request body is missing string field 'model'",
 				"missing_model",
-			)
+			))
 		})?;
 	Ok(RequestedModel {
 		model,
@@ -417,25 +431,25 @@ fn rewrite_request_model(
 	req: &mut Request,
 	location: RequestedModelLocation,
 	target: &str,
-) -> Result<(), Response> {
+) -> RouterResult<()> {
 	match location {
 		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
 	}
 }
 
-fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Result<(), Response> {
+fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> RouterResult<()> {
 	let Some(obj) = body.as_object_mut() else {
 		return Ok(());
 	};
 	obj.insert("model".to_string(), Value::String(target.to_string()));
 	let body = serde_json::to_vec(&body).map_err(|err| {
 		tracing::debug!(%err, "failed to serialize rewritten LLM request body");
-		llm_error_response(
+		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
 			"Failed to rewrite LLM request body model",
 			"request_body_rewrite_failed",
-		)
+		))
 	})?;
 	*req.body_mut() = http::Body::from(body);
 	req.headers_mut().remove(::http::header::CONTENT_LENGTH);
@@ -443,7 +457,7 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Resul
 	Ok(())
 }
 
-fn rewrite_uri_model(req: &mut Request, target: &str) -> Result<(), Response> {
+fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 	let Some(path_and_query) = req.uri().path_and_query() else {
 		return Ok(());
 	};
@@ -457,21 +471,21 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> Result<(), Response> {
 	};
 	let path_and_query = path_and_query.parse().map_err(|err| {
 		tracing::debug!(%err, "failed to rewrite LLM request URI model");
-		llm_error_response(
+		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
 			"Failed to rewrite LLM request URI model",
 			"request_uri_rewrite_failed",
-		)
+		))
 	})?;
 	let mut parts = req.uri().clone().into_parts();
 	parts.path_and_query = Some(path_and_query);
 	*req.uri_mut() = ::http::Uri::from_parts(parts).map_err(|err| {
 		tracing::debug!(%err, "failed to rebuild LLM request URI");
-		llm_error_response(
+		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
 			"Failed to rewrite LLM request URI model",
 			"request_uri_rewrite_failed",
-		)
+		))
 	})?;
 	Ok(())
 }
@@ -508,17 +522,17 @@ fn encode_model_path_segment(model: &str) -> String {
 	utf8_percent_encode(model, MODEL_SEGMENT).to_string()
 }
 
-async fn body_bytes(req: &mut Request) -> Result<Bytes, Response> {
+async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
 		return Ok(body.0.clone());
 	}
 	let body = http::inspect_body(req).await.map_err(|err| {
 		tracing::debug!(%err, "failed to read LLM request body");
-		llm_error_response(
+		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
 			"Failed to read LLM request body",
 			"request_body_read_failed",
-		)
+		))
 	})?;
 	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
 	Ok(body)

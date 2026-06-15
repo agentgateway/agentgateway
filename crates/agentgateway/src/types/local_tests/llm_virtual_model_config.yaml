@@ -4,8 +4,7 @@ llm:
     visibility: internal
     provider: anthropic
     params:
-      apiKey:
-        file: $HOME/.secrets/anthropic
+      apiKey: sk-anthropic
     transformation:
       model: llmRequest.model.stripPrefix("anthropic/")
   - name: openai/gpt-5-mini
@@ -13,14 +12,12 @@ llm:
     provider: openAI
     params:
       model: gpt-5-mini
-      apiKey:
-        file: $HOME/.secrets/openai
+      apiKey: sk-openai
   - name: "*"
     visibility: internal
     provider: openAI
     params:
-      apiKey:
-        file: $HOME/.secrets/openai
+      apiKey: sk-openai
   virtualModels:
   - name: fast
     routing:
