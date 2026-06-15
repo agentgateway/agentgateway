@@ -346,16 +346,15 @@ fn resolve(
 		},
 		strng::literal!("_google-model-armor"),
 	)?;
-	let cfg = if let SimpleBackend::Guardrail(_, GuardrailBackend::GoogleModelArmor(c)) =
-		&backend.backend
-	{
-		c.clone()
-	} else {
-		anyhow::bail!(
-			"guardrail backend {} is not a google model armor guardrail backend",
-			backend.backend
-		)
-	};
+	let cfg =
+		if let SimpleBackend::Guardrail(_, GuardrailBackend::GoogleModelArmor(c)) = &backend.backend {
+			c.clone()
+		} else {
+			anyhow::bail!(
+				"guardrail backend {} is not a google model armor guardrail backend",
+				backend.backend
+			)
+		};
 	Ok((backend, cfg))
 }
 
