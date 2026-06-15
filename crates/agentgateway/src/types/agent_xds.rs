@@ -1450,6 +1450,12 @@ pub(crate) fn backend_with_policies_from_proto(
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		),
+		Some(backend::Kind::Guardrail(_)) => {
+			diagnostics.add_warning(
+				"guardrail backends are not yet implemented and will be ignored",
+			);
+			Backend::Invalid
+		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
 		},
