@@ -3,10 +3,10 @@ package proxy
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/proxy/config"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/proxy/log"
-	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/proxy/trace"
 )
 
 func Command() *cobra.Command {
