@@ -17,6 +17,8 @@ use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 
 mod catalog;
 
+const TRACE_POLICY_KIND: &str = "llm_cost";
+
 pub struct ModelCatalog {
 	snapshot: ArcSwap<CatalogSnapshot>,
 }
@@ -125,10 +127,30 @@ impl CatalogSnapshot {
 		convention: CacheTokenConvention,
 	) -> CostProjection {
 		let Some(catalog) = self.catalog.as_ref() else {
+			crate::proxy::dtrace::pol_event!(
+				TRACE_POLICY_KIND,
+				crate::proxy::dtrace::Severity::Warn,
+				details = serde_json::json!({
+					"provider": provider,
+					"model": model,
+					"status": status_name(CostLookupStatus::NoCatalog),
+					"reason": "no model catalog",
+				}),
+			);
 			return CostProjection::unpriced(CostLookupStatus::NoCatalog);
 		};
 		let entry = catalog.resolve(provider, model);
 		let Some(entry) = entry else {
+			crate::proxy::dtrace::pol_event!(
+				TRACE_POLICY_KIND,
+				crate::proxy::dtrace::Severity::Warn,
+				details = serde_json::json!({
+					"provider": provider,
+					"model": model,
+					"status": status_name(CostLookupStatus::Missing),
+					"reason": "no catalog entry for provider/model",
+				}),
+			);
 			return CostProjection::unpriced(CostLookupStatus::Missing);
 		};
 
@@ -138,19 +160,50 @@ impl CatalogSnapshot {
 		let context_tokens = provisional_usage.context_tokens();
 		let rates = entry.effective_rates(context_tokens);
 		if rates.is_empty() {
+			crate::proxy::dtrace::pol_event!(
+				TRACE_POLICY_KIND,
+				crate::proxy::dtrace::Severity::Warn,
+				details = serde_json::json!({
+					"provider": provider,
+					"model": model,
+					"status": status_name(CostLookupStatus::Unpriced),
+					"reason": "catalog entry has no effective rates",
+					"cacheTokenConvention": cache_convention_name(convention),
+					"contextTokens": context_tokens,
+					"usage": &provisional_usage,
+				}),
+			);
 			return CostProjection::unpriced(CostLookupStatus::Unpriced);
 		}
 
-		let usage = if rates.cache_read.is_some() {
+		let prices_cache_read = rates.cache_read.is_some();
+		let usage = if prices_cache_read {
 			provisional_usage
 		} else {
 			usage_for(convention, resp, false)
 		};
 		let breakdown = rates.breakdown(&usage);
+		let cost = CostBreakdown::from(&breakdown);
+		let cost_rates = CostRates::from(&rates);
+		crate::proxy::dtrace::pol_event!(
+			TRACE_POLICY_KIND,
+			crate::proxy::dtrace::Severity::Info,
+			details = serde_json::json!({
+				"provider": provider,
+				"model": model,
+				"status": status_name(CostLookupStatus::Exact),
+				"cacheTokenConvention": cache_convention_name(convention),
+				"contextTokens": context_tokens,
+				"pricesCacheRead": prices_cache_read,
+				"usage": &usage,
+				"rates": cost_rates,
+				"cost": cost,
+			}),
+		);
 		CostProjection {
 			status: CostLookupStatus::Exact,
 			cost: Some(breakdown),
-			cost_rates: Some(CostRates::from(&rates)),
+			cost_rates: Some(cost_rates),
 		}
 	}
 }
@@ -377,7 +430,6 @@ fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
 		catalog.providers.values().map(|p| p.models.len()).sum()
 	});
 	info!(
-		count = loaded.loaded,
 		providers,
 		models,
 		missing_files = ?loaded.missing,
@@ -418,6 +470,22 @@ pub enum CostLookupStatus {
 	#[default]
 	Missing,
 	NoCatalog,
+}
+
+fn status_name(status: CostLookupStatus) -> &'static str {
+	match status {
+		CostLookupStatus::Exact => "exact",
+		CostLookupStatus::Unpriced => "unpriced",
+		CostLookupStatus::Missing => "missing",
+		CostLookupStatus::NoCatalog => "noCatalog",
+	}
+}
+
+fn cache_convention_name(convention: CacheTokenConvention) -> &'static str {
+	match convention {
+		CacheTokenConvention::InputIncludesCache => "inputIncludesCache",
+		CacheTokenConvention::InputExcludesCache => "inputExcludesCache",
+	}
 }
 
 fn usage_for(

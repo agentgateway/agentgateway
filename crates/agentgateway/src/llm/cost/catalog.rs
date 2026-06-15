@@ -153,7 +153,7 @@ impl From<Money> for String {
 }
 const TOKENS_PER_UNIT: u64 = 1_000_000;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Usage {
 	pub input: u64,
 	pub cache_read: u64,

@@ -69,7 +69,7 @@ type traceEvent struct {
 	Protocol        *string           `json:"protocol,omitempty"`
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
-	Details         string            `json:"details,omitempty"`
+	Details         json.RawMessage   `json:"details,omitempty"`
 	Provider        string            `json:"provider,omitempty"`
 	RouteType       string            `json:"routeType,omitempty"`
 	InputFormat     string            `json:"inputFormat,omitempty"`
@@ -673,7 +673,7 @@ func summarizeEvent(event traceEvent) string {
 	case "policy":
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
-		return truncate(fmt.Sprintf("%s: %s", event.Kind, event.Details), 120)
+		return truncate(fmt.Sprintf("%s: %s", event.Kind, eventDetailsText(event.Details)), 120)
 	case "authorizationResult":
 		return summarizeAuthorizationResult(event.Result, event.Rules)
 	case "backendCallStart":
@@ -749,6 +749,17 @@ func summarizeEnvelope(envelope traceEnvelope) string {
 		return summary
 	}
 	return truncate(strings.Join(envelope.Scope, " > ")+": "+summary, 120)
+}
+
+func eventDetailsText(details json.RawMessage) string {
+	if len(details) == 0 {
+		return ""
+	}
+	var text string
+	if json.Unmarshal(details, &text) == nil {
+		return text
+	}
+	return compactJSON(details)
 }
 
 func summarizeCEL(expr string, result json.RawMessage) string {
