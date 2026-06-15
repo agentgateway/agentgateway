@@ -4,6 +4,7 @@
 //! content filtering similar to OpenAI's moderation endpoint. It uses GCP authentication
 //! via the backend policies.
 
+use agent_core::prelude::Strng;
 use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -242,7 +243,7 @@ pub async fn send_request(
 		user_prompt_data: UserPromptData { text: content },
 	};
 
-	let (response, cfg) = send_model_armor_request(
+	let (response, template_id) = send_model_armor_request(
 		client,
 		claims.clone(),
 		model_armor,
@@ -252,7 +253,7 @@ pub async fn send_request(
 	.await?;
 
 	debug!(
-		template_id = %cfg.template_id,
+		template_id = %template_id,
 		is_blocked = response.is_blocked(),
 		response = ?response,
 		"[Model Armor] <<< Received REQUEST response from Model Armor"
@@ -260,12 +261,12 @@ pub async fn send_request(
 
 	if response.is_blocked() {
 		warn!(
-			template_id = %cfg.template_id,
+			template_id = %template_id,
 			"[Model Armor] REQUEST BLOCKED by Google Model Armor"
 		);
 	} else {
 		debug!(
-			template_id = %cfg.template_id,
+			template_id = %template_id,
 			"[Model Armor] Request passed Google Model Armor checks"
 		);
 	}
@@ -288,7 +289,7 @@ pub async fn send_response(
 		},
 	};
 
-	let (response, cfg) = send_model_armor_request(
+	let (response, template_id) = send_model_armor_request(
 		client,
 		claims.clone(),
 		model_armor,
@@ -298,7 +299,7 @@ pub async fn send_response(
 	.await?;
 
 	debug!(
-		template_id = %cfg.template_id,
+		template_id = %template_id,
 		is_blocked = response.is_blocked(),
 		response = ?response,
 		"[Model Armor] <<< Received RESPONSE response from Model Armor"
@@ -306,12 +307,12 @@ pub async fn send_response(
 
 	if response.is_blocked() {
 		warn!(
-			template_id = %cfg.template_id,
+			template_id = %template_id,
 			"[Model Armor] RESPONSE BLOCKED by Google Model Armor"
 		);
 	} else {
 		debug!(
-			template_id = %cfg.template_id,
+			template_id = %template_id,
 			"[Model Armor] Response passed Google Model Armor checks"
 		);
 	}
@@ -345,14 +346,16 @@ fn resolve(
 		},
 		strng::literal!("_google-model-armor"),
 	)?;
-	let SimpleBackend::Guardrail(_, GuardrailBackend::GoogleModelArmor(cfg)) = &backend.backend
-	else {
+	let cfg = if let SimpleBackend::Guardrail(_, GuardrailBackend::GoogleModelArmor(c)) =
+		&backend.backend
+	{
+		c.clone()
+	} else {
 		anyhow::bail!(
 			"guardrail backend {} is not a google model armor guardrail backend",
 			backend.backend
-		);
+		)
 	};
-	let cfg = cfg.clone();
 	Ok((backend, cfg))
 }
 
@@ -362,7 +365,7 @@ async fn send_model_armor_request<T: Serialize>(
 	model_armor: &GoogleModelArmor,
 	action: &str,
 	request_body: &T,
-) -> anyhow::Result<(SanitizeResponse, GuardrailGoogleModelArmor)> {
+) -> anyhow::Result<(SanitizeResponse, Strng)> {
 	let (backend, cfg) = resolve(client, model_armor)?;
 
 	// The transport (endpoint host, TLS, GCP auth) is owned by the resolved backend;
@@ -392,5 +395,5 @@ async fn send_model_armor_request<T: Serialize>(
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;
-	Ok((resp, cfg))
+	Ok((resp, cfg.template_id))
 }

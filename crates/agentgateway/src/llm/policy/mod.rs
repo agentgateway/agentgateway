@@ -1197,8 +1197,16 @@ pub(crate) fn resolve_guardrail_backend(
 ) -> anyhow::Result<SimpleBackendWithPolicies> {
 	match backend_ref {
 		Some(key) => {
+			// Local-config backends are keyed as "/<name>" (empty-namespace prefix).
+			// Route backendRefs apply this normalization in local.rs; guards must too.
+			// xds keys already contain a "/" (e.g. "default/name"), so the check is safe.
+			let lookup_key = if key.contains('/') {
+				key.clone()
+			} else {
+				strng::format!("/{}", key)
+			};
 			let resolved = client
-				.resolve_backend(&SimpleBackendReference::Backend(key.clone()))
+				.resolve_backend(&SimpleBackendReference::Backend(lookup_key))
 				.map_err(|e| anyhow::anyhow!("failed to resolve guardrail backend {key}: {e}"))?;
 			if !matches!(resolved.backend, SimpleBackend::Guardrail(_, _)) {
 				anyhow::bail!("backend {key} is not a guardrail backend");

@@ -1809,18 +1809,6 @@ async fn build_simple_backend_call(
 			)
 		},
 		SimpleBackend::Guardrail(_, config) => {
-			http::modify_req_uri(req, |uri| {
-				let host_with_port = format!("{}:443", config.host());
-				uri.authority =
-					Some(Authority::try_from(host_with_port.as_str()).map_err(anyhow::Error::msg)?);
-				if uri.scheme.is_none() {
-					// Default to HTTP; the system TLS default policy upgrades the transport
-					uri.scheme = Some(Scheme::HTTP);
-				}
-				Ok(())
-			})
-			.map_err(ProxyError::Processing)?;
-
 			if let llm::policy::guardrail::GuardrailBackend::Bedrock(b) = config {
 				// The implicit AWS auth needs the signing region
 				req.extensions_mut().insert(llm::bedrock::AwsRegion {

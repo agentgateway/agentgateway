@@ -126,7 +126,7 @@ impl GuardrailBackend {
 				strng::format!("modelarmor.{}.rep.googleapis.com", g.location())
 			},
 			GuardrailBackend::AzureContentSafety(a) => a.host(),
-			GuardrailBackend::OpenAIModeration(_) => strng::literal!("api.openai.com"),
+			GuardrailBackend::OpenAIModeration(_) => crate::llm::openai::DEFAULT_HOST,
 		}
 	}
 
@@ -160,16 +160,6 @@ impl GuardrailBackend {
 		match self {
 			GuardrailBackend::AzureContentSafety(a) => a.validate(),
 			_ => Ok(()),
-		}
-	}
-
-	/// Short provider name, used in error messages.
-	pub fn provider_name(&self) -> &'static str {
-		match self {
-			GuardrailBackend::Bedrock(_) => "bedrock",
-			GuardrailBackend::GoogleModelArmor(_) => "googleModelArmor",
-			GuardrailBackend::AzureContentSafety(_) => "azureContentSafety",
-			GuardrailBackend::OpenAIModeration(_) => "openAIModeration",
 		}
 	}
 }
