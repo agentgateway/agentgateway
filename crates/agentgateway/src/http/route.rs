@@ -292,13 +292,7 @@ fn compare_route_match(a: &agent::RouteMatch, b: &agent::RouteMatch) -> cmp::Ord
 		return header_count1.cmp(&header_count2);
 	}
 
-	let query_count1 = a.query.len();
-	let query_count2 = b.query.len();
-	if query_count1 != query_count2 {
-		return query_count1.cmp(&query_count2);
-	}
-
-	cmp::Ordering::Equal
+	a.query.len().cmp(&b.query.len())
 }
 
 fn get_path_rank(path: &PathMatch) -> u8 {
