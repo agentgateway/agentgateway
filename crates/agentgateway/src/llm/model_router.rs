@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
 
@@ -92,7 +93,12 @@ pub enum ResolveResult {
 
 struct RequestedModel {
 	model: String,
-	body: Option<Value>,
+	location: RequestedModelLocation,
+}
+
+enum RequestedModelLocation {
+	Body(Value),
+	Path,
 }
 
 impl ModelRouter {
@@ -130,7 +136,7 @@ impl ModelRouter {
 			.find(|model| model.name == requested_model.model)
 		{
 			return self
-				.resolve_virtual_model(virtual_model, req, requested_model.body)
+				.resolve_virtual_model(virtual_model, req, requested_model.location)
 				.await;
 		}
 
@@ -170,7 +176,7 @@ impl ModelRouter {
 		&self,
 		virtual_model: &VirtualModelRoute,
 		req: &mut Request,
-		body: Option<Value>,
+		location: RequestedModelLocation,
 	) -> ResolveResult {
 		let target = match &virtual_model.routing {
 			VirtualModelRouting::Weighted(targets) => {
@@ -219,10 +225,8 @@ impl ModelRouter {
 				}
 			},
 		};
-		if let Some(body) = body {
-			if let Err(resp) = rewrite_body_model(req, body, &target) {
-				return ResolveResult::DirectResponse(resp);
-			}
+		if let Err(resp) = rewrite_request_model(req, location, &target) {
+			return ResolveResult::DirectResponse(resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
 			Some(route) => ResolveResult::Backend(route),
@@ -376,37 +380,11 @@ fn model_name_matches(pattern: &str, model: &str) -> bool {
 
 async fn requested_model(req: &mut Request) -> Result<RequestedModel, Response> {
 	let path = req.uri().path();
-	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
-		return path
-			.rsplit_once("/publishers/anthropic/models/")
-			.and_then(|(_, rest)| rest.split_once(':'))
-			.map(|(model, _)| RequestedModel {
-				model: model.to_string(),
-				body: None,
-			})
-			.ok_or_else(|| {
-				llm_error_response(
-					::http::StatusCode::BAD_REQUEST,
-					"LLM request path is missing model",
-					"missing_model",
-				)
-			});
-	}
-	if path.ends_with("/invoke-with-response-stream") || path.ends_with("/invoke") {
-		return path
-			.rsplit_once("/model/")
-			.and_then(|(_, rest)| rest.split_once("/invoke"))
-			.map(|(model, _)| RequestedModel {
-				model: model.to_string(),
-				body: None,
-			})
-			.ok_or_else(|| {
-				llm_error_response(
-					::http::StatusCode::BAD_REQUEST,
-					"LLM request path is missing model",
-					"missing_model",
-				)
-			});
+	if let Some(model) = crate::llm::types::detect::extract_model_from_path(path) {
+		return Ok(RequestedModel {
+			model: model.to_string(),
+			location: RequestedModelLocation::Path,
+		});
 	}
 
 	let body = body_bytes(req).await?;
@@ -431,8 +409,19 @@ async fn requested_model(req: &mut Request) -> Result<RequestedModel, Response> 
 		})?;
 	Ok(RequestedModel {
 		model,
-		body: Some(body),
+		location: RequestedModelLocation::Body(body),
 	})
+}
+
+fn rewrite_request_model(
+	req: &mut Request,
+	location: RequestedModelLocation,
+	target: &str,
+) -> Result<(), Response> {
+	match location {
+		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
+		RequestedModelLocation::Path => rewrite_uri_model(req, target),
+	}
 }
 
 fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Result<(), Response> {
@@ -454,6 +443,71 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Resul
 	Ok(())
 }
 
+fn rewrite_uri_model(req: &mut Request, target: &str) -> Result<(), Response> {
+	let Some(path_and_query) = req.uri().path_and_query() else {
+		return Ok(());
+	};
+	let Some(path) = rewrite_path_model(path_and_query.path(), target) else {
+		return Ok(());
+	};
+	let path_and_query = if let Some(query) = path_and_query.query() {
+		format!("{path}?{query}")
+	} else {
+		path
+	};
+	let path_and_query = path_and_query.parse().map_err(|err| {
+		tracing::debug!(%err, "failed to rewrite LLM request URI model");
+		llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to rewrite LLM request URI model",
+			"request_uri_rewrite_failed",
+		)
+	})?;
+	let mut parts = req.uri().clone().into_parts();
+	parts.path_and_query = Some(path_and_query);
+	*req.uri_mut() = ::http::Uri::from_parts(parts).map_err(|err| {
+		tracing::debug!(%err, "failed to rebuild LLM request URI");
+		llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to rewrite LLM request URI model",
+			"request_uri_rewrite_failed",
+		)
+	})?;
+	Ok(())
+}
+
+fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
+	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
+		let (prefix, rest) = path.split_once("/publishers/anthropic/models/")?;
+		let (_, suffix) = rest.split_once(':')?;
+		return Some(format!(
+			"{prefix}/publishers/anthropic/models/{}:{suffix}",
+			encode_model_path_segment(target)
+		));
+	}
+	for suffix in [
+		"/invoke-with-response-stream",
+		"/invoke",
+		"/converse-stream",
+		"/converse",
+	] {
+		if let Some(before_suffix) = path.strip_suffix(suffix)
+			&& let Some((prefix, _)) = before_suffix.split_once("/model/")
+		{
+			return Some(format!(
+				"{prefix}/model/{}{suffix}",
+				encode_model_path_segment(target)
+			));
+		}
+	}
+	None
+}
+
+fn encode_model_path_segment(model: &str) -> String {
+	const MODEL_SEGMENT: &AsciiSet = &CONTROLS.add(b'/').add(b'%');
+	utf8_percent_encode(model, MODEL_SEGMENT).to_string()
+}
+
 async fn body_bytes(req: &mut Request) -> Result<Bytes, Response> {
 	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
 		return Ok(body.0.clone());
@@ -468,4 +522,60 @@ async fn body_bytes(req: &mut Request) -> Result<Bytes, Response> {
 	})?;
 	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
 	Ok(body)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn rewrite_path_model_rewrites_bedrock_converse_and_preserves_suffix() {
+		assert_eq!(
+			rewrite_path_model(
+				"/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+				"anthropic.claude-3-haiku-20240307-v1:0",
+			)
+			.as_deref(),
+			Some("/model/anthropic.claude-3-haiku-20240307-v1:0/converse")
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_rewrites_bedrock_invoke_and_encodes_slashes() {
+		assert_eq!(
+			rewrite_path_model(
+				"/model/virtual/invoke-with-response-stream",
+				"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+			)
+			.as_deref(),
+			Some(
+				"/model/arn:aws:bedrock:us-east-1:123456789012:application-inference-profile%2Fmy-profile/invoke-with-response-stream"
+			)
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_rewrites_vertex_raw_predict() {
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/anthropic/models/virtual:rawPredict",
+				"claude-sonnet",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/anthropic/models/claude-sonnet:rawPredict")
+		);
+	}
+
+	#[test]
+	fn rewrite_uri_model_preserves_query() {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/model/virtual/converse?trace=true")
+			.body(http::Body::empty())
+			.unwrap();
+		rewrite_uri_model(&mut req, "real/model").expect("URI rewrites");
+		assert_eq!(
+			req.uri().to_string(),
+			"http://example.com/model/real%2Fmodel/converse?trace=true"
+		);
+	}
 }

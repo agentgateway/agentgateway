@@ -341,6 +341,46 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_model_rejects_multiple_wildcards() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: '*foo*'
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("model name with multiple wildcards should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("model name wildcard may only appear once: '*foo*'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_middle_wildcard() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: foo*bar
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("model name with middle wildcard should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("model name wildcard must be either at the beginning or the end: 'foo*bar'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_llm_weighted_virtual_model_allows_authorized_target() {
 	let normalized = normalize_test_config(
 		r#"

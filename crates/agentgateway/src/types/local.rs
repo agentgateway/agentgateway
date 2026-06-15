@@ -2271,6 +2271,17 @@ fn llm_model_match_specificity(model_name: &str) -> usize {
 	model_name.chars().filter(|c| *c != '*').count()
 }
 
+fn validate_llm_model_pattern(pattern: &str) -> anyhow::Result<()> {
+	let wildcard_count = pattern.chars().filter(|c| *c == '*').count();
+	if wildcard_count > 1 {
+		bail!("model name wildcard may only appear once: '{pattern}'");
+	}
+	if wildcard_count == 1 && pattern != "*" && !pattern.starts_with('*') && !pattern.ends_with('*') {
+		bail!("model name wildcard must be either at the beginning or the end: '{pattern}'");
+	}
+	Ok(())
+}
+
 fn merge_prompt_guards(
 	shared: Option<PromptGuard>,
 	model: Option<PromptGuard>,
@@ -2310,6 +2321,7 @@ enum LocalLLMVirtualRoutingStrategy<'a> {
 }
 
 fn llm_model_matches(pattern: &str, model: &str) -> anyhow::Result<bool> {
+	validate_llm_model_pattern(pattern)?;
 	if pattern == "*" {
 		return Ok(true);
 	}
@@ -2318,9 +2330,6 @@ fn llm_model_matches(pattern: &str, model: &str) -> anyhow::Result<bool> {
 	}
 	if let Some(suffix) = pattern.strip_prefix('*') {
 		return Ok(model.ends_with(suffix));
-	}
-	if pattern.contains('*') {
-		bail!("model name wildcard must be either at the beginning or the end: '{pattern}'");
 	}
 	Ok(pattern == model)
 }
@@ -2408,8 +2417,16 @@ impl LocalLLMModelRegistry {
 			models,
 			virtual_models,
 		};
+		registry.validate_model_patterns()?;
 		registry.validate_virtual_models()?;
 		Ok(registry)
+	}
+
+	fn validate_model_patterns(&self) -> anyhow::Result<()> {
+		for model in &self.models {
+			validate_llm_model_pattern(&model.name)?;
+		}
+		Ok(())
 	}
 
 	fn model_matches(&self, target: &str) -> anyhow::Result<bool> {
