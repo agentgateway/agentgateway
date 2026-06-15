@@ -238,6 +238,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
+			//nolint:staticcheck
 			pgModeration.InlinePolicies = pols
 		}
 	}
@@ -251,9 +252,12 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 	}
 
 	pgGuardrails := &api.BackendPolicySpec_Ai_BedrockGuardrails{
+		//nolint:staticcheck
 		Identifier: guardrails.GuardrailIdentifier,
-		Version:    guardrails.GuardrailVersion,
-		Region:     guardrails.Region,
+		//nolint:staticcheck
+		Version: guardrails.GuardrailVersion,
+		//nolint:staticcheck
+		Region: guardrails.Region,
 	}
 
 	if guardrails.Policies != nil {
@@ -264,6 +268,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
+			//nolint:staticcheck
 			pgGuardrails.InlinePolicies = pols
 		}
 	}
@@ -277,14 +282,18 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
+		//nolint:staticcheck
 		TemplateId: armor.TemplateID,
-		ProjectId:  armor.ProjectID,
+		//nolint:staticcheck
+		ProjectId: armor.ProjectID,
 	}
 
 	// Set location with default value if not specified
 	if armor.Location != nil {
+		//nolint:staticcheck
 		pgArmor.Location = new(*armor.Location)
 	} else {
+		//nolint:staticcheck
 		pgArmor.Location = new("us-central1")
 	}
 
@@ -296,6 +305,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
+			//nolint:staticcheck
 			pgArmor.InlinePolicies = pols
 		}
 	}
