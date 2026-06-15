@@ -371,24 +371,19 @@ async fn load_files(paths: &[PathBuf]) -> anyhow::Result<LoadedCatalog> {
 }
 
 fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
-	if loaded.missing.is_empty() {
-		info!(count = loaded.loaded, "{}", message);
-	} else {
-		info!(
-			count = loaded.loaded,
-			missing_files = %format_paths(&loaded.missing),
-			"{}",
-			message
-		);
-	}
-}
-
-fn format_paths(paths: &[PathBuf]) -> String {
-	paths
-		.iter()
-		.map(|p| p.display().to_string())
-		.collect::<Vec<_>>()
-		.join(", ")
+	let catalog = loaded.snapshot.catalog.as_ref();
+	let providers = catalog.map_or(0, |catalog| catalog.providers.len());
+	let models = catalog.map_or(0, |catalog| {
+		catalog.providers.values().map(|p| p.models.len()).sum()
+	});
+	info!(
+		count = loaded.loaded,
+		providers,
+		models,
+		missing_files = ?loaded.missing,
+		"{}",
+		message
+	);
 }
 
 fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
