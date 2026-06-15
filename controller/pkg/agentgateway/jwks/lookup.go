@@ -11,28 +11,24 @@ type Lookup interface {
 }
 
 type lookup struct {
-	resolver Resolver
-	cache    *keysetCache
+	resolver  Resolver
+	persisted *PersistedEntries
 }
 
 func NewLookup(persisted *PersistedEntries, resolver Resolver) Lookup {
 	return &lookup{
-		resolver: resolver,
-		cache:    newKeysetCache(persisted),
+		resolver:  resolver,
+		persisted: persisted,
 	}
 }
 
 func (l *lookup) InlineForOwner(krtctx krt.HandlerContext, owner RemoteJwksOwner) (string, error) {
-	if l.cache == nil {
-		return "", fmt.Errorf("jwks persisted cache is not configured")
-	}
-
 	resolved, err := l.resolver.ResolveOwner(krtctx, owner)
 	if err != nil {
 		return "", err
 	}
 
-	keyset, ok := l.cache.Get(krtctx, resolved.Target.Key)
+	keyset, ok := l.persisted.CanonicalGet(krtctx, resolved.RequestKey())
 	if !ok {
 		return "", fmt.Errorf("jwks keyset for %q isn't available (not yet fetched or fetch failed)", resolved.Target.Target.URL)
 	}

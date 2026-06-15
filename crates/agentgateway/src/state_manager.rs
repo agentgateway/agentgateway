@@ -40,6 +40,7 @@ impl StateManager {
 		let stores = Stores::new_with_dynamic_ca_cert_cache(
 			config.ipv6_enabled,
 			config.threading_mode,
+			config.oidc_cookie_encoder(),
 			config.dynamic_ca_cert_cache.clone(),
 		);
 		let xds_client = if let Some(addr) = &xds.address {
@@ -403,7 +404,7 @@ mod tests {
 	}
 
 	fn test_stores() -> Stores {
-		Stores::new(false, crate::ThreadingMode::Multithreaded)
+		Stores::new(false, crate::ThreadingMode::Multithreaded, None)
 	}
 
 	fn wds_identity(name: &str, ns: &str, cluster: &str) -> SelfIdentitySource {

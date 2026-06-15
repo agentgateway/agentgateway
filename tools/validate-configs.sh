@@ -41,9 +41,10 @@ echo "Starting validation dependencies..."
 "$SCRIPT_DIR/manage-validation-deps.sh" start
 deps_started=1
 
-# Example validation runs without shell setup, so provide a deterministic cookie
-# secret for configs that enable browser auth.
-export OIDC_COOKIE_SECRET="${OIDC_COOKIE_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+# Example validation runs without shell setup, so provide a deterministic
+# session key for configs that enable OIDC browser auth (the OIDC cookie
+# encoder is derived from SESSION_KEY).
+export SESSION_KEY="${SESSION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
 
 for config_file in "${config_files[@]}"; do
   echo "Validating $config_file"

@@ -3224,7 +3224,7 @@ pub async fn convert_route(
 			pol,
 			Some(AttachedPolicyContext {
 				oidc_policy_id: crate::http::oidc::PolicyId::route(&key),
-				oidc_cookie_encoder: config.oidc_cookie_encoder.as_ref(),
+				oidc_cookie_encoder: config.oidc_cookie_encoder(),
 			}),
 		)
 		.await?
@@ -3260,9 +3260,9 @@ pub(crate) struct ResolvedPolicies {
 	pub(crate) route_policies: Vec<TrafficPolicy>,
 }
 
-pub struct AttachedPolicyContext<'a> {
+pub struct AttachedPolicyContext {
 	pub oidc_policy_id: crate::http::oidc::PolicyId,
-	pub oidc_cookie_encoder: Option<&'a crate::http::sessionpersistence::Encoder>,
+	pub(crate) oidc_cookie_encoder: Option<crate::http::oidc::OidcCookieEncoder>,
 }
 
 async fn split_frontend_policies(
@@ -3337,7 +3337,7 @@ async fn split_frontend_policies(
 pub(crate) async fn split_policies(
 	client: Client,
 	pol: FilterOrPolicy,
-	attached: Option<AttachedPolicyContext<'_>>,
+	attached: Option<AttachedPolicyContext>,
 ) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
@@ -3456,9 +3456,9 @@ pub(crate) async fn split_policies(
 		else {
 			return Err(Error::msg("oidc policies must be attached"));
 		};
-		let Some(oidc_cookie_encoder) = oidc_cookie_encoder else {
+		let Some(oidc_cookie_encoder) = oidc_cookie_encoder.as_ref() else {
 			return Err(Error::msg(
-				"OIDC_COOKIE_SECRET is required when oidc is configured",
+				"SESSION_KEY is required when oidc is configured",
 			));
 		};
 		Some(TrafficPolicy::Oidc(RequestPolicy::single(

@@ -4,7 +4,7 @@ pub mod extprocmock;
 mod hyper_tower;
 pub mod oteltracemock;
 #[cfg(any(test, feature = "internal_benches"))]
-mod policy;
+pub mod policy;
 #[cfg(any(test, feature = "internal_benches"))]
 pub mod proxymock;
 pub mod ratelimitmock;

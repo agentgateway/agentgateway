@@ -29,6 +29,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/oidc"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -53,6 +54,7 @@ const (
 	retryPolicySuffix              = ":retry"
 	timeoutPolicySuffix            = ":timeout"
 	jwtPolicySuffix                = ":jwt"
+	oidcPolicySuffix               = ":oidc"
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
@@ -90,7 +92,7 @@ func ConvertStatusCollection[T controllers.Object, S any](
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
-func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, oidcLookup oidc.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -99,7 +101,7 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, input.Grants, resolver, jwksLookup, credentialResolver)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, input.Grants, resolver, jwksLookup, oidcLookup, credentialResolver)
 					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
 					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
@@ -121,6 +123,7 @@ type PolicyCtx struct {
 	SourceGVK   schema.GroupVersionKind
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+	OidcLookup  oidc.Lookup
 
 	// CredentialResolver resolves credential refs: the built-in Secret resolver
 	// in OSS, or an injected resolver (which may itself be a chain). Access it
@@ -162,6 +165,7 @@ func TranslateAgentgatewayPolicy(
 	grants ReferenceGrantChecker,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
+	oidcLookup oidc.Lookup,
 	credentialResolver kubeutils.CredentialResolver,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
@@ -175,6 +179,7 @@ func TranslateAgentgatewayPolicy(
 		SourceGVK:          wellknown.AgentgatewayPolicyGVK,
 		Resolver:           resolver,
 		JWKSLookup:         jwksLookup,
+		OidcLookup:         oidcLookup,
 		CredentialResolver: credentialResolver,
 	}
 	var ancestors []gwv1.PolicyAncestorStatus
@@ -405,9 +410,10 @@ func ClonePoliciesForTarget(base []*api.Policy, policyTarget *api.PolicyTarget) 
 		return nil
 	}
 	out := make([]*api.Policy, 0, len(base))
+	attachment := attachmentName(policyTarget)
 	for _, p := range base {
 		clone := protomarshal.ShallowClone(p)
-		clone.Key += attachmentName(policyTarget)
+		clone.Key += attachment
 		clone.Target = policyTarget
 		out = append(out, clone)
 	}
@@ -553,6 +559,15 @@ func translateTrafficPolicyToAgw(
 
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
+	}
+
+	if traffic.OIDC != nil {
+		// OIDC keys off policyName (not basePolicyName) so the effective
+		// Policy.Key stays stable — the dataplane derives the OIDC session
+		// PolicyId (hashed into cookie names) from that key. Switching to
+		// basePolicyName would invalidate every active session cookie on
+		// rollout.
+		appendPolicy("oidc")(processOIDCPolicy(ctx, traffic.OIDC, traffic.Phase, policyName))
 	}
 
 	if traffic.APIKeyAuthentication != nil {
@@ -2094,6 +2109,11 @@ func referencedBackendRefsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []
 				if p.JWKS.Remote != nil {
 					app(p.JWKS.Remote.BackendRef)
 				}
+			}
+		}
+		if s.Traffic.OIDC != nil {
+			if s.Traffic.OIDC.BackendRef != nil {
+				app(*s.Traffic.OIDC.BackendRef)
 			}
 		}
 	}

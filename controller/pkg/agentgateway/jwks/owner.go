@@ -2,37 +2,18 @@ package jwks
 
 import (
 	"fmt"
-	"reflect"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/equality"
+
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotecache"
 )
-
-type OwnerKind string
-
-const (
-	OwnerKindPolicy  OwnerKind = "AgentgatewayPolicy"
-	OwnerKindBackend OwnerKind = "AgentgatewayBackend"
-)
-
-type JwksOwnerID struct {
-	Kind      OwnerKind
-	Namespace string
-	Name      string
-	Path      string
-}
-
-func (o JwksOwnerID) String() string {
-	return fmt.Sprintf("%s/%s/%s#%s", o.Kind, o.Namespace, o.Name, o.Path)
-}
-
-type OwnerKey = JwksOwnerID
 
 type RemoteJwksOwner struct {
-	ID               JwksOwnerID
-	DefaultNamespace string
-	Remote           agentgateway.RemoteJWKS
-	TTL              time.Duration
+	ID     remotecache.OwnerID
+	Remote agentgateway.RemoteJWKS
+	TTL    time.Duration
 }
 
 func (o RemoteJwksOwner) ResourceName() string {
@@ -41,13 +22,12 @@ func (o RemoteJwksOwner) ResourceName() string {
 
 func (o RemoteJwksOwner) Equals(other RemoteJwksOwner) bool {
 	return o.ID == other.ID &&
-		o.DefaultNamespace == other.DefaultNamespace &&
 		o.TTL == other.TTL &&
-		reflect.DeepEqual(o.Remote, other.Remote)
+		equality.Semantic.DeepEqual(o.Remote, other.Remote)
 }
 
 func OwnersFromPolicy(policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner {
-	if len(policy.Spec.TargetRefs) == 0 {
+	if len(policy.Spec.TargetRefs) == 0 && len(policy.Spec.TargetSelectors) == 0 {
 		return nil
 	}
 
@@ -92,43 +72,40 @@ func PolicyJWTProviderLookupOwner(namespace, name string, providerIndex int, pro
 	}
 
 	return RemoteJwksOwner{
-		ID: JwksOwnerID{
-			Kind:      OwnerKindPolicy,
+		ID: remotecache.OwnerID{
+			Kind:      remotecache.OwnerKindPolicy,
 			Namespace: namespace,
 			Name:      name,
 			Path:      fmt.Sprintf("spec.traffic.jwtAuthentication.providers[%d].jwks.remote", providerIndex),
 		},
-		DefaultNamespace: namespace,
-		Remote:           *provider.JWKS.Remote.DeepCopy(),
-		TTL:              TTLForRemote(*provider.JWKS.Remote),
+		Remote: *provider.JWKS.Remote.DeepCopy(),
+		TTL:    TTLForRemote(*provider.JWKS.Remote),
 	}, true
 }
 
 func PolicyBackendMCPAuthenticationLookupOwner(namespace, name string, remote agentgateway.RemoteJWKS) RemoteJwksOwner {
 	return RemoteJwksOwner{
-		ID: JwksOwnerID{
-			Kind:      OwnerKindPolicy,
+		ID: remotecache.OwnerID{
+			Kind:      remotecache.OwnerKindPolicy,
 			Namespace: namespace,
 			Name:      name,
 			Path:      "spec.backend.mcp.authentication.jwks",
 		},
-		DefaultNamespace: namespace,
-		Remote:           *remote.DeepCopy(),
-		TTL:              TTLForRemote(remote),
+		Remote: *remote.DeepCopy(),
+		TTL:    TTLForRemote(remote),
 	}
 }
 
 func backendMCPAuthenticationOwner(namespace, name string, remote agentgateway.RemoteJWKS) RemoteJwksOwner {
 	return RemoteJwksOwner{
-		ID: JwksOwnerID{
-			Kind:      OwnerKindBackend,
+		ID: remotecache.OwnerID{
+			Kind:      remotecache.OwnerKindBackend,
 			Namespace: namespace,
 			Name:      name,
 			Path:      "spec.policies.mcp.authentication.jwks",
 		},
-		DefaultNamespace: namespace,
-		Remote:           *remote.DeepCopy(),
-		TTL:              TTLForRemote(remote),
+		Remote: *remote.DeepCopy(),
+		TTL:    TTLForRemote(remote),
 	}
 }
 

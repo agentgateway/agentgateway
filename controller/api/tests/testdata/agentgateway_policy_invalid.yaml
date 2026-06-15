@@ -658,6 +658,51 @@ spec:
             inline: '{"keys":[]}'
       mcp: {}
 ---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-oidc-redirect-uri-no-path
+spec:
+  traffic:
+    oidc:
+      issuerURL: https://issuer.example.com
+      clientID: client-1
+      redirectURI: https://gateway.example.com
+---
+_err: 'should match'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-oidc-redirect-uri-root-path
+spec:
+  traffic:
+    oidc:
+      issuerURL: https://issuer.example.com
+      clientID: client-1
+      redirectURI: https://gateway.example.com/
+---
+_err: 'oidc and jwtAuthentication are mutually exclusive'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-oidc-and-jwt-mutually-exclusive
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    oidc:
+      issuerURL: https://issuer.example.com
+      clientID: client-1
+      redirectURI: https://gateway.example.com/oauth/callback
+    jwtAuthentication:
+      providers:
+        - issuer: https://issuer.example.com
+          jwks:
+            inline: '{"keys":[]}'
+---
 _err: 'pseudo-headers must be one of'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

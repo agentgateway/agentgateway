@@ -94,11 +94,21 @@ fn test_redirect_uri() -> RedirectUri {
 	RedirectUri::parse("https://app.example.com/oauth/callback".into()).expect("redirect uri")
 }
 
-fn test_oidc_cookie_encoder() -> crate::http::sessionpersistence::Encoder {
-	crate::http::sessionpersistence::Encoder::aes(
+fn test_oidc_cookie_encoder() -> OidcCookieEncoder {
+	let session_encoder = crate::http::sessionpersistence::Encoder::aes(
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	)
-	.expect("aes encoder")
+	.expect("aes encoder");
+	OidcCookieEncoder::from_session_encoder(&session_encoder).expect("oidc cookie encoder")
+}
+
+#[test]
+fn oidc_cookie_encoder_rejects_base64_session_encoder() {
+	assert!(
+		OidcCookieEncoder::from_session_encoder(&crate::http::sessionpersistence::Encoder::base64())
+			.is_none(),
+		"base64 encoder must not be accepted for oidc cookies"
+	);
 }
 
 fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
@@ -106,6 +116,7 @@ fn provider_endpoint(value: impl AsRef<str>) -> ProviderEndpoint {
 }
 
 fn test_policy() -> OidcPolicy {
+	let scopes: Vec<String> = vec!["openid".into(), "profile".into()];
 	let session = SessionConfig {
 		cookie_name: "agw_oidc_s_test".into(),
 		transaction_cookie_prefix: "agw_oidc_t_test".into(),
@@ -126,12 +137,14 @@ fn test_policy() -> OidcPolicy {
 		}),
 		client: ClientConfig {
 			client_id: TEST_CLIENT_ID.into(),
-			client_secret: SecretString::new("client-secret".into()),
-			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
+			credentials: ClientCredentials::ClientSecretBasic {
+				client_secret: SecretString::new("client-secret".into()),
+			},
 		},
 		redirect_uri: test_redirect_uri(),
 		session,
-		scopes: vec!["openid".into(), "profile".into()],
+		scopes,
+		provider_backend: None,
 	}
 }
 
@@ -240,7 +253,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		token_endpoint_auth: None,
 		jwks: Some(test_jwks_inline()),
 		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
+		client_secret: Some(SecretString::new("client-secret".into())),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
 	}
@@ -485,8 +498,11 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 		};
 		let client_config = ClientConfig {
 			client_id: client_id.into(),
-			client_secret: SecretString::new(client_secret.into()),
-			token_endpoint_auth,
+			credentials: ClientCredentials::from_parts(
+				token_endpoint_auth,
+				Some(SecretString::new(client_secret.into())),
+			)
+			.expect("confidential credentials"),
 		};
 
 		let response = provider::exchange_code(
@@ -496,6 +512,7 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 			"https://app.example.com/oauth/callback",
 			"code",
 			&SecretString::new("verifier".into()),
+			None,
 		)
 		.await
 		.expect(name);
@@ -542,6 +559,62 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 }
 
 #[tokio::test]
+async fn public_client_token_exchange_sends_no_client_secret() {
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({
+			"id_token": signed_id_token(TEST_NONCE)
+		})))
+		.mount(&mock)
+		.await;
+
+	let provider = Provider {
+		issuer: TEST_ISSUER.into(),
+		authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+		token_endpoint: provider_endpoint(format!("{}/token", mock.uri())),
+		id_token_validator: test_id_token_validator(),
+	};
+	let client_config = ClientConfig {
+		client_id: TEST_CLIENT_ID.into(),
+		credentials: ClientCredentials::Public,
+	};
+
+	let response = provider::exchange_code(
+		policy_client(),
+		&provider,
+		&client_config,
+		"https://app.example.com/oauth/callback",
+		"code",
+		&SecretString::new("verifier".into()),
+		None,
+	)
+	.await
+	.expect("public-client token exchange");
+	assert!(response.id_token.is_some());
+
+	let request = &mock.received_requests().await.expect("requests")[0];
+	let body = String::from_utf8(request.body.clone()).expect("utf8 body");
+
+	// Public clients authenticate themselves only by presenting client_id and
+	// a valid PKCE verifier; no Authorization header and no client_secret
+	// parameter should ever leave the gateway.
+	assert!(!request.headers.contains_key("authorization"));
+	assert!(
+		body.contains(&format!("client_id={TEST_CLIENT_ID}")),
+		"token request must still identify the client: {body}"
+	);
+	assert!(
+		!body.contains("client_secret"),
+		"public-client request leaked a client_secret: {body}"
+	);
+	assert!(
+		body.contains("code_verifier=verifier"),
+		"PKCE verifier must still be present: {body}"
+	);
+}
+
+#[tokio::test]
 async fn token_exchange_bounds_transport_failures() {
 	#[derive(Copy, Clone)]
 	enum FailureMode {
@@ -576,8 +649,9 @@ async fn token_exchange_bounds_transport_failures() {
 		};
 		let client_config = ClientConfig {
 			client_id: TEST_CLIENT_ID.into(),
-			client_secret: SecretString::new("client-secret".into()),
-			token_endpoint_auth: TokenEndpointAuth::ClientSecretBasic,
+			credentials: ClientCredentials::ClientSecretBasic {
+				client_secret: SecretString::new("client-secret".into()),
+			},
 		};
 
 		let err = match failure_mode {
@@ -589,6 +663,7 @@ async fn token_exchange_bounds_transport_failures() {
 					"https://app.example.com/oauth/callback",
 					"code",
 					&SecretString::new("verifier".into()),
+					None,
 					Duration::from_millis(50),
 				)
 				.await
@@ -601,6 +676,7 @@ async fn token_exchange_bounds_transport_failures() {
 					"https://app.example.com/oauth/callback",
 					"code",
 					&SecretString::new("verifier".into()),
+					None,
 				)
 				.await
 			},
@@ -731,6 +807,102 @@ async fn callback_success_sets_session_cookie_and_clears_transaction_cookie() {
 		cookie.starts_with(&policy.session.transaction_cookie_name(transaction_id))
 			&& cookie.contains("Max-Age=0")
 	}));
+}
+
+#[tokio::test]
+async fn callback_rejects_transaction_cookie_from_incompatible_policy() {
+	let source = test_policy();
+	let mut target = test_policy();
+	target.policy_id = PolicyId::policy("other-policy");
+	let (cookie_name, transaction_cookie_prefix) =
+		super::session::derive_cookie_names(&target.policy_id);
+	target.session.cookie_name = cookie_name;
+	target.session.transaction_cookie_prefix = transaction_cookie_prefix;
+
+	let transaction_id = "tx-policy";
+	let callback_state = encoded_callback_state(transaction_id, "test-state");
+	let encoded = encoded_transaction(
+		&source,
+		transaction_id,
+		"test-state",
+		TEST_NONCE,
+		"/protected",
+		now_unix() + 300,
+	);
+	let uri = format!("https://app.example.com/oauth/callback?code=auth-code&state={callback_state}");
+	let mut req = request(Method::GET, &uri, Some("text/html"));
+	add_cookie(
+		&mut req,
+		format!(
+			"{}={encoded}",
+			target.session.transaction_cookie_name(transaction_id)
+		),
+	);
+
+	let mut log = crate::test_helpers::policy::make_min_req_log();
+	let err = target
+		.apply(&mut log, &mut req, policy_client())
+		.await
+		.expect_err("incompatible transaction policy must be rejected");
+	assert!(matches!(err, Error::PolicyMismatch));
+}
+
+#[tokio::test]
+async fn browser_session_cookie_from_incompatible_policy_is_not_accepted() {
+	let source = test_policy();
+	let mut target = test_policy();
+	target.policy_id = PolicyId::policy("other-policy");
+	let (cookie_name, transaction_cookie_prefix) =
+		super::session::derive_cookie_names(&target.policy_id);
+	target.session.cookie_name = cookie_name;
+	target.session.transaction_cookie_prefix = transaction_cookie_prefix;
+
+	let encoded = source
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: source.policy_id.clone(),
+			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			expires_at_unix: Some(now_unix() + 300),
+		})
+		.expect("encode session");
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/protected",
+		Some("text/html"),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", target.session.cookie_name),
+	);
+
+	let mut log = crate::test_helpers::policy::make_min_req_log();
+	let response = target
+		.apply(&mut log, &mut req, policy_client())
+		.await
+		.expect("target policy should start a fresh login");
+	assert!(
+		response.direct_response.is_some(),
+		"incompatible browser session policy must not authenticate the request",
+	);
+	assert!(
+		req.extensions().get::<jwt::Claims>().is_none(),
+		"incompatible browser session policy must not install claims",
+	);
+}
+
+#[test]
+fn browser_session_cookie_size_limit_still_applies_with_policy_payload() {
+	let policy = test_policy();
+	let err = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			raw_id_token: SecretString::new("x".repeat(5000).into()),
+			expires_at_unix: Some(now_unix() + 300),
+		})
+		.expect_err("oversized session cookie must be rejected");
+
+	assert!(matches!(err, Error::SessionCookieTooLarge));
 }
 
 #[tokio::test]
@@ -919,7 +1091,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				token_endpoint_auth: None,
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -967,7 +1139,8 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 			"{name}"
 		);
 		assert_eq!(
-			policy.client.token_endpoint_auth, expected_token_endpoint_auth,
+			policy.client.credentials.method(),
+			expected_token_endpoint_auth,
 			"{name}"
 		);
 	}
@@ -996,7 +1169,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		token_endpoint_auth: None,
 		jwks: None,
 		client_id: TEST_CLIENT_ID.into(),
-		client_secret: SecretString::new("client-secret".into()),
+		client_secret: Some(SecretString::new("client-secret".into())),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
 	};
@@ -1020,7 +1193,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				token_endpoint_auth: None,
 				jwks: Some(test_jwks_inline()),
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -1048,7 +1221,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				token_endpoint_auth: Some(TokenEndpointAuth::ClientSecretPost),
 				jwks: None,
 				client_id: TEST_CLIENT_ID.into(),
-				client_secret: SecretString::new("client-secret".into()),
+				client_secret: Some(SecretString::new("client-secret".into())),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
 			},
@@ -1062,4 +1235,109 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 			.expect_err(name);
 		assert!(err.to_string().contains(expected_error_fragment), "{name}");
 	}
+}
+
+#[test]
+fn cookie_names_are_stable_for_the_cross_plane_policy_key_contract() {
+	// The Go controller emits Policy.Key = "<ns>/<name>:oidc"
+	// (processOIDCPolicy) and the xDS decoder wraps it as "policy/<key>";
+	// cookie names are the truncated sha256 of that string. If this golden
+	// changes, every live browser session invalidates on upgrade — change it
+	// together with TestOIDCPolicyKeyFormatIsStable in
+	// controller/pkg/agentgateway/plugins/traffic_oidc_test.go.
+	let (session, txn) = super::session::derive_cookie_names(&PolicyId::policy("default/test:oidc"));
+	assert_eq!(session, "agw_oidc_s_da0304d7fbfcda5b");
+	assert_eq!(txn, "agw_oidc_t_da0304d7fbfcda5b");
+}
+
+fn compile_test_oidc_from_xds(
+	policy_id: PolicyId,
+	jwks_inline: &str,
+	encoder: &OidcCookieEncoder,
+) -> Result<OidcPolicy, super::Error> {
+	let credentials = ClientCredentials::from_parts(
+		TokenEndpointAuth::ClientSecretBasic,
+		Some(SecretString::new("client-secret".into())),
+	)?;
+	super::PreparedOidcPolicy {
+		policy_id,
+		issuer: TEST_ISSUER.into(),
+		authorization_endpoint: provider_endpoint("https://issuer.example.com/authorize"),
+		token_endpoint: provider_endpoint("https://issuer.example.com/token"),
+		id_token_jwks: super::parse_jwks_inline(jwks_inline)?,
+		client_id: TEST_CLIENT_ID.into(),
+		credentials,
+		redirect_uri: test_redirect_uri(),
+		scopes: vec!["profile".into(), "email".into()],
+		provider_backend: None,
+	}
+	.compile(encoder)
+}
+
+#[test]
+fn xds_oidc_compiles_to_policy() {
+	let policy_id = PolicyId::policy("default/my-policy");
+	let encoder = test_oidc_cookie_encoder();
+	let jwks = serde_json::to_string(&test_jwks()).expect("jwks json");
+
+	let policy =
+		compile_test_oidc_from_xds(policy_id.clone(), &jwks, &encoder).expect("compile xds oidc");
+
+	assert_eq!(policy.policy_id, policy_id);
+	assert_eq!(policy.provider.issuer, TEST_ISSUER);
+	assert_eq!(policy.client.client_id, TEST_CLIENT_ID);
+	match &policy.client.credentials {
+		ClientCredentials::ClientSecretBasic { client_secret } => {
+			assert_eq!(client_secret.expose_secret(), "client-secret");
+		},
+		other => panic!("expected ClientSecretBasic credentials, got {other:?}"),
+	}
+
+	// Scopes always include "openid", even when not explicitly requested.
+	assert_eq!(
+		policy.scopes,
+		vec!["openid".to_string(), "profile".into(), "email".into()]
+	);
+
+	// Cookie names are deterministic from the policy id.
+	let (expected_cookie, expected_transaction_prefix) =
+		super::session::derive_cookie_names(&policy.policy_id);
+	assert_eq!(policy.session.cookie_name, expected_cookie);
+	assert_eq!(
+		policy.session.transaction_cookie_prefix,
+		expected_transaction_prefix
+	);
+}
+
+#[test]
+fn different_policy_ids_use_different_cookie_names() {
+	let encoder = test_oidc_cookie_encoder();
+	let jwks = serde_json::to_string(&test_jwks()).expect("jwks json");
+
+	let first = compile_test_oidc_from_xds(PolicyId::policy("default/first"), &jwks, &encoder)
+		.expect("compile first xds oidc");
+	let second = compile_test_oidc_from_xds(PolicyId::policy("default/second"), &jwks, &encoder)
+		.expect("compile second xds oidc");
+
+	assert_ne!(first.policy_id, second.policy_id);
+	assert_ne!(first.session.cookie_name, second.session.cookie_name);
+	assert_ne!(
+		first.session.transaction_cookie_prefix,
+		second.session.transaction_cookie_prefix,
+	);
+}
+
+#[test]
+fn xds_oidc_rejects_invalid_jwks_inline() {
+	let err = compile_test_oidc_from_xds(
+		PolicyId::policy("default/p"),
+		"not valid json",
+		&test_oidc_cookie_encoder(),
+	)
+	.expect_err("bad jwks must be rejected");
+	let msg = err.to_string();
+	assert!(
+		msg.contains("failed to parse inline oidc jwks"),
+		"expected jwks parse error, got: {msg}",
+	);
 }

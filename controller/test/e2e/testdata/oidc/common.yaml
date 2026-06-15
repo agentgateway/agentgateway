@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: oidc-client
+  namespace: agentgateway-base
+stringData:
+  clientSecret: secret_2nGx_bjvo9z72Aw3-hKTWMusEo2-yTfH
