@@ -254,6 +254,8 @@ impl TCPProxy {
 					default_policies.merge(backend_policies),
 				)
 			},
+			// Guardrail backends are only callable from prompt guard policies, not TCP routes
+			SimpleBackend::Guardrail(_, _) => return Err(ProxyError::InvalidBackendType),
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
 		Ok(backend_call)

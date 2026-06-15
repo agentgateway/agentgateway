@@ -1851,6 +1851,20 @@ async fn build_simple_backend_call(
 				default_policies.merge(policies.as_ref().clone()),
 			)
 		},
+		SimpleBackend::Guardrail(_, config) => {
+			if let llm::policy::guardrail::GuardrailBackend::Bedrock(b) = config {
+				// The implicit AWS auth needs the signing region
+				req.extensions_mut().insert(llm::bedrock::AwsRegion {
+					region: b.region.to_string(),
+				});
+			}
+
+			BackendCall::new(
+				config.target(),
+				// Gateway-owned transport defaults; user-attached policies take precedence
+				config.default_policies().merge(policies.as_ref().clone()),
+			)
+		},
 		SimpleBackend::Invalid => {
 			return Err(ProxyError::BackendDoesNotExist.into());
 		},
@@ -2039,6 +2053,20 @@ async fn make_backend_call(
 		},
 		Backend::Aws(name, config) => {
 			let simple = SimpleBackend::Aws(name.clone(), config.clone());
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
+		},
+		Backend::Guardrail(name, config) => {
+			let simple = SimpleBackend::Guardrail(name.clone(), config.clone());
 			build_simple_backend_call(
 				&inputs,
 				policy_client.clone(),
@@ -2476,7 +2504,7 @@ fn build_connect_backend_call(
 			policies,
 		)),
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
-		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) => {
+		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) | Backend::Guardrail(_, _) => {
 			Err(ProxyError::InvalidBackendType)
 		},
 	}
@@ -3640,14 +3668,34 @@ impl PolicyClient {
 
 	pub async fn call_reference_with_policies(
 		&self,
-		mut req: Request,
+		req: Request,
 		backend_ref: &SimpleBackendReference,
 		policies: &[BackendTrafficPolicy],
 	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
+		let backend = self.resolve_backend(backend_ref)?;
+		self.call_resolved(req, backend, policies).await
+	}
+
+	/// Resolve a backend reference without calling it. Useful when the caller needs
+	/// the resolved backend configuration to construct the request (e.g. guardrails).
+	pub fn resolve_backend(
+		&self,
+		backend_ref: &SimpleBackendReference,
+	) -> Result<SimpleBackendWithPolicies, ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
+		Ok(backend)
+	}
 
+	/// Call an already-resolved backend, applying policies attached to it in the store,
+	/// its inline policies, and any additional caller-provided policies (most specific).
+	pub async fn call_resolved(
+		&self,
+		mut req: Request,
+		backend: SimpleBackendWithPolicies,
+		policies: &[BackendTrafficPolicy],
+	) -> Result<Response, ProxyError> {
+		let start = std::time::Instant::now();
 		http::modify_req_uri(&mut req, |uri| {
 			if uri.authority.is_none() {
 				// If host is not set, set it to the backend
@@ -3696,23 +3744,6 @@ impl PolicyClient {
 		let res = self
 			.internal_call_with_policies(req, backend, policies)
 			.await;
-		self.observe_outbound(start);
-		res
-	}
-
-	pub async fn call_with_explicit_policies_list(
-		&self,
-		req: Request,
-		backend: Backend,
-		policies: Vec<BackendTrafficPolicy>,
-	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let pols = self
-			.inputs
-			.stores
-			.read_binds()
-			.inline_backend_policies(&policies);
-		let res = self.internal_call_with_policies(req, backend, pols).await;
 		self.observe_outbound(start);
 		res
 	}
