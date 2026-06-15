@@ -128,13 +128,13 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 }
 
 func readFile(filename string) ([]byte, error) {
-	file := os.Stdin
-	if filename != "-" {
-		var err error
-		file, err = os.Open(filename)
-		if err != nil {
-			return nil, err
-		}
+	if filename == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
 	}
 	defer file.Close()
 

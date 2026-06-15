@@ -6,5 +6,8 @@ import (
 )
 
 func Command() flag.Command {
-	return proxyconfig.Command()
+	cmd := proxyconfig.Command()
+	cmd.Deprecated = `use "agctl proxy config" instead`
+	cmd.Hidden = true
+	return cmd
 }

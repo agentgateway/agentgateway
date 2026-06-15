@@ -6,5 +6,8 @@ import (
 )
 
 func Command() flag.Command {
-	return proxytrace.Command()
+	cmd := proxytrace.Command()
+	cmd.Deprecated = `use "agctl proxy trace" instead`
+	cmd.Hidden = true
+	return cmd
 }

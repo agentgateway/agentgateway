@@ -10,6 +10,8 @@ type Command struct {
 	Long               string
 	Example            string
 	Aliases            []string
+	Deprecated         string
+	Hidden             bool
 	Args               cobra.PositionalArgs
 	RunE               func(cmd *cobra.Command, args []string) error
 	AddFlags           func(cmd *cobra.Command)
@@ -25,6 +27,8 @@ func BuildCobra(cb CommandBuilder) *cobra.Command {
 		Long:         built.Long,
 		Example:      built.Example,
 		Aliases:      built.Aliases,
+		Deprecated:   built.Deprecated,
+		Hidden:       built.Hidden,
 		Args:         built.Args,
 		RunE:         built.RunE,
 		SilenceUsage: true,
