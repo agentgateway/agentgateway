@@ -3579,6 +3579,7 @@ type Backend_Aws struct {
 }
 
 type Backend_Guardrail struct {
+	// Not yet implemented. Reserved for a future release.
 	Guardrail *GuardrailBackend `protobuf:"bytes,9,opt,name=guardrail,proto3,oneof"`
 }
 
@@ -12539,11 +12540,9 @@ func (x *BackendPolicySpec_Ai_Webhook) GetFailureMode() BackendPolicySpec_Ai_Web
 type BackendPolicySpec_Ai_Moderation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Model to use. Defaults to `omni-moderation-latest`
-	Model *string `protobuf:"bytes,1,opt,name=model,proto3,oneof" json:"model,omitempty"`
-	// Deprecated: reference a GuardrailBackend via backend_ref and attach policies to it instead.
+	Model          *string              `protobuf:"bytes,1,opt,name=model,proto3,oneof" json:"model,omitempty"`
 	InlinePolicies []*BackendPolicySpec `protobuf:"bytes,2,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
-	// Reference to a GuardrailBackend with an openai_moderation provider.
-	// Mutually exclusive with inline_policies.
+	// Not yet implemented. Reserved for a future release.
 	BackendRef    *BackendReference `protobuf:"bytes,3,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -12601,15 +12600,13 @@ func (x *BackendPolicySpec_Ai_Moderation) GetBackendRef() *BackendReference {
 }
 
 type BackendPolicySpec_Ai_BedrockGuardrails struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Deprecated: set provider config on a GuardrailBackend referenced via backend_ref instead.
-	Identifier string `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
-	Version    string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	Version    string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	// AWS region where the guardrail is deployed (e.g., "us-west-2")
 	Region         string               `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	InlinePolicies []*BackendPolicySpec `protobuf:"bytes,4,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
-	// Reference to a GuardrailBackend with a bedrock provider.
-	// Mutually exclusive with the inline provider fields above.
+	// Not yet implemented. Reserved for a future release.
 	BackendRef    *BackendReference `protobuf:"bytes,5,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -12681,15 +12678,13 @@ func (x *BackendPolicySpec_Ai_BedrockGuardrails) GetBackendRef() *BackendReferen
 }
 
 type BackendPolicySpec_Ai_GoogleModelArmor struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Deprecated: set provider config on a GuardrailBackend referenced via backend_ref instead.
-	TemplateId string `protobuf:"bytes,1,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
-	ProjectId  string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	TemplateId string                 `protobuf:"bytes,1,opt,name=template_id,json=templateId,proto3" json:"template_id,omitempty"`
+	ProjectId  string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
 	// default: us-central1
 	Location       *string              `protobuf:"bytes,3,opt,name=location,proto3,oneof" json:"location,omitempty"`
 	InlinePolicies []*BackendPolicySpec `protobuf:"bytes,4,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
-	// Reference to a GuardrailBackend with a google_model_armor provider.
-	// Mutually exclusive with the inline provider fields above.
+	// Not yet implemented. Reserved for a future release.
 	BackendRef    *BackendReference `protobuf:"bytes,5,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -12763,7 +12758,6 @@ func (x *BackendPolicySpec_Ai_GoogleModelArmor) GetBackendRef() *BackendReferenc
 type BackendPolicySpec_Ai_AzureContentSafety struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The Azure Content Safety endpoint URL (e.g., "https://<resource-name>.cognitiveservices.azure.com")
-	// Deprecated: set provider config on a GuardrailBackend referenced via backend_ref instead.
 	Endpoint string `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// Severity threshold (0-6). Content at or above this level is blocked. Default: 2.
 	SeverityThreshold *int32 `protobuf:"varint,2,opt,name=severity_threshold,json=severityThreshold,proto3,oneof" json:"severity_threshold,omitempty"`
@@ -12774,8 +12768,7 @@ type BackendPolicySpec_Ai_AzureContentSafety struct {
 	// When true, further analysis stops if a blocklist is hit
 	HaltOnBlocklistHit *bool                `protobuf:"varint,5,opt,name=halt_on_blocklist_hit,json=haltOnBlocklistHit,proto3,oneof" json:"halt_on_blocklist_hit,omitempty"`
 	InlinePolicies     []*BackendPolicySpec `protobuf:"bytes,6,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
-	// Reference to a GuardrailBackend with an azure_content_safety provider.
-	// Mutually exclusive with endpoint/inline_policies.
+	// Not yet implemented. Reserved for a future release.
 	BackendRef    *BackendReference `protobuf:"bytes,7,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
