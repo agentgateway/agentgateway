@@ -1319,6 +1319,28 @@ async fn llm_openai_tokenize() {
 	.await;
 }
 
+async fn setup_local_llm_config(yaml: &str) -> TestBind {
+	let t = setup_proxy_test("{}").unwrap();
+	let normalized = crate::types::local::NormalizedLocalConfig::from(
+		t.pi.cfg.as_ref(),
+		t.pi.upstream.clone(),
+		t.pi.cfg.gateway(),
+		yaml,
+	)
+	.await
+	.expect("local config normalizes");
+	t.pi.stores.binds.sync_local(
+		normalized.binds,
+		normalized.listener_routes,
+		normalized.listener_tcp_routes,
+		normalized.policies,
+		normalized.backends,
+		normalized.route_groups,
+		Default::default(),
+	);
+	t
+}
+
 async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
 	let t = setup_proxy_test("{}").unwrap();
 	let mut normalized = crate::types::local::NormalizedLocalConfig::from(
@@ -1462,6 +1484,62 @@ llm:
 			.expect("upstream requests")
 			.len(),
 		1
+	);
+}
+
+#[tokio::test]
+async fn llm_conditional_virtual_model_no_match_returns_json_error() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+  virtualModels:
+  - name: public-model
+    routing:
+      conditional:
+        targets:
+        - model: real-model
+          when: request.headers["x-use-model"] == "true"
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+	let request_body = json!({
+		"model": "public-model",
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		&serde_json::to_vec(&request_body).expect("serialized request"),
+	)
+	.await;
+
+	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	let body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("error JSON");
+	assert_eq!(body["error"]["code"], "virtual_model_no_matching_target");
+	assert_eq!(body["error"]["type"], "invalid_request_error");
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		0
 	);
 }
 

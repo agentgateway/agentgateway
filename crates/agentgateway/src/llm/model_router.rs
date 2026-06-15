@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
-use anyhow::Context;
 use bytes::Bytes;
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -91,6 +90,11 @@ pub enum ResolveResult {
 	Backend(ResolvedBackend),
 }
 
+struct RequestedModel {
+	model: String,
+	body: Option<Value>,
+}
+
 impl ModelRouter {
 	pub fn new(
 		models: Vec<ModelRoute>,
@@ -104,18 +108,13 @@ impl ModelRouter {
 		}
 	}
 
-	pub async fn resolve(&self, req: &mut Request) -> anyhow::Result<ResolveResult> {
+	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
 		if is_model_list_request(req) {
-			return Ok(ResolveResult::DirectResponse(
-				self.model_list_response(req)?,
-			));
+			return ResolveResult::DirectResponse(self.model_list_response(req));
 		}
 		let requested_model = match requested_model(req).await {
-			Ok(model) => model,
-			Err(err) => {
-				tracing::debug!(%err, "failed to read LLM request model");
-				return Ok(ResolveResult::DirectResponse(model_not_found_response()));
-			},
+			Ok(requested_model) => requested_model,
+			Err(resp) => return ResolveResult::DirectResponse(resp),
 		};
 		req
 			.extensions_mut()
@@ -123,34 +122,25 @@ impl ModelRouter {
 			.0
 			.insert(
 				"agentgateway_user_model".to_string(),
-				Value::String(requested_model.clone()),
+				Value::String(requested_model.model.clone()),
 			);
 		if let Some(virtual_model) = self
 			.virtual_models
 			.iter()
-			.find(|model| model.name == requested_model)
+			.find(|model| model.name == requested_model.model)
 		{
-			return Ok(match self.resolve_virtual_model(virtual_model, req).await {
-				Ok(backend) => ResolveResult::Backend(backend),
-				Err(err) => {
-					tracing::debug!(%err, "failed to resolve LLM virtual model");
-					ResolveResult::DirectResponse(model_not_found_response())
-				},
-			});
+			return self
+				.resolve_virtual_model(virtual_model, req, requested_model.body)
+				.await;
 		}
 
-		Ok(
-			match self.resolve_concrete_model(&requested_model, false, req) {
-				Ok(route) => ResolveResult::Backend(route),
-				Err(err) => {
-					tracing::debug!(%err, "failed to resolve LLM model");
-					ResolveResult::DirectResponse(model_not_found_response())
-				},
-			},
-		)
+		match self.resolve_concrete_model(&requested_model.model, false, req) {
+			Some(route) => ResolveResult::Backend(route),
+			None => ResolveResult::DirectResponse(model_not_found_response()),
+		}
 	}
 
-	fn model_list_response(&self, req: &Request) -> anyhow::Result<Response> {
+	fn model_list_response(&self, req: &Request) -> Response {
 		let data = self
 			.models
 			.iter()
@@ -164,30 +154,40 @@ impl ModelRouter {
 					.map(|model| model_list_entry(&model.name, self.created)),
 			)
 			.collect::<Vec<_>>();
-		let body = serde_json::to_vec(&serde_json::json!({
+		let body = serde_json::json!({
 			"data": data,
 			"object": "list",
-		}))?;
-		Ok(
-			::http::Response::builder()
-				.status(::http::StatusCode::OK)
-				.header(::http::header::CONTENT_TYPE, "application/json")
-				.body(http::Body::from(body))?,
-		)
+		})
+		.to_string();
+		::http::Response::builder()
+			.status(::http::StatusCode::OK)
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(http::Body::from(body))
+			.expect("LLM model list response is valid")
 	}
 
 	async fn resolve_virtual_model(
 		&self,
 		virtual_model: &VirtualModelRoute,
 		req: &mut Request,
-	) -> anyhow::Result<ResolvedBackend> {
+		body: Option<Value>,
+	) -> ResolveResult {
 		let target = match &virtual_model.routing {
-			VirtualModelRouting::Weighted(targets) => targets
-				.choose_weighted(&mut rand::rng(), |target| target.weight)
-				.map(|target| target.model.clone())
-				.context("virtual model has no valid weighted targets")?,
+			VirtualModelRouting::Weighted(targets) => {
+				match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
+					Ok(target) => target.model.clone(),
+					Err(err) => {
+						tracing::debug!(%err, "failed to select weighted virtual model target");
+						return ResolveResult::DirectResponse(llm_error_response(
+							::http::StatusCode::NOT_FOUND,
+							&format!("Virtual model {} could not be resolved", virtual_model.name),
+							"virtual_model_not_resolved",
+						));
+					},
+				}
+			},
 			VirtualModelRouting::Failover { backend_key } => {
-				return Ok(ResolvedBackend {
+				return ResolveResult::Backend(ResolvedBackend {
 					backend: RouteBackendReference {
 						weight: 1,
 						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
@@ -198,23 +198,43 @@ impl ModelRouter {
 			},
 			VirtualModelRouting::Conditional(targets) => {
 				let exec = cel::Executor::new_request(req);
-				targets
-					.iter()
-					.find(|target| {
-						target
-							.when
-							.as_ref()
-							.map(|expr| exec.eval_bool(expr))
-							.unwrap_or(true)
-					})
-					.map(|target| target.model.clone())
-					.context("virtual model did not match any conditional target")?
+				match targets.iter().find(|target| {
+					target
+						.when
+						.as_ref()
+						.map(|expr| exec.eval_bool(expr))
+						.unwrap_or(true)
+				}) {
+					Some(target) => target.model.clone(),
+					None => {
+						return ResolveResult::DirectResponse(llm_error_response(
+							::http::StatusCode::BAD_REQUEST,
+							&format!(
+								"Virtual model {} did not match any conditional target",
+								virtual_model.name
+							),
+							"virtual_model_no_matching_target",
+						));
+					},
+				}
 			},
 		};
-		rewrite_body_model(req, &target).await?;
-		self
-			.resolve_concrete_model(&target, true, req)
-			.with_context(|| format!("failed to resolve LLM virtual model target {target}"))
+		if let Some(body) = body {
+			if let Err(resp) = rewrite_body_model(req, body, &target) {
+				return ResolveResult::DirectResponse(resp);
+			}
+		}
+		match self.resolve_concrete_model(&target, true, req) {
+			Some(route) => ResolveResult::Backend(route),
+			None => ResolveResult::DirectResponse(llm_error_response(
+				::http::StatusCode::NOT_FOUND,
+				&format!(
+					"Virtual model {} selected target {target}, but no matching model was found",
+					virtual_model.name
+				),
+				"virtual_model_target_not_found",
+			)),
+		}
 	}
 
 	fn resolve_concrete_model(
@@ -222,17 +242,14 @@ impl ModelRouter {
 		requested_model: &str,
 		allow_internal: bool,
 		req: &Request,
-	) -> anyhow::Result<ResolvedBackend> {
-		let model = self
-			.models
-			.iter()
-			.find(|model| {
-				(allow_internal || model.visibility == ModelVisibility::Public)
-					&& model_name_matches(&model.name, requested_model)
-					&& header_matches(&model.header_matches, req)
-			})
-			.with_context(|| format!("model not found: {requested_model}"))?;
-		Ok(ResolvedBackend {
+	) -> Option<ResolvedBackend> {
+		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
+		let model = self.models.iter().find(|model| {
+			(allow_internal || model.visibility == ModelVisibility::Public)
+				&& model_name_matches(&model.name, requested_model)
+				&& header_matches(&model.header_matches, req)
+		})?;
+		Some(ResolvedBackend {
 			backend: RouteBackendReference {
 				weight: 1,
 				target: BackendReference::Backend(strng::format!("/{}", model.backend_key)).into(),
@@ -244,13 +261,28 @@ impl ModelRouter {
 }
 
 fn model_not_found_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::NOT_FOUND,
+		"Model not found",
+		"model_not_found",
+	)
+}
+
+fn llm_error_response(status: ::http::StatusCode, message: &str, code: &str) -> Response {
 	::http::Response::builder()
-		.status(::http::StatusCode::NOT_FOUND)
+		.status(status)
 		.header(::http::header::CONTENT_TYPE, "application/json")
 		.body(http::Body::from(
-			r#"{"error":{"message":"Model not found","type":"invalid_request_error","code":"model_not_found"}}"#,
+			serde_json::json!({
+				"error": {
+					"message": message,
+					"type": "invalid_request_error",
+					"code": code,
+				}
+			})
+			.to_string(),
 		))
-		.expect("static LLM model not found response is valid")
+		.expect("LLM error response is valid")
 }
 
 fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
@@ -277,6 +309,7 @@ fn model_list_entry(id: &str, created: u64) -> serde_json::Value {
 		"id": id,
 		"object": "model",
 		"created": created,
+		// TODO: this matches some other gateways but seems odd. Should we use the real provide here?
 		"owned_by": "openai",
 	})
 }
@@ -341,56 +374,98 @@ fn model_name_matches(pattern: &str, model: &str) -> bool {
 	pattern == model
 }
 
-async fn requested_model(req: &mut Request) -> anyhow::Result<String> {
+async fn requested_model(req: &mut Request) -> Result<RequestedModel, Response> {
 	let path = req.uri().path();
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		return path
 			.rsplit_once("/publishers/anthropic/models/")
 			.and_then(|(_, rest)| rest.split_once(':'))
-			.map(|(model, _)| model.to_string())
-			.context("missing vertex anthropic model in request path");
+			.map(|(model, _)| RequestedModel {
+				model: model.to_string(),
+				body: None,
+			})
+			.ok_or_else(|| {
+				llm_error_response(
+					::http::StatusCode::BAD_REQUEST,
+					"LLM request path is missing model",
+					"missing_model",
+				)
+			});
 	}
 	if path.ends_with("/invoke-with-response-stream") || path.ends_with("/invoke") {
 		return path
 			.rsplit_once("/model/")
 			.and_then(|(_, rest)| rest.split_once("/invoke"))
-			.map(|(model, _)| model.to_string())
-			.context("missing bedrock model in request path");
+			.map(|(model, _)| RequestedModel {
+				model: model.to_string(),
+				body: None,
+			})
+			.ok_or_else(|| {
+				llm_error_response(
+					::http::StatusCode::BAD_REQUEST,
+					"LLM request path is missing model",
+					"missing_model",
+				)
+			});
 	}
 
 	let body = body_bytes(req).await?;
-	let body: Value = serde_json::from_slice(&body).context("failed to parse LLM request body")?;
-	body
+	let body: Value = serde_json::from_slice(&body).map_err(|err| {
+		tracing::debug!(%err, "failed to parse LLM request body");
+		llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"LLM request body must be valid JSON",
+			"invalid_request_body",
+		)
+	})?;
+	let model = body
 		.get("model")
 		.and_then(Value::as_str)
 		.map(ToString::to_string)
-		.context("LLM request body is missing string field 'model'")
+		.ok_or_else(|| {
+			llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"LLM request body is missing string field 'model'",
+				"missing_model",
+			)
+		})?;
+	Ok(RequestedModel {
+		model,
+		body: Some(body),
+	})
 }
 
-async fn rewrite_body_model(req: &mut Request, target: &str) -> anyhow::Result<()> {
-	let body = body_bytes(req).await?;
-	if body.is_empty() {
-		return Ok(());
-	}
-	let Ok(mut json) = serde_json::from_slice::<Value>(&body) else {
-		return Ok(());
-	};
-	let Some(obj) = json.as_object_mut() else {
+fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Result<(), Response> {
+	let Some(obj) = body.as_object_mut() else {
 		return Ok(());
 	};
 	obj.insert("model".to_string(), Value::String(target.to_string()));
-	let body = serde_json::to_vec(&json)?;
+	let body = serde_json::to_vec(&body).map_err(|err| {
+		tracing::debug!(%err, "failed to serialize rewritten LLM request body");
+		llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to rewrite LLM request body model",
+			"request_body_rewrite_failed",
+		)
+	})?;
 	*req.body_mut() = http::Body::from(body);
 	req.headers_mut().remove(::http::header::CONTENT_LENGTH);
 	req.extensions_mut().remove::<cel::BufferedBody>();
 	Ok(())
 }
 
-async fn body_bytes(req: &mut Request) -> anyhow::Result<Bytes> {
+async fn body_bytes(req: &mut Request) -> Result<Bytes, Response> {
 	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
 		return Ok(body.0.clone());
 	}
-	let body = http::inspect_body(req).await?;
+	let body = http::inspect_body(req).await.map_err(|err| {
+		tracing::debug!(%err, "failed to read LLM request body");
+		llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to read LLM request body",
+			"request_body_read_failed",
+		)
+	})?;
 	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
 	Ok(body)
 }

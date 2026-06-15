@@ -165,7 +165,7 @@ mod body_modes {
 		assert_eq!(
 			body
 				.headers
-				.get("x-ext-proc-model-name")
+				.get("x-gateway-model-name")
 				.unwrap()
 				.to_str()
 				.unwrap(),
@@ -198,7 +198,7 @@ mod body_modes {
 		assert_eq!(
 			body
 				.headers
-				.get("x-ext-proc-model-name")
+				.get("x-gateway-model-name")
 				.unwrap()
 				.to_str()
 				.unwrap(),
@@ -2982,7 +2982,7 @@ impl Handler for BBRExtProc {
 					header_mutation: Some(HeaderMutation {
 						set_headers: vec![HeaderValueOption {
 							header: Some(HeaderValue {
-								key: "X-Ext-Proc-Model-Name".to_string(),
+								key: "X-Gateway-Model-Name".to_string(),
 								value: String::new(),
 								raw_value: b"my-model-name".to_vec(),
 							}),

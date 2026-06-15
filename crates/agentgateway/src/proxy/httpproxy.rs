@@ -795,12 +795,7 @@ impl HTTPProxy {
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
 		let selected_llm_backend = if let Some(router) = &selected_route.llm_router {
-			match router
-				.resolve(&mut req)
-				.await
-				.map_err(ProxyError::Processing)
-				.snapshot_on_err(log, &mut req)?
-			{
+			match router.resolve(&mut req).await {
 				model_router::ResolveResult::DirectResponse(resp) => {
 					return Err(ProxyResponse::DirectResponse(Box::new(resp))).snapshot_on_err(log, &mut req);
 				},
