@@ -535,24 +535,13 @@ pub struct ModelCatalogConfig {
 	pub sources: Vec<ModelCatalogSource>,
 }
 
-impl ModelCatalogConfig {
-	/// Resolve the configured sources to catalog file paths.
-	pub fn paths(&self) -> Vec<PathBuf> {
-		self
-			.sources
-			.iter()
-			.map(|ModelCatalogSource::File { file }| file.clone())
-			.collect()
-	}
-}
-
 /// A source of model cost catalog data.
-// TODO: Add support for inline cost config
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {
 	File { file: PathBuf },
+	Inline { inline: String },
 }
 
 #[apply(schema!)]

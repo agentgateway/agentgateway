@@ -473,6 +473,33 @@ spec:
                       `rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn`.
                     type: string
                 type: object
+              modelCatalog:
+                description: |-
+                  ModelCatalog configures sources for the model cost catalog.
+                  Sources are merged in order, with later entries taking precedence.
+                properties:
+                  sources:
+                    items:
+                      description: ModelCatalogSource is a single source of model
+                        cost catalog data.
+                      properties:
+                        configMap:
+                          description: ModelCatalogConfigMapRef identifies a ConfigMap
+                            holding model cost catalog JSON.
+                          properties:
+                            key:
+                              description: Data key whose value is the catalog JSON.
+                                Defaults to "catalog.json".
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          type: object
+                      type: object
+                    type: array
+                type: object
               podDisruptionBudget:
                 description: |-
                   Creates a `PodDisruptionBudget` for the

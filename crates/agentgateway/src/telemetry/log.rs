@@ -1971,7 +1971,10 @@ mod tests {
 			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2"}}}}}}"#,
 		)
 		.unwrap();
-		let catalog = ModelCatalog::new(vec![catalog_file.path().to_path_buf()]).unwrap();
+		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
+			file: catalog_file.path().to_path_buf(),
+		}])
+		.unwrap();
 		let request = llm::LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Completions,
