@@ -1,0 +1,25 @@
+llm:
+  models:
+  - name: openai/gpt-5-mini
+    provider: openAI
+    params:
+      model: gpt-5-mini
+      apiKey: sk-openai
+  - name: anthropic/*
+    visibility: internal
+    provider: anthropic
+    params:
+      apiKey: sk-anthropic
+    transformation:
+      model: llmRequest.model.stripPrefix("anthropic/")
+  virtualModels:
+  - name: resilient
+    routing:
+      failover:
+        targets:
+        - model: openai/gpt-5-mini
+          priority: 0
+        - model: anthropic/haiku
+          priority: 1
+        - model: anthropic/sonnet
+          priority: 1

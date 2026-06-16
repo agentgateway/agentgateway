@@ -29,7 +29,9 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
 	merge_in_headers, retry,
 };
-use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
+use crate::llm::{
+	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
+};
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
 	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
@@ -546,6 +548,7 @@ impl HTTPProxy {
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.model_catalog.clone(),
 			start,
 			tcp.clone(),
 		);
@@ -791,6 +794,42 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
+		let selected_llm_backend = if let Some(router) = &selected_route.llm_router {
+			match router.resolve(&mut req).await {
+				model_router::ResolveResult::DirectResponse(resp) => {
+					return Err(ProxyResponse::DirectResponse(Box::new(resp))).snapshot_on_err(log, &mut req);
+				},
+				model_router::ResolveResult::Backend(backend) => Some(backend),
+			}
+		} else {
+			None
+		};
+
+		let mut route_inline_policy_storage;
+		let route_inlines = if let Some(selected_llm_backend) = &selected_llm_backend {
+			// LLM routing may add route policies to the final selected route. Clone the
+			// inline policy lists so we can append those policies without mutating config.
+			route_inline_policy_storage = selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.clone())
+				.collect::<Vec<_>>();
+			if let Some(inline_policies) = route_inline_policy_storage.last_mut() {
+				inline_policies.extend(selected_llm_backend.route_policies.clone());
+			}
+			route_inline_policy_storage
+				.iter()
+				.map(Vec::as_slice)
+				.collect::<Vec<_>>()
+		} else {
+			// Most requests do not use LLM routing, so borrow the existing inline policy
+			// lists directly and avoid cloning policy config.
+			selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.as_slice())
+				.collect()
+		};
 		let route_path = RoutePath {
 			listener: &selected_listener.name,
 			service: selected_route_chain
@@ -802,17 +841,9 @@ impl HTTPProxy {
 				.iter()
 				.map(|route| &route.name)
 				.collect(),
+			route_inlines,
 		};
-		let route_inline_policies = selected_route_chain
-			.routes
-			.iter()
-			.map(|route| route.inline_policies.as_slice())
-			.collect::<Vec<_>>();
-
-		let route_policies = inputs
-			.stores
-			.read_binds()
-			.route_policies(&route_path, &route_inline_policies);
+		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let mut route_retry = route_policies.retry.select("retry", &req);
@@ -848,8 +879,9 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 
-		let selected_backend_ref = selected_route_chain
-			.backend
+		let selected_backend_ref = selected_llm_backend
+			.map(|selected| selected.backend)
+			.or(selected_route_chain.backend)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
@@ -2263,6 +2295,7 @@ async fn make_backend_call(
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
 								native_format: Some(llm::custom::ProviderFormat::Realtime),
+								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
@@ -2379,6 +2412,7 @@ async fn make_backend_call(
 				log.as_ref().expect("must be set").request_snapshot.clone(),
 				llm_response_log.expect("must be set"),
 				include_completion_in_log,
+				Some(&inputs.model_catalog),
 				resp,
 			)
 			.await
@@ -2818,7 +2852,9 @@ fn finalize_attempt_for_retry(
 	let end_time = agent_core::Timestamp::now();
 	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
 	let mut llm_response: Option<crate::cel::LLMContext> =
-		log.llm_response.load_clone().map(Into::into);
+		log.llm_response.load_clone().map(|llm_info| {
+			crate::cel::LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref()))
+		});
 	if let Some(llm_response) = llm_response.as_mut() {
 		llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 	}
@@ -3760,6 +3796,7 @@ mod route_chain_tests {
 				target,
 				inline_policies: Vec::new(),
 			}],
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}
@@ -3783,6 +3820,7 @@ mod route_chain_tests {
 				query: Vec::new(),
 			}],
 			backends: Vec::new(),
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}

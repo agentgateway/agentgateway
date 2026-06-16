@@ -95,6 +95,17 @@ pub fn policy_response_details(pr: &crate::http::PolicyResponse) -> String {
 }
 
 macro_rules! pol_event {
+	($kind:expr, $severity:expr, details = $details:expr $(,)?) => {{
+		let __details: $crate::proxy::dtrace::PolicyEventDetails = ($details).into();
+		tracing::debug!(
+			policy_kind = $kind,
+			details = ?__details,
+			"policy event"
+		);
+		$crate::proxy::dtrace::trace(|trace| {
+			trace.policy_event($severity, $kind, __details)
+		});
+	}};
 	($severity:expr, $($arg:tt)+) => {{
 		tracing::debug!($($arg)+);
 		$crate::proxy::dtrace::trace(|trace| {
@@ -268,6 +279,31 @@ pub enum PolicyResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum PolicyEventDetails {
+	Text(String),
+	Structured(Value),
+}
+
+impl From<String> for PolicyEventDetails {
+	fn from(value: String) -> Self {
+		Self::Text(value)
+	}
+}
+
+impl From<&str> for PolicyEventDetails {
+	fn from(value: &str) -> Self {
+		Self::Text(value.to_string())
+	}
+}
+
+impl From<Value> for PolicyEventDetails {
+	fn from(value: Value) -> Self {
+		Self::Structured(value)
+	}
+}
+
+#[derive(Debug, Serialize)]
 #[allow(non_snake_case)]
 #[serde(
 	tag = "type",
@@ -310,7 +346,7 @@ pub enum MessageType {
 	// An event along the way of a policy
 	PolicyEvent {
 		kind: String,
-		details: String,
+		details: PolicyEventDetails,
 	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
@@ -661,12 +697,17 @@ impl DebugTracer {
 			},
 		)
 	}
-	pub fn policy_event(&self, severity: Severity, kind: &str, details: String) {
+	pub fn policy_event(
+		&self,
+		severity: Severity,
+		kind: &str,
+		details: impl Into<PolicyEventDetails>,
+	) {
 		self.send_explicit(
 			severity,
 			MessageType::PolicyEvent {
 				kind: kind.to_string(),
-				details,
+				details: details.into(),
 			},
 		)
 	}

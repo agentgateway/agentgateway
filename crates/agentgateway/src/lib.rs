@@ -143,6 +143,9 @@ pub struct RawConfig {
 	/// Local XDS path. If not specified, the current configuration file will be used.
 	local_xds_path: Option<PathBuf>,
 
+	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
+	model_catalog: Option<Vec<ModelCatalogSource>>,
+
 	ca_address: Option<String>,
 	ca_auth_token: Option<String>,
 	xds_address: Option<String>,
@@ -523,6 +526,33 @@ pub struct Config {
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
+	pub model_catalog: ModelCatalogConfig,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelCatalogConfig {
+	pub sources: Vec<ModelCatalogSource>,
+}
+
+impl ModelCatalogConfig {
+	/// Resolve the configured sources to catalog file paths.
+	pub fn paths(&self) -> Vec<PathBuf> {
+		self
+			.sources
+			.iter()
+			.map(|ModelCatalogSource::File { file }| file.clone())
+			.collect()
+	}
+}
+
+/// A source of model cost catalog data.
+// TODO: Add support for inline cost config
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum ModelCatalogSource {
+	File { file: PathBuf },
 }
 
 #[apply(schema!)]
@@ -631,6 +661,7 @@ pub struct ProxyInputs {
 	pub upstream: client::Client,
 
 	pub metrics: Arc<metrics::Metrics>,
+	pub model_catalog: Arc<llm::cost::ModelCatalog>,
 
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
@@ -648,6 +679,7 @@ impl ProxyInputs {
 		upstream: client::Client,
 		metrics: Arc<metrics::Metrics>,
 		mcp_state: mcp::App,
+		model_catalog: Option<llm::cost::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
 	) -> Self {
 		Self {
@@ -655,6 +687,7 @@ impl ProxyInputs {
 			stores,
 			upstream,
 			metrics,
+			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
 			mcp_state,
 			ca,
 		}

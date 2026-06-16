@@ -685,6 +685,8 @@ pub struct Route {
 	pub matches: Vec<RouteMatch>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub backends: Vec<RouteBackendReference>,
+	#[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
+	pub llm_router: Option<Arc<llm::model_router::ModelRouter>>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<TrafficPolicy>,
 }
@@ -2810,6 +2812,7 @@ mod tests {
 			hostnames: hostnames.into_iter().map(strng::new).collect(),
 			matches,
 			backends: vec![],
+			llm_router: None,
 			inline_policies: vec![],
 		}
 	}

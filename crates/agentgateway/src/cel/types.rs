@@ -1194,7 +1194,7 @@ impl PartialEq for RequestRef<'_> {
 }
 
 #[apply(schema!)]
-#[derive(Eq, PartialEq, cel::DynamicType)]
+#[derive(cel::DynamicType)]
 pub struct LLMContext {
 	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
@@ -1291,10 +1291,24 @@ pub struct LLMContext {
 	pub completion: Option<Vec<String>>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
+	/// The realized USD cost of the request from the model cost catalog.
+	/// Unset when the model could not be priced.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost: Option<llm::cost::Breakdown>,
+	/// Effective model catalog rates in USD per 1M tokens after tier selection.
+	/// Unset when the model could not be priced.
+	#[dynamic(rename = "costRates")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost_rates: Option<llm::cost::CostRates>,
+	#[serde(skip)]
+	#[dynamic(skip)]
+	pub cost_status: Option<llm::cost::CostLookupStatus>,
 }
 
-impl From<llm::LLMInfo> for LLMContext {
-	fn from(value: LLMInfo) -> Self {
+impl LLMContext {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+		let projection = model_catalog.map(|catalog| catalog.project(&value));
+
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
@@ -1323,11 +1337,16 @@ impl From<llm::LLMInfo> for LLMContext {
 			// Better info, override
 			base.input_tokens = Some(pt);
 		}
+
+		if let Some(projection) = projection {
+			base.cost = projection.cost;
+			base.cost_rates = projection.cost_rates;
+			base.cost_status = Some(projection.status);
+		}
+
 		base
 	}
-}
 
-impl LLMContext {
 	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
 		let Some(first_token) = self.first_token else {
 			return;
@@ -1356,6 +1375,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			input_tokens,
 			input_format: _, // Expose this?
 			native_format: _,
+			cache_convention: _,
 			request_model,
 			provider,
 			streaming,
@@ -1388,6 +1408,9 @@ impl From<llm::LLMRequest> for LLMContext {
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
 			service_tier: None,
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}
 	}
 }
@@ -2061,6 +2084,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 				encoding_format: None,
 				dimensions: None,
 			},
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
 			method_name: Some("tools/call".to_string()),

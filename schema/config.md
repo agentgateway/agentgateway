@@ -8,6 +8,8 @@
 |`config.dns.lookupFamily`|enum|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
 |`config.dns.edns0`|boolean|Whether to enable EDNS0 (Extension Mechanisms for DNS) in the resolver.<br>When `None`, the system-provided resolver setting is preserved.<br>Can also be set via the `DNS_EDNS0` environment variable.|
 |`config.localXdsPath`|string|Local XDS path. If not specified, the current configuration file will be used.|
+|`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
+|`config.modelCatalog[].file`|string||
 |`config.caAddress`|string||
 |`config.caAuthToken`|string||
 |`config.xdsAddress`|string||
@@ -19108,6 +19110,7 @@
 |`llm.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].visibility`|enum|visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).<br>Possible values: `public`, `internal`.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|string|The model to send to the provider.<br>If unset, the same model will be used from the request.|
 |`llm.models[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
@@ -20055,6 +20058,21 @@
 |`llm.models[].matches[].headers[].value`|object|Exactly one of exact or regex may be set.|
 |`llm.models[].matches[].headers[].value.exact`|string||
 |`llm.models[].matches[].headers[].value.regex`|string||
+|`llm.virtualModels`|[]object|virtualModels defines a set of models that can be served from the gateway. The model name refers to the<br>model in the users request that is matched. However, unlike the `models` field, virtual models will<br>dynamically route to a specific model (configured in `models`) based on the configured logic.|
+|`llm.virtualModels[].name`|string|name is the public model name clients request.|
+|`llm.virtualModels[].routing`|object|routing selects an existing LLM model backend for each request.|
+|`llm.virtualModels[].routing.weighted`|object|weighted enables weight-based selection of the target model.|
+|`llm.virtualModels[].routing.weighted.targets`|[]object|targets are existing model names or names matched by wildcard model entries.|
+|`llm.virtualModels[].routing.weighted.targets[].model`|string|model is resolved against llm.models using the same wildcard matching as client requests.|
+|`llm.virtualModels[].routing.weighted.targets[].weight`|integer||
+|`llm.virtualModels[].routing.failover`|object|failover enables priority-based selection of the target model.<br>Within a priority level, the best provider is selected by a composite score factoring in health<br>and latency.<br>If all models within a priority level are degraded, requests will move onto the next priority group.|
+|`llm.virtualModels[].routing.failover.targets`|[]object|targets are grouped by priority. Lower priority values are tried first.|
+|`llm.virtualModels[].routing.failover.targets[].model`|string|model is resolved against llm.models using the same wildcard matching as client requests.|
+|`llm.virtualModels[].routing.failover.targets[].priority`|integer|priority groups targets for failover. Lower values are preferred.|
+|`llm.virtualModels[].routing.conditional`|object|Conditional enables condition-based selection of the target model. Each condition is evaluated<br>in order until the best match is found.|
+|`llm.virtualModels[].routing.conditional.targets`|[]object|targets are evaluated in order. The first matching condition selects the model.|
+|`llm.virtualModels[].routing.conditional.targets[].when`|string|when must evaluate to true for this target to be selected. Omit only on the final fallback target.|
+|`llm.virtualModels[].routing.conditional.targets[].model`|string|model is resolved against llm.models using the same wildcard matching as client requests.|
 |`llm.policies`|object|policies defines policies for handling incoming requests, before a model is selected|
 |`llm.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`llm.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|

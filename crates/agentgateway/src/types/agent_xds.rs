@@ -1231,6 +1231,7 @@ impl Route {
 				.iter()
 				.map(|backend| route_backend_reference_from_proto(backend, diagnostics))
 				.collect::<Result<Vec<_>, _>>()?,
+			llm_router: None,
 			inline_policies: s
 				.traffic_policies
 				.iter()
@@ -2278,7 +2279,6 @@ fn traffic_policy_from_proto(
 					})
 					.collect::<Result<_, ProtoError>>()?,
 				status: StatusCode::from_u16(dr.status as u16)?,
-				authorization_filtered_model_list: None,
 			}))
 		},
 		Some(tps::Kind::Cors(c)) => TrafficPolicy::CORS(RequestPolicy::single(

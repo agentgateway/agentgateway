@@ -91,6 +91,16 @@
             "null"
           ]
         },
+        "modelCatalog": {
+          "description": "Model cost catalog sources; entries are merged in order, with later entries taking precedence.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ModelCatalogSource"
+          }
+        },
         "caAddress": {
           "type": [
             "string",
@@ -336,6 +346,22 @@
           "description": "Only query for AAAA (IPv6) records.",
           "type": "string",
           "const": "V6Only"
+        }
+      ]
+    },
+    "ModelCatalogSource": {
+      "description": "A source of model cost catalog data.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
         }
       ]
     },
@@ -8347,6 +8373,13 @@
             "$ref": "#/$defs/LocalLLMModels"
           }
         },
+        "virtualModels": {
+          "description": "virtualModels defines a set of models that can be served from the gateway. The model name refers to the\nmodel in the users request that is matched. However, unlike the `models` field, virtual models will\ndynamically route to a specific model (configured in `models`) based on the configured logic.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMVirtualModel"
+          }
+        },
         "policies": {
           "description": "policies defines policies for handling incoming requests, before a model is selected",
           "anyOf": [
@@ -8370,6 +8403,10 @@
         "name": {
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"
+        },
+        "visibility": {
+          "description": "visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).",
+          "$ref": "#/$defs/ModelVisibility"
         },
         "params": {
           "description": "params customizes parameters for the outgoing request",
@@ -8551,6 +8588,20 @@
               "tls"
             ]
           }
+        }
+      ]
+    },
+    "ModelVisibility": {
+      "oneOf": [
+        {
+          "description": "Public models can be requested directly by clients and are included in the model list.",
+          "type": "string",
+          "const": "public"
+        },
+        {
+          "description": "Internal models can be targeted by virtual models but cannot be requested directly.",
+          "type": "string",
+          "const": "internal"
         }
       ]
     },
@@ -8739,6 +8790,175 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalLLMVirtualModel": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name is the public model name clients request.",
+          "type": "string"
+        },
+        "routing": {
+          "description": "routing selects an existing LLM model backend for each request.",
+          "$ref": "#/$defs/LocalLLMVirtualModelRouting"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "routing"
+      ]
+    },
+    "LocalLLMVirtualModelRouting": {
+      "type": "object",
+      "properties": {
+        "weighted": {
+          "description": "weighted enables weight-based selection of the target model.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMWeightedRouting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failover": {
+          "description": "failover enables priority-based selection of the target model.\nWithin a priority level, the best provider is selected by a composite score factoring in health\nand latency.\nIf all models within a priority level are degraded, requests will move onto the next priority group.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMFailoverRouting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conditional": {
+          "description": "Conditional enables condition-based selection of the target model. Each condition is evaluated\nin order until the best match is found.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMConditionalRouting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalLLMWeightedRouting": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "description": "targets are existing model names or names matched by wildcard model entries.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMWeightedTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targets"
+      ]
+    },
+    "LocalLLMWeightedTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "model is resolved against llm.models using the same wildcard matching as client requests.",
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model"
+      ]
+    },
+    "LocalLLMFailoverRouting": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "description": "targets are grouped by priority. Lower priority values are tried first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMFailoverTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targets"
+      ]
+    },
+    "LocalLLMFailoverTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "model is resolved against llm.models using the same wildcard matching as client requests.",
+          "type": "string"
+        },
+        "priority": {
+          "description": "priority groups targets for failover. Lower values are preferred.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "priority"
+      ]
+    },
+    "LocalLLMConditionalRouting": {
+      "type": "object",
+      "properties": {
+        "targets": {
+          "description": "targets are evaluated in order. The first matching condition selects the model.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMConditionalTarget"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "targets"
+      ]
+    },
+    "LocalLLMConditionalTarget": {
+      "type": "object",
+      "properties": {
+        "when": {
+          "description": "when must evaluate to true for this target to be selected. Omit only on the final fallback target.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model": {
+          "description": "model is resolved against llm.models using the same wildcard matching as client requests.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model"
+      ]
     },
     "LocalLLMPolicy": {
       "type": "object",

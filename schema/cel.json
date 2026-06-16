@@ -572,6 +572,115 @@
               "minimum": 0
             }
           }
+        },
+        "cost": {
+          "description": "The realized USD cost of the request from the model cost catalog.\nUnset when the model could not be priced.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "total": {
+              "type": "number",
+              "format": "double"
+            },
+            "input": {
+              "type": "number",
+              "format": "double"
+            },
+            "output": {
+              "type": "number",
+              "format": "double"
+            },
+            "cacheRead": {
+              "type": "number",
+              "format": "double"
+            },
+            "cacheWrite": {
+              "type": "number",
+              "format": "double"
+            },
+            "reasoning": {
+              "type": "number",
+              "format": "double"
+            },
+            "inputAudio": {
+              "type": "number",
+              "format": "double"
+            },
+            "outputAudio": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "total",
+            "input",
+            "output",
+            "cacheRead",
+            "cacheWrite",
+            "reasoning",
+            "inputAudio",
+            "outputAudio"
+          ]
+        },
+        "costRates": {
+          "description": "Effective model catalog rates in USD per 1M tokens after tier selection.\nUnset when the model could not be priced.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "input": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "output": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "cacheRead": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "cacheWrite": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "reasoning": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "inputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "outputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            }
+          }
         }
       },
       "additionalProperties": false,

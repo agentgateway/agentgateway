@@ -42,6 +42,7 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> (Arc<Listene
 		matches,
 		name: Default::default(),
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	};
 
@@ -1175,6 +1176,7 @@ fn service_route(key: &str, service_key: NamespacedHostname, matches: Vec<RouteM
 		hostnames: vec![], // GAMMA: hostname matching skipped for service routes
 		matches,
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	}
 }
@@ -1477,6 +1479,7 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 		hostnames: host.into_iter().map(|s| s.into()).collect(),
 		matches,
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	}) {
 		stores

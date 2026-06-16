@@ -128,6 +128,7 @@ mod tests {
 
 	static DATA: &str = "user2:$apr1$7/CTEZag$omWmIgXPJYoxB3joyuq4S/
 user:$apr1$lZL6V/ci$eIMz/iKDkbtys/uU7LEK00
+longpassword:$apr1$5jJtzRYw$xQlupJ3AHTXrqQiCyLBwY1
 bcrypt_test:$2y$05$nC6nErr9XZJuMJ57WyCob.EuZEjylDt2KaHfbfOtyb.EgL1I2jCVa
 sha1_test:{SHA}W6ph5Mm5Pz8GgiULbPgzG37mj9g=
 crypt_test:bGVh02xkuGli2";
@@ -157,6 +158,8 @@ crypt_test:bGVh02xkuGli2";
 		assert!(!htpasswd.check("user", "passwort"));
 		assert!(htpasswd.check("user2", "zaq1@WSX"));
 		assert!(!htpasswd.check("user2", "ZAQ1@WSX"));
+		assert!(htpasswd.check("longpassword", "password-longer-than-16-chars"));
+		assert!(!htpasswd.check("longpassword", "passwort-longer-than-16-chars"));
 	}
 
 	#[test]
