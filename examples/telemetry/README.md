@@ -4,6 +4,9 @@ This example shows how to use the agentgateway to visualize traces and metrics f
 This builds upon the [RBAC sample](../authorization).
 While you can use tracing without RBAC, this example uses both together to showcase augmenting traces with information from the authenicated user.
 
+For recommended governance metadata fields on exported spans (decision result, risk class, audit id, and related
+attributes), see [EP-2141: Recommended Governance Metadata for Gateway Traces](../../design/2141-governance-trace-metadata.md).
+
 ### Running the example
 
 ```bash
