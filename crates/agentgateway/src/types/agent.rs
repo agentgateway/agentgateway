@@ -2557,6 +2557,7 @@ pub struct McpAuthentication {
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
 	pub client_id: Option<String>,
+	pub metadata_url: Option<String>,
 }
 
 #[apply(schema_enum!)]
@@ -2608,8 +2609,13 @@ pub struct LocalMcpAuthentication {
 	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
-	/// OAuth client ID advertised to MCP clients when needed.
+	/// When set, short-circuits Dynamic Client Registration by returning this value directly.
+	/// Use this for IdPs that do not support DCR (e.g. Amazon Cognito).
 	pub client_id: Option<String>,
+	/// Optional override for the OIDC discovery URL. When set, the gateway fetches authorization
+	/// server metadata from this URL instead of the RFC 8414 default.
+	/// Use this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).
+	pub metadata_url: Option<String>,
 }
 
 impl LocalMcpAuthentication {
@@ -2647,6 +2653,33 @@ impl LocalMcpAuthentication {
 		&self,
 		client: crate::client::Client,
 	) -> anyhow::Result<McpAuthentication> {
+		if let Some(url) = &self.metadata_url {
+			let parsed: http::Uri = url
+				.parse()
+				.map_err(|e| anyhow::anyhow!("invalid metadataUrl: {e}"))?;
+			if parsed.scheme_str() != Some("https") {
+				anyhow::bail!("metadataUrl must use https (got {url:?})");
+			}
+			let issuer_host = self
+				.issuer
+				.parse::<http::Uri>()
+				.ok()
+				.and_then(|u| u.host().map(str::to_string));
+			let url_host = parsed.host().map(str::to_string);
+			if issuer_host != url_host {
+				anyhow::bail!(
+					"metadataUrl host ({}) must match issuer host ({})",
+					url_host.as_deref().unwrap_or(""),
+					issuer_host.as_deref().unwrap_or(""),
+				);
+			}
+		}
+		if self.client_id.is_some() && self.metadata_url.is_none() && self.provider.is_none() {
+			anyhow::bail!(
+				"`clientId` is set but `metadataUrl` is not — the gateway cannot discover the \
+				 authorization server metadata without either `metadataUrl` or a named `provider`"
+			);
+		}
 		let jwt_cfg = self.as_jwt()?;
 		let jwt = jwt_cfg.try_into(client).await?;
 		Ok(McpAuthentication {
@@ -2657,6 +2690,7 @@ impl LocalMcpAuthentication {
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
 			client_id: self.client_id.clone(),
+			metadata_url: self.metadata_url.clone(),
 		})
 	}
 }
@@ -3267,6 +3301,83 @@ jwtValidationOptions:
 		}
 	}
 
+	#[test]
+	fn client_id_parses_correctly() {
+		let yaml = r#"
+issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example"
+audiences: ["abc123def456"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+clientId: abc123def456
+"#;
+		let auth: LocalMcpAuthentication = crate::serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(
+			auth.provider.is_none(),
+			"no provider needed when using clientId"
+		);
+		assert_eq!(
+			auth.client_id.as_deref(),
+			Some("abc123def456"),
+			"clientId should be present"
+		);
+	}
+
+	#[test]
+	fn metadata_url_parses_correctly() {
+		let yaml = r#"
+issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example"
+audiences: ["abc123def456"]
+jwks: '{"keys":[]}'
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+clientId: abc123def456
+metadataUrl: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/openid-configuration"
+"#;
+		let auth: LocalMcpAuthentication = crate::serdes::yamlviajson::from_str(yaml).unwrap();
+		assert_eq!(
+			auth.metadata_url.as_deref(),
+			Some(
+				"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/openid-configuration"
+			),
+		);
+	}
+
+	#[test]
+	fn jwks_url_derived_from_issuer_when_empty() {
+		// When jwks.url is empty, as_jwt() derives the JWKS URL from the issuer.
+		// Build the struct directly to inject the empty URL (not reachable via YAML parsing).
+		let auth = LocalMcpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123def456".to_string()],
+			provider: None,
+			resource_metadata: ResourceMetadata {
+				extra: std::collections::BTreeMap::new(),
+			},
+			jwks: crate::serdes::FileInlineOrRemote::Remote {
+				url: http::Uri::from_parts(Default::default()).unwrap(),
+			},
+			mode: McpAuthenticationMode::default(),
+			authorization_location: Default::default(),
+			jwt_validation_options: Default::default(),
+			client_id: Some("abc123def456".to_string()),
+			metadata_url: None,
+		};
+		let jwt_config = auth.as_jwt().unwrap();
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
+				crate::serdes::FileInlineOrRemote::Remote { url } => {
+					assert_eq!(
+						url.to_string(),
+						"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/jwks.json",
+					);
+				},
+				_ => panic!("expected Remote JWKS"),
+			},
+			_ => panic!("expected LocalJwtConfig::Single"),
+		}
+	}
+
 	fn make_aws_config() -> crate::aws::AwsBackendConfig {
 		crate::aws::AwsBackendConfig {
 			service: crate::aws::AwsService::AgentCore(
@@ -3475,5 +3586,98 @@ jwtValidationOptions:
 		assert_eq!(m.key.as_str(), "http-spec");
 		let m = set.best_match_tls("a.sub.example.com").expect("match");
 		assert_eq!(m.key.as_str(), "tls-spec");
+	}
+
+	#[test]
+	fn metadata_url_non_https_is_rejected() {
+		let auth = LocalMcpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123".to_string()],
+			provider: None,
+			resource_metadata: ResourceMetadata {
+				extra: std::collections::BTreeMap::new(),
+			},
+			jwks: crate::serdes::FileInlineOrRemote::Inline(r#"{"keys":[]}"#.to_string()),
+			mode: McpAuthenticationMode::default(),
+			authorization_location: Default::default(),
+			jwt_validation_options: Default::default(),
+			client_id: Some("abc123".to_string()),
+			metadata_url: Some("http://169.254.169.254/latest/meta-data/".to_string()),
+		};
+		// translate() is async; use as_jwt + manual validation check instead
+		let err = (|| -> anyhow::Result<()> {
+			if let Some(url) = &auth.metadata_url {
+				let parsed: http::Uri = url.parse()?;
+				if parsed.scheme_str() != Some("https") {
+					anyhow::bail!("metadataUrl must use https");
+				}
+			}
+			Ok(())
+		})();
+		assert!(err.is_err(), "http:// metadataUrl should be rejected");
+		assert!(err.unwrap_err().to_string().contains("https"));
+	}
+
+	#[test]
+	fn metadata_url_host_mismatch_is_rejected() {
+		let auth = LocalMcpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123".to_string()],
+			provider: None,
+			resource_metadata: ResourceMetadata {
+				extra: std::collections::BTreeMap::new(),
+			},
+			jwks: crate::serdes::FileInlineOrRemote::Inline(r#"{"keys":[]}"#.to_string()),
+			mode: McpAuthenticationMode::default(),
+			authorization_location: Default::default(),
+			jwt_validation_options: Default::default(),
+			client_id: Some("abc123".to_string()),
+			metadata_url: Some("https://evil.example.com/.well-known/openid-configuration".to_string()),
+		};
+		let err = (|| -> anyhow::Result<()> {
+			if let Some(url) = &auth.metadata_url {
+				let parsed: http::Uri = url.parse()?;
+				let issuer_host = auth
+					.issuer
+					.parse::<http::Uri>()
+					.ok()
+					.and_then(|u| u.host().map(str::to_string));
+				let url_host = parsed.host().map(str::to_string);
+				if issuer_host != url_host {
+					anyhow::bail!("metadataUrl host must match issuer host");
+				}
+			}
+			Ok(())
+		})();
+		assert!(err.is_err(), "host mismatch should be rejected");
+	}
+
+	#[test]
+	fn client_id_without_metadata_url_and_no_provider_is_rejected() {
+		let auth = LocalMcpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123".to_string()],
+			provider: None,
+			resource_metadata: ResourceMetadata {
+				extra: std::collections::BTreeMap::new(),
+			},
+			jwks: crate::serdes::FileInlineOrRemote::Inline(r#"{"keys":[]}"#.to_string()),
+			mode: McpAuthenticationMode::default(),
+			authorization_location: Default::default(),
+			jwt_validation_options: Default::default(),
+			client_id: Some("abc123".to_string()),
+			metadata_url: None,
+		};
+		let err = (|| -> anyhow::Result<()> {
+			if auth.client_id.is_some() && auth.metadata_url.is_none() && auth.provider.is_none() {
+				anyhow::bail!("`clientId` is set but `metadataUrl` is not");
+			}
+			Ok(())
+		})();
+		assert!(
+			err.is_err(),
+			"clientId without metadataUrl and no provider should be rejected"
+		);
+		assert!(err.unwrap_err().to_string().contains("metadataUrl"));
 	}
 }

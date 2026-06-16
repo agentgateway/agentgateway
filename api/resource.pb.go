@@ -11101,6 +11101,7 @@ type TrafficPolicySpec_JWT_MCP struct {
 	Provider         BackendPolicySpec_McpAuthentication_McpIDP            `protobuf:"varint,1,opt,name=provider,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_McpAuthentication_McpIDP" json:"provider,omitempty"`
 	ResourceMetadata *BackendPolicySpec_McpAuthentication_ResourceMetadata `protobuf:"bytes,2,opt,name=resource_metadata,json=resourceMetadata,proto3" json:"resource_metadata,omitempty"`
 	ClientId         *string                                               `protobuf:"bytes,3,opt,name=client_id,json=clientId,proto3,oneof" json:"client_id,omitempty"`
+	MetadataUrl      *string                                               `protobuf:"bytes,4,opt,name=metadata_url,json=metadataUrl,proto3,oneof" json:"metadata_url,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -11152,6 +11153,13 @@ func (x *TrafficPolicySpec_JWT_MCP) GetResourceMetadata() *BackendPolicySpec_Mcp
 func (x *TrafficPolicySpec_JWT_MCP) GetClientId() string {
 	if x != nil && x.ClientId != nil {
 		return *x.ClientId
+	}
+	return ""
+}
+
+func (x *TrafficPolicySpec_JWT_MCP) GetMetadataUrl() string {
+	if x != nil && x.MetadataUrl != nil {
+		return *x.MetadataUrl
 	}
 	return ""
 }
@@ -12093,6 +12101,7 @@ type BackendPolicySpec_McpAuthentication struct {
 	JwtValidationOptions  *JWTValidationOptions  `protobuf:"bytes,7,opt,name=jwt_validation_options,json=jwtValidationOptions,proto3" json:"jwt_validation_options,omitempty"`
 	AuthorizationLocation *AuthorizationLocation `protobuf:"bytes,8,opt,name=authorization_location,json=authorizationLocation,proto3" json:"authorization_location,omitempty"`
 	ClientId              *string                `protobuf:"bytes,9,opt,name=client_id,json=clientId,proto3,oneof" json:"client_id,omitempty"`
+	MetadataUrl           *string                `protobuf:"bytes,10,opt,name=metadata_url,json=metadataUrl,proto3,oneof" json:"metadata_url,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -12186,6 +12195,13 @@ func (x *BackendPolicySpec_McpAuthentication) GetAuthorizationLocation() *Author
 func (x *BackendPolicySpec_McpAuthentication) GetClientId() string {
 	if x != nil && x.ClientId != nil {
 		return *x.ClientId
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_McpAuthentication) GetMetadataUrl() string {
+	if x != nil && x.MetadataUrl != nil {
+		return *x.MetadataUrl
 	}
 	return ""
 }

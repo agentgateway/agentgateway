@@ -937,6 +937,7 @@ message TrafficPolicySpec {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
       optional string client_id = 3;
+      optional string metadata_url = 4;
     }
 
     // Validation mode for JWT authentication
@@ -1446,6 +1447,8 @@ message BackendPolicySpec {
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
     optional string client_id = 9;
+    // Optional override for OIDC discovery URL. If set, used instead of the RFC 8414 default.
+    optional string metadata_url = 10;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of

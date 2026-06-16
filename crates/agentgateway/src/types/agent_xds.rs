@@ -407,7 +407,6 @@ fn mcp_authentication_from_proto(
 			"MCP Authentication requires jwks_inline to be set.".to_string(),
 		));
 	}
-
 	let audiences = (!m.audiences.is_empty()).then(|| m.audiences.clone());
 	let jwt_validation_options = m
 		.jwt_validation_options
@@ -444,15 +443,18 @@ fn mcp_authentication_from_proto(
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
 	);
-	Ok(build_mcp_authentication(
-		m.issuer.clone(),
-		m.audiences.clone(),
-		m.provider,
-		convert_mcp_resource_metadata(m.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
-		std::sync::Arc::new(jwt_validator),
+	Ok(McpAuthentication {
+		issuer: m.issuer.clone(),
+		audiences: m.audiences.clone(),
+		provider: convert_mcp_provider(m.provider),
+		resource_metadata: convert_mcp_resource_metadata(
+			m.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+		),
+		jwt_validator: std::sync::Arc::new(jwt_validator),
 		mode,
-		m.client_id.clone(),
-	))
+		client_id: m.client_id.clone(),
+		metadata_url: m.metadata_url.clone(),
+	})
 }
 
 fn jwt_provider_from_inline_jwks_or_warn(
@@ -511,26 +513,6 @@ where
 		})
 		.unwrap_or_default();
 	ResourceMetadata { extra }
-}
-
-fn build_mcp_authentication(
-	issuer: String,
-	audiences: Vec<String>,
-	provider: i32,
-	resource_metadata: ResourceMetadata,
-	jwt_validator: Arc<http::jwt::Jwt>,
-	mode: McpAuthenticationMode,
-	client_id: Option<String>,
-) -> McpAuthentication {
-	McpAuthentication {
-		issuer,
-		audiences,
-		provider: convert_mcp_provider(provider),
-		resource_metadata,
-		jwt_validator,
-		mode,
-		client_id,
-	}
 }
 
 fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::RouteType {
@@ -1991,21 +1973,24 @@ fn traffic_policy_from_proto(
 						)));
 					}
 					let provider = &jwt.providers[0];
-					Some(build_mcp_authentication(
-						provider.issuer.clone(),
-						provider.audiences.clone(),
-						mcp.provider,
-						convert_mcp_resource_metadata(mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter())),
-						Arc::new(jwt_auth.clone()),
-						match tps::jwt::Mode::try_from(jwt.mode)
+					Some(McpAuthentication {
+						issuer: provider.issuer.clone(),
+						audiences: provider.audiences.clone(),
+						provider: convert_mcp_provider(mcp.provider),
+						resource_metadata: convert_mcp_resource_metadata(
+							mcp.resource_metadata.as_ref().map(|rm| rm.extra.iter()),
+						),
+						jwt_validator: Arc::new(jwt_auth.clone()),
+						mode: match tps::jwt::Mode::try_from(jwt.mode)
 							.map_err(|_| ProtoError::EnumParse("invalid JWT mode".to_string()))?
 						{
 							tps::jwt::Mode::Optional => McpAuthenticationMode::Optional,
 							tps::jwt::Mode::Strict => McpAuthenticationMode::Strict,
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
-						mcp.client_id.clone(),
-					))
+						client_id: mcp.client_id.clone(),
+						metadata_url: mcp.metadata_url.clone(),
+					})
 				},
 				None => None,
 			};
@@ -4217,6 +4202,30 @@ mod tests {
 		};
 
 		assert_eq!(metrics.add.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn xds_client_id_and_metadata_url_flow_through() -> Result<(), ProtoError> {
+		let m = proto::agent::backend_policy_spec::McpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			audiences: vec!["abc123".to_string()],
+			jwks_inline: r#"{"keys":[]}"#.to_string(),
+			client_id: Some("abc123".to_string()),
+			metadata_url: Some(
+				"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/openid-configuration"
+					.to_string(),
+			),
+			..Default::default()
+		};
+		let auth = mcp_authentication_from_proto(&m, &mut Diagnostics::default())?;
+		assert_eq!(auth.client_id.as_deref(), Some("abc123"));
+		assert_eq!(
+			auth.metadata_url.as_deref(),
+			Some(
+				"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example/.well-known/openid-configuration"
+			),
+		);
 		Ok(())
 	}
 }
