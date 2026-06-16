@@ -367,7 +367,6 @@
           "type": "object",
           "properties": {
             "inline": {
-              "description": "Inline JSON catalog data embedded directly in configuration. Used by the controller to inject ConfigMap content without a file mount.",
               "type": "string"
             }
           },

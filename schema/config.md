@@ -10,6 +10,7 @@
 |`config.localXdsPath`|string|Local XDS path. If not specified, the current configuration file will be used.|
 |`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
 |`config.modelCatalog[].file`|string||
+|`config.modelCatalog[].inline`|string||
 |`config.caAddress`|string||
 |`config.caAuthToken`|string||
 |`config.xdsAddress`|string||
