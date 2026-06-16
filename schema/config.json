@@ -8366,6 +8366,13 @@
             }
           ]
         },
+        "providers": {
+          "description": "providers defines reusable LLM provider defaults that models may reference.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMProvider"
+          }
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -8395,6 +8402,334 @@
       "additionalProperties": false,
       "required": [
         "models"
+      ]
+    },
+    "LocalLLMProvider": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name is referenced from llm.models[].provider.reference.",
+          "type": "string"
+        },
+        "params": {
+          "description": "params customizes parameters for outgoing requests that use this provider.",
+          "$ref": "#/$defs/LocalLLMParams"
+        },
+        "provider": {
+          "description": "provider of the LLM we are connecting to.",
+          "$ref": "#/$defs/LocalModelAIProvider"
+        },
+        "defaults": {
+          "description": "defaults defines provider-level policy defaults. Model-level policy fields override these.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMProviderDefaults"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "provider"
+      ]
+    },
+    "LocalLLMParams": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "apiKey": {
+          "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretFromFile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "awsRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexProject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "azureApiVersion": {
+          "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "baseUrl": {
+          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostOverride": {
+          "description": "Override the upstream host for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "pathOverride": {
+          "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "pathPrefix": {
+          "description": "Override the default base path prefix for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "tokenize": {
+          "description": "Whether to tokenize the request before forwarding it upstream.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SecretFromFile": {
+      "$ref": "#/$defs/FileOrInline"
+    },
+    "LocalModelAIProvider": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "openai",
+            "openAI",
+            "gemini",
+            "vertex",
+            "anthropic",
+            "bedrock",
+            "azure",
+            "copilot",
+            "cohere",
+            "ollama",
+            "baseten",
+            "cerebras",
+            "deepinfra",
+            "deepseek",
+            "groq",
+            "huggingface",
+            "mistral",
+            "openrouter",
+            "togetherai",
+            "xai",
+            "fireworks"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/Provider8"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LocalLLMProviderDefaults": {
+      "type": "object",
+      "properties": {
+        "defaults": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "transformation": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "requestHeaders": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "responseHeaders": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backendTunnel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "promptCaching": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "backendTLS",
+              "tls"
+            ]
+          }
+        }
       ]
     },
     "LocalLLMModels": {
@@ -8602,166 +8937,6 @@
           "description": "Internal models can be targeted by virtual models but cannot be requested directly.",
           "type": "string",
           "const": "internal"
-        }
-      ]
-    },
-    "LocalLLMParams": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "apiKey": {
-          "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SecretFromFile"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "awsRegion": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "vertexRegion": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "vertexProject": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureResourceName": {
-          "description": "For Azure: the resource name of the deployment",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureResourceType": {
-          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AzureResourceType"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "azureApiVersion": {
-          "description": "For Azure: the API version to use",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureProjectName": {
-          "description": "For Azure: the Foundry project name (required for foundry resource type)",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "baseUrl": {
-          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "hostOverride": {
-          "description": "Override the upstream host for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "pathOverride": {
-          "description": "Override the upstream path for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "pathPrefix": {
-          "description": "Override the default base path prefix for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "tokenize": {
-          "description": "Whether to tokenize the request before forwarding it upstream.",
-          "type": "boolean",
-          "default": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "SecretFromFile": {
-      "$ref": "#/$defs/FileOrInline"
-    },
-    "LocalModelAIProvider": {
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "openai",
-            "openAI",
-            "gemini",
-            "vertex",
-            "anthropic",
-            "bedrock",
-            "azure",
-            "copilot",
-            "cohere",
-            "ollama",
-            "baseten",
-            "cerebras",
-            "deepinfra",
-            "deepseek",
-            "groq",
-            "huggingface",
-            "mistral",
-            "openrouter",
-            "togetherai",
-            "xai",
-            "fireworks"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "custom": {
-              "$ref": "#/$defs/Provider8"
-            }
-          },
-          "required": [
-            "custom"
-          ],
-          "additionalProperties": false
         }
       ]
     },

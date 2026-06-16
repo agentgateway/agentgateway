@@ -19108,6 +19108,138 @@
 |`llm.tls.maxTLSVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`llm.tls.maxTlsVersion`|enum|Maximum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`, `null`.|
 |`llm.tls.keyExchangeGroups`|[]string|Key exchange groups allowed for negotiating TLS.|
+|`llm.providers`|[]object|providers defines reusable LLM provider defaults that models may reference.|
+|`llm.providers[].name`|string|name is referenced from llm.models[].provider.reference.|
+|`llm.providers[].params`|object|params customizes parameters for outgoing requests that use this provider.|
+|`llm.providers[].params.model`|string|The model to send to the provider.<br>If unset, the same model will be used from the request.|
+|`llm.providers[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
+|`llm.providers[].params.apiKey.file`|string||
+|`llm.providers[].params.awsRegion`|string||
+|`llm.providers[].params.vertexRegion`|string||
+|`llm.providers[].params.vertexProject`|string||
+|`llm.providers[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
+|`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`.|
+|`llm.providers[].params.azureApiVersion`|string|For Azure: the API version to use|
+|`llm.providers[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
+|`llm.providers[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.|
+|`llm.providers[].params.hostOverride`|string|Override the upstream host for this provider.|
+|`llm.providers[].params.pathOverride`|string|Override the upstream path for this provider.|
+|`llm.providers[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
+|`llm.providers[].params.tokenize`|boolean|Whether to tokenize the request before forwarding it upstream.|
+|`llm.providers[].provider`|object|provider of the LLM we are connecting to.|
+|`llm.providers[].provider.reference`|string||
+|`llm.providers[].provider.custom`|object||
+|`llm.providers[].provider.custom.model`|string||
+|`llm.providers[].provider.custom.formats`|[]object||
+|`llm.providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`llm.providers[].provider.custom.formats[].path`|string||
+|`llm.providers[].defaults`|object|defaults defines provider-level policy defaults. Model-level policy fields override these.|
+|`llm.providers[].defaults.defaults`|object||
+|`llm.providers[].defaults.overrides`|object||
+|`llm.providers[].defaults.transformation`|object||
+|`llm.providers[].defaults.requestHeaders`|object||
+|`llm.providers[].defaults.requestHeaders.add`|object|Headers to append without replacing existing values.|
+|`llm.providers[].defaults.requestHeaders.set`|object|Headers to set, replacing any existing values.|
+|`llm.providers[].defaults.requestHeaders.remove`|[]string|Header names to remove.|
+|`llm.providers[].defaults.responseHeaders`|object||
+|`llm.providers[].defaults.responseHeaders.add`|object|Headers to append without replacing existing values.|
+|`llm.providers[].defaults.responseHeaders.set`|object|Headers to set, replacing any existing values.|
+|`llm.providers[].defaults.responseHeaders.remove`|[]string|Header names to remove.|
+|`llm.providers[].defaults.backendTLS`|object||
+|`llm.providers[].defaults.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`llm.providers[].defaults.backendTLS.key`|string|Private key file for the client certificate.|
+|`llm.providers[].defaults.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`llm.providers[].defaults.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`llm.providers[].defaults.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`llm.providers[].defaults.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`llm.providers[].defaults.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`llm.providers[].defaults.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`llm.providers[].defaults.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.providers[].defaults.tls`|object||
+|`llm.providers[].defaults.tls.cert`|string|Client certificate file to present to the backend.|
+|`llm.providers[].defaults.tls.key`|string|Private key file for the client certificate.|
+|`llm.providers[].defaults.tls.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`llm.providers[].defaults.tls.hostname`|string|Server name to use for TLS verification and SNI.|
+|`llm.providers[].defaults.tls.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`llm.providers[].defaults.tls.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`llm.providers[].defaults.tls.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`llm.providers[].defaults.tls.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`llm.providers[].defaults.tls.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.providers[].defaults.auth`|object||
+|`llm.providers[].defaults.auth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`llm.providers[].defaults.auth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`llm.providers[].defaults.auth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`llm.providers[].defaults.auth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`llm.providers[].defaults.auth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.providers[].defaults.auth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.providers[].defaults.auth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.providers[].defaults.auth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`llm.providers[].defaults.auth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.providers[].defaults.auth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
+|`llm.providers[].defaults.auth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.providers[].defaults.auth.key`|object|Send a configured secret value to the backend.|
+|`llm.providers[].defaults.auth.key.value`|object|Secret value to send to the backend.|
+|`llm.providers[].defaults.auth.key.value.file`|string||
+|`llm.providers[].defaults.auth.key.location`|object|Where to place the secret in the backend request.|
+|`llm.providers[].defaults.auth.key.location.header`|object|Read the credential from an HTTP header.|
+|`llm.providers[].defaults.auth.key.location.header.name`|string|Header name containing the credential.|
+|`llm.providers[].defaults.auth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.providers[].defaults.auth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.providers[].defaults.auth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.providers[].defaults.auth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`llm.providers[].defaults.auth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.providers[].defaults.auth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
+|`llm.providers[].defaults.auth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.providers[].defaults.auth.gcp`|object|Authenticate to Google Cloud services.|
+|`llm.providers[].defaults.auth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.providers[].defaults.auth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.providers[].defaults.auth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.providers[].defaults.auth.gcp.credential.file`|string||
+|`llm.providers[].defaults.auth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.providers[].defaults.auth.aws`|object|Sign backend requests with AWS credentials.|
+|`llm.providers[].defaults.auth.aws.accessKeyId`|string||
+|`llm.providers[].defaults.auth.aws.secretAccessKey`|string||
+|`llm.providers[].defaults.auth.aws.region`|string||
+|`llm.providers[].defaults.auth.aws.sessionToken`|string||
+|`llm.providers[].defaults.auth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.providers[].defaults.auth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`llm.providers[].defaults.auth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`llm.providers[].defaults.auth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.providers[].defaults.auth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.providers[].defaults.auth.azure.explicitConfig.clientSecret`|object||
+|`llm.providers[].defaults.auth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.managedIdentity`|object||
+|`llm.providers[].defaults.auth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.providers[].defaults.auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.providers[].defaults.auth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.providers[].defaults.auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`llm.providers[].defaults.auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.providers[].defaults.health`|object|Local/config health policy with CEL as string; converted to Policy by compiling the expression.<br>Mirrors the proto `Health` message structure.|
+|`llm.providers[].defaults.health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
+|`llm.providers[].defaults.health.eviction`|object|Settings for temporarily removing unhealthy backends.|
+|`llm.providers[].defaults.health.eviction.duration`|string|How long to evict an unhealthy backend.|
+|`llm.providers[].defaults.health.eviction.restoreHealth`|number|Health score to restore when the backend returns from eviction.|
+|`llm.providers[].defaults.health.eviction.consecutiveFailures`|integer|Consecutive unhealthy responses required before eviction.|
+|`llm.providers[].defaults.health.eviction.healthThreshold`|number|Health score threshold below which an unhealthy response can evict the backend.|
+|`llm.providers[].defaults.backendTunnel`|object||
+|`llm.providers[].defaults.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.|
+|`llm.providers[].defaults.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.providers[].defaults.backendTunnel.proxy.service.name`|object||
+|`llm.providers[].defaults.backendTunnel.proxy.service.name.namespace`|string||
+|`llm.providers[].defaults.backendTunnel.proxy.service.name.hostname`|string||
+|`llm.providers[].defaults.backendTunnel.proxy.service.port`|integer||
+|`llm.providers[].defaults.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.providers[].defaults.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.promptCaching`|object||
+|`llm.providers[].defaults.promptCaching.cacheSystem`|boolean|Add cache markers to system prompts when supported by the provider.|
+|`llm.providers[].defaults.promptCaching.cacheMessages`|boolean|Add cache markers to chat messages when supported by the provider.|
+|`llm.providers[].defaults.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
+|`llm.providers[].defaults.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
+|`llm.providers[].defaults.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
 |`llm.models[].visibility`|enum|visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).<br>Possible values: `public`, `internal`.|
@@ -19128,6 +19260,7 @@
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
 |`llm.models[].params.tokenize`|boolean|Whether to tokenize the request before forwarding it upstream.|
 |`llm.models[].provider`|object|provider of the LLM we are connecting too|
+|`llm.models[].provider.reference`|string||
 |`llm.models[].provider.custom`|object||
 |`llm.models[].provider.custom.model`|string||
 |`llm.models[].provider.custom.formats`|[]object||
