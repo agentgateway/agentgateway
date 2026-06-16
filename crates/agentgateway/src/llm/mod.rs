@@ -362,7 +362,10 @@ impl AIProvider {
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
 			AIProvider::Azure(_p) => azure::Provider::NAME,
 			AIProvider::Copilot(_p) => copilot::Provider::NAME,
-			AIProvider::Custom(_p) => custom::Provider::NAME,
+			AIProvider::Custom(p) => p
+				.provider_override
+				.clone()
+				.unwrap_or(custom::Provider::NAME),
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {

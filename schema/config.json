@@ -6641,6 +6641,13 @@
             "null"
           ]
         },
+        "providerOverride": {
+          "description": "Provider identity for cost-catalog lookup and telemetry. Built-in named providers\n(cohere, mistral, ...) set this so their cost resolves under the right catalog key;\na bare custom provider may set it to match a catalog entry. Falls back to \"custom\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "formats": {
           "type": "array",
           "items": {

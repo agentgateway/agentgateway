@@ -1369,6 +1369,7 @@ pub(crate) fn backend_with_policies_from_proto(
 								.collect::<Result<Vec<_>, _>>()?;
 							AIProvider::Custom(llm::custom::Provider {
 								model: custom.model.as_deref().map(strng::new),
+								provider_override: custom.provider_override.as_deref().map(strng::new),
 								formats,
 							})
 						},
@@ -4129,6 +4130,7 @@ mod tests {
 								},
 							],
 							model: None,
+							provider_override: None,
 						})),
 						inline_policies: vec![],
 					}],

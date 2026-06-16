@@ -1615,6 +1615,7 @@ message AIBackend {
   message Custom {
     repeated ProviderFormatConfig formats = 1;
     optional string model = 2;
+    optional string provider_override = 3;
   }
 
   message Provider {

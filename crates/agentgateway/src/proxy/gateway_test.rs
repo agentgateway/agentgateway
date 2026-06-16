@@ -1550,6 +1550,7 @@ async fn llm_custom_rerank() {
 		name: "default".into(),
 		provider: AIProvider::Custom(custom::Provider {
 			model: None,
+			provider_override: None,
 			formats: vec![custom::ProviderFormatConfig {
 				format: custom::ProviderFormat::Rerank,
 				path: None,

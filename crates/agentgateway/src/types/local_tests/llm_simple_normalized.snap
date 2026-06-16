@@ -249,6 +249,7 @@ backends:
                     name: llama-3.1-8b-instant
                     provider:
                       custom:
+                        providerOverride: groq
                         formats:
                           - type: completions
                             path: ~
@@ -293,6 +294,7 @@ backends:
                     name: fireworks-llama
                     provider:
                       custom:
+                        providerOverride: fireworks
                         formats:
                           - type: completions
                             path: ~

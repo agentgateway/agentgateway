@@ -14069,11 +14069,12 @@ func (x *AIBackend_ProviderFormatConfig) GetPath() string {
 }
 
 type AIBackend_Custom struct {
-	state         protoimpl.MessageState            `protogen:"open.v1"`
-	Formats       []*AIBackend_ProviderFormatConfig `protobuf:"bytes,1,rep,name=formats,proto3" json:"formats,omitempty"`
-	Model         *string                           `protobuf:"bytes,2,opt,name=model,proto3,oneof" json:"model,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState            `protogen:"open.v1"`
+	Formats          []*AIBackend_ProviderFormatConfig `protobuf:"bytes,1,rep,name=formats,proto3" json:"formats,omitempty"`
+	Model            *string                           `protobuf:"bytes,2,opt,name=model,proto3,oneof" json:"model,omitempty"`
+	ProviderOverride *string                           `protobuf:"bytes,3,opt,name=provider_override,json=providerOverride,proto3,oneof" json:"provider_override,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AIBackend_Custom) Reset() {
@@ -14116,6 +14117,13 @@ func (x *AIBackend_Custom) GetFormats() []*AIBackend_ProviderFormatConfig {
 func (x *AIBackend_Custom) GetModel() string {
 	if x != nil && x.Model != nil {
 		return *x.Model
+	}
+	return ""
+}
+
+func (x *AIBackend_Custom) GetProviderOverride() string {
+	if x != nil && x.ProviderOverride != nil {
+		return *x.ProviderOverride
 	}
 	return ""
 }
@@ -15511,7 +15519,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\x87\x15\n" +
+	"_qualifier\"\xcf\x15\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -15562,11 +15570,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x14ProviderFormatConfig\x12K\n" +
 	"\x06format\x18\x01 \x01(\x0e23.agentgateway.dev.resource.AIBackend.ProviderFormatR\x06format\x12\x17\n" +
 	"\x04path\x18\x02 \x01(\tH\x00R\x04path\x88\x01\x01B\a\n" +
-	"\x05_path\x1a\x82\x01\n" +
+	"\x05_path\x1a\xca\x01\n" +
 	"\x06Custom\x12S\n" +
 	"\aformats\x18\x01 \x03(\v29.agentgateway.dev.resource.AIBackend.ProviderFormatConfigR\aformats\x12\x19\n" +
-	"\x05model\x18\x02 \x01(\tH\x00R\x05model\x88\x01\x01B\b\n" +
-	"\x06_model\x1a\xf3\a\n" +
+	"\x05model\x18\x02 \x01(\tH\x00R\x05model\x88\x01\x01\x120\n" +
+	"\x11provider_override\x18\x03 \x01(\tH\x01R\x10providerOverride\x88\x01\x01B\b\n" +
+	"\x06_modelB\x14\n" +
+	"\x12_provider_override\x1a\xf3\a\n" +
 	"\bProvider\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12V\n" +
 	"\rhost_override\x18\x02 \x01(\v21.agentgateway.dev.resource.AIBackend.HostOverrideR\fhostOverride\x12(\n" +

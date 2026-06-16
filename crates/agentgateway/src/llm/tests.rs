@@ -1468,6 +1468,7 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 fn setup_request_custom_path_override_wins_over_format_path() {
 	let provider = AIProvider::Custom(custom::Provider {
 		model: None,
+		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig {
 			format: custom::ProviderFormat::Messages,
 			path: Some(strng::literal!("/api/messages")),
@@ -1872,8 +1873,28 @@ fn vertex_provider(model: &str) -> AIProvider {
 fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
 	AIProvider::Custom(custom::Provider {
 		model: None,
+		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig { format, path: None }],
 	})
+}
+
+#[test]
+fn custom_provider_name_falls_back_to_custom() {
+	let provider = custom_provider(custom::ProviderFormat::Completions);
+	assert_eq!(provider.provider(), strng::literal!("custom"));
+}
+
+#[test]
+fn custom_provider_override_drives_provider_name() {
+	let provider = AIProvider::Custom(custom::Provider {
+		model: None,
+		provider_override: Some(strng::literal!("cohere")),
+		formats: vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Rerank,
+			path: None,
+		}],
+	});
+	assert_eq!(provider.provider(), strng::literal!("cohere"));
 }
 
 #[test]
