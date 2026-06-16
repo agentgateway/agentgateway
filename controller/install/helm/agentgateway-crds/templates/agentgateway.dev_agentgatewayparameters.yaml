@@ -475,8 +475,10 @@ spec:
                 type: object
               modelCatalog:
                 description: |-
-                  ModelCatalog configures sources for the model cost catalog.
-                  Sources are merged in order, with later entries taking precedence.
+                  Model cost catalog sources. Only effective when set on a Gateway-level
+                  AgentgatewayParameters (via Gateway.spec.infrastructure.parametersRef);
+                  ignored on GatewayClass-level parameters because ConfigMap references
+                  are resolved from the Gateway's deployment namespace.
                 properties:
                   sources:
                     items:
@@ -484,8 +486,9 @@ spec:
                         cost catalog data.
                       properties:
                         configMap:
-                          description: ModelCatalogConfigMapRef identifies a ConfigMap
-                            holding model cost catalog JSON.
+                          description: |-
+                            ModelCatalogConfigMapRef identifies a ConfigMap holding model cost catalog JSON.
+                            The ConfigMap must be in the same namespace as the Gateway that references it.
                           properties:
                             key:
                               description: Data key whose value is the catalog JSON.
