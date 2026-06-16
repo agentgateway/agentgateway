@@ -2,17 +2,27 @@ import styled from "@emotion/styled";
 import type { MenuProps } from "antd";
 import { Layout as AntLayout, Button, Menu } from "antd";
 import {
-  Brain,
+  BarChart3,
+  Bot,
+  Boxes,
+  Braces,
+  Cable,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
-  FlaskConical,
+  FileCode,
   Home,
+  KeyRound,
   Moon,
   Network,
+  Play,
   Route,
-  Sparkles,
+  Server,
+  Shield,
+  ShieldAlert,
   Sun
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "../../contexts";
 import { AgentgatewayLogo } from "../AgentgatewayLogo";
@@ -52,7 +62,7 @@ const StyledSider = styled(Sider)`
         var(--color-bg-container) 100%
       );
   border-right: 1px solid var(--color-border-secondary);
-  overflow-y: auto;
+  overflow: hidden;
   position: relative;
 
   /* Additional gradient overlays for depth */
@@ -85,12 +95,20 @@ const StyledSider = styled(Sider)`
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow: hidden;
     position: relative;
     z-index: 1;
 
     // Removes a faint border from the logo container.
     > div {
       border: none !important
+    }
+
+    // Menu takes remaining space and scrolls internally
+    > ul.ant-menu {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
     }
   }
 `;
@@ -99,8 +117,8 @@ const StyledHeader = styled(Header)`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-bg-container);
-  border-bottom: 1px solid var(--color-border-secondary);
+  background: var(--color-bg-layout);
+  border-bottom: 1px solid var(--color-border-base);
   padding: 0 var(--spacing-xl);
   height: var(--header-height);
   min-height: var(--header-height);
@@ -149,15 +167,16 @@ const StyledContent = styled(Content)`
   }
 `;
 
-const Logo = styled.div`
+const Logo = styled.div<{ $collapsed?: boolean }>`
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: ${({ $collapsed }) => ($collapsed ? "center" : "flex-start")};
   gap: var(--spacing-md);
-  padding: var(--spacing-xl) var(--spacing-lg);
+  padding: ${({ $collapsed }) => ($collapsed ? "var(--spacing-xl) var(--spacing-md)" : "var(--spacing-xl) var(--spacing-lg)")};
   border-bottom: 1px solid var(--color-border-secondary);
   cursor: pointer;
-  transition: opacity var(--transition-base) var(--transition-timing);
+  transition: opacity var(--transition-base) var(--transition-timing), padding var(--transition-base) var(--transition-timing);
+  overflow: hidden;
 
   svg {
     width: 32px;
@@ -169,10 +188,50 @@ const Logo = styled.div`
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-base);
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   &:hover {
     opacity: 0.8;
+  }
+`;
+
+const CollapseButton = styled.button<{ $left: number }>`
+  position: fixed;
+  left: ${({ $left }) => $left - 18}px;
+  top: 50vh;
+  transform: translateY(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-base);
+  background: var(--color-bg-container);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: left 0.2s ease,
+    background var(--transition-base) var(--transition-timing),
+    color var(--transition-base) var(--transition-timing),
+    box-shadow var(--transition-base) var(--transition-timing);
+
+  svg {
+    flex-shrink: 0;
+    display: block;
+  }
+
+  &:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-base);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 `;
 
@@ -274,7 +333,11 @@ const StyledMenu = styled(Menu)`
   }
 
   li:has(.ant-menu-item){
-    padding: 0px 4px 0px 0px !important;
+    padding: 0px 4px !important;
+  }
+
+  &.ant-menu-inline-collapsed li:has(.ant-menu-item) {
+    padding: 0 !important;
   }
 
 `;
@@ -287,39 +350,39 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "true"
+  );
+
+  const handleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    localStorage.setItem("sidebar-collapsed", String(next));
+  };
 
   const menuItems: MenuItem[] = [
     {
-      key: "/dashboard",
-      icon: <Home size={18} />,
-      label: "Dashboard",
+      key: "gateway-group",
+      label: "Gateway",
+      type: "group",
+      children: [
+        { key: "/", icon: <Home size={18} />, label: "Home" },
+      ],
     },
     {
       key: "llm-group",
       label: "LLM",
       type: "group",
       children: [
-        {
-          key: "/llm-configuration",
-          icon: <Brain size={18} />,
-          label: "Configuration",
-        },
-        // Alan - commenting fake-data pages out until we hook up to a real backend
-        // {
-        //   key: "/llm-metrics",
-        //   icon: <BarChart3 size={18} />,
-        //   label: "Metrics",
-        // },
-        // {
-        //   key: "/llm-logs",
-        //   icon: <FileText size={18} />,
-        //   label: "Logs",
-        // },
-        {
-          key: "/llm-playground",
-          icon: <FlaskConical size={18} />,
-          label: "Playground",
-        },
+        // { key: "/llm-configuration", icon: <Brain size={18} />, label: "Configuration" },
+        { key: "/llm-models", icon: <Bot size={18} />, label: "Models" },
+        { key: "/llm-providers", icon: <Boxes size={18} />, label: "Providers" },
+        { key: "/llm-policies", icon: <ShieldAlert size={18} />, label: "Policies" },
+        { key: "/llm-guardrails", icon: <Shield size={18} />, label: "Guardrails" },
+        { key: "/llm-monitoring", icon: <BarChart3 size={18} />, label: "Monitoring" },
+        { key: "/llm-keys", icon: <KeyRound size={18} />, label: "Virtual API Keys" },
+        { key: "/llm-playground", icon: <Play size={18} />, label: "Playground" },
+        { key: "/llm-client-setup", icon: <Cable size={18} />, label: "Client Setup" },
       ],
     },
     {
@@ -327,27 +390,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       label: "MCP",
       type: "group",
       children: [
-        {
-          key: "/mcp-configuration",
-          icon: <Network size={18} />,
-          label: "Configuration",
-        },
-        // Alan - commenting fake-data pages out until we hook up to a real backend
-        // {
-        //   key: "/mcp-metrics",
-        //   icon: <BarChart3 size={18} />,
-        //   label: "Metrics",
-        // },
-        // {
-        //   key: "/mcp-logs",
-        //   icon: <FileText size={18} />,
-        //   label: "Logs",
-        // },
-        {
-          key: "/mcp-playground",
-          icon: <FlaskConical size={18} />,
-          label: "Playground",
-        },
+        // { key: "/mcp-configuration", icon: <Network size={18} />, label: "Configuration" },
+        { key: "/mcp-servers", icon: <Server size={18} />, label: "Servers" },
+        { key: "/mcp-playground", icon: <Play size={18} />, label: "Playground" },
       ],
     },
     {
@@ -355,22 +400,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       label: "Traffic",
       type: "group",
       children: [
-        {
-          key: "/traffic-configuration",
-          icon: <Route size={18} />,
-          label: "Configuration",
-        },
-        // Alan - commenting fake-data pages out until we hook up to a real backend
-        // {
-        //   key: "/traffic-metrics",
-        //   icon: <BarChart3 size={18} />,
-        //   label: "Metrics",
-        // },
-        // {
-        //   key: "/traffic-logs",
-        //   icon: <FileText size={18} />,
-        //   label: "Logs",
-        // },
+        // { key: "/traffic-configuration", icon: <Route size={18} />, label: "Configuration" },
+        { key: "/traffic-listeners", icon: <Network size={18} />, label: "Listeners" },
+        { key: "/traffic-routes", icon: <Route size={18} />, label: "Routes" },
       ],
     },
     {
@@ -380,8 +412,13 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       children: [
         {
           key: "/cel-playground",
-          icon: <Sparkles size={18} />,
+          icon: <Braces size={18} />,
           label: "CEL Playground",
+        },
+        {
+          key: "/raw-config",
+          icon: <FileCode size={18} />,
+          label: "Raw Configuration",
         },
       ]
     },
@@ -400,15 +437,26 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
       "/traffic-configuration",
       "/traffic-logs",
       "/traffic-metrics",
+      "/traffic-listeners",
+      "/traffic-routes",
       "/llm-configuration",
       "/llm-logs",
       "/llm-metrics",
       "/llm-playground",
+      "/llm-models",
+      "/llm-providers",
+      "/llm-policies",
+      "/llm-guardrails",
+      "/llm-monitoring",
+      "/llm-keys",
+      "/llm-client-setup",
       "/mcp-configuration",
       "/mcp-logs",
       "/mcp-metrics",
       "/mcp-playground",
+      "/mcp-servers",
       "/cel-playground",
+      "/raw-config",
       "/dashboard",
     ];
 
@@ -433,17 +481,31 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <StyledLayout>
-      <StyledSider width={240} collapsed={false}>
-        <Logo onClick={() => navigate("/dashboard")}>
+      <StyledSider
+        width={240}
+        collapsedWidth={64}
+        collapsed={collapsed}
+        trigger={null}
+      >
+        <Logo $collapsed={collapsed} onClick={() => navigate("/")}>
           <AgentgatewayLogo />
-          <span>agentgateway</span>
+          {!collapsed && <span>agentgateway</span>}
         </Logo>
         <StyledMenu
           mode="inline"
+          inlineCollapsed={collapsed}
           selectedKeys={selectedKeys}
           items={menuItems}
           onClick={handleMenuClick}
         />
+        <CollapseButton
+          $left={collapsed ? 64 : 240}
+          type="button"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={handleCollapse}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </CollapseButton>
       </StyledSider>
       <ContentWrapper>
         <StyledHeader>

@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
         "/config_dump": proxyTarget,
         "^/config$": proxyTarget,
         "/cel": proxyTarget,
+        "/api/logs/search": proxyTarget,
+        "/api/logs/tail": proxyTarget,
+        "/api/logs/analytics/token-usage": proxyTarget,
       }
     },
     build: {

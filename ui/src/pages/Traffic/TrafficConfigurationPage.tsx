@@ -277,12 +277,12 @@ export function TrafficConfigurationPage() {
               View and edit the full agentgateway configuration.
             </Description>
           </div>
-          <Button
+          {/* <Button
             icon={<CodeOutlined />}
             onClick={() => navigate("/traffic-configuration/editor")}
           >
             Editor
-          </Button>
+          </Button> */}
         </PageHeader>
       </MetricsHeader>
       <SplitBody>

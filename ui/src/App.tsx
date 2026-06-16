@@ -6,7 +6,7 @@ import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { EditorSettingsProvider } from "./contexts/EditorSettingsContext";
 import { CELPlaygroundPage } from "./pages/CELPlayground/Playground/CELPlaygroundPage";
 import { ConfigEditorPage } from "./pages/ConfigEditor/ConfigEditorPage";
-import { DashboardPage } from "./pages/Dashboard/DashboardPage";
+import { GatewayOverviewPage } from "./pages/GatewayOverview/GatewayOverviewPage";
 import { LLMConfigurationPage } from "./pages/LLM/LLMConfigurationPage";
 import { LLMLogsPage } from "./pages/LLM/LLMLogsPage";
 import { LLMMetricsPage } from "./pages/LLM/LLMMetricsPage";
@@ -23,6 +23,21 @@ import { SetupWizardPage } from "./pages/SetupWizard/SetupWizardPage";
 import { TrafficConfigurationPage } from "./pages/Traffic/TrafficConfigurationPage";
 import { TrafficLogsPage } from "./pages/Traffic/TrafficLogsPage";
 import { TrafficMetricsPage } from "./pages/Traffic/TrafficMetricsPage";
+// Imported pages from v2 UI
+import {
+  ClientSetupPage,
+  GuardrailsPage,
+  KeysPage,
+  LogsPage,
+  McpServersPage,
+  ModelsPage,
+  PoliciesPage,
+  ProvidersPage,
+  RawConfigPage,
+  TrafficListenersPage,
+  TrafficRoutesPage,
+} from "./imported";
+import "./imported/styles.css";
 
 function App() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
@@ -55,12 +70,7 @@ function App() {
             <ConfirmProvider>
               <MainLayout>
                 <Routes>
-                  <Route
-                    path="/"
-                    element={<Navigate to="/dashboard" replace />}
-                  />
-
-                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/" element={<GatewayOverviewPage />} />
 
                   {/* LLM Section */}
                   <Route path="/llm-setup-wizard" element={<LLMSetupWizardPage />} />
@@ -169,6 +179,19 @@ function App() {
                     path="/traffic-configuration/bind/:port/listener/:li/tcproute/:ri/backend/:bi/policy/:policyType"
                     element={<TrafficConfigurationPage />}
                   />
+
+                  {/* Imported pages from v2 UI */}
+                  <Route path="/llm-models" element={<ModelsPage />} />
+                  <Route path="/llm-providers" element={<ProvidersPage />} />
+                  <Route path="/llm-policies" element={<PoliciesPage />} />
+                  <Route path="/llm-guardrails" element={<GuardrailsPage />} />
+                  <Route path="/llm-monitoring" element={<LogsPage />} />
+                  <Route path="/llm-keys" element={<KeysPage />} />
+                  <Route path="/llm-client-setup" element={<ClientSetupPage />} />
+                  <Route path="/mcp-servers" element={<McpServersPage />} />
+                  <Route path="/traffic-listeners" element={<TrafficListenersPage />} />
+                  <Route path="/traffic-routes" element={<TrafficRoutesPage />} />
+                  <Route path="/raw-config" element={<RawConfigPage />} />
 
                   {/* CEL Playground */}
                   <Route

@@ -196,12 +196,12 @@ export function LLMConfigurationPage() {
             <PageTitle>LLM Configuration</PageTitle>
             <Description>Manage LLM models and policies</Description>
           </div>
-          <Button
+          {/* <Button
             icon={<CodeOutlined />}
             onClick={() => navigate("/llm-configuration/editor")}
           >
             Editor
-          </Button>
+          </Button> */}
         </PageHeader>
       </MetricsHeader>
       <SplitBody>

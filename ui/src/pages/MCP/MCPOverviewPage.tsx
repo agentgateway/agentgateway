@@ -473,13 +473,13 @@ export function MCPOverviewPage() {
                                             >
                                                 Open Playground
                                             </Button>
-                                            <Button
+                                            {/* <Button
                                                 size="small"
                                                 onClick={() => navigate("/traffic-configuration/editor")}
                                                 data-testid={`mcp-server-target-card-${i}-raw-editor-button`}
                                             >
                                                 Raw Editor
-                                            </Button>
+                                            </Button> */}
                                         </CardActions>
                                     </ServerCard>
                                 ))}

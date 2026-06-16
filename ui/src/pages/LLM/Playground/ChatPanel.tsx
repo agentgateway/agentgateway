@@ -1,9 +1,9 @@
 import styled from "@emotion/styled";
-import { Button, Card, Input, Spin, Tag, Typography } from "antd";
-import { Brain, Send } from "lucide-react";
+import { Button, Card, Input, Spin, Typography } from "antd";
+import { Bot, Send } from "lucide-react";
 import type { RefObject } from "react";
 import ReactMarkdown from "react-markdown";
-import { PROVIDER_COLORS } from "./constants";
+import { ProviderIcon } from "../../../imported/components/ProviderIcon";
 import type { Message, PlaygroundModel } from "./types";
 
 const { TextArea } = Input;
@@ -37,6 +37,20 @@ const InputRow = styled.div`
   display: flex;
   gap: 8px;
   margin-top: auto;
+`;
+
+const SendButton = styled(Button)`
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+
+  .ant-btn-icon {
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
 `;
 
 const MarkdownContent = styled.div`
@@ -134,25 +148,16 @@ export function ChatPanel({
     <Card
       title={
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Brain size={16} />
+          <Bot size={16} />
           Chat
         </span>
       }
       extra={
         selectedModel && effectiveModel && (
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Tag
-              color={PROVIDER_COLORS[selectedModel.provider] ?? "default"}
-              style={{ fontSize: 11 }}
-            >
-              {selectedModel.provider}
-            </Tag>
-            <Tag color="cyan" style={{ fontSize: 11 }}>
-              {effectiveModel}
-            </Tag>
-            <Tag color="purple" style={{ fontSize: 11 }}>
-              {selectedModel.label}
-            </Tag>
+            <ProviderIcon provider={selectedModel.provider} />
+            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{effectiveModel}</span>
+            <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{selectedModel.label}</span>
           </span>
         )
       }
@@ -217,7 +222,7 @@ export function ChatPanel({
           autoSize={{ minRows: 1, maxRows: 4 }}
           disabled={!selectedModel || sending}
         />
-        <Button
+        <SendButton
           type="primary"
           icon={<Send size={16} />}
           onClick={onSend}

@@ -1,6 +1,9 @@
 import styled from "@emotion/styled";
-import { Spin } from "antd";
+import { Alert, Button, Spin } from "antd";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { updateConfig } from "../../../api";
+import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../../../cors";
 import { ChatPanel } from "./ChatPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { usePlayground } from "./usePlayground";
@@ -36,8 +39,10 @@ const PlaygroundLayout = styled.div`
 `;
 
 export function LLMPlaygroundPage() {
+  const [applyingCors, setApplyingCors] = useState(false);
   const {
     isLoading,
+    config,
     models,
     selectedLabel,
     selectedModel,
@@ -53,6 +58,14 @@ export function LLMPlaygroundPage() {
     handleSelectLabel,
     setModelOverride,
     setPrompt,
+    apiKeyMode,
+    setApiKeyMode,
+    selectedApiKey,
+    setSelectedApiKey,
+    rawApiKey,
+    setRawApiKey,
+    includeMcpTools,
+    setIncludeMcpTools,
   } = usePlayground();
 
   const [searchParams] = useSearchParams();
@@ -70,6 +83,18 @@ export function LLMPlaygroundPage() {
   }
 
 
+  const needsCors = config ? corsNeedsUpdate(config.llm?.policies?.cors) : false;
+
+  const handleApplyCors = async () => {
+    if (!config) return;
+    setApplyingCors(true);
+    try {
+      await updateConfig(applyPlaygroundCors(config));
+    } finally {
+      setApplyingCors(false);
+    }
+  };
+
   return (
     <Container>
       <div>
@@ -77,6 +102,19 @@ export function LLMPlaygroundPage() {
           Send chat completions requests to your configured LLM models
         </PageSubtitle>
       </div>
+      {needsCors && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Browser access is not allowed"
+          description={`Add ${currentOrigin()} to the LLM CORS policy so this playground can call the gateway from the browser.`}
+          action={
+            <Button size="small" loading={applyingCors} onClick={handleApplyCors}>
+              Apply CORS
+            </Button>
+          }
+        />
+      )}
 
       <PlaygroundLayout>
         <SettingsPanel
@@ -87,9 +125,17 @@ export function LLMPlaygroundPage() {
           modelOverride={modelOverride}
           messages={messages}
           prompt={prompt}
+          apiKeyMode={apiKeyMode}
+          selectedApiKey={selectedApiKey}
+          rawApiKey={rawApiKey}
+          includeMcpTools={includeMcpTools}
           onSelectLabel={handleSelectLabel}
           onChangeModelOverride={setModelOverride}
           onClear={handleClear}
+          onApiKeyModeChange={setApiKeyMode}
+          onSelectedApiKeyChange={setSelectedApiKey}
+          onRawApiKeyChange={setRawApiKey}
+          onIncludeMcpToolsChange={setIncludeMcpTools}
         />
 
         <ChatPanel

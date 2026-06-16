@@ -1,9 +1,12 @@
 import styled from "@emotion/styled";
-import { Card, Spin } from "antd";
+import { Alert, Button, Card, Spin } from "antd";
 import { Settings } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { updateConfig } from "../../../api";
 import { useConfig } from "../../../api/hooks";
+import { applyMcpPlaygroundCors, currentOrigin, mcpCorsNeedsUpdate } from "../../../cors";
+import type { FilterOrPolicy } from "../../../config";
 import type { LocalBind, LocalListener, LocalRoute } from "../../../config";
 import { RouteSelector } from "./RouteSelector";
 import { ToolTester } from "./ToolTester";
@@ -62,6 +65,7 @@ export function MCPPlaygroundPage() {
   const [routes, setRoutes] = useState<RouteInfo[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteInfo | null>(null);
   const [resultExpanded, setResultExpanded] = useState<boolean>(true);
+  const [applyingCors, setApplyingCors] = useState(false);
 
   const [searchParams] = useSearchParams();
   const providedTargetLabel = searchParams.get("label");
@@ -185,10 +189,36 @@ export function MCPPlaygroundPage() {
     );
   }
 
+  const mcpCors = (config?.mcp?.policies as FilterOrPolicy | null | undefined)?.cors;
+  const needsCors = config ? mcpCorsNeedsUpdate(mcpCors) : false;
+
+  const handleApplyCors = async () => {
+    if (!config) return;
+    setApplyingCors(true);
+    try {
+      await updateConfig(applyMcpPlaygroundCors(config));
+    } finally {
+      setApplyingCors(false);
+    }
+  };
+
   return (
     <Container>
       <PageSubtitle>Test MCP server tool calls interactively</PageSubtitle>
-      
+      {needsCors && (
+        <Alert
+          type="warning"
+          showIcon
+          message="MCP browser access is not allowed"
+          description={`Add ${currentOrigin()} to the MCP CORS policy so this playground can connect to the gateway from the browser.`}
+          action={
+            <Button size="small" loading={applyingCors} onClick={handleApplyCors}>
+              Apply CORS
+            </Button>
+          }
+        />
+      )}
+
       {/* Connection Section */}
       <SectionCard
         title={

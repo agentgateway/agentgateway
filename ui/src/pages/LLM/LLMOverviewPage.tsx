@@ -430,13 +430,13 @@ export function LLMOverviewPage() {
                                         >
                                             Open Playground
                                         </Button>
-                                        <Button
+                                        {/* <Button
                                             size="small"
                                             onClick={() => navigate("/traffic-configuration/editor")}
                                             data-testid={`llm-model-card-${i}-raw-editor-button`}
                                         >
                                             Raw Editor
-                                        </Button>
+                                        </Button> */}
                                     </CardActions>
                                 </ModelCard>
                             ))}

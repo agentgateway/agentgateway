@@ -6,8 +6,11 @@ import { capitalizeFirstLetters } from "../utils/helpers";
 
 const StyledBreadcrumb = styled(Breadcrumb)`
   .ant-breadcrumb-link {
-    color: var(--color-text-secondary);
+    color: var(--color-sidebar) !important;
     cursor: pointer;
+    text-transform: uppercase;
+    font-weight: var(--font-weight-bold) !important;
+    font-size: var(--font-size-sm) !important;
     transition: color var(--transition-base) var(--transition-timing);
 
     &:hover {
@@ -41,14 +44,9 @@ export function Breadcrumbs() {
       .split("/")
       .filter((segment) => segment !== "");
 
-    // Don't show breadcrumbs on root
+    // Root path gets a single "Gateway Overview" breadcrumb
     if (pathSegments.length === 0) {
-      return null;
-    }
-
-    // Dashboard gets a single breadcrumb
-    if (location.pathname === "/dashboard") {
-      return [{ title: <span>Dashboard</span> }];
+      return [{ title: <span>Gateway Overview</span> }];
     }
 
     return pathSegments.map((segment, index) => {

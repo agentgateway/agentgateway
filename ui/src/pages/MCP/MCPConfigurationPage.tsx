@@ -204,12 +204,12 @@ export function MCPConfigurationPage() {
             <PageTitle>MCP Configuration</PageTitle>
             <Description>Manage MCP servers and policies</Description>
           </div>
-          <Button
+          {/* <Button
             icon={<CodeOutlined />}
             onClick={() => navigate("/mcp-configuration/editor")}
           >
             Editor
-          </Button>
+          </Button> */}
         </PageHeader>
       </MetricsHeader>
       <SplitBody>
