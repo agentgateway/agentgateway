@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
@@ -9,16 +9,15 @@ use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
-	ServerNotification, ServerResult,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, Implementation, JsonRpcNotification,
+	JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+	ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, ServerInfo,
+	ServerJsonRpcMessage, ServerNotification, ServerResult,
 };
 use tracing::{debug, warn};
 
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
@@ -27,6 +26,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::{Strng, mcp};
 
 const DELIMITER: &str = "_";
 
@@ -581,6 +581,7 @@ impl Relay {
 	pub async fn send_fanout_get(
 		&self,
 		ctx: IncomingRequestContext,
+		pending_server_requests: Arc<Mutex<HashMap<RequestId, Strng>>>,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
 
@@ -599,6 +600,7 @@ impl Relay {
 			match result {
 				Ok(s) => {
 					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let s = track_outbound_server_requests(name.clone(), s, pending_server_requests.clone());
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -726,6 +728,31 @@ impl Relay {
 			None => messages_to_response(id, ms, None),
 		}
 	}
+
+	pub async fn send_client_response(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: IncomingRequestContext,
+		pending_server_requests: &Arc<Mutex<HashMap<RequestId, Strng>>>,
+	) -> Result<Response, UpstreamError> {
+		let request_id = match &message {
+			ClientJsonRpcMessage::Response(r) => r.id.clone(),
+			ClientJsonRpcMessage::Error(e) => e.id.clone(),
+			_ => {
+				return Err(UpstreamError::InvalidRequest(
+					"expected client JSON-RPC response".into(),
+				));
+			},
+		};
+
+		let upstream_name =
+			resolve_upstream_for_server_response(self, pending_server_requests, &request_id)?;
+
+		let us = self.upstreams.get(upstream_name.as_str())?;
+		us.generic_client_message(message, &ctx).await?;
+		Ok(accepted_response())
+	}
+
 	pub async fn send_notification(
 		&self,
 		r: JsonRpcNotification<ClientNotification>,
@@ -972,6 +999,47 @@ fn accepted_response() -> Response {
 		.expect("valid response")
 }
 
+fn track_outbound_server_requests(
+	upstream: Strng,
+	stream: Messages,
+	pending_server_requests: Arc<Mutex<HashMap<RequestId, Strng>>>,
+) -> Messages {
+	stream.map_server_messages(move |msg| {
+		if let ServerJsonRpcMessage::Request(ref req) = msg {
+			pending_server_requests
+				.lock()
+				.expect("pending_server_requests lock poisoned")
+				.insert(req.id.clone(), upstream.clone());
+		}
+		msg
+	})
+}
+
+fn resolve_upstream_for_server_response(
+	relay: &Relay,
+	pending_server_requests: &Arc<Mutex<HashMap<RequestId, Strng>>>,
+	request_id: &RequestId,
+) -> Result<Strng, UpstreamError> {
+	if let Some(name) = pending_server_requests
+		.lock()
+		.expect("pending_server_requests lock poisoned")
+		.remove(request_id)
+	{
+		return Ok(name);
+	}
+	if relay.upstreams.size() == 1 {
+		return relay
+			.upstreams
+			.iter_named()
+			.next()
+			.map(|(name, _)| name)
+			.ok_or_else(|| UpstreamError::InvalidRequest("no upstreams available".into()));
+	}
+	Err(UpstreamError::InvalidRequest(format!(
+		"no upstream registered for server-initiated request id {request_id:?}"
+	)))
+}
+
 #[cfg(test)]
 mod tests {
 	use futures_util::stream;
@@ -1071,6 +1139,31 @@ mod tests {
 				.as_str()
 				.unwrap()
 				.contains("boom")
+		);
+	}
+
+	#[tokio::test]
+	async fn track_outbound_server_requests_registers_server_initiated_request_id() {
+		use futures_util::StreamExt;
+		use rmcp::model::{PingRequest, ServerRequest};
+
+		let pending = Arc::new(Mutex::new(HashMap::new()));
+		let upstream: Strng = "backend".into();
+		let req_id = RequestId::Number(7);
+		let ping = ServerJsonRpcMessage::request(
+			ServerRequest::PingRequest(PingRequest::default()),
+			req_id.clone(),
+		);
+		let mut tracked =
+			track_outbound_server_requests(upstream.clone(), Messages::from(ping), pending.clone());
+		assert!(tracked.next().await.is_some());
+		assert_eq!(
+			pending
+				.lock()
+				.expect("lock")
+				.get(&req_id)
+				.map(|s| s.as_str()),
+			Some("backend")
 		);
 	}
 }

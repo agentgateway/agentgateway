@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
@@ -34,6 +34,9 @@ pub struct Session {
 	relay: Arc<Relay>,
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
+	/// Maps server-initiated JSON-RPC request ids (e.g. heartbeat pings on the GET stream)
+	/// to the upstream that issued them, so client responses can be routed back.
+	pending_server_requests: Arc<Mutex<HashMap<RequestId, Strng>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +47,10 @@ struct SessionEntry {
 }
 
 const SESSION_REAP_INTERVAL: Duration = Duration::from_secs(30);
+
+fn new_pending_server_requests() -> Arc<Mutex<HashMap<RequestId, Strng>>> {
+	Arc::new(Mutex::new(HashMap::new()))
+}
 
 impl Session {
 	/// send a message to upstream server(s)
@@ -290,7 +297,14 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
+		Self::handle_error(
+			None,
+			self
+				.relay
+				.send_fanout_get(ctx, self.pending_server_requests.clone())
+				.await,
+		)
+		.await
 	}
 
 	async fn handle_error(
@@ -610,9 +624,39 @@ impl Session {
 				self.relay.send_notification(r, ctx).await
 			},
 
-			_ => Err(UpstreamError::InvalidRequest(
-				"unsupported message type".to_string(),
-			)),
+			ClientJsonRpcMessage::Response(r) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
+				let session_id = self.id.to_string();
+				log.non_atomic_mutate(|l| {
+					l.session_id = Some(session_id);
+				});
+				self
+					.relay
+					.send_client_response(
+						ClientJsonRpcMessage::Response(r),
+						ctx,
+						&self.pending_server_requests,
+					)
+					.await
+			},
+
+			ClientJsonRpcMessage::Error(e) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
+				let session_id = self.id.to_string();
+				log.non_atomic_mutate(|l| {
+					l.session_id = Some(session_id);
+				});
+				self
+					.relay
+					.send_client_response(
+						ClientJsonRpcMessage::Error(e),
+						ctx,
+						&self.pending_server_requests,
+					)
+					.await
+			},
 		}
 	}
 
@@ -688,6 +732,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			pending_server_requests: new_pending_server_requests(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(
@@ -711,6 +756,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			pending_server_requests: new_pending_server_requests(),
 		}
 	}
 
@@ -737,6 +783,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: None,
 			encoder: self.encoder.clone(),
+			pending_server_requests: new_pending_server_requests(),
 		}
 	}
 
@@ -754,6 +801,7 @@ impl SessionManager {
 			relay: Arc::new(relay),
 			tx: Some(tx),
 			encoder: self.encoder.clone(),
+			pending_server_requests: new_pending_server_requests(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(
