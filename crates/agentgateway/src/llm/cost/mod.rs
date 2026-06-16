@@ -13,9 +13,8 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
-use crate::ModelCatalogSource;
-
 use super::{CacheTokenConvention, LLMInfo, LLMResponse};
+use crate::ModelCatalogSource;
 
 mod catalog;
 
@@ -835,7 +834,9 @@ mod tests {
 
 		let loaded = load_sources(&[
 			ModelCatalogSource::File { file: base },
-			ModelCatalogSource::File { file: override_file },
+			ModelCatalogSource::File {
+				file: override_file,
+			},
 		])
 		.await
 		.unwrap();
@@ -1078,9 +1079,12 @@ mod tests {
 			input_tokens: Some(1_000_000),
 			..Default::default()
 		};
-		let (cost, status) = loaded
-			.snapshot
-			.price("openai", "my-model", &resp, CacheTokenConvention::InputIncludesCache);
+		let (cost, status) = loaded.snapshot.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(5.0));
 	}
@@ -1089,7 +1093,9 @@ mod tests {
 	async fn inline_source_overrides_file_source() {
 		let dir = tempfile::tempdir().unwrap();
 		let base = dir.path().join("base.json");
-		fs_err::tokio::write(&base, test_catalog("1")).await.unwrap();
+		fs_err::tokio::write(&base, test_catalog("1"))
+			.await
+			.unwrap();
 
 		let loaded = load_sources(&[
 			ModelCatalogSource::File { file: base },
@@ -1103,9 +1109,12 @@ mod tests {
 			input_tokens: Some(1_000_000),
 			..Default::default()
 		};
-		let (cost, _) = loaded
-			.snapshot
-			.price("openai", "my-model", &resp, CacheTokenConvention::InputIncludesCache);
+		let (cost, _) = loaded.snapshot.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
 		assert_eq!(cost, Some(7.0), "inline layer overrides file layer");
 	}
 
