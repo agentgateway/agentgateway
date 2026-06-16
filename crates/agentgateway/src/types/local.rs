@@ -2698,11 +2698,11 @@ async fn convert_llm_config(
 	let tls = tls.map(TryInto::try_into).transpose()?;
 	let llm_registry = LocalLLMModelRegistry::new(models, virtual_models)?;
 
-	let mut all_policies = vec![];
+	let all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = Vec::new();
 	let mut shared_prompt_guard = None;
-	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
+	let llm_route_policies = if let Some(pol) = policies {
 		let LocalLLMPolicy {
 			gateway,
 			guardrails,
@@ -2724,7 +2724,7 @@ async fn convert_llm_config(
 		)
 		.await?;
 
-		// Rest of policies are PreRoute gateway policies; resolve these to our listener.
+		// Resolve the rest of the LLM policies to the generated LLM route.
 		let gateway_policies: FilterOrPolicy = gateway.into();
 		let gateway_policies = split_policies(
 			client.clone(),
@@ -2732,12 +2732,11 @@ async fn convert_llm_config(
 			config.as_policy_context("listener/llm"),
 		)
 		.await?;
-		(
-			gateway_policies.route_policies,
-			route_policies.route_policies,
-		)
+		let mut policies = gateway_policies.route_policies;
+		policies.extend(route_policies.route_policies);
+		policies
 	} else {
-		(vec![], vec![])
+		vec![]
 	};
 
 	// Get static startup unix timestamp
@@ -3171,7 +3170,7 @@ async fn convert_llm_config(
 			router_virtual_models,
 			startup_timestamp,
 		))),
-		inline_policies: vec![],
+		inline_policies: llm_route_policies,
 	});
 
 	// Create listener
@@ -3192,31 +3191,6 @@ async fn convert_llm_config(
 			None => ListenerProtocol::HTTP,
 		},
 	};
-
-	if !listener_gateway_policies.is_empty() || !listener_route_policies.is_empty() {
-		let pc = listener_gateway_policies.len();
-		let target = PolicyTarget::Gateway(listener_name.clone().into());
-		for (idx, pol) in listener_gateway_policies.into_iter().enumerate() {
-			let key = strng::format!("listener/{idx}");
-			all_policies.push(TargetedPolicy {
-				key,
-				name: None,
-				target: target.clone(),
-				inheritance: Default::default(),
-				policy: (pol, PolicyPhase::Gateway).into(),
-			});
-		}
-		for (idx, pol) in listener_route_policies.into_iter().enumerate() {
-			let key = strng::format!("listener/{}", pc + idx);
-			all_policies.push(TargetedPolicy {
-				key,
-				name: None,
-				target: target.clone(),
-				inheritance: Default::default(),
-				policy: (pol, PolicyPhase::Route).into(),
-			});
-		}
-	}
 
 	let mut listener_set = ListenerSet::default();
 	listener_set.insert(listener);

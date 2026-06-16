@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 207
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -18,7 +17,31 @@ binds:
         protocol: HTTP
 listener_routes:
   - - llm
-    - - key: "llm:request"
+    - - inlinePolicies:
+          - cors:
+              allowCredentials: false
+              allowOrigins:
+                - "http://localhost:15000"
+              maxAge: ~
+          - jwtAuth:
+              location:
+                header:
+                  name: authorization
+                  prefix: "Bearer "
+              mode: optional
+              providers:
+                - issuer: agentgateway.dev
+                  keys: []
+          - authorization:
+              rules:
+                allow:
+                  - "jwt.email.endsWith(\"@example.com\")"
+          - localRateLimit:
+              - fillInterval: 1s
+                maxTokens: 100
+                tokensPerFill: 10
+                type: tokens
+        key: "llm:request"
         llmRouter:
           models:
             - name: llama-3.1-8b-instant
@@ -161,69 +184,6 @@ listener_tcp_routes:
   - - llm
     - []
 policies:
-  - key: listener/0
-    name: ~
-    target:
-      gateway:
-        gatewayName: name
-        gatewayNamespace: ns
-        listenerName: llm
-    policy:
-      traffic:
-        cors:
-          allowCredentials: false
-          allowOrigins:
-            - "http://localhost:15000"
-          maxAge: ~
-        phase: gateway
-  - key: listener/1
-    name: ~
-    target:
-      gateway:
-        gatewayName: name
-        gatewayNamespace: ns
-        listenerName: llm
-    policy:
-      traffic:
-        jwtAuth:
-          location:
-            header:
-              name: authorization
-              prefix: "Bearer "
-          mode: optional
-          providers:
-            - issuer: agentgateway.dev
-              keys: []
-        phase: gateway
-  - key: listener/2
-    name: ~
-    target:
-      gateway:
-        gatewayName: name
-        gatewayNamespace: ns
-        listenerName: llm
-    policy:
-      traffic:
-        authorization:
-          rules:
-            allow:
-              - "jwt.email.endsWith(\"@example.com\")"
-        phase: gateway
-  - key: listener/3
-    name: ~
-    target:
-      gateway:
-        gatewayName: name
-        gatewayNamespace: ns
-        listenerName: llm
-    policy:
-      traffic:
-        localRateLimit:
-          - fillInterval: 1s
-            maxTokens: 100
-            tokensPerFill: 10
-            type: tokens
-        phase: route
   - key: frontend/accessLog
     name: ~
     target:
