@@ -4,11 +4,6 @@ metadata:
   name: agentgateway
 spec:
   controllerName: agentgateway.dev/agentgateway
-  parametersRef:
-    group: agentgateway.dev
-    kind: AgentgatewayParameters
-    name: my-agwp
-    namespace: default
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayParameters
@@ -29,6 +24,11 @@ metadata:
   namespace: default
 spec:
   gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: my-agwp
   listeners:
     - protocol: HTTP
       port: 8080
