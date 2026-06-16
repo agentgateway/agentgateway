@@ -102,8 +102,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	// Run the XDS state manager in the current tokio worker pool.
 	tokio::spawn(state_mgr.run());
 
-	#[allow(unused_mut)]
-	let mut admin_server = crate::management::admin::Service::new(
+	let admin_server = crate::management::admin::Service::new(
 		config.clone(),
 		stores.clone(),
 		shutdown.trigger(),
@@ -112,8 +111,6 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	)
 	.await
 	.context("admin server starts")?;
-	#[cfg(feature = "ui")]
-	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new(config.clone())));
 	#[cfg(feature = "ui")]
 	info!("serving UI at http://{}/ui", config.admin_addr);
 
