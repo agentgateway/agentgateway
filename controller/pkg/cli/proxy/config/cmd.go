@@ -109,7 +109,7 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 		return nil, err
 	}
 
-	podName, podNamespace, err := kubeutil.ResolvePodForResource(kubeClient, resourceName, namespace)
+	podName, podNamespace, err := kubeutil.ResolvePodForResource(ctx, kubeClient, resourceName, namespace)
 	if err != nil {
 		return nil, err
 	}
