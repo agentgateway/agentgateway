@@ -875,6 +875,10 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => false,
 			AIProvider::Bedrock(p) => !p.is_anthropic_model(req.model.as_deref()),
 			AIProvider::Vertex(p) => !p.is_anthropic_model(req.model.as_deref()),
+			AIProvider::Azure(p) => {
+				!matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					|| !p.is_anthropic_model(req.model.as_deref())
+			},
 			AIProvider::Custom(p) => !p.supports(custom::ProviderFormat::AnthropicTokenCount),
 			_ => true,
 		};
@@ -1142,12 +1146,14 @@ impl AIProvider {
 				AIProvider::OpenAI(_) | AIProvider::Copilot(_) => req.to_openai()?,
 				AIProvider::Azure(p) => {
 					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
-						&& original_format == InputFormat::Messages
 						&& p.is_anthropic_model(Some(request_model))
 					{
 						// Foundry's Anthropic-native endpoint requires the Anthropic wire format,
 						// but only for Claude models; GPT models use the OpenAI completions format.
-						req.to_anthropic()?
+						match original_format {
+							InputFormat::Messages | InputFormat::CountTokens => req.to_anthropic()?,
+							_ => req.to_openai()?,
+						}
 					} else {
 						req.to_openai()?
 					}
