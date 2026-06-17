@@ -42,6 +42,7 @@ pub enum HTTPHeaderCase {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "FrontendHTTP"))]
 pub struct HTTP {
 	/// Maximum request or response body size buffered by the frontend.
 	#[serde(default = "defaults::max_buffer_size")]
@@ -154,6 +155,7 @@ impl Default for TLS {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "FrontendTCP"))]
 pub struct TCP {
 	/// TCP keepalive settings for downstream connections.
 	pub keepalives: super::agent::KeepaliveConfig,

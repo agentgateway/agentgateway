@@ -434,6 +434,7 @@ pub struct LocalSimpleMcpConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalConditionalPolicy_{T}"))]
 struct LocalConditionalPolicy<T> {
 	/// condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
 	#[serde(default)]
@@ -444,6 +445,7 @@ struct LocalConditionalPolicy<T> {
 }
 
 #[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalConditionalPolicies_{T}"))]
 struct LocalConditionalPolicies<T> {
 	/// conditional policy entries. An entry without a condition must be the final fallback.
 	conditional: Vec<LocalConditionalPolicy<T>>,
@@ -451,7 +453,14 @@ struct LocalConditionalPolicies<T> {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(
+		untagged,
+		deny_unknown_fields,
+		rename = "LocalExplicitOrConditional_{T}"
+	)
+)]
 enum LocalExplicitOrConditional<T> {
 	Conditional(LocalConditionalPolicies<T>),
 	Explicit(T),

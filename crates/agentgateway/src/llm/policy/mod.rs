@@ -1290,6 +1290,7 @@ pub struct NamedRegex {
 /// the LLM request is rejected. When failing open, the request is allowed
 /// through despite the webhook failure.
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "WebhookFailureMode"))]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
 	/// Reject the request when the webhook guardrail is unavailable (default).

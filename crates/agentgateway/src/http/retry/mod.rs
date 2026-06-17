@@ -13,6 +13,7 @@ use crate::*;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "RetryPolicy"))]
 pub struct Policy {
 	/// Total number of attempts, including the original request.
 	#[serde(default = "default_attempts")]
