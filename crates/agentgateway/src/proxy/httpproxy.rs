@@ -111,14 +111,16 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
-	if lp.add.is_empty() && lp.remove.is_empty() {
-		return;
-	}
 	if !lp.add.is_empty() {
 		log.cel.fields.add = lp.add.clone();
 	}
 	if !lp.remove.is_empty() {
 		log.cel.fields.remove = lp.remove.clone();
+	}
+	if let Some(database) = &lp.database
+		&& !database.add.is_empty()
+	{
+		log.cel.database_fields.add = database.add.clone();
 	}
 }
 

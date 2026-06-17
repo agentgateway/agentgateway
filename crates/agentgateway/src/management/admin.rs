@@ -67,6 +67,8 @@ where
 struct AdminState {
 	stores: crate::store::Stores,
 	config: Arc<Config>,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -108,6 +110,7 @@ pub struct CertsDump {
 impl Service {
 	pub async fn new(
 		config: Arc<Config>,
+		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 		stores: crate::store::Stores,
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
@@ -119,6 +122,7 @@ impl Service {
 			drain_rx,
 			AdminState {
 				config,
+				model_catalog,
 				stores,
 				shutdown_trigger,
 				config_dump_handlers: vec![],
@@ -158,13 +162,16 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 		.route("/memory", get(handle_memory))
 		.route("/quitquitquit", post(handle_server_shutdown))
 		.route("/debug/tasks", get(handle_tokio_tasks))
-		.route("/debug/trace", get(handle_debug_trace))
+		.route("/debug/trace", post(handle_debug_trace))
 		.route("/config_dump", get(handle_config_dump))
 		.route("/logging", post(handle_logging))
 		.with_state(state.clone());
 
 	#[cfg(feature = "ui")]
-	let router = router.merge(crate::ui::router(state.config.clone()));
+	let router = router.merge(crate::ui::router(
+		state.config.clone(),
+		state.model_catalog.clone(),
+	));
 	#[cfg(not(feature = "ui"))]
 	let router = router.route("/", get(handle_dashboard));
 

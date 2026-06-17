@@ -44,6 +44,8 @@ type LocalRemoteRateLimitPolicy =
 	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
 type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
 type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
+const DEFAULT_LLM_PORT: u16 = 4000;
+const DEFAULT_MCP_PORT: u16 = 3000;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -181,6 +183,7 @@ fn merge_deprecated_frontend_policies(
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		});
 	}
@@ -2219,6 +2222,7 @@ async fn convert(
 	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
+	validate_local_listener_ports(&i)?;
 	let LocalConfig {
 		config: _,
 		mut frontend_policies,
@@ -2384,6 +2388,43 @@ async fn convert(
 		services,
 	};
 	Ok(normalized)
+}
+
+fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
+	let mut ports = HashMap::new();
+
+	let mut insert_local_listener_port = |port: u16, label: String| {
+		if let Some(existing) = ports.insert(port, label.clone()) {
+			bail!(
+				"port {port} is configured by both {existing} and {label}; binds, llm, and mcp must use unique ports"
+			);
+		}
+		Ok(())
+	};
+	for (idx, bind) in config.binds.iter().enumerate() {
+		insert_local_listener_port(bind.port, format!("binds[{idx}]"))?;
+	}
+	if let Some(llm) = &config.llm {
+		insert_local_listener_port(
+			llm.port.unwrap_or(DEFAULT_LLM_PORT),
+			if llm.port.is_some() {
+				"llm".to_string()
+			} else {
+				"llm (default)".to_string()
+			},
+		)?;
+	}
+	if let Some(mcp) = &config.mcp {
+		insert_local_listener_port(
+			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+			if mcp.port.is_some() {
+				"mcp".to_string()
+			} else {
+				"mcp (default)".to_string()
+			},
+		)?;
+	}
+	Ok(())
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
@@ -2697,7 +2738,6 @@ async fn convert_llm_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
 		tls,
@@ -3266,7 +3306,6 @@ async fn convert_mcp_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
 		backend,

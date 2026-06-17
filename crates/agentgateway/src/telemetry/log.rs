@@ -24,6 +24,7 @@ use opentelemetry::{Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
+use rust_decimal::prelude::ToPrimitive;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -40,12 +41,70 @@ use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
 	RouteIdentifier,
 };
-use crate::telemetry::trc;
 use crate::telemetry::trc::TraceParent;
+use crate::telemetry::{log_store, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
 use crate::{cel, llm, mcp};
+
+fn u64_to_i64(value: Option<u64>) -> Option<i64> {
+	value.map(|value| value.min(i64::MAX as u64) as i64)
+}
+
+fn u128_to_i64(value: u128) -> i64 {
+	value.min(i64::MAX as u128) as i64
+}
+
+fn kv_to_json(kv: &[(&str, Option<ValueBag>)]) -> Value {
+	let mut map = serde_json::Map::with_capacity(kv.len());
+	for (key, value) in kv {
+		if let Some(value) = value
+			&& let Ok(value) = serde_json::to_value(value)
+		{
+			map.insert((*key).to_string(), value);
+		}
+	}
+	Value::Object(map)
+}
+
+fn string_attribute(attributes: &Value, key: &str) -> Option<String> {
+	attributes
+		.get(key)
+		.and_then(Value::as_str)
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(ToOwned::to_owned)
+}
+
+fn user_agent_name(req: Option<&cel::RequestSnapshot>) -> Option<String> {
+	let value = req?
+		.headers
+		.get(::http::header::USER_AGENT)?
+		.to_str()
+		.ok()?
+		.trim();
+	if value.is_empty() {
+		return None;
+	}
+	let end = value
+		.find(|c: char| c == '/' || c.is_ascii_whitespace() || c == ';' || c == '(')
+		.unwrap_or(value.len());
+	let name = value[..end].trim();
+	(!name.is_empty()).then(|| name.to_string())
+}
+
+fn api_key_name(req: Option<&cel::RequestSnapshot>) -> Option<String> {
+	req?
+		.api_key
+		.as_ref()?
+		.metadata
+		.get("name")?
+		.as_str()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(ToOwned::to_owned)
+}
 
 /// AsyncLog is a wrapper around an item that can be atomically set.
 /// The intent is to provide additional info to the log after we have lost the RequestLog reference,
@@ -117,10 +176,14 @@ pub struct Config {
 	pub filter: Option<Arc<cel::Expression>>,
 	/// Deprecated: use frontendPolicies.accessLog
 	pub fields: LoggingFields,
+	/// Database-only request log fields.
+	pub database_fields: LoggingFields,
 	/// Level sets the level for logs
 	pub level: String,
 	/// Format sets the logging format (text or json)
 	pub format: crate::LoggingFormat,
+	/// Optional request log database sink.
+	pub database: Option<crate::telemetry::log_store::Config>,
 }
 
 #[derive(serde::Serialize, Default, Clone, Debug)]
@@ -240,6 +303,21 @@ fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
 	}
 }
 
+fn original_model_from_metadata<'a>(
+	req: Option<&'a cel::RequestSnapshot>,
+	resp: Option<&'a cel::ResponseSnapshot>,
+) -> Option<&'a str> {
+	resp
+		.and_then(|snapshot| snapshot.metadata.as_ref())
+		.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
+		.or_else(|| {
+			req
+				.and_then(|snapshot| snapshot.metadata.as_ref())
+				.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
+		})
+		.and_then(Value::as_str)
+}
+
 #[derive(Debug, Default)]
 pub struct TraceSampler {
 	pub random_sampling: Option<Arc<cel::Expression>>,
@@ -275,6 +353,7 @@ pub struct CelLogging {
 	pub cel_context: cel::ContextBuilder,
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
+	pub database_fields: LoggingFields,
 	pub metric_fields: MetricFields,
 }
 
@@ -282,6 +361,7 @@ pub struct CelLoggingExecutor<'a> {
 	pub executor: cel::Executor<'a>,
 	pub filter: &'a Option<Arc<cel::Expression>>,
 	pub fields: &'a LoggingFields,
+	pub database_fields: &'a LoggingFields,
 	pub metric_fields: &'a MetricFields,
 }
 
@@ -391,6 +471,10 @@ impl<'a> CelLoggingExecutor<'a> {
 	fn eval_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
 		self.eval(&self.fields.add)
 	}
+
+	fn eval_database_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
+		self.eval(&self.database_fields.add)
+	}
 }
 
 impl CelLogging {
@@ -402,14 +486,21 @@ impl CelLogging {
 		for v in cfg.fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
 		}
+		for v in cfg.database_fields.add.values_unordered() {
+			cel_context.register_log_expression(v.as_ref());
+		}
 		for v in metrics.metric_fields.add.values_unordered() {
 			cel_context.register_log_expression(v.as_ref());
+		}
+		if cfg.database.is_some() {
+			cel_context.register_log_request();
 		}
 
 		Self {
 			cel_context,
 			filter: cfg.filter,
 			fields: cfg.fields,
+			database_fields: cfg.database_fields,
 			metric_fields: metrics.metric_fields,
 		}
 	}
@@ -429,6 +520,7 @@ impl CelLogging {
 			cel_context: _,
 			filter,
 			fields,
+			database_fields,
 			metric_fields,
 		} = self;
 		let executor = if inputs.req.is_none() && inputs.source_context.is_some() {
@@ -449,6 +541,7 @@ impl CelLogging {
 			executor,
 			filter,
 			fields,
+			database_fields,
 			metric_fields,
 		}
 	}
@@ -1081,8 +1174,9 @@ impl Drop for DropOnLog {
 			}
 
 			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
-			let enable_logs = maybe_enable_log && cel_exec.eval_filter();
-			if !enable_logs && !enable_trace {
+			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
+			let log_store_enabled = log_store::enabled() && llm_response.is_some();
+			if !maybe_enable_log && !enable_trace && !log_store_enabled {
 				return;
 			}
 
@@ -1350,7 +1444,7 @@ impl Drop for DropOnLog {
 			];
 
 			let mut extra_kv_capacity = trace_cost_fields.as_ref().map_or(0, |fields| fields.len());
-			if enable_logs {
+			if maybe_enable_log || log_store_enabled {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
@@ -1376,7 +1470,12 @@ impl Drop for DropOnLog {
 					}
 				}
 			};
-			if enable_logs {
+			if maybe_enable_log || log_store_enabled {
+				let passes_log_filter = cel_exec.eval_filter();
+				if !passes_log_filter {
+					return;
+				}
+				kv.reserve(fields.add.len());
 				for (k, v) in &mut kv {
 					// Remove filtered lines, or things we are about to add
 					if fields.has(k) {
@@ -1393,10 +1492,124 @@ impl Drop for DropOnLog {
 					kv.push((k, eval));
 				}
 
-				agent_core::telemetry::log("info", "request", &kv);
+				if maybe_enable_log {
+					agent_core::telemetry::log("info", "request", &kv);
 
-				if let Some(otel) = &log.otel_logger {
-					otel.emit("info", "request", &kv);
+					if let Some(otel) = &log.otel_logger {
+						otel.emit("info", "request", &kv);
+					}
+				}
+
+				if log_store_enabled {
+					let original_model = original_model_from_metadata(
+						log.request_snapshot.as_deref(),
+						log.response_snapshot.as_ref(),
+					)
+					.map(str::to_owned);
+
+					let mut db_kv = kv.clone();
+					let db_raws = cel_exec.eval_database_additions();
+					let default_db_raws = [
+						(
+							Cow::Borrowed("user_agent.name"),
+							user_agent_name(log.request_snapshot.as_deref()).map(Value::String),
+						),
+						(
+							Cow::Borrowed("agw.ai.original_model"),
+							original_model.clone().map(Value::String),
+						),
+						(
+							Cow::Borrowed("agw.api_key.name"),
+							api_key_name(log.request_snapshot.as_deref()).map(Value::String),
+						),
+					];
+					db_kv.reserve(db_raws.len() + default_db_raws.len());
+					for (k, v) in db_raws.iter().chain(default_db_raws.iter()) {
+						let eval = v.as_ref().map(json_value_to_value_bag);
+						db_kv.push((k, eval));
+					}
+					if let Some(cost) = cost {
+						// Default log only puts totals; we want all of them.
+						let cost_raws = [
+							("agw.ai.usage.cost.total", cost.total()),
+							("agw.ai.usage.cost.input", cost.input),
+							("agw.ai.usage.cost.output", cost.output),
+							("agw.ai.usage.cost.cacheRead", cost.cache_read),
+							("agw.ai.usage.cost.cacheWrite", cost.cache_write),
+							("agw.ai.usage.cost.reasoning", cost.reasoning),
+							("agw.ai.usage.cost.inputAudio", cost.input_audio),
+							("agw.ai.usage.cost.outputAudio", cost.output_audio),
+						];
+						db_kv.reserve(cost_raws.len());
+						for (k, v) in &cost_raws {
+							let eval = v.to_f64().map(ValueBag::from_f64);
+							db_kv.push((*k, eval));
+						}
+					}
+					let attributes_json = kv_to_json(&db_kv);
+					let agentgateway_user = string_attribute(&attributes_json, "agentgateway.user");
+					let agentgateway_group = string_attribute(&attributes_json, "agentgateway.group");
+					let user_agent_name = string_attribute(&attributes_json, "user_agent.name");
+					let payload = llm_response.as_ref().and_then(|info| {
+						let request_prompt_json = info
+							.prompt
+							.as_ref()
+							.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
+						let response_completion_json = info
+							.completion
+							.as_ref()
+							.and_then(|completion| serde_json::to_value(completion).ok());
+						(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
+							log_store::StoredRequestLogPayload {
+								request_prompt_json,
+								response_completion_json,
+							},
+						)
+					});
+					let has_payload = payload.is_some();
+					let total_tokens = llm_response.as_ref().and_then(|llm| {
+						llm
+							.total_tokens
+							.or_else(|| Some(llm.input_tokens? + llm.output_tokens?))
+					});
+					log_store::emit(log_store::StoredRequestLog {
+						id: uuid::Uuid::new_v4().to_string(),
+						started_at: log.start.as_datetime().with_timezone(&chrono::Utc),
+						completed_at: end_time.as_datetime().with_timezone(&chrono::Utc),
+						duration_ms: u128_to_i64(duration.as_millis()),
+						trace_id: trace_id.map(|id| id.to_string()),
+						span_id: span_id.map(|id| id.to_string()),
+						http_status: log.status.as_ref().map(|s| i64::from(s.as_u16())),
+						error: log.error.clone(),
+						gen_ai_operation_name: log.llm_request.as_ref().map(|request| {
+							if request.input_format == InputFormat::Embeddings {
+								"embeddings".to_string()
+							} else {
+								"chat".to_string()
+							}
+						}),
+						gen_ai_provider_name: log
+							.llm_request
+							.as_ref()
+							.map(|request| request.provider.to_string()),
+						gen_ai_request_model: log
+							.llm_request
+							.as_ref()
+							.map(|request| request.request_model.to_string()),
+						gen_ai_response_model: llm_response
+							.as_ref()
+							.and_then(|llm| llm.response_model.as_ref().map(ToString::to_string)),
+						input_tokens: u64_to_i64(input_tokens),
+						output_tokens: u64_to_i64(llm_response.as_ref().and_then(|llm| llm.output_tokens)),
+						total_tokens: u64_to_i64(total_tokens),
+						cost: cost.and_then(|cost| cost.total().to_f64()),
+						agentgateway_user,
+						agentgateway_group,
+						user_agent_name,
+						has_payload,
+						attributes_json,
+						payload,
+					});
 				}
 			}
 		});
@@ -1884,6 +2097,7 @@ mod tests {
 			filter: None,
 			fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
+			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
 		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));

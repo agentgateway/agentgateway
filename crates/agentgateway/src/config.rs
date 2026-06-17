@@ -10,13 +10,16 @@ use agent_core::prelude::*;
 use secrecy::ExposeSecret;
 
 use crate::control::caclient;
-use crate::telemetry::log::{LoggingFields, MetricFields};
+use crate::telemetry::log::{LoggingFields, MetricFields, OrderedStringMap};
 use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
-	ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
+	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
+	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
 };
+
+const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
+const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
 
 #[derive(Default)]
 struct TracingEnvOverrides {
@@ -135,7 +138,6 @@ pub fn parse_config(
 			local_config,
 		}
 	};
-
 	let self_addr = if !xds.namespace.is_empty() && !xds.gateway.is_empty() {
 		Some(WaypointIdentity {
 			gateway: xds.gateway.clone(),
@@ -341,6 +343,10 @@ pub fn parse_config(
 		})
 		.or(raw.model_catalog)
 		.unwrap_or_default();
+	let database = raw
+		.database
+		.clone()
+		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -474,23 +480,9 @@ pub fn parse_config(
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			fields: raw
-				.logging
-				.and_then(|f| f.fields)
-				.map(|fields| {
-					Ok::<_, anyhow::Error>(LoggingFields {
-						remove: Arc::new(fields.remove.into_iter().collect()),
-						add: Arc::new(
-							fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
-						),
-					})
-				})
-				.transpose()?
-				.unwrap_or_default(),
+			database: database.clone(),
+			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
+			database_fields: database_logging_fields(raw.standard_attributes.as_ref())?,
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -515,6 +507,7 @@ pub fn parse_config(
 		model_catalog: crate::ModelCatalogConfig {
 			sources: model_catalog_sources,
 		},
+		database,
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
@@ -548,6 +541,51 @@ pub fn parse_config(
 	})
 }
 
+fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFields> {
+	let fields = fields.unwrap_or(RawLoggingFields {
+		remove: Vec::new(),
+		add: Default::default(),
+	});
+	Ok(LoggingFields {
+		remove: Arc::new(fields.remove.into_iter().collect()),
+		add: Arc::new(
+			fields
+				.add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<_, _>>()?,
+		),
+	})
+}
+
+fn database_logging_fields(
+	standard_attributes: Option<&crate::RawStandardAttributes>,
+) -> anyhow::Result<LoggingFields> {
+	let add = [
+		(
+			"agentgateway.user".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.user.clone())
+				.unwrap_or_else(|| DEFAULT_UI_USER_ATTRIBUTE.to_string()),
+		),
+		(
+			"agentgateway.group".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.group.clone())
+				.unwrap_or_else(|| DEFAULT_UI_GROUP_ATTRIBUTE.to_string()),
+		),
+	];
+
+	Ok(LoggingFields {
+		remove: Arc::default(),
+		add: Arc::new(
+			add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<OrderedStringMap<_>, _>>()?,
+		),
+	})
+}
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,

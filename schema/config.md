@@ -11,6 +11,8 @@
 |`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
 |`config.modelCatalog[].file`|string||
 |`config.modelCatalog[].inline`|string||
+|`config.database`|object|Primary database used by local runtime features.|
+|`config.database.url`|string||
 |`config.caAddress`|string||
 |`config.caAuthToken`|string||
 |`config.xdsAddress`|string||
@@ -24,6 +26,9 @@
 |`config.clusterId`|string||
 |`config.network`|string||
 |`config.adminAddr`|string|Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
+|`config.standardAttributes`|object|Standard request log attributes populated for database-backed local runtime features.|
+|`config.standardAttributes.user`|string|CEL expression used to populate the `agentgateway.user` request log attribute.|
+|`config.standardAttributes.group`|string|CEL expression used to populate the `agentgateway.group` request log attribute.|
 |`config.statsAddr`|string|Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|
@@ -50,6 +55,8 @@
 |`config.logging.fields.add`|object||
 |`config.logging.level`|string||
 |`config.logging.format`|enum|Possible values: `text`, `json`, `null`.|
+|`config.logging.database`|object||
+|`config.logging.database.url`|string||
 |`config.metrics`|object||
 |`config.metrics.remove`|[]string||
 |`config.metrics.fields`|object||
@@ -6898,6 +6905,8 @@
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`frontendPolicies.accessLog.otlp.protocol`|enum|OTLP protocol used to export logs.<br>Possible values: `grpc`, `http`.|
 |`frontendPolicies.accessLog.otlp.path`|string|OTLP HTTP path used to export logs.|
+|`frontendPolicies.accessLog.database`|object|Database-specific access log settings.|
+|`frontendPolicies.accessLog.database.add`|object|Database-only fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging`|object|Settings for request access logs.|
 |`frontendPolicies.logging.filter`|string|CEL expression that decides whether a request is logged.|
 |`frontendPolicies.logging.add`|object|Access log fields to add, computed from CEL expressions.|
@@ -7014,6 +7023,8 @@
 |`frontendPolicies.logging.otlp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`frontendPolicies.logging.otlp.protocol`|enum|OTLP protocol used to export logs.<br>Possible values: `grpc`, `http`.|
 |`frontendPolicies.logging.otlp.path`|string|OTLP HTTP path used to export logs.|
+|`frontendPolicies.logging.database`|object|Database-specific access log settings.|
+|`frontendPolicies.logging.database.add`|object|Database-only fields to add, computed from CEL expressions.|
 |`frontendPolicies.tracing`|object|Settings for exporting request traces.|
 |`frontendPolicies.tracing.service`|object|Service reference. Service must be defined in the top level services list.|
 |`frontendPolicies.tracing.service.name`|object||

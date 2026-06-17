@@ -101,6 +101,17 @@
             "$ref": "#/$defs/ModelCatalogSource"
           }
         },
+        "database": {
+          "description": "Primary database used by local runtime features.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "type": [
             "string",
@@ -180,6 +191,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "standardAttributes": {
+          "description": "Standard request log attributes populated for database-backed local runtime features.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawStandardAttributes"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "statsAddr": {
@@ -376,6 +398,38 @@
         }
       ]
     },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ]
+    },
+    "RawStandardAttributes": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "description": "CEL expression used to populate the `agentgateway.user` request log attribute.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "description": "CEL expression used to populate the `agentgateway.group` request log attribute.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "RawSession": {
       "type": "object",
       "properties": {
@@ -531,6 +585,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/LoggingFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "database": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
             },
             {
               "type": "null"
@@ -7811,6 +7875,17 @@
               "type": "null"
             }
           ]
+        },
+        "database": {
+          "description": "Database-specific access log settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatabaseLoggingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -7902,6 +7977,19 @@
         "grpc",
         "http"
       ]
+    },
+    "DatabaseLoggingConfig": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "description": "Database-only fields to add, computed from CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",

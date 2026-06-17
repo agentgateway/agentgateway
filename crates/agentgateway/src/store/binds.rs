@@ -192,6 +192,7 @@ impl FrontendPolices {
 			add: fields_add,
 			remove: _,
 			otlp: _,
+			database,
 			access_log_policy: _,
 		}) = &self.access_log
 		{
@@ -200,6 +201,11 @@ impl FrontendPolices {
 			}
 			for (_, v) in fields_add.iter() {
 				ctx.register_log_expression(v)
+			}
+			if let Some(database) = database {
+				for (_, v) in database.add.iter() {
+					ctx.register_log_expression(v)
+				}
 			}
 		}
 		if let Some(mf) = &self.metrics_fields {
@@ -2018,6 +2024,7 @@ mod tests {
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		})
 	}

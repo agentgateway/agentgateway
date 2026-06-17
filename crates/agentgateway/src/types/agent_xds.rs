@@ -2789,6 +2789,7 @@ fn frontend_policy_from_proto(
 				add: Arc::new(add),
 				remove: Arc::new(FzHashSet::new(rm)),
 				otlp,
+				database: None,
 				access_log_policy: None,
 			};
 			logging_policy.init_access_log_policy();
