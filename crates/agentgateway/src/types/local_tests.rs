@@ -874,12 +874,13 @@ binds:
         localRateLimit:
           conditional:
           - condition: request.path == "/local-limit"
-            maxTokens: 10
-            tokensPerFill: 1
-            fillInterval: 1s
-          - maxTokens: 1
-            tokensPerFill: 1
-            fillInterval: 60s
+            type: requests
+            limit: 1
+            unit: seconds
+            burst: 9
+          - type: requests
+            limit: 1
+            unit: minutes
         remoteRateLimit:
           conditional:
           - condition: request.path == "/remote-limit"
@@ -932,6 +933,15 @@ binds:
 				},
 				("localRateLimit", TrafficPolicy::LocalRateLimit(p)) => {
 					let entries = p.iter().collect::<Vec<_>>();
+					assert_eq!(entries[0].pol[0].spec.max_tokens, 10);
+					assert_eq!(entries[0].pol[0].spec.tokens_per_fill, 1);
+					assert_eq!(entries[0].pol[0].spec.fill_interval, Duration::from_secs(1));
+					assert_eq!(entries[1].pol[0].spec.max_tokens, 1);
+					assert_eq!(entries[1].pol[0].spec.tokens_per_fill, 1);
+					assert_eq!(
+						entries[1].pol[0].spec.fill_interval,
+						Duration::from_secs(60)
+					);
 					Some((entries.len(), entries[1].condition.is_none()))
 				},
 				("remoteRateLimit", TrafficPolicy::RemoteRateLimit(p)) => {
