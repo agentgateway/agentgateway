@@ -69,6 +69,7 @@ struct AdminState {
 	config: Arc<Config>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
+	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 	dataplane_handle: Handle,
 }
 
