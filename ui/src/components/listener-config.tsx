@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Listener, ListenerProtocol, Bind } from "@/lib/types";
 import {
+  AlertCircle,
   Trash2,
   Lock,
   Settings2,
@@ -26,6 +27,7 @@ import {
   removeListenerFromBind,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -104,6 +106,14 @@ interface ListenerWithBackendsAndRoutes extends Listener {
   backendCount?: number;
 }
 
+type ListenerConflictReason = "protocol" | "hostname";
+
+interface ListenerConflict {
+  firstIndex: number;
+  secondIndex: number;
+  reason: ListenerConflictReason;
+}
+
 const getListenerCounts = (listener: Listener): { backendCount: number } => {
   let backendCount = 0;
 
@@ -120,6 +130,84 @@ const getListenerCounts = (listener: Listener): { backendCount: number } => {
 
   console.log(`Listener ${listenerName}: ${backendCount} backends`);
   return { backendCount };
+};
+
+const getListenerDisplayName = (listener: Listener, index: number) =>
+  listener.name || `listener-${index + 1}`;
+
+const getProtocolString = (protocol: unknown): ListenerProtocol => {
+  if (typeof protocol === "string") {
+    return protocol as ListenerProtocol;
+  }
+  if (protocol && typeof protocol === "object") {
+    const keys = Object.keys(protocol as Record<string, unknown>);
+    if (keys.length > 0) {
+      return keys[0] as ListenerProtocol;
+    }
+  }
+  return ListenerProtocol.HTTP;
+};
+
+const normalizeListenerHostname = (listener: Listener) => {
+  const hostname = listener.hostname?.trim();
+  return hostname ? hostname : "*";
+};
+
+const hostnameMatchesPattern = (hostname: string, pattern: string) => {
+  if (pattern === "*" || hostname === "*") {
+    return true;
+  }
+
+  if (pattern === hostname) {
+    return true;
+  }
+
+  if (!pattern.startsWith("*.")) {
+    return false;
+  }
+
+  const suffix = pattern.slice(1);
+  return hostname.endsWith(suffix) && hostname.length > suffix.length;
+};
+
+const hostnamesOverlap = (first: string, second: string) =>
+  hostnameMatchesPattern(first, second) || hostnameMatchesPattern(second, first);
+
+const getListenerConflicts = (listeners: Listener[]) => {
+  const conflicts: ListenerConflict[] = [];
+
+  for (let firstIndex = 0; firstIndex < listeners.length; firstIndex++) {
+    for (let secondIndex = firstIndex + 1; secondIndex < listeners.length; secondIndex++) {
+      const first = listeners[firstIndex];
+      const second = listeners[secondIndex];
+      const firstProtocol = getProtocolString(first.protocol);
+      const secondProtocol = getProtocolString(second.protocol);
+
+      if (firstProtocol !== secondProtocol) {
+        conflicts.push({ firstIndex, secondIndex, reason: "protocol" });
+        continue;
+      }
+
+      if (hostnamesOverlap(normalizeListenerHostname(first), normalizeListenerHostname(second))) {
+        conflicts.push({ firstIndex, secondIndex, reason: "hostname" });
+      }
+    }
+  }
+
+  return conflicts;
+};
+
+const getConflictMessage = (listeners: Listener[], conflict: ListenerConflict) => {
+  const first = listeners[conflict.firstIndex];
+  const second = listeners[conflict.secondIndex];
+  const firstName = getListenerDisplayName(first, conflict.firstIndex);
+  const secondName = getListenerDisplayName(second, conflict.secondIndex);
+
+  if (conflict.reason === "protocol") {
+    return `${firstName} and ${secondName} use different protocols on the same port.`;
+  }
+
+  return `${firstName} and ${secondName} overlap on hostname ${normalizeListenerHostname(first)} / ${normalizeListenerHostname(second)}.`;
 };
 
 export function ListenerConfig({
@@ -363,19 +451,6 @@ export function ListenerConfig({
     return !!listener.tls;
   };
 
-  const getProtocolString = (protocol: unknown): ListenerProtocol => {
-    if (typeof protocol === "string") {
-      return protocol as ListenerProtocol;
-    }
-    if (protocol && typeof protocol === "object") {
-      const keys = Object.keys(protocol as Record<string, unknown>);
-      if (keys.length > 0) {
-        return keys[0] as ListenerProtocol;
-      }
-    }
-    return ListenerProtocol.HTTP;
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -408,231 +483,266 @@ export function ListenerConfig({
         </div>
       ) : (
         <div className="space-y-4">
-          {binds.map((bind) => (
-            <Card key={bind.port}>
-              <Collapsible
-                open={expandedBinds.has(bind.port)}
-                onOpenChange={() => toggleBindExpansion(bind.port)}
-              >
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="hover:bg-muted/50 cursor-pointer">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        {expandedBinds.has(bind.port) ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                        <div className="flex items-center space-x-2">
-                          <Network className="h-5 w-5 text-primary" />
-                          <div>
-                            <h3 className="text-lg font-semibold">Port {bind.port}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {bind.listeners.length} listener
-                              {bind.listeners.length !== 1 ? "s" : ""}
-                            </p>
+          {binds.map((bind) => {
+            const conflicts = getListenerConflicts(bind.listeners);
+            const conflictedIndexes = new Set(
+              conflicts.flatMap((conflict) => [conflict.firstIndex, conflict.secondIndex])
+            );
+
+            return (
+              <Card key={bind.port}>
+                <Collapsible
+                  open={expandedBinds.has(bind.port)}
+                  onOpenChange={() => toggleBindExpansion(bind.port)}
+                >
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="hover:bg-muted/50 cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          {expandedBinds.has(bind.port) ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                          <div className="flex items-center space-x-2">
+                            <Network className="h-5 w-5 text-primary" />
+                            <div>
+                              <h3 className="text-lg font-semibold">Port {bind.port}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {bind.listeners.length} listener
+                                {bind.listeners.length !== 1 ? "s" : ""}
+                              </p>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          {conflicts.length > 0 && <Badge variant="destructive">Conflict</Badge>}
+                          <Badge>{bind.port}</Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteDialog({
+                                type: "bind",
+                                isOpen: true,
+                                bindPort: bind.port,
+                              });
+                            }}
+                            disabled={xds}
+                            className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge>{bind.port}</Badge>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <CardContent className="pt-0">
+                      {conflicts.length > 0 && (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Listeners on port {bind.port} conflict</AlertTitle>
+                          <AlertDescription>
+                            {conflicts.map((conflict) => (
+                              <p
+                                key={`${conflict.firstIndex}-${conflict.secondIndex}-${conflict.reason}`}
+                              >
+                                {getConflictMessage(bind.listeners, conflict)}
+                              </p>
+                            ))}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div className="mb-4 flex justify-between items-center">
+                        <h4 className="text-sm font-medium text-muted-foreground">
+                          Listeners on Port {bind.port}
+                        </h4>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteDialog({
-                              type: "bind",
-                              isOpen: true,
-                              bindPort: bind.port,
-                            });
-                          }}
+                          size="sm"
+                          onClick={() => handleAddListenerToBind(bind.port)}
                           disabled={xds}
-                          className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                          className={`h-8 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Plus className="mr-2 h-3 w-3" />
+                          Add Listener
                         </Button>
                       </div>
-                    </div>
-                  </CardHeader>
-                </CollapsibleTrigger>
-
-                <CollapsibleContent>
-                  <CardContent className="pt-0">
-                    <div className="mb-4 flex justify-between items-center">
-                      <h4 className="text-sm font-medium text-muted-foreground">
-                        Listeners on Port {bind.port}
-                      </h4>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAddListenerToBind(bind.port)}
-                        disabled={xds}
-                        className={`h-8 ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
-                      >
-                        <Plus className="mr-2 h-3 w-3" />
-                        Add Listener
-                      </Button>
-                    </div>
-                    {bind.listeners.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No listeners in this bind. Add a listener to get started.
-                      </div>
-                    ) : (
-                      <div className="border rounded-md overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/50">
-                              <TableHead>Name</TableHead>
-                              <TableHead>Protocol</TableHead>
-                              <TableHead>Hostname</TableHead>
-                              <TableHead>Endpoint</TableHead>
-                              <TableHead>Backends</TableHead>
-                              <TableHead>TLS</TableHead>
-                              <TableHead>Policies</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {bind.listeners.map((listener, listenerIndex) => (
-                              <TableRow
-                                key={listener.name || listenerIndex}
-                                className="hover:bg-muted/30"
-                              >
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center space-x-2">
-                                    <span>{listener.name || `listener-${listenerIndex + 1}`}</span>
-                                    {!listener.name && (
-                                      <Badge variant="outline" className="text-xs">
-                                        unnamed
+                      {bind.listeners.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No listeners in this bind. Add a listener to get started.
+                        </div>
+                      ) : (
+                        <div className="border rounded-md overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50">
+                                <TableHead>Name</TableHead>
+                                <TableHead>Protocol</TableHead>
+                                <TableHead>Hostname</TableHead>
+                                <TableHead>Endpoint</TableHead>
+                                <TableHead>Backends</TableHead>
+                                <TableHead>TLS</TableHead>
+                                <TableHead>Policies</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {bind.listeners.map((listener, listenerIndex) => (
+                                <TableRow
+                                  key={listener.name || listenerIndex}
+                                  className={
+                                    conflictedIndexes.has(listenerIndex)
+                                      ? "bg-destructive/5 hover:bg-destructive/10"
+                                      : "hover:bg-muted/30"
+                                  }
+                                >
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center space-x-2">
+                                      <span>
+                                        {listener.name || `listener-${listenerIndex + 1}`}
+                                      </span>
+                                      {!listener.name && (
+                                        <Badge variant="outline" className="text-xs">
+                                          unnamed
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline">
+                                        {getProtocolString(listener.protocol)}
                                       </Badge>
+                                      {conflictedIndexes.has(listenerIndex) && (
+                                        <Badge variant="destructive">Conflict</Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{listener.hostname || "localhost"}</TableCell>
+                                  <TableCell className="font-mono text-sm">
+                                    {getDisplayEndpoint(
+                                      {
+                                        ...listener,
+                                        protocol: getProtocolString(listener.protocol),
+                                      },
+                                      bind.port
                                     )}
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">
-                                    {getProtocolString(listener.protocol)}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>{listener.hostname || "localhost"}</TableCell>
-                                <TableCell className="font-mono text-sm">
-                                  {getDisplayEndpoint(
-                                    {
-                                      ...listener,
-                                      protocol: getProtocolString(listener.protocol),
-                                    },
-                                    bind.port
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">
-                                    {listener.backendCount ?? 0} backend
-                                    {listener.backendCount !== 1 ? "s" : ""}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center space-x-2">
-                                    <Badge
-                                      variant={hasTLS(listener) ? "default" : "outline"}
-                                      className="h-7 space-x-2"
-                                    >
-                                      <Lock className="h-4 w-4" />
-                                      <span>TLS</span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">
+                                      {listener.backendCount ?? 0} backend
+                                      {listener.backendCount !== 1 ? "s" : ""}
                                     </Badge>
-                                    <DropdownMenu>
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <DropdownMenuTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="hover:bg-primary/20"
-                                              >
-                                                <MoreVertical className="h-4 w-4" />
-                                              </Button>
-                                            </DropdownMenuTrigger>
-                                          </TooltipTrigger>
-                                          <TooltipContent side="top">
-                                            <p className="text-xs">Manage TLS Encryption</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem
-                                          onClick={() =>
-                                            setConfigDialog({
-                                              type: "tls",
-                                              isOpen: true,
-                                              listener,
-                                              bindPort: bind.port,
-                                              listenerIndex,
-                                            })
-                                          }
-                                        >
-                                          <Settings2 className="h-4 w-4 mr-2" />
-                                          Configure
-                                        </DropdownMenuItem>
-                                        {hasTLS(listener) && (
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center space-x-2">
+                                      <Badge
+                                        variant={hasTLS(listener) ? "default" : "outline"}
+                                        className="h-7 space-x-2"
+                                      >
+                                        <Lock className="h-4 w-4" />
+                                        <span>TLS</span>
+                                      </Badge>
+                                      <DropdownMenu>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  className="hover:bg-primary/20"
+                                                >
+                                                  <MoreVertical className="h-4 w-4" />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top">
+                                              <p className="text-xs">Manage TLS Encryption</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                        <DropdownMenuContent align="end">
                                           <DropdownMenuItem
-                                            className={`text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
-                                            disabled={xds}
-                                            onClick={() => {
-                                              setDeleteConfigDialog({
+                                            onClick={() =>
+                                              setConfigDialog({
+                                                type: "tls",
                                                 isOpen: true,
+                                                listener,
                                                 bindPort: bind.port,
                                                 listenerIndex,
-                                                configType: "tls",
-                                              });
-                                            }}
+                                              })
+                                            }
                                           >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
+                                            <Settings2 className="h-4 w-4 mr-2" />
+                                            Configure
                                           </DropdownMenuItem>
-                                        )}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center space-x-2">
-                                    <Link
-                                      href="/policies"
-                                      className="flex items-center underline space-x-1 hover:text-primary"
+                                          {hasTLS(listener) && (
+                                            <DropdownMenuItem
+                                              className={`text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
+                                              disabled={xds}
+                                              onClick={() => {
+                                                setDeleteConfigDialog({
+                                                  isOpen: true,
+                                                  bindPort: bind.port,
+                                                  listenerIndex,
+                                                  configType: "tls",
+                                                });
+                                              }}
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              Delete
+                                            </DropdownMenuItem>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center space-x-2">
+                                      <Link
+                                        href="/policies"
+                                        className="flex items-center underline space-x-1 hover:text-primary"
+                                      >
+                                        <span className="text-sm">View Policies</span>
+                                        <ExternalLink className="h-3 w-3" />
+                                      </Link>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() =>
+                                        setDeleteDialog({
+                                          type: "listener",
+                                          isOpen: true,
+                                          listenerName:
+                                            listener.name || `listener-${listenerIndex}`,
+                                          listenerIndex,
+                                        })
+                                      }
+                                      disabled={xds}
+                                      className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
                                     >
-                                      <span className="text-sm">View Policies</span>
-                                      <ExternalLink className="h-3 w-3" />
-                                    </Link>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() =>
-                                      setDeleteDialog({
-                                        type: "listener",
-                                        isOpen: true,
-                                        listenerName: listener.name || `listener-${listenerIndex}`,
-                                        listenerIndex,
-                                      })
-                                    }
-                                    disabled={xds}
-                                    className={`text-destructive hover:text-destructive ${xds ? "opacity-50 cursor-not-allowed" : ""}`}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
-          ))}
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            );
+          })}
         </div>
       )}
 
