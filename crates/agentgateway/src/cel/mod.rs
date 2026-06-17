@@ -103,6 +103,7 @@ flagset::flags! {
 		Llm,
 		LlmPrompt,
 		LlmCompletion,
+		LlmCompletionMessages,
 
 		Backend,
 
@@ -272,6 +273,9 @@ impl ContextBuilder {
 	pub fn needs_llm_completion(&self) -> bool {
 		self.any_has(Attributes::LlmCompletion)
 	}
+	pub fn needs_llm_completion_messages(&self) -> bool {
+		self.any_has(Attributes::LlmCompletionMessages)
+	}
 }
 
 impl Expression {
@@ -338,6 +342,9 @@ impl Expression {
 				},
 				["llm", "prompt", ..] => {
 					attributes |= Attributes::Llm | Attributes::LlmPrompt;
+				},
+				["llm", "completionMessages", ..] => {
+					attributes |= Attributes::Llm | Attributes::LlmCompletionMessages;
 				},
 				["llm", "completion", ..] => {
 					attributes |= Attributes::Llm | Attributes::LlmCompletion;

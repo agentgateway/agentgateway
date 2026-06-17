@@ -388,6 +388,9 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			// This response shape only exposes text cleanly; structured blocks are
+			// captured on the streaming path and the typed MessagesResponse path.
+			completion_messages: None,
 			first_token: Default::default(),
 		}
 	}
@@ -1029,6 +1032,13 @@ pub mod typed {
 							})
 							.collect(),
 					)
+				} else {
+					None
+				},
+				// Non-streaming: the typed response already holds structured content blocks
+				// (text, tool_use, thinking, ...). Serialize them for llm.completionMessages.
+				completion_messages: if include_completion_in_log {
+					serde_json::to_string(&self.content).ok()
 				} else {
 					None
 				},

@@ -2337,7 +2337,10 @@ async fn make_backend_call(
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
 	let include_completion_in_log = log
 		.as_ref()
-		.map(|l| l.cel.cel_context.needs_llm_completion())
+		.map(|l| {
+			let cc = &l.cel.cel_context;
+			cc.needs_llm_completion() || cc.needs_llm_completion_messages()
+		})
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
 

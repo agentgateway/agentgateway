@@ -69,6 +69,7 @@ impl<IO> Parser<IO> {
 						service_tier: None,
 						provider_model: None,
 						completion: None,
+						completion_messages: None,
 						first_token: None,
 						count_tokens: None,
 						reasoning_tokens: None,

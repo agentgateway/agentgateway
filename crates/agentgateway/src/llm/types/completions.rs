@@ -196,6 +196,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			completion_messages: None,
 			first_token: Default::default(),
 		}
 	}

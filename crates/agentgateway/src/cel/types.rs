@@ -1289,6 +1289,12 @@ pub struct LLMContext {
 	/// The completion from the LLM. Warning: accessing this has some performance impacts for large responses.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	/// The structured completion from the LLM as a JSON string: an array of message-content
+	/// blocks (text, tool_use, thinking, ...). Unlike `completion` (text-only), this preserves
+	/// tool calls. Warning: accessing this has some performance impacts for large responses.
+	#[dynamic(rename = "completionMessages")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub completion_messages: Option<Strng>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
 	/// The realized USD cost of the request from the model cost catalog.
@@ -1330,6 +1336,7 @@ impl LLMContext {
 			response_model: resp.provider_model.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
+			completion_messages: resp.completion_messages.as_deref().map(Strng::from),
 			..LLMContext::from(value.request)
 		};
 
@@ -1401,6 +1408,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			output_audio_tokens: None,
 			total_tokens: None,
 			completion: None,
+			completion_messages: None,
 			reasoning_tokens: None,
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -2074,6 +2082,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 
 			prompt: None,
 			completion: Some(vec!["Hello".to_string()]),
+			completion_messages: None,
 			params: llm::LLMRequestParams {
 				temperature: Some(0.7),
 				top_p: Some(1.0),

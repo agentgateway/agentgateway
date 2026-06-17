@@ -339,6 +339,13 @@ pub struct LLMResponse {
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	/// Structured completion content as a serialized JSON array of message-content blocks
+	/// (e.g. Anthropic `{"type":"text",...}` / `{"type":"tool_use",...}`). Unlike
+	/// `completion` (text-only), this preserves tool calls and thinking so observability
+	/// backends can render them. Populated only when a CEL field references
+	/// `llm.completionMessages`. Currently produced by the Bedrock `from_messages` path.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub completion_messages: Option<String>,
 
 	#[serde(skip)]
 	// Time to get the first token. Only used for streaming.

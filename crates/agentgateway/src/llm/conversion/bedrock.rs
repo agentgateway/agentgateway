@@ -1490,6 +1490,17 @@ pub mod from_messages {
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut completion = include_completion_in_log.then(String::new);
+		// Structured completion: accumulate per content-block index so tool_use calls and
+		// thinking are preserved (not just text). Tool input arrives as partial-JSON string
+		// fragments, so it's buffered as a String and parsed at flush. Gated by the same
+		// flag as `completion`, and ordered by block index via BTreeMap.
+		enum StreamBlockAccum {
+			Text(String),
+			Thinking { thinking: String, signature: String },
+			ToolUse { id: String, name: String, input_json: String },
+		}
+		let mut completion_blocks: Option<std::collections::BTreeMap<i32, StreamBlockAccum>> =
+			include_completion_in_log.then(std::collections::BTreeMap::new);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1556,6 +1567,25 @@ pub mod from_messages {
 						}),
 					};
 
+					// Mirror the started block into the structured accumulator.
+					if let (Some(blocks), Some(cb)) = (completion_blocks.as_mut(), {
+						match &content_block {
+							messages::ContentBlock::ToolUse { id, name, .. } => Some(StreamBlockAccum::ToolUse {
+								id: id.clone(),
+								name: name.clone(),
+								input_json: String::new(),
+							}),
+							messages::ContentBlock::Thinking { .. } => Some(StreamBlockAccum::Thinking {
+								thinking: String::new(),
+								signature: String::new(),
+							}),
+							messages::ContentBlock::Text(_) => Some(StreamBlockAccum::Text(String::new())),
+							_ => None,
+						}
+					}) {
+						blocks.insert(start.content_block_index, cb);
+					}
+
 					let event = messages::MessagesStreamEvent::ContentBlockStart {
 						index: start.content_block_index as usize,
 						content_block,
@@ -1608,18 +1638,39 @@ pub mod from_messages {
 							});
 						}
 
+						let idx = delta.content_block_index;
 						let anthropic_delta = match d {
 							bedrock::ContentBlockDelta::Text(text) => {
 								if let Some(c) = completion.as_mut() {
 									c.push_str(&text);
 								}
+								if let Some(blocks) = completion_blocks.as_mut() {
+									match blocks.entry(idx).or_insert_with(|| StreamBlockAccum::Text(String::new())) {
+										StreamBlockAccum::Text(s) => s.push_str(&text),
+										_ => {},
+									}
+								}
 								messages::ContentBlockDelta::TextDelta { text }
 							},
 							bedrock::ContentBlockDelta::ReasoningContent(rc) => match rc {
 								bedrock::ReasoningContentBlockDelta::Text(t) => {
+									if let Some(blocks) = completion_blocks.as_mut()
+										&& let StreamBlockAccum::Thinking { thinking, .. } = blocks
+											.entry(idx)
+											.or_insert_with(|| StreamBlockAccum::Thinking {
+												thinking: String::new(),
+												signature: String::new(),
+											}) {
+										thinking.push_str(&t);
+									}
 									messages::ContentBlockDelta::ThinkingDelta { thinking: t }
 								},
 								bedrock::ReasoningContentBlockDelta::Signature(sig) => {
+									if let Some(blocks) = completion_blocks.as_mut()
+										&& let Some(StreamBlockAccum::Thinking { signature, .. }) = blocks.get_mut(&idx)
+									{
+										signature.push_str(&sig);
+									}
 									messages::ContentBlockDelta::SignatureDelta { signature: sig }
 								},
 								bedrock::ReasoningContentBlockDelta::RedactedContent(_) => {
@@ -1634,6 +1685,11 @@ pub mod from_messages {
 								},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
+								if let Some(blocks) = completion_blocks.as_mut()
+									&& let Some(StreamBlockAccum::ToolUse { input_json, .. }) = blocks.get_mut(&idx)
+								{
+									input_json.push_str(&tu.input);
+								}
 								messages::ContentBlockDelta::InputJsonDelta {
 									partial_json: tu.input,
 								}
@@ -1665,6 +1721,36 @@ pub mod from_messages {
 				bedrock::ConverseStreamOutput::Metadata(meta) => {
 					if let Some(usage) = meta.usage {
 						pending_usage = Some(usage);
+						// Finalize structured blocks: parse each tool_use input buffer and
+						// serialize the ordered blocks to a JSON string for llm.completionMessages.
+						let completion_messages_json = completion_blocks.take().map(|blocks| {
+							let finalized: Vec<messages::ContentBlock> = blocks
+								.into_values()
+								.map(|b| match b {
+									StreamBlockAccum::Text(text) => {
+										messages::ContentBlock::Text(messages::ContentTextBlock {
+											text,
+											citations: None,
+											cache_control: None,
+										})
+									},
+									StreamBlockAccum::Thinking { thinking, signature } => {
+										messages::ContentBlock::Thinking { thinking, signature }
+									},
+									StreamBlockAccum::ToolUse { id, name, input_json } => {
+										let input = serde_json::from_str::<serde_json::Value>(&input_json)
+											.unwrap_or_else(|_| serde_json::json!({}));
+										messages::ContentBlock::ToolUse {
+											id,
+											name,
+											input,
+											cache_control: None,
+										}
+									},
+								})
+								.collect();
+							serde_json::to_string(&finalized).unwrap_or_default()
+						});
 						log.non_atomic_mutate(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
@@ -1675,6 +1761,7 @@ pub mod from_messages {
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}
+							r.response.completion_messages = completion_messages_json;
 						});
 					}
 
