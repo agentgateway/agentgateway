@@ -45,6 +45,9 @@ type LocalRemoteRateLimitPolicy =
 type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
 type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 
+const DEFAULT_LLM_PORT: u16 = 4000;
+const DEFAULT_MCP_PORT: u16 = 3000;
+
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
 #[path = "local_tests.rs"]
@@ -1644,6 +1647,23 @@ fn default_matches() -> Vec<RouteMatch> {
 	}]
 }
 
+fn mcp_matches() -> Vec<RouteMatch> {
+	vec![
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/mcp".into()),
+			method: None,
+			query: vec![],
+		},
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/.well-known".into()),
+			method: None,
+			query: vec![],
+		},
+	]
+}
+
 #[apply(schema_de!)]
 struct LocalTCPRoute {
 	#[serde(flatten)]
@@ -2326,24 +2346,47 @@ async fn convert(
 		all_backends.extend(bws);
 	}
 
-	// Convert llm config if present
-	if let Some(llm_config) = llm {
-		let (llm_bind, llm_routes, llm_policies, llm_backends) =
-			convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
-		all_listener_routes.push((strng::new("llm"), llm_routes));
-		all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
-		all_binds.push(llm_bind);
-		all_policies.extend_from_slice(&llm_policies);
-		all_backends.extend_from_slice(&llm_backends);
-	}
-	if let Some(mcp_config) = mcp {
-		let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
-			convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config).await?;
-		all_listener_routes.push((strng::new("mcp"), mcp_routes));
-		all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
-		all_binds.push(mcp_bind);
-		all_policies.extend_from_slice(&mcp_policies);
-		all_backends.extend_from_slice(&mcp_backends);
+	match (llm, mcp) {
+		(Some(llm_config), Some(mcp_config))
+			if llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
+				== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
+		{
+			if llm_config.tls.is_some() {
+				bail!("top-level llm and mcp cannot share a port when llm.tls is configured");
+			}
+			let (llm_bind, mut llm_routes, llm_policies, llm_backends) =
+				convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
+				convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config, true).await?;
+			llm_routes.extend(mcp_routes);
+			all_listener_routes.push((strng::new("llm"), llm_routes));
+			all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+			all_binds.push(llm_bind);
+			all_policies.extend_from_slice(&llm_policies);
+			all_policies.extend_from_slice(&mcp_policies);
+			all_backends.extend_from_slice(&llm_backends);
+			all_backends.extend_from_slice(&mcp_backends);
+		},
+		(llm, mcp) => {
+			if let Some(llm_config) = llm {
+				let (llm_bind, llm_routes, llm_policies, llm_backends) =
+					convert_llm_config(client.clone(), config, gateway.clone(), llm_config).await?;
+				all_listener_routes.push((strng::new("llm"), llm_routes));
+				all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+				all_binds.push(llm_bind);
+				all_policies.extend_from_slice(&llm_policies);
+				all_backends.extend_from_slice(&llm_backends);
+			}
+			if let Some(mcp_config) = mcp {
+				let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
+					convert_mcp_config(client.clone(), config, gateway.clone(), mcp_config, false).await?;
+				all_listener_routes.push((strng::new("mcp"), mcp_routes));
+				all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
+				all_binds.push(mcp_bind);
+				all_policies.extend_from_slice(&mcp_policies);
+				all_backends.extend_from_slice(&mcp_backends);
+			}
+		},
 	}
 
 	// Convert route groups
@@ -2685,7 +2728,6 @@ async fn convert_llm_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
 		tls,
@@ -3222,13 +3264,13 @@ async fn convert_mcp_config(
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
+	shared_port: bool,
 ) -> anyhow::Result<(
 	Bind,
 	Vec<Route>,
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
 		backend,
@@ -3255,7 +3297,11 @@ async fn convert_mcp_config(
 			kind: None,
 		},
 		hostnames: vec![],
-		matches: default_matches(),
+		matches: if shared_port {
+			mcp_matches()
+		} else {
+			default_matches()
+		},
 		backends: vec![RouteBackendReference {
 			weight: 1,
 			target: BackendReference::Backend(strng::new("/mcp")).into(),

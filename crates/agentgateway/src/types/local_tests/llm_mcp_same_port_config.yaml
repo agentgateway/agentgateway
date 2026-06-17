@@ -1,0 +1,12 @@
+llm:
+  port: 3000
+  models:
+  - name: gpt-4
+    provider: openAI
+
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+      args: ["mcp-server-time"]
