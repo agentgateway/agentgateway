@@ -2344,6 +2344,9 @@ async fn make_backend_call(
 				None,
 			)
 		};
+	if let Some(llm) = &backend_call.backend_policies.llm_provider {
+		llm.provider.strip_browser_cors_headers(&mut req);
+	}
 	apply_auto_hostname(&mut req, &backend_call.target)?;
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(

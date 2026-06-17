@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
-use ::http::{HeaderMap, HeaderValue, header};
+use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
@@ -686,6 +686,28 @@ impl AIProvider {
 				})
 			},
 			_ => Ok(()),
+		}
+	}
+
+	// Anthropic does not like CORS requests, but we are not really directly CORS since we are proxying requests.
+	// Securing the requests and management of CORS is handled by the proxy so we just directly send.
+	pub fn strip_browser_cors_headers(&self, req: &mut Request) {
+		if !matches!(self, AIProvider::Anthropic(_)) {
+			return;
+		}
+
+		let headers = req.headers_mut();
+		headers.remove("origin");
+		headers.remove("access-control-request-method");
+		headers.remove("access-control-request-headers");
+
+		let sec_fetch_headers: Vec<HeaderName> = headers
+			.keys()
+			.filter(|name| name.as_str().starts_with("sec-fetch-"))
+			.cloned()
+			.collect();
+		for name in sec_fetch_headers {
+			headers.remove(name);
 		}
 	}
 
