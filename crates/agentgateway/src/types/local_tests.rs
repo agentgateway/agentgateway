@@ -626,40 +626,6 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
-async fn test_llm_mcp_same_port_share_listener_routes() {
-	test_config_parsing("llm_mcp_same_port").await;
-}
-
-#[tokio::test]
-async fn test_llm_mcp_same_port_rejects_llm_tls() {
-	let err = normalize_test_yaml(
-		r#"
-llm:
-  port: 3000
-  tls:
-    cert: inline
-    key: inline
-  models:
-  - name: gpt-4
-    provider: openAI
-mcp:
-  targets:
-  - name: time
-    stdio:
-      cmd: uvx
-"#,
-	)
-	.await
-	.expect_err("same-port LLM and MCP should reject llm.tls");
-	assert!(
-		err
-			.to_string()
-			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
-		"{err:?}"
-	);
-}
-
-#[tokio::test]
 async fn test_local_mcp_target_name_wiring_rejects_plus() {
 	let yaml = r#"
 mcp:
