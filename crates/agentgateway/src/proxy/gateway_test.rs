@@ -94,8 +94,8 @@ fn test_jwks() -> JwkSet {
 
 fn test_server_tls_config() -> crate::types::agent::ServerTLSConfig {
 	crate::types::agent::ServerTLSConfig::from_pem_with_profile(
-		include_bytes!("../../../../examples/tls/certs/cert.pem").to_vec(),
-		include_bytes!("../../../../examples/tls/certs/key.pem").to_vec(),
+		include_bytes!("../../../../examples/mcp-tls/certs/cert.pem").to_vec(),
+		include_bytes!("../../../../examples/mcp-tls/certs/key.pem").to_vec(),
 		None,
 		vec![b"h2".to_vec(), b"http/1.1".to_vec()],
 		None,
@@ -178,7 +178,7 @@ async fn serve_https_http1_connection(
 	let tls: crate::http::backendtls::BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
 		cert: None,
 		key: None,
-		root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
 		hostname: Some(sni.to_string()),
 		insecure: false,
 		insecure_host: true,
@@ -3645,7 +3645,7 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 /// (`source.connectHeaders`).
 #[tokio::test]
 async fn connect_tunnel_terminates_outer_tls() {
-	// SNI must match the `*.example.com` static cert at examples/tls/certs.
+	// SNI must match the `*.example.com` static cert at examples/mcp-tls/certs.
 	const SNI: &str = "gw.example.com";
 
 	async fn tls_connect_inner(custom_header: Option<&str>) -> String {
@@ -3691,7 +3691,7 @@ async fn connect_tunnel_terminates_outer_tls() {
 		let raw = t.serve_tunnel(strng::literal!("outer"));
 		let client_tls: crate::http::backendtls::BackendTLS =
 			crate::http::backendtls::ResolvedBackendTLS {
-				root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+				root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
 				hostname: Some(SNI.to_string()),
 				insecure_host: true,
 				..Default::default()

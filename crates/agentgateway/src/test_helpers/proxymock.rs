@@ -1000,7 +1000,7 @@ impl TestBind {
 		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
 			cert: None,
 			key: None,
-			root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+			root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
 			hostname: sni.map(|s| s.to_string()),
 			insecure: false,
 			insecure_host: true,

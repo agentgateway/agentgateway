@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+    randomSampling: true
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        localRateLimit:
+        - maxTokens: 10
+          tokensPerFill: 1
+          fillInterval: 60s
+      backends:
+      - host: localhost:8080

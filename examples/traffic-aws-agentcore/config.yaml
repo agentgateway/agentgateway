@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# AgentCore with static user-id header forwarding.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /supply-chain-agent
+      backends:
+      - aws:
+          agentCore:
+            agentRuntimeArn: "arn:aws:bedrock-agentcore:us-west-2:606469916935:runtime/a2a_sca_iam-4rLvS1BRqq"
+        policies:
+          requestHeaderModifier:
+            set:
+              X-Amzn-Bedrock-AgentCore-Runtime-User-Id: "user-foo"
+              X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: "user-foo"

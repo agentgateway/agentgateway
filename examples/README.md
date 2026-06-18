@@ -1,57 +1,34 @@
 ## Examples
 
-This directory contains examples of how to use agentgateway. Each example covers a slightly different use-case, if you are unsure where to start, basic is the way to go. The examples increase in complexity, so we recommend following them in order.
+This directory contains examples of how to use agentgateway. Each example is named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
 
-### [Basic](basic/README.md)
+### MCP
 
-The basic example is the simplest way to get started with agentgateway.
-This example exposes a single MCP server over Stdio.
+* [mcp-basic](mcp-basic/README.md): the simplest way to get started with agentgateway, exposing a single MCP server over Stdio.
+* [mcp-multiplex](mcp-multiplex/README.md): multiplex multiple MCP targets on a single listener.
+* [mcp-authorization](mcp-authorization/README.md): apply JWT authentication and MCP authorization policies to incoming requests.
+* [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
+* [mcp-tls](mcp-tls/README.md): terminate TLS connections.
+* [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.
+* [mcp-telemetry](mcp-telemetry/README.md): visualize traces and metrics for MCP calls.
 
-### [Multiplex](multiplex/README.md)
+### LLM
 
-The multiplex example shows how to use agentgateway to multiplex multiple targets on a single listener.
+* [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
+* [llm-prompt-guard](llm-prompt-guard/README.md): configure prompt guards for LLM requests and responses.
+* [llm-standalone-epp](llm-standalone-epp/README.md): run agentgateway as the sidecar proxy next to a standalone EPP deployment on Kubernetes.
+* [llm-telemetry](llm-telemetry/README.md): export traces for LLM backend calls.
 
-### [Authorization](authorization/README.md)
+### Traffic
 
-The authorization example shows how to use agentgateway to apply authorization policies to incoming requests. It uses JWT Authentication and authorizaton policies to authenticate and authorize incoming requests.
-
-### [OIDC Browser Auth](oidc/README.md)
-
-The oidc example shows the built-in `oidc` flow using a local Keycloak issuer.
-
-### [OAuth2 Proxy Integration](oauth2-proxy/README.md)
-
-The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` deployment. Most new browser-auth setups should prefer the built-in `oidc` flow instead.
-
-### [Backend OAuth](backend-oauth/README.md)
-
-The backend OAuth example shows how to use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
-
-### [Cross App Access (ID-JAG)](identity-assertion/README.md)
-
-The `identity-assertion` example shows how to use Cross App Access over the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token, so the gateway can call a downstream API as the user.
-
-### [TLS](tls/README.md)
-
-The tls example shows how to use agentgateway to terminate TLS connections.
-
-### [OpenAPI](openapi/README.md)
-
-The openapi example shows how to use agentgateway to serve an OpenAPI specification for a given target.
-
-### [A2A](a2a/README.md)
-
-The `a2a` example shows how to use agentgateway to serve an [A2A](https://a2aproject.github.io/A2A/) agent.
-
-### [HTTP](http/README.md)
-
-The `http` example shows how to use agentgateway to serve generic HTTP traffic.
-
-### [Prompt Enrichment](prompt-enrichment/README.md)
-
-The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
-
-### [Standalone EPP](standalone-epp/README.md)
-
-The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy
-next to a standalone EPP deployment on Kubernetes.
+* [traffic-http](traffic-http/README.md): use agentgateway as a standard HTTP proxy.
+* [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
+* [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
+* [traffic-backend-oauth](traffic-backend-oauth/README.md): use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
+* [traffic-identity-assertion](traffic-identity-assertion/README.md): use Cross App Access over the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token.
+* [traffic-oidc](traffic-oidc/README.md): use the built-in `oidc` browser auth flow with a local Keycloak issuer.
+* [traffic-oauth2-proxy](traffic-oauth2-proxy/README.md): integrate with an external `oauth2-proxy` deployment.
+* [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
+* [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
+* [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.

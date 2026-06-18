@@ -167,7 +167,7 @@ spec:
           periodSeconds: 5
           failureThreshold: 3
 ---
-# From https://github.com/agentgateway/agentgateway/tree/main/examples/tls/certs
+# From https://github.com/agentgateway/agentgateway/tree/main/examples/mcp-tls/certs
 # We use this since Istio's builtin cert is self signed which is not supported (https://github.com/agentgateway/agentgateway/issues/680)
 apiVersion: v1
 kind: Secret
