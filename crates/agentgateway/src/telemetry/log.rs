@@ -676,6 +676,17 @@ impl DropOnLog {
 					CostLookupStatus::Exact | CostLookupStatus::NoCatalog => {},
 				}
 			}
+			if let Some(cost) = llm_response
+				.cost
+				.as_ref()
+				.and_then(|cost| cost.total().to_f64())
+			{
+				log
+					.metrics
+					.gen_ai_cost
+					.get_or_create(&gen_ai_labels)
+					.inc_by(cost);
+			}
 			if let Some(it) = llm_response.input_tokens {
 				log
 					.metrics

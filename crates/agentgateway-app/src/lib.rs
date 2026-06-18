@@ -231,7 +231,8 @@ fn default_config_contents(dir: &std::path::Path) -> String {
 		""
 	};
 	format!(
-		r#"config:
+		r#"# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
 {}  database:
     url: sqlite://{}
 "#,

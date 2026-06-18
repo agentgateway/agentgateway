@@ -88,6 +88,10 @@ def bytes_timeseries(title: str, desc: str = "") -> Timeseries:
   return base_timeseries(title, desc).unit("bytes")
 
 
+def usd_timeseries(title: str, desc: str = "") -> Timeseries:
+  return base_timeseries(title, desc).unit("currencyUSD")
+
+
 def query(expr: str, legend: str) -> PrometheusQuery:
   return raw_query(expr).legend_format(legend)
 
@@ -267,6 +271,15 @@ def build_dashboard() -> Dashboard:
         by=["gen_ai_token_type", "gen_ai_request_model", "gateway"],
       ),
       "{{gateway}}: {{gen_ai_request_model}} ({{gen_ai_token_type}})",
+    )
+  )
+  llm_cost = usd_timeseries("USD Cost").with_target(
+    query(
+      filtered_sum(
+        "agentgateway_gen_ai_client_cost_usd_total",
+        by=["gen_ai_request_model", "gateway"],
+      ),
+      "{{gateway}}: {{gen_ai_request_model}}",
     )
   )
 
@@ -452,6 +465,7 @@ def build_dashboard() -> Dashboard:
       Row("LLM")
       .collapsed(True)
       .with_panel(llm_tokens)
+      .with_panel(llm_cost)
       .with_panel(llm_ttft)
       .with_panel(llm_time)
       .with_panel(llm_tps)
