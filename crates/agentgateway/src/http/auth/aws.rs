@@ -162,12 +162,20 @@ pub(super) async fn sign_request(
 	trace!("AWS signing with region: {}, service: {}", region, service);
 
 	// Sign the request
+	// For Bedrock, disable URI path normalization to preserve %2F encoding in ARN-based
+	// model IDs (e.g. application inference profile ARNs). Default normalization decodes
+	// %2F to /, causing Bedrock to misparse the path and return UnknownOperationException.
+	let mut signing_settings = aws_sigv4::http_request::SigningSettings::default();
+	if service == "bedrock" {
+		signing_settings.uri_path_normalization_mode =
+			aws_sigv4::http_request::UriPathNormalizationMode::Disabled;
+	}
 	let signing_params = SigningParams::builder()
 		.identity(&creds)
 		.region(region)
 		.name(service)
 		.time(std::time::SystemTime::now())
-		.settings(aws_sigv4::http_request::SigningSettings::default())
+		.settings(signing_settings)
 		.build()?
 		.into();
 
