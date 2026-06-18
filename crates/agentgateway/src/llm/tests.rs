@@ -172,6 +172,7 @@ fn test_response(
 async fn test_streaming(
 	provider: &str,
 	relative_path: &str,
+	snapshot_suffix: &str,
 	xlate: impl AsyncFnOnce(Response, AsyncLog<llm::LLMInfo>) -> Result<Response, AIError>,
 ) {
 	let input_path = fixture_path(relative_path);
@@ -208,7 +209,7 @@ async fn test_streaming(
 	};
 	let resp_str = resp_body + "\n\n" + llm_resp_str.as_str();
 	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
-	let snapshot_name = snapshot_name + "-streaming";
+	let snapshot_name = snapshot_name + snapshot_suffix;
 
 	insta::with_settings!({
 			description => input_path.to_string_lossy().to_string(),
@@ -603,11 +604,20 @@ mod response {
 		("openrouter_reasoning", ALL_COMPLETIONS),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		("tool_call", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", ALL_COMPLETIONS),
 		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
 	];
+	// Streaming fixtures replayed with include_completion_in_log=true so the
+	// streaming tool-call aggregator populates LLMResponse.tool_calls. Kept
+	// separate from COMPLETIONS_STREAM_RESPONSES so existing flag-disabled
+	// snapshots remain unchanged.
+	const COMPLETIONS_STREAM_TOOL_CALL_RESPONSES: &[(&str, &[&str])] = &[(
+		"stream_tool_empty_content",
+		&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_COMPLETIONS],
+	)];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
 		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
@@ -685,6 +695,13 @@ mod response {
 				test_streaming_response_for_provider(provider, test).await
 			}
 		}
+
+		for (name, providers) in COMPLETIONS_STREAM_TOOL_CALL_RESPONSES {
+			let test = &format!("response/completions/{name}.json");
+			for provider in *providers {
+				test_streaming_response_with_completion_log(provider, test).await
+			}
+		}
 	}
 
 	#[tokio::test]
@@ -740,7 +757,28 @@ mod response {
 			)
 			.await
 		};
-		test_streaming(provider, test, test_fn).await
+		test_streaming(provider, test, "-streaming", test_fn).await
+	}
+
+	async fn test_streaming_response_with_completion_log(provider: &str, test: &str) {
+		use crate::proxy::httpproxy::PolicyClient;
+		use crate::test_helpers::proxymock::setup_proxy_test;
+		let (p, r) = build_provider_request(provider);
+		let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
+			p.process_streaming(
+				client,
+				r,
+				LLMResponsePolicies::default(),
+				None,
+				log,
+				true,
+				None,
+				i,
+			)
+			.await
+		};
+		test_streaming(provider, test, "-streaming-toolcalls", test_fn).await
 	}
 
 	fn build_provider_request(provider: &str) -> (AIProvider, LLMRequest) {

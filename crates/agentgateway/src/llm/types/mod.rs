@@ -83,6 +83,16 @@ pub struct SimpleChatCompletionMessage {
 	pub content: Strng,
 }
 
+/// ToolCall represents a single tool/function invocation surfaced for observability.
+/// `arguments` holds the model-produced arguments JSON as a string.
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ToolCall {
+	pub id: Strng,
+	pub name: Strng,
+	pub arguments: Strng,
+}
+
 pub fn serialize_str<T: Serialize>(value: &T) -> Option<Strng> {
 	serde_json::to_value(value).ok()?.as_str().map(Into::into)
 }

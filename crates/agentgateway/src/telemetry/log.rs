@@ -1092,6 +1092,10 @@ impl Drop for DropOnLog {
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
+			let tool_calls_json = llm_response
+				.as_ref()
+				.and_then(|l| l.tool_calls.as_ref())
+				.and_then(|tc| serde_json::to_string(tc).ok());
 			let trace_cost_fields = if enable_trace {
 				cost.map(|b| {
 					[
@@ -1279,6 +1283,10 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.output_audio_tokens)
 						.map(Into::into),
+				),
+				(
+					"gen_ai.tool_calls",
+					tool_calls_json.as_deref().map(Into::into),
 				),
 				(
 					"gen_ai.request.temperature",
@@ -2039,6 +2047,105 @@ mod tests {
 				.iter()
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
+		);
+	}
+
+	#[test]
+	fn tool_calls_emitted_as_span_attribute_when_present() {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Completions,
+			native_format: None,
+			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
+			request_model: strng::literal!("my-model"),
+			provider: strng::literal!("openai"),
+			streaming: true,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+		};
+		let response = llm::LLMResponse {
+			tool_calls: Some(vec![llm::ToolCall {
+				id: strng::literal!("call_1"),
+				name: strng::literal!("get_weather"),
+				arguments: strng::literal!("{\"city\":\"sf\"}"),
+			}]),
+			..Default::default()
+		};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let tool_calls = span
+			.attributes
+			.iter()
+			.find(|attr| attr.key.as_str() == "gen_ai.tool_calls")
+			.expect("expected gen_ai.tool_calls span attribute");
+		let value = tool_calls.value.as_str();
+		assert!(
+			value.contains("get_weather"),
+			"tool_calls attribute should contain the invoked tool name, got {value}"
+		);
+	}
+
+	#[test]
+	fn tool_calls_absent_when_no_tool_calls() {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Completions,
+			native_format: None,
+			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
+			request_model: strng::literal!("my-model"),
+			provider: strng::literal!("openai"),
+			streaming: true,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+		};
+		let response = llm::LLMResponse {
+			tool_calls: None,
+			..Default::default()
+		};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		assert!(
+			span
+				.attributes
+				.iter()
+				.all(|attr| attr.key.as_str() != "gen_ai.tool_calls"),
+			"gen_ai.tool_calls must not be emitted when there are no tool calls"
 		);
 	}
 }

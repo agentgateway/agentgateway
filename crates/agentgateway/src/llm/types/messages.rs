@@ -4,7 +4,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
+use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage, ToolCall};
 use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
@@ -359,8 +359,42 @@ impl From<SimpleChatCompletionMessage> for RequestMessage {
 	}
 }
 
+fn extract_tool_calls_from_content(content: &[Content]) -> Option<Vec<ToolCall>> {
+	let tool_calls: Vec<ToolCall> = content
+		.iter()
+		.filter_map(|c| {
+			let typ = c.rest.get("type")?.as_str()?;
+			if typ != "tool_use" && typ != "server_tool_use" {
+				return None;
+			}
+			let id = c.rest.get("id")?.as_str().unwrap_or("");
+			let name = c.rest.get("name")?.as_str().unwrap_or("");
+			// Mirror the typed path, which always serializes the `input` Value;
+			// fall back to an empty JSON object when the provider omitted it.
+			let arguments = c
+				.rest
+				.get("input")
+				.map(|v| v.to_string())
+				.unwrap_or_else(|| "{}".to_string());
+			Some(ToolCall {
+				id: strng::new(id),
+				name: strng::new(name),
+				arguments: strng::new(&arguments),
+			})
+		})
+		.collect();
+
+	(!tool_calls.is_empty()).then_some(tool_calls)
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let tool_calls = if include_completion_in_log {
+			extract_tool_calls_from_content(&self.content)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: Some(self.usage.input_tokens),
 			input_image_tokens: None,
@@ -388,6 +422,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			tool_calls,
 			first_token: Default::default(),
 		}
 	}
@@ -1000,8 +1035,37 @@ pub mod typed {
 		pub fields: std::collections::HashMap<String, String>,
 	}
 
+	fn extract_tool_calls_from_content_blocks(
+		content: &[ContentBlock],
+	) -> Option<Vec<super::ToolCall>> {
+		let tool_calls: Vec<super::ToolCall> = content
+			.iter()
+			.filter_map(|block| match block {
+				ContentBlock::ToolUse {
+					id, name, input, ..
+				}
+				| ContentBlock::ServerToolUse {
+					id, name, input, ..
+				} => Some(super::ToolCall {
+					id: agent_core::strng::new(id),
+					name: agent_core::strng::new(name),
+					arguments: agent_core::strng::new(input.to_string()),
+				}),
+				_ => None,
+			})
+			.collect();
+
+		(!tool_calls.is_empty()).then_some(tool_calls)
+	}
+
 	impl super::ResponseType for MessagesResponse {
 		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
+			let tool_calls = if include_completion_in_log {
+				extract_tool_calls_from_content_blocks(&self.content)
+			} else {
+				None
+			};
+
 			crate::llm::LLMResponse {
 				input_tokens: Some(self.usage.input_tokens as u64),
 				input_image_tokens: None,
@@ -1032,6 +1096,7 @@ pub mod typed {
 				} else {
 					None
 				},
+				tool_calls,
 				first_token: Default::default(),
 			}
 		}
@@ -1073,5 +1138,151 @@ pub mod typed {
 		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 			serde_json::to_vec(&self)
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::llm::types::ResponseType;
+
+	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
+		typed::MessagesResponse {
+			id: "msg_test".to_string(),
+			r#type: "message".to_string(),
+			role: typed::Role::Assistant,
+			content: vec![
+				typed::ContentBlock::Text(typed::ContentTextBlock {
+					text: "I'll call the tool.".to_string(),
+					citations: None,
+					cache_control: None,
+				}),
+				typed::ContentBlock::ToolUse {
+					id: "toolu_01A".to_string(),
+					name: "get_weather".to_string(),
+					input: serde_json::json!({"location": "San Francisco"}),
+					cache_control: None,
+				},
+				typed::ContentBlock::ServerToolUse {
+					id: "srvtoolu_01B".to_string(),
+					name: "web_search".to_string(),
+					input: serde_json::json!({"query": "rust programming"}),
+					cache_control: None,
+				},
+			],
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some(typed::StopReason::ToolUse),
+			stop_sequence: None,
+			usage: typed::Usage {
+				input_tokens: 100,
+				output_tokens: 50,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+			},
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+		}
+	}
+
+	#[test]
+	fn test_typed_response_tool_calls_populated_when_flag_true() {
+		let response = make_typed_response_with_tool_use();
+		let llm_response = response.to_llm_response(true);
+
+		let tool_calls = llm_response.tool_calls.expect("tool_calls should be Some");
+		assert_eq!(tool_calls.len(), 2);
+
+		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments.as_str(),
+			r#"{"location":"San Francisco"}"#
+		);
+
+		assert_eq!(tool_calls[1].id.as_str(), "srvtoolu_01B");
+		assert_eq!(tool_calls[1].name.as_str(), "web_search");
+		assert_eq!(
+			tool_calls[1].arguments.as_str(),
+			r#"{"query":"rust programming"}"#
+		);
+	}
+
+	#[test]
+	fn test_typed_response_no_tool_calls_returns_none() {
+		let response = typed::MessagesResponse {
+			id: "msg_test2".to_string(),
+			r#type: "message".to_string(),
+			role: typed::Role::Assistant,
+			content: vec![typed::ContentBlock::Text(typed::ContentTextBlock {
+				text: "Hello!".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some(typed::StopReason::EndTurn),
+			stop_sequence: None,
+			usage: typed::Usage {
+				input_tokens: 50,
+				output_tokens: 20,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+			},
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+		};
+
+		let llm_response = response.to_llm_response(true);
+		assert!(llm_response.tool_calls.is_none());
+	}
+
+	#[test]
+	fn test_weakly_typed_response_tool_calls_from_rest() {
+		let response = Response {
+			id: "msg_test3".to_string(),
+			r#type: "message".to_string(),
+			role: "assistant".to_string(),
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some("tool_use".to_string()),
+			stop_sequence: None,
+			usage: Usage {
+				input_tokens: 100,
+				output_tokens: 50,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+				rest: Default::default(),
+			},
+			content: vec![
+				Content {
+					text: Some("I'll call the tool.".to_string()),
+					rest: serde_json::json!({"type": "text"}),
+				},
+				Content {
+					text: None,
+					rest: serde_json::json!({
+						"type": "tool_use",
+						"id": "toolu_01A",
+						"name": "get_weather",
+						"input": {"location": "San Francisco"}
+					}),
+				},
+			],
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+			rest: Default::default(),
+		};
+
+		let llm_response = response.to_llm_response(true);
+
+		let tool_calls = llm_response.tool_calls.expect("tool_calls should be Some");
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments.as_str(),
+			r#"{"location":"San Francisco"}"#
+		);
 	}
 }

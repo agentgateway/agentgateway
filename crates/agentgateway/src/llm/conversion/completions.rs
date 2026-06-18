@@ -243,12 +243,14 @@ pub mod from_messages {
 		b: crate::http::Body,
 		buffer_limit: usize,
 		log: AmendOnDrop,
+		include_completion_in_log: bool,
 	) -> crate::http::Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
 			name: Option<String>,
 			pending_json: String,
+			arguments: String,
 		}
 
 		#[derive(Debug, Default)]
@@ -385,6 +387,7 @@ pub mod from_messages {
 			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
 			log: &AmendOnDrop,
 			force: bool,
+			include_completion_in_log: bool,
 		) {
 			if state.sent_message_stop {
 				return;
@@ -436,6 +439,18 @@ pub mod from_messages {
 					r.response.total_tokens = Some(usage.total_tokens as u64);
 				});
 			}
+
+			if include_completion_in_log
+				&& let Some(tool_calls) = super::finalize_streaming_tool_calls(
+					state
+						.pending_tool_calls
+						.drain()
+						.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+				) {
+				log.non_atomic_mutate(|r| {
+					r.response.tool_calls = Some(tool_calls);
+				});
+			}
 		}
 
 		let mut state = StreamState::default();
@@ -448,7 +463,13 @@ pub mod from_messages {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
 				SseJsonEvent::Done => {
-					flush_message_end(&mut state, &mut events, &log, true);
+					flush_message_end(
+						&mut state,
+						&mut events,
+						&log,
+						true,
+						include_completion_in_log,
+					);
 					return events;
 				},
 				SseJsonEvent::Data(Err(e)) => {
@@ -519,6 +540,7 @@ pub mod from_messages {
 												id: None,
 												name: None,
 												pending_json: String::new(),
+												arguments: String::new(),
 											});
 									if let Some(id) = &tool_call.id {
 										entry.id = Some(id.clone());
@@ -529,6 +551,7 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
 
@@ -575,7 +598,13 @@ pub mod from_messages {
 					}
 
 					if state.pending_stop_reason.is_some() && state.pending_usage.is_some() {
-						flush_message_end(&mut state, &mut events, &log, false);
+						flush_message_end(
+							&mut state,
+							&mut events,
+							&log,
+							false,
+							include_completion_in_log,
+						);
 					}
 				},
 			}
@@ -960,12 +989,50 @@ pub mod from_messages {
 	}
 }
 
+/// Build the observability tool-call list from accumulated streaming deltas,
+/// keyed by tool-call index. Synthesizes an id when the provider omitted one,
+/// and returns `None` when there are no tool calls.
+fn finalize_streaming_tool_calls(
+	entries: impl IntoIterator<Item = (u32, Option<String>, Option<String>, String)>,
+) -> Option<Vec<llm::ToolCall>> {
+	let mut entries: Vec<_> = entries.into_iter().collect();
+	entries.sort_by_key(|(idx, ..)| *idx);
+	let tool_calls: Vec<llm::ToolCall> = entries
+		.into_iter()
+		.map(|(idx, id, name, arguments)| llm::ToolCall {
+			id: id.unwrap_or_else(|| format!("tool_call_{idx}")).into(),
+			name: name.unwrap_or_default().into(),
+			arguments: arguments.into(),
+		})
+		.collect();
+	(!tool_calls.is_empty()).then_some(tool_calls)
+}
+
 pub fn passthrough_stream(
 	mut log: AmendOnDrop,
 	include_completion_in_log: bool,
 	resp: Response,
 ) -> Response {
+	#[derive(Default)]
+	struct PendingPassthroughToolCall {
+		id: Option<String>,
+		name: Option<String>,
+		arguments: String,
+	}
+
+	fn finalize_tool_calls(
+		pending: &mut std::collections::HashMap<u32, PendingPassthroughToolCall>,
+	) -> Option<Vec<llm::ToolCall>> {
+		finalize_streaming_tool_calls(
+			pending
+				.drain()
+				.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+		)
+	}
+
 	let mut completion = include_completion_in_log.then(String::new);
+	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
+		include_completion_in_log.then(std::collections::HashMap::new);
 	let buffer_limit = crate::http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		let mut seen_provider = false;
@@ -980,6 +1047,24 @@ pub fn passthrough_stream(
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
 							c.push_str(delta);
+						}
+						if let Some(pending) = pending_tool_calls.as_mut()
+							&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
+						{
+							for chunk in deltas {
+								let entry = pending.entry(chunk.index).or_default();
+								if let Some(id) = &chunk.id {
+									entry.id = Some(id.clone());
+								}
+								if let Some(function) = &chunk.function {
+									if let Some(name) = &function.name {
+										entry.name = Some(name.clone());
+									}
+									if let Some(args) = &function.arguments {
+										entry.arguments.push_str(args);
+									}
+								}
+							}
 						}
 						if !saw_token {
 							saw_token = true;
@@ -1019,6 +1104,11 @@ pub fn passthrough_stream(
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
+								if let Some(pending) = pending_tool_calls.as_mut()
+									&& let Some(tc) = finalize_tool_calls(pending)
+								{
+									r.response.tool_calls = Some(tc);
+								}
 							});
 
 							log.report_rate_limit();
@@ -1033,6 +1123,11 @@ pub fn passthrough_stream(
 						log.non_atomic_mutate(|r| {
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
+							}
+							if let Some(pending) = pending_tool_calls.as_mut()
+								&& let Some(tc) = finalize_tool_calls(pending)
+							{
+								r.response.tool_calls = Some(tc);
 							}
 						});
 					},

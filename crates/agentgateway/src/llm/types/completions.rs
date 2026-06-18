@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{ResponseType, SimpleChatCompletionMessage};
+use crate::llm::types::{ResponseType, SimpleChatCompletionMessage, ToolCall};
 use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 use crate::{json, llm};
 
@@ -150,6 +150,12 @@ pub struct Usage {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let tool_calls = if include_completion_in_log {
+			extract_tool_calls(&self.choices)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
@@ -196,6 +202,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			tool_calls,
 			first_token: Default::default(),
 		}
 	}
@@ -227,6 +234,42 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+}
+
+fn extract_tool_calls(choices: &[Choice]) -> Option<Vec<ToolCall>> {
+	let mut tool_calls = Vec::new();
+
+	for choice in choices {
+		if let Some(tc_array) = choice
+			.message
+			.rest
+			.get("tool_calls")
+			.and_then(|v| v.as_array())
+		{
+			for (idx, tc_item) in tc_array.iter().enumerate() {
+				if let Some(function) = tc_item.get("function").and_then(|v| v.as_object()) {
+					let id = tc_item
+						.get("id")
+						.and_then(|v| v.as_str())
+						.map(strng::new)
+						.unwrap_or_else(|| format!("tool_call_{idx}").into());
+					let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
+					let arguments = function
+						.get("arguments")
+						.and_then(|v| v.as_str())
+						.unwrap_or("");
+
+					tool_calls.push(ToolCall {
+						id,
+						name: strng::new(name),
+						arguments: strng::new(arguments),
+					});
+				}
+			}
+		}
+	}
+
+	(!tool_calls.is_empty()).then_some(tool_calls)
 }
 
 impl super::RequestType for Request {
@@ -1030,5 +1073,147 @@ pub mod typed {
 				_ => vec![],
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_extract_tool_calls_from_response() {
+		// Covers both single-call extraction and that multiple calls keep their order.
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_1",
+								"type": "function",
+								"function": {
+									"name": "get_weather",
+									"arguments": "{\"location\": \"San Francisco\"}"
+								}
+							},
+							{
+								"id": "call_2",
+								"type": "function",
+								"function": {
+									"name": "func_b",
+									"arguments": "{\"y\": 2}"
+								}
+							}
+						]
+					},
+					"finish_reason": "tool_calls"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(true);
+
+		let tool_calls = llm_response
+			.tool_calls
+			.expect("tool_calls should be present");
+		assert_eq!(tool_calls.len(), 2);
+
+		assert_eq!(tool_calls[0].id.as_str(), "call_1");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments.as_str(),
+			r#"{"location": "San Francisco"}"#
+		);
+		assert_eq!(tool_calls[1].id.as_str(), "call_2");
+		assert_eq!(tool_calls[1].name.as_str(), "func_b");
+	}
+
+	#[test]
+	fn test_no_tool_calls_when_flag_false() {
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello",
+						"tool_calls": [
+							{
+								"id": "call_123",
+								"type": "function",
+								"function": {
+									"name": "get_weather",
+									"arguments": "{\"location\": \"San Francisco\"}"
+								}
+							}
+						]
+					},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(false);
+
+		assert!(
+			llm_response.tool_calls.is_none(),
+			"tool_calls should be None when flag is false"
+		);
+	}
+
+	#[test]
+	fn test_no_tool_calls_in_response() {
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello, how can I help?"
+					},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(true);
+
+		assert!(
+			llm_response.tool_calls.is_none(),
+			"tool_calls should be None when no tool calls in response"
+		);
 	}
 }

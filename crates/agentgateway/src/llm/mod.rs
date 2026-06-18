@@ -41,7 +41,7 @@ pub mod policy;
 mod types;
 
 use policy::streaming_guardrails::GuardedSseBody;
-pub use types::SimpleChatCompletionMessage;
+pub use types::{SimpleChatCompletionMessage, ToolCall};
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
@@ -340,6 +340,8 @@ pub struct LLMResponse {
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tool_calls: Option<Vec<ToolCall>>,
 
 	#[serde(skip)]
 	// Time to get the first token. Only used for streaming.
@@ -1680,7 +1682,14 @@ impl AIProvider {
 				})
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Completions)) => {
-				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
+				resp.map(|b| {
+					conversion::completions::from_messages::translate_stream(
+						b,
+						buffer,
+						logger,
+						include_completion_in_log,
+					)
+				})
 			},
 			(AIProvider::Custom(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
 				resp.map(|b| {
@@ -1732,9 +1741,14 @@ impl AIProvider {
 			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => resp.map(|b| {
 				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
 			}),
-			(AIProvider::Vertex(_), InputFormat::Messages, _) => {
-				resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger))
-			},
+			(AIProvider::Vertex(_), InputFormat::Messages, _) => resp.map(|b| {
+				conversion::completions::from_messages::translate_stream(
+					b,
+					buffer,
+					logger,
+					include_completion_in_log,
+				)
+			}),
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
 				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
@@ -1747,7 +1761,14 @@ impl AIProvider {
 				| AIProvider::Azure(_),
 				InputFormat::Messages,
 				_,
-			) => resp.map(|b| conversion::completions::from_messages::translate_stream(b, buffer, logger)),
+			) => resp.map(|b| {
+				conversion::completions::from_messages::translate_stream(
+					b,
+					buffer,
+					logger,
+					include_completion_in_log,
+				)
+			}),
 			// Supported paths with conversion...
 			(AIProvider::Anthropic(_), InputFormat::Completions, _) => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))

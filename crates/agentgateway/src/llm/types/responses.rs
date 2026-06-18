@@ -402,8 +402,33 @@ impl RequestType for Request {
 	}
 }
 
+fn extract_tool_calls(output: &[OutputItem]) -> Option<Vec<ToolCall>> {
+	let tool_calls: Vec<ToolCall> = output
+		.iter()
+		.filter_map(|item| match item {
+			OutputItem::FunctionCall(call) => {
+				let id = call.id.as_deref().unwrap_or(call.call_id.as_str());
+				Some(ToolCall {
+					id: strng::new(id),
+					name: strng::new(&call.name),
+					arguments: strng::new(&call.arguments),
+				})
+			},
+			_ => None,
+		})
+		.collect();
+
+	(!tool_calls.is_empty()).then_some(tool_calls)
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+		let tool_calls = if include_completion_in_log {
+			extract_tool_calls(&self.output)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
@@ -454,6 +479,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			tool_calls,
 			first_token: Default::default(),
 		}
 	}
@@ -580,5 +606,64 @@ pub mod typed {
 		/// Emitted when an error occurs.
 		#[serde(rename = "error")]
 		ResponseError(openai_responses::ResponseErrorEvent),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::typed::{FunctionToolCall, OutputStatus};
+	use super::*;
+
+	fn response_with_output(output: Vec<OutputItem>) -> Response {
+		Response {
+			id: "resp_123".to_string(),
+			status: "completed".to_string(),
+			output,
+			model: "gpt-4.1".to_string(),
+			service_tier: None,
+			usage: None,
+			rest: serde_json::Value::Null,
+		}
+	}
+
+	#[test]
+	fn test_response_tool_calls_populated_when_flag_true() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: r#"{"location":"San Francisco"}"#.to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(true);
+		let tool_calls = llm_response
+			.tool_calls
+			.expect("tool_calls should be present");
+
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "fc_123");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments.as_str(),
+			r#"{"location":"San Francisco"}"#
+		);
+	}
+
+	#[test]
+	fn test_response_tool_calls_omitted_when_flag_false() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: "{}".to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(false);
+
+		assert!(llm_response.tool_calls.is_none());
 	}
 }
