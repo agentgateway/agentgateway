@@ -257,6 +257,11 @@
             }
           ]
         },
+        "customFunctions": {
+          "description": "Custom CEL functions available to all CEL expressions. These can define re-usable snippets that\ncan be used in any expressions.\nConfigure as a block string containing one or more definitions, for example:\n`customFunctions: |`\n`  isInternal() { request.headers[\"x-env\"] == \"internal\" }`\n`  this.joined(prefix, parts...) { prefix + this + parts.join(\"\") }`",
+          "type": "string",
+          "default": ""
+        },
         "connectionTerminationDeadline": {
           "type": [
             "string",

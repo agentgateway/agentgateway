@@ -37,6 +37,7 @@
 |`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.mcp`|object|MCP gateway settings.|
 |`config.mcp.sessionTtl`|string||
+|`config.customFunctions`|string|Custom CEL functions available to all CEL expressions. These can define re-usable snippets that<br>can be used in any expressions.<br>Configure as a block string containing one or more definitions, for example:<br>`customFunctions: |`<br>`  isInternal() { request.headers["x-env"] == "internal" }`<br>`  this.joined(prefix, parts...) { prefix + this + parts.join("") }`|
 |`config.connectionTerminationDeadline`|string||
 |`config.connectionMinTerminationDeadline`|string||
 |`config.workerThreads`|string||

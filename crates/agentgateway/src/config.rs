@@ -34,6 +34,7 @@ pub fn parse_config(
 ) -> anyhow::Result<Config> {
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
 	let raw = nested.config.unwrap_or_default();
+	cel::register_custom_functions(&raw.custom_functions)?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)

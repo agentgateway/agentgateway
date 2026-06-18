@@ -191,6 +191,15 @@ pub struct RawConfig {
 	/// MCP gateway settings.
 	mcp: Option<RawMcpConfig>,
 
+	/// Custom CEL functions available to all CEL expressions. These can define re-usable snippets that
+	/// can be used in any expressions.
+	/// Configure as a block string containing one or more definitions, for example:
+	/// `customFunctions: |`
+	/// `  isInternal() { request.headers["x-env"] == "internal" }`
+	/// `  this.joined(prefix, parts...) { prefix + this + parts.join("") }`
+	#[serde(default)]
+	custom_functions: String,
+
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_termination_deadline: Option<Duration>,

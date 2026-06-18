@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use tracing::event;
 
-use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::cel::{Error, Expression, context, query};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
@@ -458,8 +458,8 @@ static DUMP: Lazy<Expression> =
 impl ExecutorResolver<'_> {
 	pub fn slow_debug(&self) -> serde_json::Value {
 		let expr = &DUMP;
-		let cel_value = Value::resolve(expr.expression.expression(), ROOT_CONTEXT.as_ref(), self)
-			.unwrap_or(Value::Null);
+		let cel_value =
+			Value::resolve(expr.expression.expression(), context(), self).unwrap_or(Value::Null);
 		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
 		// Filter nulls which are just noisy
 		if let serde_json::Value::Object(obj) = &mut v {
@@ -685,11 +685,7 @@ impl<'a> Executor<'a> {
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
 		let start = dtrace::timed_start();
-		let res = Value::resolve(
-			expr.expression.expression(),
-			ROOT_CONTEXT.as_ref(),
-			&resolver,
-		);
+		let res = Value::resolve(expr.expression.expression(), context(), &resolver);
 		dtrace::trace(|t| {
 			t.cel_eval(
 				start,
