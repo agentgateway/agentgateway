@@ -147,8 +147,8 @@ fn https_bind() -> Bind {
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
 					mode: Default::default(),
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
+					cert: "../../examples/mcp-tls/certs/cert.pem".into(),
+					key: "../../examples/mcp-tls/certs/key.pem".into(),
 					root: None,
 					cipher_suites: None,
 					min_tls_version: None,
@@ -175,7 +175,7 @@ async fn serve_https_http1_connection(
 	let tls: crate::http::backendtls::BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
 		cert: None,
 		key: None,
-		root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+		root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
 		hostname: Some(sni.to_string()),
 		insecure: false,
 		insecure_host: true,
@@ -3531,8 +3531,8 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 			protocol: ListenerProtocol::HTTPS(
 				types::local::LocalTLSServerConfig {
 					mode: Default::default(),
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
+					cert: "../../examples/mcp-tls/certs/cert.pem".into(),
+					key: "../../examples/mcp-tls/certs/key.pem".into(),
 					root: None,
 					cipher_suites: None,
 					min_tls_version: None,
@@ -3864,8 +3864,8 @@ async fn auto_protocol_mixed_listeners() {
 				protocol: ListenerProtocol::HTTPS(
 					types::local::LocalTLSServerConfig {
 						mode: Default::default(),
-						cert: "../../examples/tls/certs/cert.pem".into(),
-						key: "../../examples/tls/certs/key.pem".into(),
+						cert: "../../examples/mcp-tls/certs/cert.pem".into(),
+						key: "../../examples/mcp-tls/certs/key.pem".into(),
 						root: None,
 						cipher_suites: None,
 						min_tls_version: None,
