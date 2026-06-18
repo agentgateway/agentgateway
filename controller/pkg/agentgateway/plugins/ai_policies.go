@@ -276,16 +276,16 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		return nil
 	}
 
+	// Default location if not specified.
+	location := "us-central1"
+	if armor.Location != nil {
+		location = *armor.Location
+	}
+
 	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
 		TemplateId: armor.TemplateID,
 		ProjectId:  armor.ProjectID,
-	}
-
-	// Set location with default value if not specified
-	if armor.Location != nil {
-		pgArmor.Location = new(*armor.Location)
-	} else {
-		pgArmor.Location = new("us-central1")
+		Location:   &location,
 	}
 
 	if armor.Policies != nil {
