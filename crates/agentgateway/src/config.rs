@@ -482,7 +482,11 @@ pub fn parse_config(
 				.unwrap_or_default(),
 			database: database.clone(),
 			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
-			database_fields: database_logging_fields(raw.standard_attributes.as_ref())?,
+			database_fields: if database.is_some() {
+				database_logging_fields(raw.standard_attributes.as_ref())?
+			} else {
+				Default::default()
+			},
 		},
 		dns: client::Config {
 			resolver_cfg,
