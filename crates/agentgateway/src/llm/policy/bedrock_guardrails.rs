@@ -137,14 +137,13 @@ fn resolve(
 		},
 		strng::literal!("_bedrock-guardrails"),
 	)?;
-	let cfg = if let SimpleBackend::Guardrail(_, GuardrailBackend::Bedrock(b)) = &backend.backend {
-		b.clone()
-	} else {
+	let SimpleBackend::Guardrail(_, GuardrailBackend::Bedrock(b)) = &backend.backend else {
 		anyhow::bail!(
 			"guardrail backend {} is not a bedrock guardrail backend",
 			backend.backend
-		)
+		);
 	};
+	let cfg = b.clone();
 	Ok((backend, cfg))
 }
 

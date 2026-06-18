@@ -342,7 +342,8 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -444,10 +445,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -550,10 +552,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -656,8 +659,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -795,10 +799,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -901,10 +906,11 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -1007,8 +1013,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -2800,7 +2807,8 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -2902,10 +2910,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -3008,10 +3017,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -3114,8 +3124,9 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -3253,10 +3264,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -3359,10 +3371,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -3465,8 +3478,9 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4051,7 +4065,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -4153,10 +4168,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4259,10 +4275,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4365,8 +4382,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4504,10 +4522,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4610,10 +4629,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -4716,8 +4736,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5272,7 +5293,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -5374,10 +5396,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5480,10 +5503,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5586,8 +5610,9 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5725,10 +5750,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5831,10 +5857,11 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -5937,8 +5964,9 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7390,7 +7418,8 @@
 |`policies[].policy.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -7492,10 +7521,11 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7598,10 +7628,11 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7704,8 +7735,9 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7843,10 +7875,11 @@
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7949,10 +7982,11 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -8055,8 +8089,9 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -9843,7 +9878,8 @@
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -9945,10 +9981,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10051,10 +10088,11 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10157,8 +10195,9 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10296,10 +10335,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10402,10 +10442,11 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10508,8 +10549,9 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11094,7 +11136,8 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -11196,10 +11239,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11302,10 +11346,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11408,8 +11453,9 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11547,10 +11593,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11653,10 +11700,11 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -11759,8 +11807,9 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12313,7 +12362,8 @@
 |`backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -12415,10 +12465,11 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12521,10 +12572,11 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12627,8 +12679,9 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12766,10 +12819,11 @@
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12872,10 +12926,11 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -12978,8 +13033,9 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13371,7 +13427,8 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -13473,10 +13530,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13579,10 +13637,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13685,8 +13744,9 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13824,10 +13884,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13930,10 +13991,11 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -14036,8 +14098,9 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -15829,7 +15892,8 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -15931,10 +15995,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -16037,10 +16102,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -16143,8 +16209,9 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -16282,10 +16349,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -16388,10 +16456,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -16494,8 +16563,9 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17080,7 +17150,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -17182,10 +17253,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17288,10 +17360,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17394,8 +17467,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17533,10 +17607,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17639,10 +17714,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -17745,8 +17821,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18301,7 +18378,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -18403,10 +18481,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18509,10 +18588,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18615,8 +18695,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18754,10 +18835,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18860,10 +18942,11 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -18966,8 +19049,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19405,7 +19489,8 @@
 |`llm.models[].guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.models[].guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.models[].guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`llm.models[].guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`llm.models[].guardrails.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`llm.models[].guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -19507,10 +19592,11 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`llm.models[].guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`llm.models[].guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`llm.models[].guardrails.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19613,10 +19699,11 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`llm.models[].guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`llm.models[].guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`llm.models[].guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`llm.models[].guardrails.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.models[].guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`llm.models[].guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`llm.models[].guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19719,8 +19806,9 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`llm.models[].guardrails.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19858,10 +19946,11 @@
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.models[].guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`llm.models[].guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`llm.models[].guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`llm.models[].guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.models[].guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`llm.models[].guardrails.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -19964,10 +20053,11 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`llm.models[].guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`llm.models[].guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`llm.models[].guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.models[].guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`llm.models[].guardrails.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.models[].guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`llm.models[].guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`llm.models[].guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20070,8 +20160,9 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.models[].guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.models[].guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`llm.models[].guardrails.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20859,7 +20950,8 @@
 |`llm.policies.guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.policies.guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`llm.policies.guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`llm.policies.guardrails.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`llm.policies.guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -20961,10 +21053,11 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`llm.policies.guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`llm.policies.guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.policies.guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`llm.policies.guardrails.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -21067,10 +21160,11 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`llm.policies.guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`llm.policies.guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`llm.policies.guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.policies.guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`llm.policies.guardrails.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.policies.guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`llm.policies.guardrails.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`llm.policies.guardrails.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -21173,8 +21267,9 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`llm.policies.guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.policies.guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`llm.policies.guardrails.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`llm.policies.guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -21312,10 +21407,11 @@
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.policies.guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`llm.policies.guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`llm.policies.guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`llm.policies.guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`llm.policies.guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`llm.policies.guardrails.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -21418,10 +21514,11 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`llm.policies.guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`llm.policies.guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`llm.policies.guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`llm.policies.guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`llm.policies.guardrails.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`llm.policies.guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`llm.policies.guardrails.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`llm.policies.guardrails.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -21524,8 +21621,9 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`llm.policies.guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`llm.policies.guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`llm.policies.guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`llm.policies.guardrails.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`llm.policies.guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22255,7 +22353,8 @@
 |`mcp.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.backendRef`|string|Reference to a guardrail backend (with an `openAIModeration` provider) defined in the<br>top level backends list. Connection policies (auth, TLS, timeouts) should be attached<br>to that backend.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.<br>Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -22357,10 +22456,11 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22463,10 +22563,11 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22569,8 +22670,9 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22708,10 +22810,11 @@
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.<br><br>The guardrail instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>guardrailIdentifier/guardrailVersion/region (deprecated).|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.backendRef`|string|Reference to a guardrail backend (with a `bedrock` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.region`|string|AWS region where the guardrail is deployed. Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies`|object|Backend policies for AWS authentication (optional, defaults to implicit AWS auth)|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22814,10 +22917,11 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1)|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.<br><br>The Model Armor instance is configured either by referencing a guardrail backend<br>via backendRef (preferred, reusable across guards), or inline via<br>templateId/projectId/location (deprecated).|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.backendRef`|string|Reference to a guardrail backend (with a `googleModelArmor` provider) defined in the<br>top level backends list. Mutually exclusive with the inline provider fields.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.projectId`|string|The GCP project ID. Deprecated: use backendRef.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.location`|string|The GCP region (default: us-central1). Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies`|object|Backend policies for GCP authentication (optional, defaults to implicit GCP auth)|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -22920,8 +23024,9 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are configured either<br>by referencing a guardrail backend via backendRef (preferred, reusable across<br>guards), or inline via endpoint (deprecated). The evaluation behavior<br>(analyzeText/detectJailbreak) always lives on the guard.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.backendRef`|string|Reference to a guardrail backend (with an `azureContentSafety` provider) defined in the<br>top level backends list. Mutually exclusive with endpoint.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com").<br>Deprecated: use backendRef.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies`|object|Backend policies for Azure authentication (optional, defaults to implicit Azure auth)|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|

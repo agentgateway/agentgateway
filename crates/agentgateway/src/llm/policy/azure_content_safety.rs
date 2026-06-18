@@ -203,14 +203,15 @@ fn resolve(
 		},
 		strng::literal!("_azure-content-safety"),
 	)?;
-	let SimpleBackend::Guardrail(_, cfg @ GuardrailBackend::AzureContentSafety(_)) = &backend.backend
+	let SimpleBackend::Guardrail(_, GuardrailBackend::AzureContentSafety(azure_config)) =
+		&backend.backend
 	else {
 		anyhow::bail!(
 			"guardrail backend {} is not an azure content safety guardrail backend",
 			backend.backend
 		);
 	};
-	let host = cfg.host();
+	let host = azure_config.host();
 	Ok((backend, host))
 }
 

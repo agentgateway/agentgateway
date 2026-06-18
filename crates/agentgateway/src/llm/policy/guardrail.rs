@@ -98,7 +98,7 @@ impl GuardrailAzureContentSafety {
 		}
 	}
 
-	fn host(&self) -> Strng {
+	pub(crate) fn host(&self) -> Strng {
 		if let Some(rn) = &self.resource_name {
 			return strng::format!("{}.cognitiveservices.azure.com", rn);
 		}
