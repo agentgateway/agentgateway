@@ -203,15 +203,19 @@ fn resolve(
 		},
 		strng::literal!("_azure-content-safety"),
 	)?;
-	let SimpleBackend::Guardrail(_, GuardrailBackend::AzureContentSafety(azure_config)) =
-		&backend.backend
-	else {
+	let SimpleBackend::Guardrail(_, guardrail) = &backend.backend else {
+		anyhow::bail!("backend {} is not a guardrail backend", backend.backend);
+	};
+	// The host is derived polymorphically by GuardrailBackend::host(); the variant
+	// check is a separate concern — guarding against a backend_ref that points at a
+	// non-Azure guardrail.
+	if !matches!(guardrail, GuardrailBackend::AzureContentSafety(_)) {
 		anyhow::bail!(
 			"guardrail backend {} is not an azure content safety guardrail backend",
 			backend.backend
 		);
-	};
-	let host = azure_config.host();
+	}
+	let host = guardrail.host();
 	Ok((backend, host))
 }
 
